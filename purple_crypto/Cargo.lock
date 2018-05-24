@@ -4,7 +4,7 @@ version = "0.1.0"
 dependencies = [
  "blake2 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rust_sodium-sys 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rust_sodium 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -234,6 +234,18 @@ version = "0.1.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "rust_sodium"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "libc 0.2.41 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.3.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rust_sodium-sys 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.59 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unwrap 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "rust_sodium-sys"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -247,6 +259,11 @@ dependencies = [
  "unwrap 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zip 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "serde"
+version = "1.0.59"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "tar"
@@ -350,7 +367,9 @@ dependencies = [
 "checksum rand 0.3.22 (registry+https://github.com/rust-lang/crates.io-index)" = "15a732abf9d20f0ad8eeb6f909bf6868722d9a06e1e50802b6a70351f40b4eb1"
 "checksum rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "eba5f8cb59cc50ed56be8880a5c7b496bfd9bd26394e176bc67884094145c2c5"
 "checksum redox_syscall 0.1.38 (registry+https://github.com/rust-lang/crates.io-index)" = "0a12d51a5b5fd700e6c757f15877685bfa04fd7eb60c108f01d045cafa0073c2"
+"checksum rust_sodium 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "145c50afac9d9a031179ad1fd9ba1fb27220398cba0e13530189ae8ce4dd654b"
 "checksum rust_sodium-sys 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)" = "c58cb4685d283e56bc6c654dd212056786518f83fab7ad435dbd00301a4fd756"
+"checksum serde 1.0.59 (registry+https://github.com/rust-lang/crates.io-index)" = "2a4d976362a13caad61c38cf841401d2d4d480496a9391c3842c288b01f9de95"
 "checksum tar 0.4.15 (registry+https://github.com/rust-lang/crates.io-index)" = "6af6b94659f9a571bf769a5b71f54079393585ee0bfdd71b691be22d7d6b1d18"
 "checksum time 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)" = "d825be0eb33fda1a7e68012d51e9c7f451dc1a69391e7fdc197060bb8c56667b"
 "checksum typenum 1.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "612d636f949607bdf9b123b4a6f6d966dedf3ff669f7f045890d3a4a73948169"
