@@ -5,4 +5,5 @@ authors = []
 
 [dependencies]
 itc = "0.1.2"
+purple_crypto = { path = "../purple_crypto" }
 account = { path = "../account" }

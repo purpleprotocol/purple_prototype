@@ -2,12 +2,25 @@ extern crate blake2;
 
 use blake2::{Blake2s, Digest};
 
+pub struct Hash([u8; 32]);
+pub struct Pkey([u8; 32]);
+pub struct Skey([u8; 64]);
+pub struct Signature([u8; 64]);
+
 pub fn hash_slice(val: &[u8]) -> Vec<u8> {
     let mut hasher = Blake2s::new();
 
     hasher.input(&val);
     hasher.result().as_slice().to_vec()
 }
+
+// pub fn sign() -> Signature {
+
+// }
+
+// pub fn verify() -> bool {
+
+// }
 
 #[cfg(test)]
 mod tests {

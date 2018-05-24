@@ -889,6 +889,7 @@ version = "0.1.0"
 dependencies = [
  "account 0.1.0",
  "itc 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "purple_crypto 0.1.0",
 ]
 
 [[package]]
