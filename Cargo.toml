@@ -1,0 +1,16 @@
+[package]
+name = "purple"
+version = "0.0.1"
+license = "GPL-3.0"
+
+[dependencies]
+crust = "0.30.0"
+hex = "0.3.2"
+purple_crypto = { path = "purple_crypto" } 
+
+[lib]
+path = "purple/lib.rs"
+
+[[bin]]
+path = "purple/main.rs"
+name = "purple"
