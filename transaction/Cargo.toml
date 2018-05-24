@@ -1,0 +1,8 @@
+[package]
+name = "transaction"
+version = "0.1.0"
+authors = []
+
+[dependencies]
+itc = "0.1.2"
+account = { path = "../account" }

@@ -8,6 +8,7 @@ crust = "0.30.0"
 hex = "0.3.2"
 purple_crypto = { path = "purple_crypto" } 
 jump = { path = "jump" }
+transaction = { path = "transaction" }
 
 [lib]
 path = "purple/lib.rs"
