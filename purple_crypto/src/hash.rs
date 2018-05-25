@@ -1,5 +1,4 @@
 extern crate hex;
-
 use blake2::{Blake2s, Digest};
 
 const HASH_BYTES: usize = 32;

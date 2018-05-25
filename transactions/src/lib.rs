@@ -1,7 +1,10 @@
+#[macro_use] extern crate transaction_derives;
+
 extern crate itc;
 extern crate purple_crypto;
 extern crate account;
 
+mod traits;
 mod call;
 mod genesis;
 mod open_contract;

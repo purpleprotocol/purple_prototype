@@ -1,9 +1,10 @@
 [package]
-name = "transaction"
+name = "transactions"
 version = "0.1.0"
 authors = []
 
 [dependencies]
 itc = "0.1.2"
+transaction_derives = { path = "../transaction_derives" }
 purple_crypto = { path = "../purple_crypto" }
 account = { path = "../account" }

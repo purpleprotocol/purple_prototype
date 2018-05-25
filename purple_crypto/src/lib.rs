@@ -1,8 +1,6 @@
 extern crate blake2;
 extern crate rust_sodium;
 
-use rust_sodium::crypto::sign;
-
 pub use hash::*;
 pub use rust_sodium::crypto::sign::{
     PublicKey, 

@@ -7,7 +7,7 @@ extern {
 }
 
 pub fn jump_bytes(key: &[u8], buckets: i64) -> i64 {
-    let key_hash: Vec<u8> = hash_slice(key);
+    let key_hash: Vec<u8> = hash_slice(key).to_vec();
     let key: u64 = bytes_to_uint(&key_hash);
 
     jump_ch(key, buckets)
@@ -31,7 +31,7 @@ fn bytes_to_uint(bin: &[u8]) -> u64 {
 #[test]
 fn jump_bytes_test() {
     let key = b"The quick brown fox jumps over the lazy dog";
-    let hash = hash_slice(key);
+    let hash = hash_slice(key).to_vec();
     let key_uint = bytes_to_uint(&hash);
 
     let result1 = jump_bytes(key, 10);
