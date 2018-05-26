@@ -5,6 +5,9 @@ authors = []
 
 [dependencies]
 itc = "0.1.2"
+serde = "1.0.59"
+serde_derive = "1.0.59"
+rmp-serde = "0.13.7"
 transaction_derives = { path = "../transaction_derives" }
 purple_crypto = { path = "../purple_crypto" }
 account = { path = "../account" }

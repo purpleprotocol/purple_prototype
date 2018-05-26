@@ -33,32 +33,6 @@ fn impl_hashable(ast: &syn::DeriveInput) -> quote::Tokens {
     }
 }
 
-#[proc_macro_derive(Serializable)]
-pub fn serializable(input: TokenStream) -> TokenStream {
-    // Construct a string representation of the type definition
-    let s = input.to_string();
-    
-    // Parse the string representation
-    let ast = syn::parse_derive_input(&s).unwrap();
-
-    // Build the impl
-    let gen = impl_serializable(&ast);
-    
-    // Return the generated impl
-    gen.parse().unwrap()
-}
-
-fn impl_serializable(ast: &syn::DeriveInput) -> quote::Tokens {
-    let name = &ast.ident;
-    quote! {
-        impl Serializable for #name {
-            fn serialize(&mut self) -> () {
-                //
-            }
-        }
-    }
-}
-
 #[proc_macro_derive(Signable)]
 pub fn signable(input: TokenStream) -> TokenStream {
     // Construct a string representation of the type definition

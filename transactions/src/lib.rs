@@ -1,5 +1,8 @@
 #[macro_use] extern crate transaction_derives;
+#[macro_use] extern crate serde_derive;
 
+extern crate rmp_serde as rmps;
+extern crate serde;
 extern crate itc;
 extern crate purple_crypto;
 extern crate account;
