@@ -5,7 +5,7 @@ use crypto::{Signature, Hash};
 use causality::Stamp;
 use traits::*;
 
-#[derive(Hashable, Signable, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Return {
     previous_hash: Hash,
     referenced_hash: Hash,

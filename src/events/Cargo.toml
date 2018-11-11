@@ -4,3 +4,7 @@ version = "0.1.0"
 authors = []
 
 [dependencies]
+causality = { path = "../causality" }
+network = { path = "../network" }
+crypto = { path = "../crypto" }
+transactions = { path = "../transactions" }

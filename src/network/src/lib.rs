@@ -16,24 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use serde::{Deserialize, Serialize};
-use rmps::{Deserializer, Serializer};
-use account::{Balance, Address};
-use crypto::{Signature, Hash};
-use causality::Stamp;
-use traits::*;
+#[macro_use] extern crate serde_derive;
+extern crate crypto;
 
-#[derive(Serialize, Deserialize)]
-pub struct Receive {
-    previous_hash: Hash,
-    referenced_hash: Hash,
-    balance: Balance,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
-    address: Address,
-    approver: Address,
-    source: Hash,
-    stamp: Stamp
-}
+use crypto::PublicKey
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NodeId(PublicKey);

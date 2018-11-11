@@ -18,22 +18,21 @@
 
 use serde::{Deserialize, Serialize};
 use rmps::{Deserializer, Serializer};
-use account::{Balance, Address};
-use crypto::{Signature, Hash};
 use causality::Stamp;
-use traits::*;
+use network::NodeId;
+use crypto::{Hash, Signature};
+use transactions::Transaction;
 
-#[derive(Serialize, Deserialize)]
-pub struct Receive {
-    previous_hash: Hash,
-    referenced_hash: Hash,
-    balance: Balance,
+#[derive(Hashable, Signable, Serialize, Deserialize)]
+pub struct Heartbeat {
+    node_id: NodeId,
+    stamp: Stamp,
+    signature: Signature,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    root_hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
     signature: Option<Signature>,
-    address: Address,
-    approver: Address,
-    source: Hash,
-    stamp: Stamp
+    transactions: Vec<Transaction>
 }
