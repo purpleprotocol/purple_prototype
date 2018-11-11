@@ -1,0 +1,10 @@
+[package]
+name = "itc"
+version = "0.1.0"
+authors = []
+
+[build-dependencies]
+cc = "1.0"
+
+[dependencies]
+libc = "0.2.0"

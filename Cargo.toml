@@ -6,6 +6,7 @@ license = "GPL-3.0"
 [dependencies]
 crust = "0.30.0"
 hex = "0.3.2"
+tokio = "0.1.11"
 purple_crypto = { path = "purple_crypto" } 
 jump = { path = "jump" }
 transactions = { path = "transactions" }
