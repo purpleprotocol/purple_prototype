@@ -1,0 +1,121 @@
+extern crate itc;
+extern crate serde;
+
+use serde::ser::{Serialize, Serializer};
+use serde::de::{Deserialize, Deserializer, Error};
+use itc::Stamp as ItcStamp;
+use itc::{IntervalTreeClock, LessThanOrEqual};
+use std::str::FromStr;
+
+#[derive(Debug, Clone)]
+pub struct Stamp(ItcStamp);
+
+impl Stamp {
+    pub fn seed() -> Stamp {
+        let seed = ItcStamp::seed();
+        Stamp(seed)
+    }
+
+    pub fn fork(&self) -> (Stamp, Stamp) {
+        let s_intern = &&self.0;
+        let (s1, s2) = s_intern.fork();
+
+        (Stamp(s1), Stamp(s2))
+    } 
+
+    pub fn join(&self, s2: Stamp) -> Stamp {
+        let s1_intern = &&self.0;
+        let s2_intern = &s2.0;
+
+        let result = s1_intern.join(s2_intern);
+        Stamp(result)
+    }
+
+    pub fn event(&self) -> Stamp {
+        let s_intern = &&self.0;
+        let result = s_intern.event();
+
+        Stamp(result)
+    }
+
+    pub fn peek(&self) -> Stamp {
+        let s_intern = &&self.0;
+        let (result, _) = s_intern.peek();
+
+        Stamp(result)
+    }
+
+    pub fn happened_before(&self, s2: Stamp) -> bool {
+        let s1_intern = &&self.0;
+        let s2_intern = &s2.0;
+
+        s1_intern.leq(&s2_intern) && !s2_intern.leq(&s1_intern)
+    }
+
+    pub fn happened_after(&self, s2: Stamp) -> bool {
+        let s1_intern = &&self.0;
+        let s2_intern = &s2.0;
+
+        !s1_intern.leq(&s2_intern) && s2_intern.leq(&s1_intern)
+    }
+
+    pub fn concurrent(&self, s2: Stamp) -> bool {
+        let s1_intern = &&self.0;
+        let s2_intern = &s2.0;
+
+        !s1_intern.leq(&s2_intern) && !s2_intern.leq(&s1_intern)
+    }
+
+    pub fn equal(&self, s2: Stamp) -> bool {
+        let s1_intern = &&self.0;
+        let s2_intern = &s2.0;
+
+        s1_intern.leq(&s2_intern) && s2_intern.leq(&s1_intern)
+    }
+}
+
+impl Serialize for Stamp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let formatted = format!("{}", &&self.0);
+        serializer.serialize_str(&formatted)
+    }
+}
+
+impl<'a> Deserialize<'a> for Stamp {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where D: Deserializer<'a>
+    {
+        let result: &str = Deserialize::deserialize(deserializer)?;
+
+        match ItcStamp::from_str(result) {
+            Ok(res) => Ok(Stamp(res)),
+            Err(_)  => Err(Error::custom(format!("{} is not a valid stamp", result)))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_compares_stamps() {
+        let seed = Stamp::seed();
+        let (r, l) = seed.fork();
+        let l_clone = l.clone();
+
+        assert!(r.equal(l));
+
+        let r1 = r.event();
+        let l1 = l_clone.event();
+        let r2 = r1.join(l1.peek()).event();
+        let r2_clone = r2.clone();
+
+        assert!(r1.concurrent(l1));
+        assert!(r2.happened_after(r1.clone()));
+        assert!(r1.happened_before(r2_clone));
+    }
+}

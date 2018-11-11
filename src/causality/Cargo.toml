@@ -1,0 +1,8 @@
+[package]
+name = "causality"
+version = "0.1.0"
+authors = []
+
+[dependencies]
+itc = "0.1.2"
+serde = "1.0.59"
