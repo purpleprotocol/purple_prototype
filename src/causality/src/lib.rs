@@ -90,6 +90,17 @@ impl Stamp {
 
         s1_intern.leq(&s2_intern) && s2_intern.leq(&s1_intern)
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut buffer: Vec<u8> = Vec::new();
+        let formatted = format!("{}", &&self.0);
+
+        for byte in formatted.as_bytes() {
+            buffer.push(*byte);
+        }
+
+        buffer
+    }
 }
 
 impl Serialize for Stamp {

@@ -19,8 +19,13 @@
 use crypto::SecretKey;
 
 pub trait Transaction {
+    fn validate(&mut self) -> bool;
+    fn apply(&mut self);
     fn hash(&mut self);
     fn sign(&mut self, skey: SecretKey);
     fn verify_sig(&mut self) -> bool;
     fn verify_hash(&mut self) -> bool;
+    fn send(&mut self);
+    fn serialize(&mut self);
 }
+

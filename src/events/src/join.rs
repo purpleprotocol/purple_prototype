@@ -15,3 +15,22 @@
   You should have received a copy of the GNU General Public License
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
+
+use causality::Stamp;
+use network::NodeId;
+use crypto::{Hash, Signature};
+use account::Address;
+
+#[derive(Serialize, Deserialize)]
+pub struct Join {
+    node_id: NodeId,
+    stamp: Stamp,
+    collector_address: Address,
+    nonce: u32,
+    proof: Vec<u32>,
+    parent_hash: Hash,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hash: Option<Hash>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signature: Option<Signature>,
+}

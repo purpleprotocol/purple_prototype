@@ -17,11 +17,10 @@
 */
 
 use serde::{Deserialize, Serialize};
-use rmps::{Deserializer, Serializer};
 use account::{Balance, Address};
 use crypto::{Signature, Hash};
 use causality::Stamp;
-use traits::*;
+use transaction::*;
 
 #[derive(Serialize, Deserialize)]
 pub struct Receive {

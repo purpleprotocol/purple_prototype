@@ -16,7 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#![feature(extern_prelude)]
+
 #[macro_use] extern crate serde_derive;
+#[macro_use] extern crate erased_serde;
 
 extern crate rmp_serde as rmps;
 extern crate serde;
@@ -24,20 +27,25 @@ extern crate causality;
 extern crate crypto;
 extern crate account;
 
-mod traits;
+mod transaction;
 mod call;
 mod genesis;
 mod open_contract;
-mod open;
 mod receive;
-mod return_tx;
 mod send;
 
 pub use call::*;
 pub use genesis::*;
 pub use open_contract::*;
-pub use open::*;
 pub use receive::*;
-pub use return_tx::*;
 pub use send::*;
-pub use traits::*;
+pub use transaction::*;
+
+#[derive(Serialize, Deserialize)]
+pub enum Tx {
+  Call(Call),
+  Genesis(Genesis),
+  OpenContract(OpenContract),
+  Receive(Receive),
+  Send(Send) 
+}

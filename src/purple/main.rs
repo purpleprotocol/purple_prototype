@@ -24,9 +24,13 @@ use tokio::prelude::*;
 use tokio::io::copy;
 use tokio::net::TcpListener;
 
+const PORT: u16 = 44034;
+
 fn main() {
+    println!("Starting TCP listener on port {}", PORT);
+
     // Bind the server's socket.
-    let addr = "127.0.0.1:12345".parse().unwrap();
+    let addr = format!("127.0.0.1:{}", PORT).parse().unwrap();
     let listener = TcpListener::bind(&addr)
         .expect("unable to bind TCP listener");
 

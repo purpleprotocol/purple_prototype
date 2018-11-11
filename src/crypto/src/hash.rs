@@ -22,7 +22,7 @@ use blake2::{Blake2s, Digest};
 const HASH_BYTES: usize = 32;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Hash([u8; HASH_BYTES]);
+pub struct Hash(pub [u8; HASH_BYTES]);
 
 impl Hash {
     pub fn to_vec(&self) -> Vec<u8> {

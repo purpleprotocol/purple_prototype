@@ -19,7 +19,7 @@
 #[macro_use] extern crate serde_derive;
 extern crate crypto;
 
-use crypto::PublicKey
+use crypto::PublicKey;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct NodeId(PublicKey);
+pub struct NodeId(pub PublicKey);

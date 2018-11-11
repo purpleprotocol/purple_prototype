@@ -16,19 +16,17 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#[macro_use] extern crate serde_derive;
+
+extern crate serde;
+extern crate account;
 extern crate causality;
 extern crate network;
 extern crate crypto;
 extern crate transactions;
+extern crate byteorder;
+extern crate rlp;
 
 mod heartbeat;
 mod join;
 mod leave;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}

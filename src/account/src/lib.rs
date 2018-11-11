@@ -23,9 +23,7 @@ extern crate crypto;
 use crypto::PublicKey;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Balance {
-    value: String
-}
+pub struct Balance(String);
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Address(PublicKey);
