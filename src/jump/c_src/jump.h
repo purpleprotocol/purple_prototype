@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-int64_t JumpConsistentHash(uint64_t key, int64_t num);
+int32_t JumpConsistentHash(uint64_t key, int32_t num);
 
 #endif

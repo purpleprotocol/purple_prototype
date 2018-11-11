@@ -1,6 +1,6 @@
 #include "jump.h"
 
-int64_t JumpConsistentHash(uint64_t key, int64_t num) {
+int32_t JumpConsistentHash(uint64_t key, int32_t num) {
   int64_t b = -1, j = 0;
   while (j < num) {
     b = j;

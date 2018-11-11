@@ -3,17 +3,17 @@ extern crate crypto;
 use crypto::*;
 
 extern {
-    fn JumpConsistentHash(key: u64, num: i64) -> i64;
+    fn JumpConsistentHash(key: u64, num: i32) -> i32;
 }
 
-pub fn jump_bytes(key: &[u8], buckets: i64) -> i64 {
+pub fn jump_bytes(key: &[u8], buckets: i32) -> i32 {
     let key_hash: Vec<u8> = hash_slice(key).to_vec();
     let key: u64 = bytes_to_uint(&key_hash);
 
     jump_ch(key, buckets)
 }
 
-pub fn jump_ch(key: u64, buckets: i64) -> i64 {
+pub fn jump_ch(key: u64, buckets: i32) -> i32 {
     unsafe { JumpConsistentHash(key, buckets) }
 }
 
