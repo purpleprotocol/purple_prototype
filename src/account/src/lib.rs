@@ -27,3 +27,10 @@ pub struct Balance(String);
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Address(PublicKey);
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Shares {
+    issued_shares: u32,
+    authorized_shares: u32,
+    required_percentile: u8
+}

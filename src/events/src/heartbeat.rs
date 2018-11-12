@@ -19,10 +19,10 @@
 use std::boxed::Box;
 use causality::Stamp;
 use network::NodeId;
-use crypto::{Hash, Signature};
+use crypto::{Hash, Signature, PublicKey};
 use transactions::Tx;
-use byteorder::{BigEndian, WriteBytesExt};
-use rlp::RlpStream;
+use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
+use std::io::Cursor;
 
 #[derive(Serialize, Deserialize)]
 pub struct Heartbeat {
@@ -53,7 +53,6 @@ impl Heartbeat {
   /// 8) Stamp         - binary of stamp length
   /// 9) Transactions  - binary of txs length
   pub fn serialize(&self) -> Result<Vec<u8>, &'static str> {
-    let mut rlp_stream = RlpStream::new();
     let mut buffer: Vec<u8> = Vec::new();
     let event_type: u8 = 0;
 
@@ -79,19 +78,14 @@ impl Heartbeat {
     
     // Serialize transactions
     for tx in self.transactions {
-      match &tx.serialize() {
+      match *tx.serialize() {
         Ok(tx) => transactions.push(tx),
         Err(_) => return Err("Bad transaction")
       }
     }
 
-    // Write txs to rlp stream
-    for tx in transactions {
-      rlp_stream.append(&tx);
-    }
-
     let node_id = &(&&self.node_id.0).0;
-    let transactions: Vec<u8> = rlp_stream.out();
+    let transactions: Vec<u8> = rlp::encode_list(&transactions);
     let stamp: Vec<u8> = self.stamp.to_bytes();
 
     let txs_len = transactions.len();
@@ -112,7 +106,116 @@ impl Heartbeat {
   }
 
   /// Deserializes a heartbeat struct from a byte array
-  pub fn deserialize(bin: &[u8]) -> Heartbeat {
+  pub fn deserialize(bin: &[u8]) -> Result<Heartbeat, &'static str> {
+    let mut rdr = Cursor::new(bin.to_vec());
+    let event_type = if let Ok(result) = rdr.read_u8() {
+      result
+    } else {
+      return Err("Bad event type");
+    };
 
+    if event_type != 0 {
+      return Err("Bad event type");
+    }
+
+    let stamp_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+      result
+    } else {
+      return Err("Bad stamp len");
+    };
+
+    let txs_len = if let Ok(result) = rdr.read_u32::<BigEndian>() {
+      result
+    } else {
+      return Err("Bad transaction len");
+    };
+
+    // Consume cursor
+    let mut buf = rdr.into_inner();
+
+    let node_id = if buf.len() > 32 as usize {
+      let mut node_id = [0; 32];
+      let node_id_vec = buf.split_off(31);
+
+      node_id.copy_from_slice(&node_id_vec);
+
+      NodeId(PublicKey(node_id))
+    } else {
+      return Err("Incorrect packet structure");
+    };
+
+    let root_hash = if buf.len() > 32 as usize {
+      let mut hash = [0; 32];
+      let hash_vec = buf.split_off(31);
+
+      hash.copy_from_slice(&hash_vec);
+
+      Hash(hash)
+    } else {
+      return Err("Incorrect packet structure");
+    };
+
+    let hash = if buf.len() > 32 as usize {
+      let mut hash = [0; 32];
+      let hash_vec = buf.split_off(31);
+
+      hash.copy_from_slice(&hash_vec);
+
+      Hash(hash)
+    } else {
+      return Err("Incorrect packet structure");
+    };
+
+    let signature = if buf.len() > 64 as usize {
+      let mut sig = [0; 64];
+      let sig_vec = buf.split_off(63);
+
+      sig.copy_from_slice(&sig_vec);
+
+      Signature(sig)
+    } else {
+      return Err("Incorrect packet structure");
+    };
+
+    let stamp = if buf.len() > stamp_len as usize {
+      let stamp_bin = buf.split_off(stamp_len as usize - 1);
+
+      if let Ok(stamp) = Stamp::from_bytes(&stamp_bin) {
+        stamp
+      } else {
+        return Err("Bad stamp");
+      }
+    } else {
+      return Err("Incorrect packet structure");
+    };
+
+    let transactions = if buf.len() == txs_len as usize {
+      let ser_txs: Vec<Vec<u8>> = rlp::decode_list(&buf);
+      let mut txs: Vec<Box<Tx>> = Vec::new();
+      
+      for tx in ser_txs {
+        let tx_type = ser_txs[0];
+
+        match tx_type {
+          // TODO: Match each tx type and deserialize
+          _ => return Err("Bad transaction type")
+        }
+      }
+
+      txs
+    } else {
+      return Err("Incorrect packet structure");
+    };
+
+    let heartbeat = Heartbeat {
+      node_id: node_id,
+      root_hash: Some(root_hash),
+      hash: Some(hash),
+      signature: Some(signature),
+      stamp: stamp,
+      transactions: transactions
+    };
+
+    Ok(heartbeat)
   }
 }

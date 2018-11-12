@@ -17,18 +17,25 @@
 */
 
 use serde::{Deserialize, Serialize};
-use account::{Balance, Address};
+use account::{Balance, Address, Shares};
 use crypto::{Signature, Hash};
 use causality::Stamp;
 use transaction::*;
 
 #[derive(Serialize, Deserialize)]
 pub struct Genesis {
-    balance: Balance,
-    address: Address,
+    treasury_balance: Balance,
+    treasury_address: Address,
+    treasury_shares: Shares,
+    treasury_stock_hash: Hash,
+    currency_hash: Hash,
+    coin_supply: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
-    stamp: Stamp
+    hash: Option<Hash>
 }
+
+// impl Transaction for Genesis {
+//   fn serialize(&self) -> Vec<u8> {
+
+//   }
+// }

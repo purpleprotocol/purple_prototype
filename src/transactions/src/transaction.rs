@@ -27,5 +27,6 @@ pub trait Transaction {
     fn verify_hash(&mut self) -> bool;
     fn send(&mut self);
     fn serialize(&mut self);
+    fn deserialize(&[u8]) -> Self;
 }
 

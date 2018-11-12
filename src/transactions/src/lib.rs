@@ -44,7 +44,6 @@ pub use transaction::*;
 #[derive(Serialize, Deserialize)]
 pub enum Tx {
   Call(Call),
-  Genesis(Genesis),
   OpenContract(OpenContract),
   Receive(Receive),
   Send(Send) 

@@ -24,6 +24,7 @@ use serde::de::{Deserialize, Deserializer, Error};
 use itc::Stamp as ItcStamp;
 use itc::{IntervalTreeClock, LessThanOrEqual};
 use std::str::FromStr;
+use std::str::from_utf8;
 
 #[derive(Debug, Clone)]
 pub struct Stamp(ItcStamp);
@@ -101,6 +102,17 @@ impl Stamp {
 
         buffer
     }
+
+    pub fn from_bytes(bin: &[u8]) -> Result<Stamp, &'static str> {
+        if let Ok(bin) = from_utf8(bin) {
+            match ItcStamp::from_str(bin) {
+                Ok(res) => Ok(Stamp(res)),
+                Err(_)  => Err("Invalid stamp")
+            }
+        } else {
+            Err("The given bin is not a utf8 valid string")
+        }
+    }
 }
 
 impl Serialize for Stamp {
@@ -146,5 +158,17 @@ mod tests {
         assert!(r1.concurrent(l1));
         assert!(r2.happened_after(r1.clone()));
         assert!(r1.happened_before(r2_clone));
+    }
+
+    #[test]
+    fn serialize() {
+        let seed = Stamp::seed();
+        let serialized = seed.to_bytes();
+
+        if let Ok(deserialized) = Stamp::from_bytes(serialized) {
+           assert_eq!(deserialized, seed);
+        } else {
+           assert!(false);
+        }
     }
 }
