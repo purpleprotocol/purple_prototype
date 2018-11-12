@@ -16,38 +16,18 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![feature(extern_prelude)]
-
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate erased_serde;
-
-extern crate rmp_serde as rmps;
-extern crate serde;
-extern crate causality;
-extern crate crypto;
-extern crate account;
-
-mod transaction;
-mod call;
-mod genesis;
-mod open_contract;
-mod receive;
-mod send;
-mod burn;
-
-pub use call::*;
-pub use genesis::*;
-pub use open_contract::*;
-pub use receive::*;
-pub use send::*;
-pub use burn::*;
-pub use transaction::*;
+use serde::{Deserialize, Serialize};
+use account::{Balance, Address};
+use crypto::{Signature, Hash};
 
 #[derive(Serialize, Deserialize)]
-pub enum Tx {
-  Call(Call),
-  OpenContract(OpenContract),
-  Receive(Receive),
-  Send(Send),
-  Burn(Burn)
+pub struct Burn {
+    burner: Address,
+    amount: Balance,
+    fee: Balance,
+    currency_hash: Hash,
+    fee_hash: Hash,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hash: Option<Hash>,
+    signatures: Vec<Signature>
 }
