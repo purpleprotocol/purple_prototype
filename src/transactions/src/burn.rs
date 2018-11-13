@@ -17,8 +17,8 @@
 */
 
 use serde::{Deserialize, Serialize};
-use account::{Balance, Address};
-use crypto::{Signature, Hash};
+use account::{Balance, Address, Signature};
+use crypto::Hash;
 
 #[derive(Serialize, Deserialize)]
 pub struct Burn {
@@ -29,5 +29,5 @@ pub struct Burn {
     fee_hash: Hash,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
-    signatures: Vec<Signature>
+    signature: Signature
 }

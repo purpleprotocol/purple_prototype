@@ -16,28 +16,11 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[macro_use] extern crate serde_derive;
-
-extern crate crypto;
-
-use crypto::{PublicKey, Signature as PrimitiveSig};
+use Address;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Balance(String);
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Address(PublicKey);
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Signature {
-  Normal(PrimitiveSig),
-  MultiSig(MultiSig)
+pub struct MultiSigAddress {
+    keys: Vec<Address>,
+    keys_required: u8,
+    address: [u8; 32]
 }
-
-mod multi_sig_address;
-mod multi_sig;
-mod shares;
-
-pub use multi_sig_address::*;
-pub use multi_sig::*;
-pub use shares::*;
