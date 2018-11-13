@@ -40,6 +40,7 @@ mod send;
 mod mint;
 mod issue_shares;
 mod open_multi_sig;
+mod open_shares;
 mod transaction;
 
 pub use burn::*;
@@ -53,6 +54,7 @@ pub use send::*;
 pub use issue_shares::*;
 pub use mint::*;
 pub use open_multi_sig::*;
+pub use open_shares::*;
 pub use transaction::*;
 
 #[derive(Serialize, Deserialize)]
@@ -66,5 +68,6 @@ pub enum Tx {
     CreateMintable(CreateMintable),
     Mint(Mint),
     IssueShares(IssueShares),
-    OpenMultiSig(OpenMultiSig)
+    OpenMultiSig(OpenMultiSig),
+    OpenShares(OpenShares)
 }

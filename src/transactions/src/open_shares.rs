@@ -16,31 +16,25 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[macro_use]
-extern crate serde_derive;
+use account::{Address, Balance, Signature, Shares, ShareMap};
+use crypto::Hash;
+use serde::{Deserialize, Serialize};
+use transaction::*;
 
-extern crate crypto;
-
-use crypto::{PublicKey, Signature as PrimitiveSig};
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Balance(String);
-
-#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Debug)]
-pub struct Address(PublicKey);
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Signature {
-    Normal(PrimitiveSig),
-    MultiSig(MultiSig),
+#[derive(Serialize, Deserialize)]
+pub struct OpenShares {
+    creator: Address,
+    shares: Shares,
+    share_map: ShareMap,
+    amount: Balance,
+    currency_hash: Hash,
+    fee: Balance,
+    fee_hash: Hash,
+    nonce: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    address: Option<Address>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hash: Option<Hash>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signature: Option<Signature>,
 }
-
-mod multi_sig;
-mod multi_sig_address;
-mod shares;
-mod share_map;
-
-pub use multi_sig::*;
-pub use multi_sig_address::*;
-pub use shares::*;
-pub use share_map::*;
