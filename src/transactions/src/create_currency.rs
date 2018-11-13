@@ -34,5 +34,5 @@ pub struct CreateCurrency {
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>
+    signature: Option<Signature>,
 }

@@ -16,46 +16,25 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![feature(extern_prelude)]
-
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate erased_serde;
-
-extern crate account;
-extern crate causality;
-extern crate crypto;
-extern crate network;
-extern crate serde;
-
-mod burn;
-mod call;
-mod create_currency;
-mod create_mintable;
-mod genesis;
-mod open_contract;
-mod receive;
-mod send;
-mod transaction;
-
-pub use burn::*;
-pub use call::*;
-pub use create_currency::*;
-pub use create_mintable::*;
-pub use genesis::*;
-pub use open_contract::*;
-pub use receive::*;
-pub use send::*;
-pub use transaction::*;
+use account::{Address, Balance};
+use causality::Stamp;
+use crypto::{Hash, Signature};
+use serde::{Deserialize, Serialize};
+use transaction::*;
 
 #[derive(Serialize, Deserialize)]
-pub enum Tx {
-    Call(Call),
-    OpenContract(OpenContract),
-    Receive(Receive),
-    Send(Send),
-    Burn(Burn),
-    CreateCurrency(CreateCurrency),
-    CreateMintable(CreateMintable),
+pub struct CreateMintable {
+    creator: Address,
+    receiver: Address,
+    minter_address: Address,
+    currency_hash: Hash,
+    coin_supply: u64,
+    max_supply: u64,
+    precision: u8,
+    fee_hash: Hash,
+    fee: Balance,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hash: Option<Hash>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signature: Option<Signature>,
 }

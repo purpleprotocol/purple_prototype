@@ -18,8 +18,8 @@
 
 use account::{Address, Balance};
 use causality::Stamp;
-use network::NodeId;
 use crypto::{Hash, Signature};
+use network::NodeId;
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
@@ -32,5 +32,5 @@ pub struct Receive {
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>
+    signature: Option<Signature>,
 }
