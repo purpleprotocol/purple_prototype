@@ -16,19 +16,15 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
 extern crate blake2;
 extern crate rust_sodium;
 
 pub use hash::*;
 pub use rust_sodium::crypto::sign::{
-    PublicKey, 
-    SecretKey, 
-    Signature,
-    gen_keypair,
-    sign_detached,
-    verify_detached
+    gen_keypair, sign_detached, verify_detached, PublicKey, SecretKey, Signature,
 };
 
 mod hash;

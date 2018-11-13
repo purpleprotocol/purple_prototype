@@ -20,5 +20,5 @@
 pub struct Shares {
     issued_shares: u32,
     authorized_shares: u32,
-    required_percentile: u8
+    required_percentile: u8,
 }

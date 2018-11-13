@@ -18,16 +18,17 @@
 
 #![feature(extern_prelude)]
 
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
-extern crate serde;
 extern crate account;
-extern crate causality;
-extern crate network;
-extern crate crypto;
-extern crate transactions;
 extern crate byteorder;
+extern crate causality;
+extern crate crypto;
+extern crate network;
 extern crate rlp;
+extern crate serde;
+extern crate transactions;
 
 mod heartbeat;
 mod join;

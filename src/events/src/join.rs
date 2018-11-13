@@ -16,10 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use causality::Stamp;
-use network::NodeId;
-use crypto::{Hash, Signature};
 use account::Address;
+use causality::Stamp;
+use crypto::{Hash, Signature};
+use network::NodeId;
 
 #[derive(Serialize, Deserialize)]
 pub struct Join {

@@ -17,7 +17,7 @@
 */
 
 extern crate crypto;
+extern crate events;
+extern crate itc;
 extern crate jump;
 extern crate transactions;
-extern crate itc;
-extern crate events;

@@ -16,10 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use serde::{Deserialize, Serialize};
-use account::{Balance, Address};
-use crypto::{Signature, Hash};
+use account::{Address, Balance};
 use causality::Stamp;
+use crypto::{Hash, Signature};
+use serde::{Deserialize, Serialize};
 use transaction::*;
 
 #[derive(Serialize, Deserialize)]
@@ -34,5 +34,5 @@ pub struct Receive {
     address: Address,
     approver: Address,
     source: Hash,
-    stamp: Stamp
+    stamp: Stamp,
 }

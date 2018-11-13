@@ -29,4 +29,3 @@ pub trait Transaction {
     fn serialize(&mut self);
     fn deserialize(&[u8]) -> Self;
 }
-

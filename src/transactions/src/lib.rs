@@ -18,36 +18,38 @@
 
 #![feature(extern_prelude)]
 
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate erased_serde;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate erased_serde;
 
-extern crate rmp_serde as rmps;
-extern crate serde;
+extern crate account;
 extern crate causality;
 extern crate crypto;
-extern crate account;
+extern crate rmp_serde as rmps;
+extern crate serde;
 
-mod transaction;
+mod burn;
 mod call;
 mod genesis;
 mod open_contract;
 mod receive;
 mod send;
-mod burn;
+mod transaction;
 
+pub use burn::*;
 pub use call::*;
 pub use genesis::*;
 pub use open_contract::*;
 pub use receive::*;
 pub use send::*;
-pub use burn::*;
 pub use transaction::*;
 
 #[derive(Serialize, Deserialize)]
 pub enum Tx {
-  Call(Call),
-  OpenContract(OpenContract),
-  Receive(Receive),
-  Send(Send),
-  Burn(Burn)
+    Call(Call),
+    OpenContract(OpenContract),
+    Receive(Receive),
+    Send(Send),
+    Burn(Burn),
 }

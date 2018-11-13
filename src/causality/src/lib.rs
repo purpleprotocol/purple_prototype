@@ -19,12 +19,12 @@
 extern crate itc;
 extern crate serde;
 
-use serde::ser::{Serialize, Serializer};
-use serde::de::{Deserialize, Deserializer, Error};
 use itc::Stamp as ItcStamp;
 use itc::{IntervalTreeClock, LessThanOrEqual};
-use std::str::FromStr;
+use serde::de::{Deserialize, Deserializer, Error};
+use serde::ser::{Serialize, Serializer};
 use std::str::from_utf8;
+use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub struct Stamp(ItcStamp);
@@ -40,7 +40,7 @@ impl Stamp {
         let (s1, s2) = s_intern.fork();
 
         (Stamp(s1), Stamp(s2))
-    } 
+    }
 
     pub fn join(&self, s2: Stamp) -> Stamp {
         let s1_intern = &&self.0;
@@ -107,7 +107,7 @@ impl Stamp {
         if let Ok(bin) = from_utf8(bin) {
             match ItcStamp::from_str(bin) {
                 Ok(res) => Ok(Stamp(res)),
-                Err(_)  => Err("Invalid stamp")
+                Err(_) => Err("Invalid stamp"),
             }
         } else {
             Err("The given bin is not a utf8 valid string")
@@ -127,13 +127,14 @@ impl Serialize for Stamp {
 
 impl<'a> Deserialize<'a> for Stamp {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'a>
+    where
+        D: Deserializer<'a>,
     {
         let result: &str = Deserialize::deserialize(deserializer)?;
 
         match ItcStamp::from_str(result) {
             Ok(res) => Ok(Stamp(res)),
-            Err(_)  => Err(Error::custom(format!("{} is not a valid stamp", result)))
+            Err(_) => Err(Error::custom(format!("{} is not a valid stamp", result))),
         }
     }
 }
@@ -166,9 +167,9 @@ mod tests {
         let serialized = seed.to_bytes();
 
         if let Ok(deserialized) = Stamp::from_bytes(serialized) {
-           assert_eq!(deserialized, seed);
+            assert_eq!(deserialized, seed);
         } else {
-           assert!(false);
+            assert!(false);
         }
     }
 }

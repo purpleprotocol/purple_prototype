@@ -16,22 +16,20 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use account::{Address, Balance};
+use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
-use account::{Balance, Address};
-use crypto::{Signature, Hash};
-use causality::Stamp;
 use transaction::*;
 
 #[derive(Serialize, Deserialize)]
 pub struct OpenContract {
-    source: Hash,
-    address: Address,
-    balance: Balance,
+    owner: Address,
+    code: String,
+    default_state: String,
+    fee: Balance,
+    fee_hash: Hash,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
     signature: Option<Signature>,
-    src: String,
-    state: String, // TODO: change to trie
-    stamp: Stamp
 }

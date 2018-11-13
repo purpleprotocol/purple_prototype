@@ -16,10 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use serde::{Deserialize, Serialize};
-use account::{Balance, Address, Shares};
-use crypto::{Signature, Hash};
+use account::{Address, Balance, Shares};
 use causality::Stamp;
+use crypto::{Hash, Signature};
+use serde::{Deserialize, Serialize};
 use transaction::*;
 
 #[derive(Serialize, Deserialize)]
@@ -31,7 +31,7 @@ pub struct Genesis {
     currency_hash: Hash,
     coin_supply: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<Hash>
+    hash: Option<Hash>,
 }
 
 // impl Transaction for Genesis {

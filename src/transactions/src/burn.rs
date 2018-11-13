@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use serde::{Deserialize, Serialize};
-use account::{Balance, Address, Signature};
+use account::{Address, Balance, Signature};
 use crypto::Hash;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct Burn {
@@ -29,5 +29,5 @@ pub struct Burn {
     fee_hash: Hash,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
-    signature: Signature
+    signature: Signature,
 }

@@ -16,10 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use serde::{Deserialize, Serialize};
-use account::{Balance, Address};
-use crypto::{Signature, Hash};
+use account::{Address, Balance};
 use causality::Stamp;
+use crypto::{Hash, Signature};
+use serde::{Deserialize, Serialize};
 use transaction::*;
 
 #[derive(Serialize, Deserialize)]
@@ -33,5 +33,5 @@ pub struct Send {
     #[serde(skip_serializing_if = "Option::is_none")]
     signature: Option<Signature>,
     address: Address,
-    stamp: Stamp
+    stamp: Stamp,
 }

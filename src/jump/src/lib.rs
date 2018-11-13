@@ -20,7 +20,7 @@ extern crate crypto;
 
 use crypto::*;
 
-extern {
+extern "C" {
     fn JumpConsistentHash(key: u64, num: i32) -> i32;
 }
 

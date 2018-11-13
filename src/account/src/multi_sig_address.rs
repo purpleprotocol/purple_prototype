@@ -22,5 +22,5 @@ use Address;
 pub struct MultiSigAddress {
     keys: Vec<Address>,
     keys_required: u8,
-    address: [u8; 32]
+    address: [u8; 32],
 }
