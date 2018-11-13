@@ -17,21 +17,24 @@
 */
 
 use serde::{Deserialize, Serialize};
-use account::{Balance, Address};
-use crypto::{Signature, Hash};
+use account::{Balance, Address, Signature};
+use crypto::{Hash};
 use causality::Stamp;
 use transaction::*;
 
 #[derive(Serialize, Deserialize)]
 pub struct Call {
-    previous_hash: Hash,
-    referenced_hash: Hash,
+    from: Address,
+    to: Address,
+    inputs: String, // TODO: Change to contract inputs type
+    amount: Balance,
+    fee: Balance,
+    gas_price: Balance,
+    gas_limit: u64,
+    currency_hash: Hash,
+    fee_hash: Hash,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
-    address: Address,
-    destination: Address,
-    balance: Balance,
-    stamp: Stamp
+    signature: Option<Signature>
 }
