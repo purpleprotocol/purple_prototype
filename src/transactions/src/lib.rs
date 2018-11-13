@@ -37,6 +37,7 @@ mod genesis;
 mod open_contract;
 mod receive;
 mod send;
+mod mint;
 mod issue_shares;
 mod transaction;
 
@@ -49,6 +50,7 @@ pub use open_contract::*;
 pub use receive::*;
 pub use send::*;
 pub use issue_shares::*;
+pub use mint::*;
 pub use transaction::*;
 
 #[derive(Serialize, Deserialize)]
@@ -60,5 +62,6 @@ pub enum Tx {
     Burn(Burn),
     CreateCurrency(CreateCurrency),
     CreateMintable(CreateMintable),
+    Mint(Mint),
     IssueShares(IssueShares),
 }
