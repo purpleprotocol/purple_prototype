@@ -16,8 +16,8 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance};
-use crypto::{Hash, Signature};
+use account::{Address, Balance, Signature};
+use crypto::Hash;
 use serde::{Deserialize, Serialize};
 use transaction::*;
 

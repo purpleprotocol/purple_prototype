@@ -25,8 +25,8 @@ extern crate erased_serde;
 
 extern crate account;
 extern crate causality;
+extern crate network;
 extern crate crypto;
-extern crate rmp_serde as rmps;
 extern crate serde;
 
 mod burn;

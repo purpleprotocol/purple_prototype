@@ -7,7 +7,7 @@ authors = []
 serde = "1.0.59"
 serde_derive = "1.0.59"
 erased-serde = "0.3.6"
-rmp-serde = "0.13.7"
+network = { path = "../network" }
 causality = { path = "../causality" }
 crypto = { path = "../crypto" }
 account = { path = "../account" }

@@ -18,21 +18,19 @@
 
 use account::{Address, Balance};
 use causality::Stamp;
+use network::NodeId;
 use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
 #[derive(Serialize, Deserialize)]
 pub struct Receive {
-    previous_hash: Hash,
-    referenced_hash: Hash,
-    balance: Balance,
+    src_event: Hash,
+    source: Hash,
+    receiver: Address,
+    sequencer: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
-    address: Address,
-    approver: Address,
-    source: Hash,
-    stamp: Stamp,
+    signature: Option<Signature>
 }
