@@ -17,7 +17,6 @@
 */
 
 use account::{Address, Balance, Shares};
-use causality::Stamp;
 use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
 use transaction::*;

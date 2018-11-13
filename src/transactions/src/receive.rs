@@ -17,7 +17,6 @@
 */
 
 use account::{Address, Balance};
-use causality::Stamp;
 use crypto::{Hash, Signature};
 use network::NodeId;
 use serde::{Deserialize, Serialize};

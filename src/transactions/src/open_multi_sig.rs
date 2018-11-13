@@ -22,13 +22,17 @@ use serde::{Deserialize, Serialize};
 use transaction::*;
 
 #[derive(Serialize, Deserialize)]
-pub struct Send {
-    from: Address,
-    to: Address,
+pub struct OpenMultiSig {
+    creator: Address,
+    keys: Vec<Address>,
+    required_keys: u8,
     amount: Balance,
-    fee: Balance,
     currency_hash: Hash,
+    fee: Balance,
     fee_hash: Hash,
+    nonce: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    address: Option<Address>,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
