@@ -36,6 +36,7 @@ mod open_contract;
 mod receive;
 mod send;
 mod transaction;
+mod create_currency;
 
 pub use burn::*;
 pub use call::*;
@@ -43,6 +44,7 @@ pub use genesis::*;
 pub use open_contract::*;
 pub use receive::*;
 pub use send::*;
+pub use create_currency::*;
 pub use transaction::*;
 
 #[derive(Serialize, Deserialize)]
@@ -52,4 +54,5 @@ pub enum Tx {
     Receive(Receive),
     Send(Send),
     Burn(Burn),
+    CreateCurrency(CreateCurrency)
 }

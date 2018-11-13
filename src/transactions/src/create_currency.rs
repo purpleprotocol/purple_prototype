@@ -16,19 +16,23 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature};
-use crypto::Hash;
+use account::{Address, Balance};
+use causality::Stamp;
+use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
+use transaction::*;
 
 #[derive(Serialize, Deserialize)]
-pub struct Burn {
-    burner: Address,
-    amount: Balance,
-    fee: Balance,
+pub struct CreateCurrency {
+    creator: Address,
+    receiver: Address,
     currency_hash: Hash,
+    coin_supply: u64,
+    precision: u8,
     fee_hash: Hash,
+    fee: Balance,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
+    signature: Option<Signature>
 }
