@@ -32,9 +32,3 @@ pub struct Genesis {
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
 }
-
-// impl Transaction for Genesis {
-//   fn serialize(&self) -> Vec<u8> {
-
-//   }
-// }
