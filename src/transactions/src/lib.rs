@@ -74,7 +74,7 @@ pub enum Tx {
 }
 
 impl Tx {
-  pub fn to_bytes(&self) -> Vec<u8> {
+  pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
     match *self {
       Tx::Call(ref tx)            => tx.to_bytes(),
       Tx::OpenContract(ref tx)    => tx.to_bytes(),
