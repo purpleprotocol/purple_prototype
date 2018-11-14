@@ -16,16 +16,31 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::SecretKey;
+use crypto::PublicKey;
 
-pub trait Transaction {
-    fn validate(&mut self) -> bool;
-    fn apply(&mut self);
-    fn hash(&mut self);
-    fn sign(&mut self, skey: SecretKey);
-    fn verify_sig(&mut self) -> bool;
-    fn verify_hash(&mut self) -> bool;
-    fn send(&mut self);
-    fn to_bytes(&mut self) -> Vec<u8>;
-    fn from_bytes(&[u8]) -> Self;
+#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Debug)]
+pub struct Address(PublicKey);
+
+impl Address {
+    pub fn from_slice(bin: &[u8]) -> Address {
+        if bin.len() == 32 {
+            let mut pkey = [0; 32];
+            pkey.copy_from_slice(&bin);
+
+            Address(PublicKey(pkey))
+        } else {
+            panic!("Bad slice length! Expected 32 found {}", bin.len());
+        }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut result: Vec<u8> = Vec::new();
+        let bytes = (&&self.0).0;
+
+        for byte in bytes.iter() {
+            result.push(*byte);
+        }
+
+        result
+    }
 }

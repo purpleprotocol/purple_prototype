@@ -16,16 +16,21 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::SecretKey;
+use crypto::Signature;
 
-pub trait Transaction {
-    fn validate(&mut self) -> bool;
-    fn apply(&mut self);
-    fn hash(&mut self);
-    fn sign(&mut self, skey: SecretKey);
-    fn verify_sig(&mut self) -> bool;
-    fn verify_hash(&mut self) -> bool;
-    fn send(&mut self);
-    fn to_bytes(&mut self) -> Vec<u8>;
-    fn from_bytes(&[u8]) -> Self;
+pub trait SigExtern {
+    fn to_bytes(&self) -> Vec<u8>; 
+}
+
+impl SigExtern for Signature {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut result: Vec<u8> = Vec::with_capacity(64);
+        let bytes = &&self.0;
+
+        for byte in bytes.iter() {
+            result.push(*byte);
+        }
+
+        result
+    }
 }

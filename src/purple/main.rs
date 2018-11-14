@@ -16,6 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#[macro_use] extern crate log;
+
+extern crate env_logger;
 extern crate itc;
 extern crate jump;
 extern crate tokio;
@@ -27,7 +30,9 @@ use tokio::prelude::*;
 const PORT: u16 = 44034;
 
 fn main() {
-    println!("Starting TCP listener on port {}", PORT);
+    env_logger::init();
+
+    info!("Starting TCP listener on port {}", PORT);
 
     // Bind the server's socket.
     let addr = format!("127.0.0.1:{}", PORT).parse().unwrap();
@@ -36,7 +41,7 @@ fn main() {
     // Pull out a stream of sockets for incoming connections
     let server = listener
         .incoming()
-        .map_err(|e| eprintln!("accept failed = {:?}", e))
+        .map_err(|e| warn!("accept failed = {:?}", e))
         .for_each(|sock| {
             // Split up the reading and writing parts of the
             // socket.
@@ -48,8 +53,8 @@ fn main() {
 
             // ... after which we'll print what happened.
             let handle_conn = bytes_copied
-                .map(|amt| println!("wrote {:?} bytes", amt))
-                .map_err(|err| eprintln!("IO error {:?}", err));
+                .map(|amt| debug!("wrote {:?} bytes", amt))
+                .map_err(|err| warn!("IO error {:?}", err));
 
             // Spawn the future as a concurrent task.
             tokio::spawn(handle_conn)

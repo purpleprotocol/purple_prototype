@@ -28,6 +28,7 @@ extern crate causality;
 extern crate crypto;
 extern crate network;
 extern crate serde;
+extern crate byteorder;
 
 mod burn;
 mod call;
@@ -70,4 +71,22 @@ pub enum Tx {
     IssueShares(IssueShares),
     OpenMultiSig(OpenMultiSig),
     OpenShares(OpenShares)
+}
+
+impl Tx {
+  pub fn to_bytes(&self) -> Vec<u8> {
+    match *self {
+      Tx::Call(ref tx)            => tx.to_bytes(),
+      Tx::OpenContract(ref tx)    => tx.to_bytes(),
+      Tx::Receive(ref tx)         => tx.to_bytes(),
+      Tx::Send(ref tx)            => tx.to_bytes(),
+      Tx::Burn(ref tx)            => tx.to_bytes(),
+      Tx::CreateCurrency(ref tx)  => tx.to_bytes(),
+      Tx::CreateMintable(ref tx)  => tx.to_bytes(),
+      Tx::Mint(ref tx)            => tx.to_bytes(),
+      Tx::IssueShares(ref tx)     => tx.to_bytes(),
+      Tx::OpenMultiSig(ref tx)    => tx.to_bytes(),
+      Tx::OpenShares(ref tx)      => tx.to_bytes()
+    }
+  }
 }

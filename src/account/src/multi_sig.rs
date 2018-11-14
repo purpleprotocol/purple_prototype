@@ -17,6 +17,21 @@
 */
 
 use crypto::Signature;
+use SigExtern;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MultiSig(Vec<Signature>);
+
+impl MultiSig {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut sigs: Vec<Vec<u8>> = Vec::with_capacity(self.0.len());
+        
+        for sig in self.0.iter() {
+            sigs.push(sig.to_bytes());
+        }
+
+        let result: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&sigs);
+
+        result
+    }
+}

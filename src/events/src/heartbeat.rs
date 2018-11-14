@@ -50,9 +50,9 @@ impl Heartbeat {
     /// 5) Root hash     - 32byte binary
     /// 6) Hash          - 32byte binary
     /// 7) Signature     - 64byte binary
-    /// 8) Stamp         - binary of stamp length
-    /// 9) Transactions  - binary of txs length
-    pub fn serialize(&self) -> Result<Vec<u8>, &'static str> {
+    /// 8) Stamp         - Binary of stamp length
+    /// 9) Transactions  - Binary of txs length
+    pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let event_type: u8 = 0;
 
@@ -78,7 +78,7 @@ impl Heartbeat {
 
         // Serialize transactions
         for tx in self.transactions {
-            match *tx.serialize() {
+            match *tx.to_bytes() {
                 Ok(tx) => transactions.push(tx),
                 Err(_) => return Err("Bad transaction"),
             }
@@ -106,7 +106,7 @@ impl Heartbeat {
     }
 
     /// Deserializes a heartbeat struct from a byte array
-    pub fn deserialize(bin: &[u8]) -> Result<Heartbeat, &'static str> {
+    pub fn from_bytes(bin: &[u8]) -> Result<Heartbeat, &'static str> {
         let mut rdr = Cursor::new(bin.to_vec());
         let event_type = if let Ok(result) = rdr.read_u8() {
             result
