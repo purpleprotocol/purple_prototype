@@ -20,6 +20,7 @@ use account::{Address, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
+use account::SigExtern;
 use transaction::*;
 
 #[derive(Serialize, Deserialize)]
