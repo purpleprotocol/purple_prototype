@@ -60,7 +60,7 @@ impl OpenContract {
             return Err("Hash field is missing");
         };
 
-        let mut signature = if let Some(signature) = &self.signature {
+        let signature = if let Some(signature) = &self.signature {
             signature.to_bytes()
         } else {
             return Err("Signature field is missing");

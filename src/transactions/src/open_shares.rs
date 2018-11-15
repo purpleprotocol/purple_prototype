@@ -67,7 +67,7 @@ impl OpenShares {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = 6;
 
-        let mut address = if let Some(address) = &self.address {
+        let address = if let Some(address) = &self.address {
             address.to_bytes()
         } else {
             return Err("Address field is missing");
@@ -85,7 +85,7 @@ impl OpenShares {
             return Err("Stock hash field is missing");
         };
 
-        let mut signature = if let Some(signature) = &self.signature {
+        let signature = if let Some(signature) = &self.signature {
             signature.to_bytes()
         } else {
             return Err("Signature field is missing");

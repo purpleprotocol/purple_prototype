@@ -56,7 +56,7 @@ impl Receive {
             return Err("Hash field is missing");
         };
 
-        let mut signature = if let Some(signature) = &self.signature {
+        let signature = if let Some(signature) = &self.signature {
             &signature.0
         } else {
             return Err("Signature field is missing");

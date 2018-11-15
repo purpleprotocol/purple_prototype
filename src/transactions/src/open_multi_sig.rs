@@ -63,7 +63,7 @@ impl OpenMultiSig {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = 5;
 
-        let mut address = if let Some(address) = &self.address {
+        let address = if let Some(address) = &self.address {
             address.to_bytes()
         } else {
             return Err("Address field is missing");
@@ -75,7 +75,7 @@ impl OpenMultiSig {
             return Err("Hash field is missing");
         };
 
-        let mut signature = if let Some(signature) = &self.signature {
+        let signature = if let Some(signature) = &self.signature {
             signature.to_bytes()
         } else {
             return Err("Signature field is missing");

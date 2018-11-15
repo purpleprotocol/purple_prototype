@@ -77,16 +77,16 @@ impl Heartbeat {
         let mut transactions: Vec<Vec<u8>> = Vec::with_capacity(self.transactions.len());
 
         // Serialize transactions
-        for tx in self.transactions {
-            match *tx.to_bytes() {
+        for tx in &self.transactions {
+            match (*tx).to_bytes() {
                 Ok(tx) => transactions.push(tx),
                 Err(_) => return Err("Bad transaction"),
             }
         }
 
         let node_id = &(&&self.node_id.0).0;
-        let transactions: Vec<u8> = rlp::encode_list(&transactions);
-        let stamp: Vec<u8> = self.stamp.to_bytes();
+        let mut transactions: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&transactions);
+        let mut stamp: Vec<u8> = self.stamp.to_bytes();
 
         let txs_len = transactions.len();
         let stamp_len = stamp.len();
@@ -194,9 +194,9 @@ impl Heartbeat {
             let mut txs: Vec<Box<Tx>> = Vec::new();
 
             for tx in ser_txs {
-                let tx_type = ser_txs[0];
+                let tx_type = &tx[0];
 
-                match tx_type {
+                match *tx_type {
                     // TODO: Match each tx type and deserialize
                     _ => return Err("Bad transaction type"),
                 }
