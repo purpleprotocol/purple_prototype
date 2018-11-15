@@ -17,7 +17,29 @@
 */
 
 use Address;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ShareMap(HashMap<Address, u32>);
+
+impl ShareMap {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut buf: Vec<Vec<u8>> = Vec::with_capacity(self.0.len());
+        
+        for (k, v) in self.0.iter() {
+            let mut b: Vec<u8> = Vec::with_capacity(36);
+            let mut k = k.to_bytes();
+
+            // Fields:
+            // 1) Shares       - 32bits
+            // 2) Shareholder  - 32byte binary
+            b.write_u32::<BigEndian>(*v).unwrap();
+            b.append(&mut k);
+
+            buf.push(b);
+        }
+
+        rlp::encode_list::<Vec<u8>, _>(&buf)
+    }
+}
