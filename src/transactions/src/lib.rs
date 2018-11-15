@@ -20,8 +20,6 @@
 
 #[macro_use]
 extern crate serde_derive;
-#[macro_use]
-extern crate erased_serde;
 
 extern crate account;
 extern crate causality;

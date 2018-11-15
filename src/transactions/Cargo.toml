@@ -6,8 +6,8 @@ authors = []
 [dependencies]
 serde = "1.0.59"
 serde_derive = "1.0.59"
-erased-serde = "0.3.6"
 byteorder = "1.2.7"
+rlp = "0.3.0"
 network = { path = "../network" }
 causality = { path = "../causality" }
 crypto = { path = "../crypto" }

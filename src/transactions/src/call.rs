@@ -18,7 +18,6 @@
 
 use account::{Address, Balance, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use causality::Stamp;
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
 use transaction::*;
