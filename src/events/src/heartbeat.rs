@@ -22,7 +22,7 @@ use crypto::{Hash, PublicKey, Signature};
 use network::NodeId;
 use std::boxed::Box;
 use std::io::Cursor;
-use transactions::Tx;
+use transactions::*;
 
 #[derive(Serialize, Deserialize)]
 pub struct Heartbeat {
@@ -197,7 +197,14 @@ impl Heartbeat {
                 let tx_type = &tx[0];
 
                 match *tx_type {
-                    // TODO: Match each tx type and deserialize
+                    1 => {
+                        let deserialized = match Call::from_bytes(&tx) {
+                            Ok(result) => result,
+                            Err(_)     => return Err("Invalid call transaction")
+                        };
+
+                        txs.push(Box::new(Tx::Call(deserialized)));
+                    },
                     _ => return Err("Bad transaction type"),
                 }
             }

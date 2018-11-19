@@ -33,4 +33,29 @@ impl Signature {
             Signature::MultiSig(ref sig) => sig.to_bytes()
         }
     }
+
+    pub fn from_bytes(bin: &[u8]) -> Result<Signature, &'static str> {
+        let bin_vec = bin.to_vec();
+        let (head, tail) = bin_vec.split_at(1);
+
+        match head {
+            [1] => {
+                if tail.len() == 32 {
+                    let sig: PrimitiveSig = SigExtern::from_bytes(&tail);
+                    Ok(Signature::Normal(sig))
+                } else {
+                    Err("Invalid signature")
+                }
+            },
+            [2] => {
+                match MultiSig::from_bytes(bin) {
+                    Ok(msig) => Ok(Signature::MultiSig(msig)),
+                    Err(err) => Err(err)
+                }
+            },
+            _ => {
+                Err("Invalid signature type")
+            }
+        }
+    }
 }

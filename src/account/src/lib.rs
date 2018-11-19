@@ -23,6 +23,7 @@ extern crate serde_derive;
 extern crate crypto;
 extern crate rlp;
 extern crate byteorder;
+extern crate regex;
 
 mod address;
 mod balance;

@@ -18,19 +18,32 @@
 
 use crypto::Signature;
 
+const SIG_TYPE: u8 = 1;
+
 pub trait SigExtern {
-    fn to_bytes(&self) -> Vec<u8>; 
+    fn to_bytes(&self) -> Vec<u8>;
+    fn from_bytes(&[u8]) -> Self; 
 }
 
 impl SigExtern for Signature {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::with_capacity(64);
+        let mut result: Vec<u8> = Vec::with_capacity(65);
         let bytes = &&self.0;
+
+        // Push sig type
+        result.push(SIG_TYPE);
 
         for byte in bytes.iter() {
             result.push(*byte);
         }
 
         result
+    }
+
+    fn from_bytes(bin: &[u8]) -> Signature {
+        let mut sig = [0; 64];
+        sig.copy_from_slice(bin);
+
+        Signature(sig)
     }
 }

@@ -16,6 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use regex::Regex;
+use std::str;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Balance(String);
 
@@ -29,5 +32,22 @@ impl Balance {
         }
 
         result
+    }
+
+    pub fn from_bytes(bin: &[u8]) -> Result<Balance, &'static str> {
+        let rgx = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,18})?$").unwrap();
+
+        match str::from_utf8(bin) {
+            Ok(result) => {
+                if rgx.is_match(result) {
+                    Ok(Balance(result.to_string()))
+                } else {
+                    Err("Invalid balance")
+                }
+            },
+            Err(_) => {
+                Err("Invalid utf8 string given")
+            }
+        }
     }
 }

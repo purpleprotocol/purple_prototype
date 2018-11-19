@@ -1,0 +1,6 @@
+[package]
+name = "purple_vm"
+version = "0.1.0"
+authors = ["octavonce <octavian.oncescu@gmail.com>"]
+
+[dependencies]
