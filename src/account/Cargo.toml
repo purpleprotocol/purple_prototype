@@ -9,4 +9,7 @@ serde_derive = "1.0.59"
 rlp = "0.3.0"
 regex = "1"
 byteorder = "1.2.7"
+rust_decimal = "0.10.2"
 crypto = { path = "../crypto" }
+quickcheck = "0.7.2"
+rand = "0.6.0"

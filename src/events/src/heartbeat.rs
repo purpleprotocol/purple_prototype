@@ -69,7 +69,7 @@ impl Heartbeat {
         };
 
         let signature = if let Some(signature) = &self.signature {
-            &signature.0
+            signature
         } else {
             return Err("Signature field is missing");
         };
@@ -98,7 +98,7 @@ impl Heartbeat {
         buffer.append(&mut node_id.to_vec());
         buffer.append(&mut root_hash.to_vec());
         buffer.append(&mut hash.to_vec());
-        buffer.append(&mut signature.to_vec());
+        buffer.append(&mut signature.inner_bytes());
         buffer.append(&mut stamp);
         buffer.append(&mut transactions);
 
@@ -167,12 +167,9 @@ impl Heartbeat {
         };
 
         let signature = if buf.len() > 64 as usize {
-            let mut sig = [0; 64];
             let sig_vec = buf.split_off(63);
 
-            sig.copy_from_slice(&sig_vec);
-
-            Signature(sig)
+            Signature::new(&sig_vec)
         } else {
             return Err("Incorrect packet structure");
         };

@@ -25,8 +25,9 @@ use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::{Serialize, Serializer};
 use std::str::from_utf8;
 use std::str::FromStr;
+use std::cmp::PartialEq;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Stamp(ItcStamp);
 
 impl Stamp {
@@ -166,7 +167,7 @@ mod tests {
         let seed = Stamp::seed();
         let serialized = seed.to_bytes();
 
-        if let Ok(deserialized) = Stamp::from_bytes(serialized) {
+        if let Ok(deserialized) = Stamp::from_bytes(&serialized) {
             assert_eq!(deserialized, seed);
         } else {
             assert!(false);

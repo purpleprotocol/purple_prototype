@@ -17,11 +17,12 @@
 */
 
 use crypto::Signature;
-use SigExtern;
+use quickcheck::Arbitrary;
+use rand::Rng;
 
 const SIG_TYPE: u8 = 2;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
 pub struct MultiSig(Vec<Signature>);
 
 impl MultiSig {
@@ -53,7 +54,10 @@ impl MultiSig {
                         let mut sig = [0; 64];
                         sig.copy_from_slice(&bytes);
 
-                        result.push(Signature(sig));
+                        match Signature::from_bytes(&sig) {
+                            Ok(sig) => result.push(sig),
+                            Err(_)  => return Err("Invalid signature") 
+                        };
                     } else {
                         return Err("Invalid signature length");
                     }
@@ -65,5 +69,15 @@ impl MultiSig {
                 Err("Invalid signature type")
             }
         }
+    }
+}
+
+impl Arbitrary for MultiSig {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> MultiSig {
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(1, 255);
+        let signatures: Vec<Signature> = (0..random).map(|_| Arbitrary::arbitrary(g)).collect();
+
+        MultiSig(signatures)
     }
 }

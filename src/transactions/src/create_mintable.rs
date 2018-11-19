@@ -19,7 +19,6 @@
 use account::{Address, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature};
-use account::SigExtern;
 use serde::{Deserialize, Serialize};
 use transaction::*;
 

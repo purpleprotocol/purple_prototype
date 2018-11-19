@@ -9,4 +9,5 @@ hex = "0.3.2"
 rust_sodium = "0.7.0"
 serde = "1.0.59"
 serde_derive = "1.0.59"
-
+quickcheck = "0.7.2"
+rand = "0.6.0"

@@ -12,3 +12,6 @@ network = { path = "../network" }
 causality = { path = "../causality" }
 crypto = { path = "../crypto" }
 account = { path = "../account" }
+
+[dev-dependencies]
+quickcheck = "0.7.2"

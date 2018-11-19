@@ -18,7 +18,7 @@
 
 use Address;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Serialize, Deserialize, Debug)]
 pub struct MultiSigAddress {
     keys: Vec<Address>,
     keys_required: u8,

@@ -24,6 +24,9 @@ extern crate crypto;
 extern crate rlp;
 extern crate byteorder;
 extern crate regex;
+extern crate quickcheck;
+extern crate rand;
+extern crate rust_decimal;
 
 mod address;
 mod balance;
@@ -32,7 +35,6 @@ mod multi_sig;
 mod multi_sig_address;
 mod shares;
 mod share_map;
-mod sig_extern;
 
 pub use address::*;
 pub use balance::*;
@@ -41,4 +43,3 @@ pub use multi_sig::*;
 pub use multi_sig_address::*;
 pub use shares::*;
 pub use share_map::*;
-pub use sig_extern::*;

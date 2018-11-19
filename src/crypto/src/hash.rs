@@ -16,12 +16,13 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-extern crate hex;
-
+use rand::Rng;
+use quickcheck::Arbitrary;
 use blake2::{Blake2s, Digest};
+
 const HASH_BYTES: usize = 32;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Hash(pub [u8; HASH_BYTES]);
 
 impl Hash {
@@ -44,6 +45,20 @@ pub fn hash_slice(val: &[u8]) -> Hash {
     result.copy_from_slice(hasher.result().as_slice());
 
     Hash(result)
+}
+
+impl Arbitrary for Hash {
+    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Hash {
+        let mut rng = rand::thread_rng();
+        let bytes: Vec<u8> = (0..32).map(|_| {
+            rng.gen_range(1, 255)
+        }).collect();
+
+        let mut result = [0; 32];
+        result.copy_from_slice(&bytes);
+
+        Hash(result)
+    }
 }
 
 #[test]

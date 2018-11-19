@@ -18,14 +18,19 @@
 
 use regex::Regex;
 use std::str;
+use rand::Rng;
+use quickcheck::Arbitrary;
+use rust_decimal::Decimal;
+use std::str::FromStr;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Balance(String);
+#[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
+pub struct Balance(Decimal);
 
 impl Balance {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::new();
-        let bytes = &self.0.as_bytes();
+        let formatted = format!("{}", &self.0);
+        let bytes = formatted.as_bytes();
 
         for byte in bytes.iter() {
             result.push(*byte);
@@ -40,7 +45,7 @@ impl Balance {
         match str::from_utf8(bin) {
             Ok(result) => {
                 if rgx.is_match(result) {
-                    Ok(Balance(result.to_string()))
+                    Ok(Balance(Decimal::from_str(result).unwrap()))
                 } else {
                     Err("Invalid balance")
                 }
@@ -49,5 +54,18 @@ impl Balance {
                 Err("Invalid utf8 string given")
             }
         }
+    }
+}
+
+impl Arbitrary for Balance {
+    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Balance {
+        let mut rng = rand::thread_rng();
+        let num1: u64 = rng.gen_range(1, 99999999999);
+        let num2: u64 = rng.gen_range(1, 99999999999);
+        let generated_str = format!("{}.{}", num1, num2); 
+
+        let result = Decimal::from_str(&generated_str).unwrap();
+
+        Balance(result)
     }
 }

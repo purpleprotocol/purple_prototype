@@ -24,7 +24,7 @@ use transaction::*;
 use std::io::Cursor;
 use std::str;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Call {
     from: Address,
     to: Address,
@@ -283,5 +283,38 @@ impl Call {
         };
 
         Ok(call)
+    }
+}
+
+#[cfg(test)]
+use quickcheck::Arbitrary;
+
+#[cfg(test)]
+impl Arbitrary for Call {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Call {
+        Call {
+            from: Arbitrary::arbitrary(g),
+            to: Arbitrary::arbitrary(g),
+            fee_hash: Arbitrary::arbitrary(g),
+            fee: Arbitrary::arbitrary(g),
+            amount: Arbitrary::arbitrary(g),
+            gas_limit: Arbitrary::arbitrary(g),
+            inputs: Arbitrary::arbitrary(g),
+            gas_price: Arbitrary::arbitrary(g),
+            currency_hash: Arbitrary::arbitrary(g),
+            hash: Some(Arbitrary::arbitrary(g)),
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn prop(tx: Call) -> bool {
+            tx == Call::from_bytes(&Call::to_bytes(&tx).unwrap()).unwrap()
+        }
     }
 }

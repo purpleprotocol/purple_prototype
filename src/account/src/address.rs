@@ -17,8 +17,10 @@
 */
 
 use crypto::PublicKey;
+use rand::Rng;
+use quickcheck::Arbitrary;
 
-#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Debug)]
+#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
 pub struct Address(PublicKey);
 
 impl Address {
@@ -42,5 +44,28 @@ impl Address {
         }
 
         result
+    }
+}
+
+impl Arbitrary for Address {
+    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Address {
+        let mut rng = rand::thread_rng();
+        let bytes: Vec<u8> = (0..32).map(|_| {
+            rng.gen_range(1, 255)
+        }).collect();
+
+        let mut result = [0; 32];
+        result.copy_from_slice(&bytes);
+
+        Address(PublicKey(result))
+    }
+
+    fn shrink(&self) -> Box<Iterator<Item=Self>> {
+        Box::new( (&(&self.0).0).to_vec().shrink().map(|p| {
+            let mut result = [0; 32];
+            result.copy_from_slice(&p);
+            
+            Address(PublicKey(result))
+        }))
     }
 }

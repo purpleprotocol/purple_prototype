@@ -18,9 +18,10 @@
 
 use crypto::Signature as PrimitiveSig;
 use MultiSig;
-use SigExtern;
+use rand::Rng;
+use quickcheck::Arbitrary;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
 pub enum Signature {
     Normal(PrimitiveSig),
     MultiSig(MultiSig),
@@ -36,13 +37,16 @@ impl Signature {
 
     pub fn from_bytes(bin: &[u8]) -> Result<Signature, &'static str> {
         let bin_vec = bin.to_vec();
-        let (head, tail) = bin_vec.split_at(1);
+        let (head, _) = bin_vec.split_at(1);
 
         match head {
             [1] => {
-                if tail.len() == 32 {
-                    let sig: PrimitiveSig = SigExtern::from_bytes(&tail);
-                    Ok(Signature::Normal(sig))
+                if bin.len() == 65 {
+                    match PrimitiveSig::from_bytes(&bin) {
+                        Ok(sig) => Ok(Signature::Normal(sig)),
+                        Err(_)  => Err("Invalid signature")
+                    }
+                    
                 } else {
                     Err("Invalid signature")
                 }
@@ -56,6 +60,19 @@ impl Signature {
             _ => {
                 Err("Invalid signature type")
             }
+        }
+    }
+}
+
+impl Arbitrary for Signature {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Signature {
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(1, 2);
+
+        match random {
+            1 => Signature::Normal(Arbitrary::arbitrary(g)),
+            2 => Signature::MultiSig(Arbitrary::arbitrary(g)),
+            _ => panic!()
         }
     }
 }

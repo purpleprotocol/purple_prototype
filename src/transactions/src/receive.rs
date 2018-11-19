@@ -57,7 +57,7 @@ impl Receive {
         };
 
         let signature = if let Some(signature) = &self.signature {
-            &signature.0
+            signature
         } else {
             return Err("Signature field is missing");
         };
@@ -74,7 +74,7 @@ impl Receive {
         buffer.append(&mut receiver.to_vec());
         buffer.append(&mut sequencer.to_vec());
         buffer.append(&mut hash.to_vec());
-        buffer.append(&mut signature.to_vec());
+        buffer.append(&mut signature.to_bytes());
 
         Ok(buffer)
     }
