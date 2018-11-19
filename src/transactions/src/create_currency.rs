@@ -21,6 +21,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
 use transaction::*;
+use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateCurrency {
@@ -43,14 +44,15 @@ impl CreateCurrency {
     /// Fields:
     /// 1) Transaction type(8)  - 8bits
     /// 2) Fee length           - 8bits
-    /// 3) Coin supply          - 64bits
-    /// 4) Creator              - 32byte binary
-    /// 5) Receiver             - 32byte binary
-    /// 6) Currency hash        - 32byte binary
-    /// 7) Fee hash             - 32byte binary
-    /// 8) Hash                 - 32byte binary
-    /// 9) Signature            - 64byte binary
-    /// 10) Fee                 - Binary of fee length
+    /// 3) Precision            - 8bits
+    /// 4) Coin supply          - 64bits
+    /// 5) Creator              - 32byte binary
+    /// 6) Receiver             - 32byte binary
+    /// 7) Currency hash        - 32byte binary
+    /// 8) Fee hash             - 32byte binary
+    /// 9) Hash                 - 32byte binary
+    /// 10) Signature           - 65byte binary
+    /// 11) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = 8;
@@ -72,12 +74,14 @@ impl CreateCurrency {
         let currency_hash = &&self.currency_hash.0;
         let fee_hash = &&self.fee_hash.0;
         let coin_supply = &self.coin_supply;
+        let precision = &self.precision;
         let fee = &self.fee.to_bytes();
 
         let fee_len = fee.len();
 
         buffer.write_u8(tx_type).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
+        buffer.write_u8(*precision).unwrap();
         buffer.write_u64::<BigEndian>(*coin_supply).unwrap();
 
         buffer.append(&mut creator.to_vec());
@@ -89,6 +93,130 @@ impl CreateCurrency {
         buffer.append(&mut fee.to_vec());
 
         Ok(buffer)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<CreateCurrency, &'static str> {
+        let mut rdr = Cursor::new(bytes.to_vec());
+        let tx_type = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad transaction type");
+        };
+
+        if tx_type != 8 {
+            return Err("Bad transation type");
+        }
+
+        rdr.set_position(1);
+
+        let fee_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad fee len");
+        };
+
+        rdr.set_position(2);
+
+        let precision = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad fee len");
+        };
+
+        rdr.set_position(3);
+
+        let coin_supply = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad signature len");
+        };
+
+        // Consume cursor
+        let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..11).collect();
+
+        let creator = if buf.len() > 32 as usize {
+            let creator_vec: Vec<u8> = buf.drain(..32).collect();
+            Address::from_slice(&creator_vec)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let receiver = if buf.len() > 32 as usize {
+            let receiver_vec: Vec<u8> = buf.drain(..32).collect();
+            Address::from_slice(&receiver_vec)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let currency_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let signature = if buf.len() > 65 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..65).collect();
+            
+            match Signature::from_bytes(&sig_vec) {
+                Ok(sig) => sig,
+                Err(_)  => return Err("Bad signature")
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee = if buf.len() == fee_len as usize {
+            let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
+            
+            match Balance::from_bytes(&fee_vec) {
+                Ok(result) => result,
+                Err(_)     => return Err("Bad gas price")
+            }
+        } else {
+            return Err("Incorrect packet structure")
+        };
+
+        let create_currency = CreateCurrency {
+            creator: creator,
+            receiver: receiver,
+            coin_supply: coin_supply,
+            fee_hash: fee_hash,
+            fee: fee,
+            precision: precision,
+            currency_hash: currency_hash,
+            hash: Some(hash),
+            signature: Some(signature),
+        };
+
+        Ok(create_currency)
     }
 }
 
@@ -106,6 +234,17 @@ impl Arbitrary for CreateCurrency {
             fee: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(tx: CreateCurrency) -> bool {
+            tx == CreateCurrency::from_bytes(&CreateCurrency::to_bytes(&tx).unwrap()).unwrap()
         }
     }
 }
