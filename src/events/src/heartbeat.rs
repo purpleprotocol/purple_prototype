@@ -118,11 +118,15 @@ impl Heartbeat {
             return Err("Bad event type");
         }
 
+        rdr.set_position(1);
+
         let stamp_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
         } else {
             return Err("Bad stamp len");
         };
+
+        rdr.set_position(3);
 
         let txs_len = if let Ok(result) = rdr.read_u32::<BigEndian>() {
             result
@@ -132,10 +136,11 @@ impl Heartbeat {
 
         // Consume cursor
         let mut buf = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..7).collect();
 
         let node_id = if buf.len() > 32 as usize {
             let mut node_id = [0; 32];
-            let node_id_vec = buf.split_off(31);
+            let node_id_vec: Vec<u8> = buf.drain(..32).collect();
 
             node_id.copy_from_slice(&node_id_vec);
 
@@ -146,7 +151,7 @@ impl Heartbeat {
 
         let root_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
-            let hash_vec = buf.split_off(31);
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
             hash.copy_from_slice(&hash_vec);
 
@@ -157,7 +162,7 @@ impl Heartbeat {
 
         let hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
-            let hash_vec = buf.split_off(31);
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
             hash.copy_from_slice(&hash_vec);
 
@@ -167,7 +172,7 @@ impl Heartbeat {
         };
 
         let signature = if buf.len() > 64 as usize {
-            let sig_vec = buf.split_off(63);
+            let sig_vec: Vec<u8> = buf.drain(..64).collect();
 
             Signature::new(&sig_vec)
         } else {
@@ -175,7 +180,7 @@ impl Heartbeat {
         };
 
         let stamp = if buf.len() > stamp_len as usize {
-            let stamp_bin = buf.split_off(stamp_len as usize - 1);
+            let stamp_bin: Vec<u8> = buf.drain(..stamp_len as usize).collect();
 
             if let Ok(stamp) = Stamp::from_bytes(&stamp_bin) {
                 stamp
@@ -201,6 +206,14 @@ impl Heartbeat {
                         };
 
                         txs.push(Box::new(Tx::Call(deserialized)));
+                    },
+                    11 => {
+                        let deserialized = match Burn::from_bytes(&tx) {
+                            Ok(result) => result,
+                            Err(_)     => return Err("Invalid call transaction")
+                        };
+
+                        txs.push(Box::new(Tx::Burn(deserialized)));
                     },
                     _ => return Err("Bad transaction type"),
                 }

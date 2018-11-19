@@ -106,17 +106,23 @@ impl Burn {
             return Err("Bad transation type");
         }
 
+        rdr.set_position(1);
+
         let fee_len = if let Ok(result) = rdr.read_u8() {
             result
         } else {
             return Err("Bad fee len");
         };
 
+        rdr.set_position(2);
+
         let amount_len = if let Ok(result) = rdr.read_u8() {
             result
         } else {
             return Err("Bad amount len");
         };
+
+        rdr.set_position(3);
 
         let signature_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
@@ -126,9 +132,10 @@ impl Burn {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..5).collect();
 
         let burner = if buf.len() > 32 as usize {
-            let burner_vec = buf.split_off(31);
+            let burner_vec: Vec<u8> = buf.drain(..32).collect();
             Address::from_slice(&burner_vec)
         } else {
             return Err("Incorrect packet structure");
@@ -136,7 +143,7 @@ impl Burn {
 
         let currency_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
-            let hash_vec = buf.split_off(31);
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
             hash.copy_from_slice(&hash_vec);
 
@@ -147,7 +154,7 @@ impl Burn {
 
         let fee_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
-            let hash_vec = buf.split_off(31);
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
             hash.copy_from_slice(&hash_vec);
 
@@ -158,7 +165,7 @@ impl Burn {
 
         let hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
-            let hash_vec = buf.split_off(31);
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
             hash.copy_from_slice(&hash_vec);
 
@@ -168,7 +175,7 @@ impl Burn {
         };
 
         let amount = if buf.len() > amount_len as usize {
-            let amount_vec = buf.split_off(amount_len as usize - 1);
+            let amount_vec: Vec<u8> = buf.drain(..amount_len as usize).collect();
             
             match Balance::from_bytes(&amount_vec) {
                 Ok(result) => result,
@@ -179,7 +186,7 @@ impl Burn {
         };
 
         let fee = if buf.len() > fee_len as usize {
-            let fee_vec = buf.split_off(fee_len as usize - 1);
+            let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
             
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
@@ -189,8 +196,8 @@ impl Burn {
             return Err("Incorrect packet structure")
         };
 
-        let signature = if buf.len() > signature_len as usize {
-            let sig_vec = buf.split_off(signature_len as usize - 1);
+        let signature = if buf.len() == signature_len as usize {
+            let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
             
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,
