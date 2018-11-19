@@ -22,7 +22,7 @@ use crypto::Hash;
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenMultiSig {
     creator: Address,
     keys: Vec<Address>,
@@ -120,5 +120,25 @@ impl OpenMultiSig {
         buffer.append(&mut keys);
 
         Ok(buffer)
+    }
+}
+
+use quickcheck::Arbitrary;
+
+impl Arbitrary for OpenMultiSig {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> OpenMultiSig {
+        OpenMultiSig {
+            creator: Arbitrary::arbitrary(g),
+            keys: Arbitrary::arbitrary(g),
+            required_keys: Arbitrary::arbitrary(g),
+            amount: Arbitrary::arbitrary(g),
+            currency_hash: Arbitrary::arbitrary(g),
+            fee: Arbitrary::arbitrary(g),
+            fee_hash: Arbitrary::arbitrary(g),
+            nonce: Arbitrary::arbitrary(g),
+            address: Some(Arbitrary::arbitrary(g)),
+            hash: Some(Arbitrary::arbitrary(g)),
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
     }
 }

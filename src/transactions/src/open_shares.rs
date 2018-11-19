@@ -22,7 +22,7 @@ use crypto::Hash;
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenShares {
     creator: Address,
     shares: Shares,
@@ -125,5 +125,26 @@ impl OpenShares {
         buffer.append(&mut share_map.to_vec());
 
         Ok(buffer)
+    }
+}
+
+use quickcheck::Arbitrary;
+
+impl Arbitrary for OpenShares {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> OpenShares {
+        OpenShares {
+            creator: Arbitrary::arbitrary(g),
+            shares: Arbitrary::arbitrary(g),
+            share_map: Arbitrary::arbitrary(g),
+            amount: Arbitrary::arbitrary(g),
+            currency_hash: Arbitrary::arbitrary(g),
+            fee: Arbitrary::arbitrary(g),
+            fee_hash: Arbitrary::arbitrary(g),
+            nonce: Arbitrary::arbitrary(g),
+            address: Some(Arbitrary::arbitrary(g)),
+            hash: Some(Arbitrary::arbitrary(g)),
+            stock_hash: Some(Arbitrary::arbitrary(g)),
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
     }
 }

@@ -22,7 +22,7 @@ use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateMintable {
     creator: Address,
     receiver: Address,
@@ -97,5 +97,25 @@ impl CreateMintable {
         buffer.append(&mut fee.to_vec());
 
         Ok(buffer)
+    }
+}
+
+use quickcheck::Arbitrary;
+
+impl Arbitrary for CreateMintable {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> CreateMintable {
+        CreateMintable {
+            creator: Arbitrary::arbitrary(g),
+            receiver: Arbitrary::arbitrary(g),
+            minter_address: Arbitrary::arbitrary(g),
+            currency_hash: Arbitrary::arbitrary(g),
+            coin_supply: Arbitrary::arbitrary(g),
+            max_supply: Arbitrary::arbitrary(g),
+            precision: Arbitrary::arbitrary(g),
+            fee_hash: Arbitrary::arbitrary(g),
+            fee: Arbitrary::arbitrary(g),
+            hash: Some(Arbitrary::arbitrary(g)),
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
     }
 }

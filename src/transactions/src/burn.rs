@@ -214,10 +214,8 @@ impl Burn {
     }
 }
 
-#[cfg(test)]
 use quickcheck::Arbitrary;
 
-#[cfg(test)]
 impl Arbitrary for Burn {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Burn {
         Burn {
@@ -237,7 +235,7 @@ mod tests {
     use super::*;
 
     quickcheck! {
-        fn prop(tx: Burn) -> bool {
+        fn serialize_deserialize(tx: Burn) -> bool {
             tx == Burn::from_bytes(&Burn::to_bytes(&tx).unwrap()).unwrap()
         }
     }

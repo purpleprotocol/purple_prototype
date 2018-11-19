@@ -23,7 +23,7 @@ use network::NodeId;
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Receive {
     src_event: Hash,
     source: Hash,
@@ -77,5 +77,20 @@ impl Receive {
         buffer.append(&mut signature.to_bytes());
 
         Ok(buffer)
+    }
+}
+
+use quickcheck::Arbitrary;
+
+impl Arbitrary for Receive {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Receive {
+        Receive {
+            src_event: Arbitrary::arbitrary(g),
+            source: Arbitrary::arbitrary(g),
+            receiver: Arbitrary::arbitrary(g),
+            sequencer: Arbitrary::arbitrary(g),
+            hash: Some(Arbitrary::arbitrary(g)),
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
     }
 }

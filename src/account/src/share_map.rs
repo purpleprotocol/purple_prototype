@@ -19,8 +19,9 @@
 use Address;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::collections::HashMap;
+use quickcheck::Arbitrary;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ShareMap(HashMap<Address, u32>);
 
 impl ShareMap {
@@ -41,5 +42,12 @@ impl ShareMap {
         }
 
         rlp::encode_list::<Vec<u8>, _>(&buf)
+    }
+}
+
+impl Arbitrary for ShareMap {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> ShareMap {
+        let share_map: HashMap<Address, u32> = Arbitrary::arbitrary(g);
+        ShareMap(share_map)
     }
 }

@@ -22,7 +22,7 @@ use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateCurrency {
     creator: Address,
     receiver: Address,
@@ -89,5 +89,23 @@ impl CreateCurrency {
         buffer.append(&mut fee.to_vec());
 
         Ok(buffer)
+    }
+}
+
+use quickcheck::Arbitrary;
+
+impl Arbitrary for CreateCurrency {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> CreateCurrency {
+        CreateCurrency {
+            creator: Arbitrary::arbitrary(g),
+            receiver: Arbitrary::arbitrary(g),
+            currency_hash: Arbitrary::arbitrary(g),
+            coin_supply: Arbitrary::arbitrary(g),
+            precision: Arbitrary::arbitrary(g),
+            fee_hash: Arbitrary::arbitrary(g),
+            fee: Arbitrary::arbitrary(g),
+            hash: Some(Arbitrary::arbitrary(g)),
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
     }
 }

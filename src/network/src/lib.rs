@@ -16,11 +16,39 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use rand::Rng;
+
 #[macro_use]
 extern crate serde_derive;
 extern crate crypto;
+extern crate rand;
+extern crate quickcheck;
 
 use crypto::PublicKey;
+use quickcheck::Arbitrary;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct NodeId(pub PublicKey);
+
+impl Arbitrary for NodeId {
+    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> NodeId {
+        let mut rng = rand::thread_rng();
+        let bytes: Vec<u8> = (0..32).map(|_| {
+            rng.gen_range(1, 255)
+        }).collect();
+
+        let mut result = [0; 32];
+        result.copy_from_slice(&bytes);
+
+        NodeId(PublicKey(result))
+    }
+
+    fn shrink(&self) -> Box<Iterator<Item=Self>> {
+        Box::new( (&(&self.0).0).to_vec().shrink().map(|p| {
+            let mut result = [0; 32];
+            result.copy_from_slice(&p);
+            
+            NodeId(PublicKey(result))
+        }))
+    }
+}

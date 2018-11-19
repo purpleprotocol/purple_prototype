@@ -22,7 +22,7 @@ use crypto::Hash;
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Mint {
     minter: Address,
     amount: Balance,
@@ -90,5 +90,21 @@ impl Mint {
         buffer.append(&mut signature);
 
         Ok(buffer)
+    }
+}
+
+use quickcheck::Arbitrary;
+
+impl Arbitrary for Mint {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Mint {
+        Mint {
+            minter: Arbitrary::arbitrary(g),
+            amount: Arbitrary::arbitrary(g),
+            currency_hash: Arbitrary::arbitrary(g), 
+            fee_hash: Arbitrary::arbitrary(g),
+            fee: Arbitrary::arbitrary(g),
+            hash: Some(Arbitrary::arbitrary(g)),
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
     }
 }

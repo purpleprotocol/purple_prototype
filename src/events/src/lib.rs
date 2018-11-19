@@ -18,6 +18,10 @@
 
 #![feature(extern_prelude)]
 
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
+
 #[macro_use]
 extern crate serde_derive;
 

@@ -17,8 +17,9 @@
 */
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use quickcheck::Arbitrary;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Shares {
     issued_shares: u32,
     authorized_shares: u32,
@@ -41,5 +42,15 @@ impl Shares {
         buf.write_u32::<BigEndian>(*authorized_shares).unwrap();
         
         buf
+    }
+}
+
+impl Arbitrary for Shares {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Shares {
+        Shares {
+            issued_shares: Arbitrary::arbitrary(g),
+            authorized_shares: Arbitrary::arbitrary(g),
+            required_percentile: Arbitrary::arbitrary(g),
+        }
     }
 }

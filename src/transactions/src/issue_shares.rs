@@ -22,7 +22,7 @@ use crypto::Hash;
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct IssueShares {
     issuer: Address,
     receiver: Address,
@@ -87,5 +87,21 @@ impl IssueShares {
         buffer.append(&mut signature);
 
         Ok(buffer)
+    }
+}
+
+use quickcheck::Arbitrary;
+
+impl Arbitrary for IssueShares {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> IssueShares {
+        IssueShares {
+            issuer: Arbitrary::arbitrary(g),
+            receiver: Arbitrary::arbitrary(g),
+            shares: Arbitrary::arbitrary(g),
+            fee_hash: Arbitrary::arbitrary(g),
+            fee: Arbitrary::arbitrary(g),
+            hash: Some(Arbitrary::arbitrary(g)),
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
     }
 }

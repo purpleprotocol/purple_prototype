@@ -18,7 +18,6 @@
 
 #![feature(extern_prelude)]
 
-#[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
 
@@ -31,6 +30,7 @@ extern crate crypto;
 extern crate network;
 extern crate serde;
 extern crate byteorder;
+extern crate rand;
 
 mod burn;
 mod call;
@@ -60,7 +60,10 @@ pub use open_multi_sig::*;
 pub use open_shares::*;
 pub use transaction::*;
 
-#[derive(Serialize, Deserialize)]
+use rand::Rng;
+use quickcheck::Arbitrary;
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Tx {
     Call(Call),
     OpenContract(OpenContract),
@@ -76,19 +79,41 @@ pub enum Tx {
 }
 
 impl Tx {
-  pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
-    match *self {
-      Tx::Call(ref tx)            => tx.to_bytes(),
-      Tx::OpenContract(ref tx)    => tx.to_bytes(),
-      Tx::Receive(ref tx)         => tx.to_bytes(),
-      Tx::Send(ref tx)            => tx.to_bytes(),
-      Tx::Burn(ref tx)            => tx.to_bytes(),
-      Tx::CreateCurrency(ref tx)  => tx.to_bytes(),
-      Tx::CreateMintable(ref tx)  => tx.to_bytes(),
-      Tx::Mint(ref tx)            => tx.to_bytes(),
-      Tx::IssueShares(ref tx)     => tx.to_bytes(),
-      Tx::OpenMultiSig(ref tx)    => tx.to_bytes(),
-      Tx::OpenShares(ref tx)      => tx.to_bytes()
+    pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
+        match *self {
+            Tx::Call(ref tx)            => tx.to_bytes(),
+            Tx::OpenContract(ref tx)    => tx.to_bytes(),
+            Tx::Receive(ref tx)         => tx.to_bytes(),
+            Tx::Send(ref tx)            => tx.to_bytes(),
+            Tx::Burn(ref tx)            => tx.to_bytes(),
+            Tx::CreateCurrency(ref tx)  => tx.to_bytes(),
+            Tx::CreateMintable(ref tx)  => tx.to_bytes(),
+            Tx::Mint(ref tx)            => tx.to_bytes(),
+            Tx::IssueShares(ref tx)     => tx.to_bytes(),
+            Tx::OpenMultiSig(ref tx)    => tx.to_bytes(),
+            Tx::OpenShares(ref tx)      => tx.to_bytes()
+        }
     }
-  }
+}
+
+impl Arbitrary for Tx {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Tx {
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(1, 11);
+
+        match random {
+            1  => Tx::Call(Arbitrary::arbitrary(g)),
+            2  => Tx::OpenContract(Arbitrary::arbitrary(g)),
+            3  => Tx::Receive(Arbitrary::arbitrary(g)),
+            4  => Tx::Send(Arbitrary::arbitrary(g)),
+            5  => Tx::Burn(Arbitrary::arbitrary(g)),
+            6  => Tx::CreateCurrency(Arbitrary::arbitrary(g)),
+            7  => Tx::CreateMintable(Arbitrary::arbitrary(g)),
+            8  => Tx::Mint(Arbitrary::arbitrary(g)),
+            9  => Tx::IssueShares(Arbitrary::arbitrary(g)),
+            10 => Tx::OpenMultiSig(Arbitrary::arbitrary(g)),
+            11 => Tx::OpenShares(Arbitrary::arbitrary(g)),
+            _  => panic!()
+        }
+    }
 }

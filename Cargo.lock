@@ -106,6 +106,8 @@ name = "causality"
 version = "0.1.0"
 dependencies = [
  "itc 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -276,6 +278,7 @@ dependencies = [
  "causality 0.1.0",
  "crypto 0.1.0",
  "network 0.1.0",
+ "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.59 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -541,6 +544,8 @@ name = "network"
 version = "0.1.0"
 dependencies = [
  "crypto 0.1.0",
+ "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.59 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1139,6 +1144,7 @@ dependencies = [
  "crypto 0.1.0",
  "network 0.1.0",
  "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.59 (registry+https://github.com/rust-lang/crates.io-index)",

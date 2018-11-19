@@ -22,7 +22,7 @@ use crypto::Hash;
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Send {
     from: Address,
     to: Address,
@@ -94,5 +94,22 @@ impl Send {
         buffer.append(&mut fee.to_vec());
 
         Ok(buffer)
+    }
+}
+
+use quickcheck::Arbitrary;
+
+impl Arbitrary for Send {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Send {
+        Send {
+            from: Arbitrary::arbitrary(g),
+            to: Arbitrary::arbitrary(g),
+            amount: Arbitrary::arbitrary(g),
+            fee: Arbitrary::arbitrary(g),
+            currency_hash: Arbitrary::arbitrary(g),
+            fee_hash: Arbitrary::arbitrary(g),
+            hash: Some(Arbitrary::arbitrary(g)),
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
     }
 }

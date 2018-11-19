@@ -21,7 +21,7 @@ use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Genesis {
     treasury_balance: Balance,
     treasury_address: Address,

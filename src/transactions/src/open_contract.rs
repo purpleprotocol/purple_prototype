@@ -22,7 +22,7 @@ use crypto::Hash;
 use serde::{Deserialize, Serialize};
 use transaction::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenContract {
     owner: Address,
     code: String,
@@ -90,5 +90,21 @@ impl OpenContract {
         buffer.append(&mut code.to_vec());
 
         Ok(buffer)
+    }
+}
+
+use quickcheck::Arbitrary;
+
+impl Arbitrary for OpenContract {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> OpenContract {
+        OpenContract {
+            owner: Arbitrary::arbitrary(g),
+            code: Arbitrary::arbitrary(g),
+            default_state: Arbitrary::arbitrary(g),
+            fee: Arbitrary::arbitrary(g),
+            fee_hash: Arbitrary::arbitrary(g),
+            hash: Some(Arbitrary::arbitrary(g)),
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
     }
 }

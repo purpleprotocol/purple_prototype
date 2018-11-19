@@ -18,7 +18,12 @@
 
 extern crate itc;
 extern crate serde;
+extern crate quickcheck;
+extern crate rand;
 
+
+use quickcheck::Arbitrary;
+use rand::Rng;
 use itc::Stamp as ItcStamp;
 use itc::{IntervalTreeClock, LessThanOrEqual};
 use serde::de::{Deserialize, Deserializer, Error};
@@ -137,6 +142,15 @@ impl<'a> Deserialize<'a> for Stamp {
             Ok(res) => Ok(Stamp(res)),
             Err(_)  => Err(Error::custom(format!("{} is not a valid stamp", result))),
         }
+    }
+}
+
+impl Arbitrary for Stamp {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Stamp {
+        let stamp = Stamp::seed();
+
+        // TODO: Make this more random and complex
+        stamp.event()
     }
 }
 

@@ -24,7 +24,7 @@ use std::boxed::Box;
 use std::io::Cursor;
 use transactions::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Heartbeat {
     node_id: NodeId,
     stamp: Stamp,
@@ -221,5 +221,33 @@ impl Heartbeat {
         };
 
         Ok(heartbeat)
+    }
+}
+
+#[cfg(test)]
+use quickcheck::Arbitrary;
+
+#[cfg(test)]
+impl Arbitrary for Heartbeat {
+    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Heartbeat {
+        Heartbeat {
+            node_id: Arbitrary::arbitrary(g),
+            root_hash: Some(Arbitrary::arbitrary(g)),
+            hash: Some(Arbitrary::arbitrary(g)),
+            signature: Some(Arbitrary::arbitrary(g)),
+            stamp: Arbitrary::arbitrary(g),
+            transactions: Arbitrary::arbitrary(g),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(tx: Heartbeat) -> bool {
+            tx == Heartbeat::from_bytes(&Heartbeat::to_bytes(&tx).unwrap()).unwrap()
+        }
     }
 }
