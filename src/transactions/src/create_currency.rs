@@ -120,7 +120,7 @@ impl CreateCurrency {
         let precision = if let Ok(result) = rdr.read_u8() {
             result
         } else {
-            return Err("Bad fee len");
+            return Err("Bad precision");
         };
 
         rdr.set_position(3);
@@ -128,7 +128,7 @@ impl CreateCurrency {
         let coin_supply = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
         } else {
-            return Err("Bad signature len");
+            return Err("Bad coin supply");
         };
 
         // Consume cursor

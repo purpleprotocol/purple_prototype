@@ -215,6 +215,14 @@ impl Heartbeat {
 
                         txs.push(Box::new(Tx::CreateCurrency(deserialized)));
                     },
+                    9 => {
+                        let deserialized = match CreateMintable::from_bytes(&tx) {
+                            Ok(result) => result,
+                            Err(_)     => return Err("Invalid call transaction")
+                        };
+
+                        txs.push(Box::new(Tx::CreateMintable(deserialized)));
+                    },
                     11 => {
                         let deserialized = match Burn::from_bytes(&tx) {
                             Ok(result) => result,
