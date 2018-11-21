@@ -49,9 +49,9 @@ impl MultiSig {
                 let rlp_decoded: Vec<Vec<u8>> = rlp::decode_list(&tail);
                 let mut result: Vec<Signature> = Vec::with_capacity(rlp_decoded.len());
 
-                for bytes in rlp_decoded {
-                    if bytes.len() == 64 {
-                        let mut sig = [0; 64];
+                for bytes in rlp_decoded.clone() {
+                    if bytes.len() == 65 {
+                        let mut sig = [0; 65];
                         sig.copy_from_slice(&bytes);
 
                         match Signature::from_bytes(&sig) {

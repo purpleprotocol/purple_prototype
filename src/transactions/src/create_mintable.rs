@@ -216,8 +216,6 @@ impl CreateMintable {
             return Err("Incorrect packet structure");
         };
 
-        println!("DEBUG 1 Buf len: {} Fee len: {}", buf.len(), fee_len);
-
         let fee = if buf.len() == fee_len as usize {
             let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
             
