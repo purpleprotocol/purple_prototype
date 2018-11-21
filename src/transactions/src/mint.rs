@@ -21,6 +21,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
 use transaction::*;
+use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Mint {
@@ -91,6 +92,132 @@ impl Mint {
 
         Ok(buffer)
     }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Mint, &'static str> {
+        let mut rdr = Cursor::new(bytes.to_vec());
+        let tx_type = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad transaction type");
+        };
+
+        if tx_type != 10 {
+            return Err("Bad transation type");
+        }
+
+        rdr.set_position(1);
+
+        let fee_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad fee len");
+        };
+
+        rdr.set_position(2);
+
+        let amount_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad amount len");
+        };
+
+        rdr.set_position(3);
+
+        let signature_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad signature len");
+        };
+
+        // Consume cursor
+        let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..5).collect();
+
+        let minter = if buf.len() > 32 as usize {
+            let minter_vec: Vec<u8> = buf.drain(..32).collect();
+            Address::from_slice(&minter_vec)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let currency_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let amount = if buf.len() > amount_len as usize {
+            let amount_vec: Vec<u8> = buf.drain(..amount_len as usize).collect();
+
+            match Balance::from_bytes(&amount_vec) {
+                Ok(result) => result,
+                Err(_)     => return Err("Bad amount")
+            }
+        } else {
+            return Err("Incorrect packet structure")
+        };
+
+        let fee = if buf.len() > fee_len as usize {
+            let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
+
+            match Balance::from_bytes(&fee_vec) {
+                Ok(result) => result,
+                Err(_)     => return Err("Bad fee")
+            }
+        } else {
+            return Err("Incorrect packet structure")
+        };
+
+        let signature = if buf.len() == signature_len as usize {
+            let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
+
+            match Signature::from_bytes(&sig_vec) {
+                Ok(sig)   => sig,
+                Err(err)  => return Err(err)
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let mint = Mint {
+            minter: minter,
+            currency_hash: currency_hash,
+            fee_hash: fee_hash,
+            fee: fee,
+            amount: amount,
+            hash: Some(hash),
+            signature: Some(signature),
+        };
+
+        Ok(mint)
+    }
 }
 
 use quickcheck::Arbitrary;
@@ -105,6 +232,17 @@ impl Arbitrary for Mint {
             fee: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(tx: Mint) -> bool {
+            tx == Mint::from_bytes(&Mint::to_bytes(&tx).unwrap()).unwrap()
         }
     }
 }
