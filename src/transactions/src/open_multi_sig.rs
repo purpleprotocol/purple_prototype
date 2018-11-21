@@ -16,11 +16,12 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature};
+use account::{Address, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::Hash;
+use crypto::{Signature, Hash};
 use serde::{Deserialize, Serialize};
 use transaction::*;
+use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenMultiSig {
@@ -121,6 +122,177 @@ impl OpenMultiSig {
 
         Ok(buffer)
     }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<OpenMultiSig, &'static str> {
+        let mut rdr = Cursor::new(bytes.to_vec());
+        let tx_type = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad transaction type");
+        };
+
+        if tx_type != 5 {
+            return Err("Bad transation type");
+        }
+
+        rdr.set_position(1);
+
+        let required_keys = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad required keys");
+        };
+
+        rdr.set_position(2);
+
+        let amount_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad amount len");
+        };
+
+        rdr.set_position(3);
+
+        let fee_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad fee len");
+        };
+
+        rdr.set_position(4);
+
+        let keys_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad keys len");
+        };
+
+        rdr.set_position(6);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
+        // Consume cursor
+        let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..14).collect();
+
+        let fee_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let currency_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let creator = if buf.len() > 32 as usize {
+            let creator_vec: Vec<u8> = buf.drain(..32).collect();
+            Address::from_slice(&creator_vec)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let address = if buf.len() > 32 as usize {
+            let address_vec: Vec<u8> = buf.drain(..32).collect();
+            Address::from_slice(&address_vec)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let signature = if buf.len() > 65 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..65 as usize).collect();
+
+            match Signature::from_bytes(&sig_vec) {
+                Ok(sig)   => sig,
+                Err(err)  => return Err(err)
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let amount = if buf.len() > amount_len as usize {
+            let amount_vec: Vec<u8> = buf.drain(..amount_len as usize).collect();
+
+            match Balance::from_bytes(&amount_vec) {
+                Ok(result) => result,
+                Err(_)     => return Err("Bad amount")
+            }
+        } else {
+            return Err("Incorrect packet structure")
+        };
+
+        let fee = if buf.len() > fee_len as usize {
+            let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
+
+            match Balance::from_bytes(&fee_vec) {
+                Ok(result) => result,
+                Err(_)     => return Err("Bad fee")
+            }
+        } else {
+            return Err("Incorrect packet structure")
+        };
+
+        let keys = if buf.len() == keys_len as usize {
+            let keys_vec: Vec<u8> = buf.drain(..keys_len as usize).collect();
+            let deserialized_keys: Vec<Vec<u8>> = rlp::decode_list(&keys_vec);
+            let mut keys: Vec<Address> = Vec::with_capacity(keys_len as usize);
+
+            for k in deserialized_keys {
+                if k.len() == 32 {
+                    keys.push(Address::from_slice(&k));
+                } else {
+                    return Err("Bad key");
+                }
+            }
+
+            keys
+        } else {
+            return Err("Incorrect packet structure")
+        };
+
+        let open_multi_sig = OpenMultiSig {
+            creator: creator,
+            required_keys: required_keys,
+            keys: keys,
+            currency_hash: currency_hash,
+            amount: amount,
+            fee_hash: fee_hash,
+            fee: fee,
+            nonce: nonce,
+            address: Some(address),
+            hash: Some(hash),
+            signature: Some(signature),
+        };
+
+        Ok(open_multi_sig)
+    }
 }
 
 use quickcheck::Arbitrary;
@@ -139,6 +311,17 @@ impl Arbitrary for OpenMultiSig {
             address: Some(Arbitrary::arbitrary(g)),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(tx: OpenMultiSig) -> bool {
+            tx == OpenMultiSig::from_bytes(&OpenMultiSig::to_bytes(&tx).unwrap()).unwrap()
         }
     }
 }

@@ -196,7 +196,7 @@ impl OpenContract {
             return Err("Incorrect packet structure")
         };
 
-        let default_state = if buf.len() > state_len as usize {
+        let default_state = if buf.len() >= state_len as usize {
             let state_vec: Vec<u8> = buf.drain(..state_len as usize).collect();
 
             match str::from_utf8(&state_vec) {

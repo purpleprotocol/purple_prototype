@@ -215,6 +215,14 @@ impl Heartbeat {
 
                         txs.push(Box::new(Tx::OpenContract(deserialized)));
                     },
+                    5 => {
+                        let deserialized = match OpenMultiSig::from_bytes(&tx) {
+                            Ok(result) => result,
+                            Err(_)     => return Err("Invalid open multi signature transaction")
+                        };
+
+                        txs.push(Box::new(Tx::OpenMultiSig(deserialized)));
+                    },
                     7 => {
                         let deserialized = match IssueShares::from_bytes(&tx) {
                             Ok(result) => result,
