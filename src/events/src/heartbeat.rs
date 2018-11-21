@@ -207,6 +207,14 @@ impl Heartbeat {
 
                         txs.push(Box::new(Tx::Call(deserialized)));
                     },
+                    2 => {
+                        let deserialized = match OpenContract::from_bytes(&tx) {
+                            Ok(result) => result,
+                            Err(_)     => return Err("Invalid open conract transaction")
+                        };
+
+                        txs.push(Box::new(Tx::OpenContract(deserialized)));
+                    },
                     7 => {
                         let deserialized = match IssueShares::from_bytes(&tx) {
                             Ok(result) => result,
