@@ -18,13 +18,13 @@
 
 #![feature(extern_prelude)]
 
-#[macro_use]
-extern crate serde_derive;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate quickcheck;
+
 extern crate crypto;
 extern crate rlp;
 extern crate byteorder;
 extern crate regex;
-extern crate quickcheck;
 extern crate rand;
 extern crate rust_decimal;
 

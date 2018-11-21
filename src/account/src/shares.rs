@@ -18,6 +18,7 @@
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use quickcheck::Arbitrary;
+use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Shares {
@@ -43,6 +44,43 @@ impl Shares {
         
         buf
     }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Shares, &'static str> {
+        if bytes.len() == 9 {
+            let mut rdr = Cursor::new(bytes.to_vec());
+            let required_percentile = if let Ok(result) = rdr.read_u8() {
+                result
+            } else {
+                return Err("Bad required percentile");
+            };
+
+            rdr.set_position(1);
+
+            let issued_shares = if let Ok(result) = rdr.read_u32::<BigEndian>() {
+                result
+            } else {
+                return Err("Bad issued shares");
+            };
+
+            rdr.set_position(5);
+
+            let authorized_shares = if let Ok(result) = rdr.read_u32::<BigEndian>() {
+                result
+            } else {
+                return Err("Bad authorized shares");
+            };
+
+            let shares = Shares {
+                required_percentile: required_percentile,
+                issued_shares: issued_shares,
+                authorized_shares: authorized_shares
+            };
+
+            Ok(shares)
+        } else {
+            Err("Bad shares length")
+        }
+    }
 }
 
 impl Arbitrary for Shares {
@@ -51,6 +89,17 @@ impl Arbitrary for Shares {
             issued_shares: Arbitrary::arbitrary(g),
             authorized_shares: Arbitrary::arbitrary(g),
             required_percentile: Arbitrary::arbitrary(g),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(tx: Shares) -> bool {
+            tx == Shares::from_bytes(&Shares::to_bytes(&tx)).unwrap()
         }
     }
 }

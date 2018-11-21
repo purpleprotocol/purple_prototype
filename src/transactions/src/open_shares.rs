@@ -21,6 +21,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
 use transaction::*;
+use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenShares {
@@ -126,6 +127,193 @@ impl OpenShares {
 
         Ok(buffer)
     }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<OpenShares, &'static str> {
+        let mut rdr = Cursor::new(bytes.to_vec());
+        let tx_type = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad transaction type");
+        };
+
+        if tx_type != 6 {
+            return Err("Bad transation type");
+        }
+
+        rdr.set_position(1);
+
+        let amount_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad amount len");
+        };
+
+        rdr.set_position(2);
+
+        let fee_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad fee len");
+        };
+
+        rdr.set_position(3);
+
+        let shares_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad shares len");
+        };
+
+        rdr.set_position(5);
+
+        let share_map_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad share map len");
+        };
+
+        rdr.set_position(7);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
+        // Consume cursor
+        let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..15).collect();
+
+        let stock_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let currency_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let creator = if buf.len() > 32 as usize {
+            let creator_vec: Vec<u8> = buf.drain(..32).collect();
+            Address::from_slice(&creator_vec)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let address = if buf.len() > 32 as usize {
+            let address_vec: Vec<u8> = buf.drain(..32).collect();
+            Address::from_slice(&address_vec)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let signature = if buf.len() > 65 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..65 as usize).collect();
+
+            match Signature::from_bytes(&sig_vec) {
+                Ok(sig)   => sig,
+                Err(err)  => return Err(err)
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let amount = if buf.len() > amount_len as usize {
+            let amount_vec: Vec<u8> = buf.drain(..amount_len as usize).collect();
+
+            match Balance::from_bytes(&amount_vec) {
+                Ok(result) => result,
+                Err(_)     => return Err("Bad amount")
+            }
+        } else {
+            return Err("Incorrect packet structure")
+        };
+
+        let fee = if buf.len() > fee_len as usize {
+            let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
+
+            match Balance::from_bytes(&fee_vec) {
+                Ok(result) => result,
+                Err(_)     => return Err("Bad fee")
+            }
+        } else {
+            return Err("Incorrect packet structure")
+        };
+
+        let shares = if buf.len() > shares_len as usize {
+            let shares_vec: Vec<u8> = buf.drain(..shares_len as usize).collect();
+
+            match Shares::from_bytes(&shares_vec) {
+                Ok(result) => result,
+                Err(_)     => return Err("Bad shares")
+            }
+        } else {
+            return Err("Incorrect packet structure")
+        };
+
+        let share_map = if buf.len() == share_map_len as usize {
+            let share_map_vec: Vec<u8> = buf.drain(..share_map_len as usize).collect();
+
+            match ShareMap::from_bytes(&share_map_vec) {
+                Ok(result) => result,
+                Err(_)     => return Err("Bad share map")
+            }
+        } else {
+            return Err("Incorrect packet structure")
+        };
+
+        let open_shares = OpenShares {
+            creator: creator,
+            shares: shares,
+            share_map: share_map,
+            currency_hash: currency_hash,
+            amount: amount,
+            fee_hash: fee_hash,
+            fee: fee,
+            nonce: nonce,
+            stock_hash: Some(stock_hash),
+            address: Some(address),
+            hash: Some(hash),
+            signature: Some(signature),
+        };
+
+        Ok(open_shares)
+    }
 }
 
 use quickcheck::Arbitrary;
@@ -145,6 +333,17 @@ impl Arbitrary for OpenShares {
             hash: Some(Arbitrary::arbitrary(g)),
             stock_hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(tx: OpenShares) -> bool {
+            tx == OpenShares::from_bytes(&OpenShares::to_bytes(&tx).unwrap()).unwrap()
         }
     }
 }

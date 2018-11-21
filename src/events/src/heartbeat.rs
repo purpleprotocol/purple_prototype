@@ -223,6 +223,14 @@ impl Heartbeat {
 
                         txs.push(Box::new(Tx::OpenMultiSig(deserialized)));
                     },
+                    6 => {
+                        let deserialized = match OpenShares::from_bytes(&tx) {
+                            Ok(result) => result,
+                            Err(_)     => return Err("Invalid shares transaction")
+                        };
+
+                        txs.push(Box::new(Tx::OpenShares(deserialized)));
+                    },
                     7 => {
                         let deserialized = match IssueShares::from_bytes(&tx) {
                             Ok(result) => result,
