@@ -17,11 +17,12 @@
 */
 
 use account::{Address, Balance};
-use crypto::{Hash, Signature};
+use crypto::{Hash, Signature, PublicKey};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use network::NodeId;
 use serde::{Deserialize, Serialize};
 use transaction::*;
+use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Receive {
@@ -74,9 +75,96 @@ impl Receive {
         buffer.append(&mut receiver.to_vec());
         buffer.append(&mut sequencer.to_vec());
         buffer.append(&mut hash.to_vec());
-        buffer.append(&mut signature.to_bytes());
+        buffer.append(&mut signature.inner_bytes());
 
         Ok(buffer)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Receive, &'static str> {
+        let mut rdr = Cursor::new(bytes.to_vec());
+        let tx_type = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad transaction type");
+        };
+
+        if tx_type != 4 {
+            return Err("Bad transation type");
+        }
+
+        // Consume cursor
+        let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..1).collect();
+
+        let source = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let src_event = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let receiver = if buf.len() > 32 as usize {
+            let receiver_vec: Vec<u8> = buf.drain(..32).collect();
+            Address::from_slice(&receiver_vec)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let sequencer = if buf.len() > 32 as usize {
+            let sequencer_vec: Vec<u8> = buf.drain(..32).collect();
+            let mut result = [0; 32];
+        
+            result.copy_from_slice(&sequencer_vec);
+
+            NodeId(PublicKey(result))
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let signature = if buf.len() == 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
+
+            Signature::new(&sig_vec)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let receive = Receive {
+            sequencer: sequencer,
+            receiver: receiver,
+            src_event: src_event,
+            source: source,
+            hash: Some(hash),
+            signature: Some(signature),
+        };
+
+        Ok(receive)
     }
 }
 
@@ -91,6 +179,17 @@ impl Arbitrary for Receive {
             sequencer: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(tx: Receive) -> bool {
+            tx == Receive::from_bytes(&Receive::to_bytes(&tx).unwrap()).unwrap()
         }
     }
 }
