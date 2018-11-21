@@ -24,6 +24,8 @@ use std::boxed::Box;
 use std::io::Cursor;
 use transactions::*;
 
+const HEARTBEAT_MAX_SIZE: usize = 16;
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Heartbeat {
     node_id: NodeId,
@@ -53,6 +55,11 @@ impl Heartbeat {
     /// 8) Stamp         - Binary of stamp length
     /// 9) Transactions  - Binary of txs length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
+        // Max size guard
+        if self.transactions.len() > HEARTBEAT_MAX_SIZE {
+            return Err("Too many transactions!");
+        }
+
         let mut buffer: Vec<u8> = Vec::new();
         let event_type: u8 = 0;
 
@@ -74,7 +81,7 @@ impl Heartbeat {
             return Err("Signature field is missing");
         };
 
-        let mut transactions: Vec<Vec<u8>> = Vec::with_capacity(self.transactions.len());
+        let mut transactions: Vec<Vec<u8>> = Vec::with_capacity(HEARTBEAT_MAX_SIZE);
 
         // Serialize transactions
         for tx in &self.transactions {
@@ -195,6 +202,10 @@ impl Heartbeat {
             let ser_txs: Vec<Vec<u8>> = rlp::decode_list(&buf);
             let mut txs: Vec<Box<Tx>> = Vec::new();
 
+            if ser_txs.len() > HEARTBEAT_MAX_SIZE {
+                return Err("Too many transactions!");
+            }
+
             for tx in ser_txs {
                 let tx_type = &tx[0];
 
@@ -214,6 +225,14 @@ impl Heartbeat {
                         };
 
                         txs.push(Box::new(Tx::OpenContract(deserialized)));
+                    },
+                    3 => {
+                        let deserialized = match Send::from_bytes(&tx) {
+                            Ok(result) => result,
+                            Err(_)     => return Err("Invalid receive transaction")
+                        };
+
+                        txs.push(Box::new(Tx::Send(deserialized)));
                     },
                     4 => {
                         let deserialized = match Receive::from_bytes(&tx) {
@@ -307,13 +326,19 @@ use quickcheck::Arbitrary;
 #[cfg(test)]
 impl Arbitrary for Heartbeat {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Heartbeat {
+        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(16);
+
+        for _ in 0..16 {
+            txs.push(Arbitrary::arbitrary(g));
+        }
+
         Heartbeat {
             node_id: Arbitrary::arbitrary(g),
             root_hash: Some(Arbitrary::arbitrary(g)),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
             stamp: Arbitrary::arbitrary(g),
-            transactions: Arbitrary::arbitrary(g),
+            transactions: txs,
         }
     }
 }
