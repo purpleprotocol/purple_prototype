@@ -16,18 +16,11 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![feature(extern_prelude)]
+use Peer;
+use NodeId;
 
-#[macro_use]
-extern crate serde_derive;
-extern crate crypto;
-extern crate rand;
-extern crate quickcheck;
-
-mod node_id;
-mod network;
-mod peer;
-
-pub use node_id::*;
-pub use network::*;
-pub use peer::*;
+pub struct Network {
+    peers: Vec<Peer>,
+    node_id: NodeId,
+    network_name: String
+}
