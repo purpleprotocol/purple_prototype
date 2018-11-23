@@ -18,11 +18,15 @@
 
 use rand::Rng;
 use quickcheck::Arbitrary;
-use blake2::{Blake2s, Digest};
+use blake2::{Blake2b, Digest};
+use std::convert::{AsMut, AsRef};
+use std::default::Default;
+use hashdb::Hasher;
+use blake_hasher::BlakeHasher;
 
-const HASH_BYTES: usize = 32;
+pub const HASH_BYTES: usize = 32;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Hash(pub [u8; HASH_BYTES]);
 
 impl Hash {
@@ -37,8 +41,45 @@ impl Hash {
     }
 }
 
+impl Default for Hash {
+    fn default() -> Self {
+        let mut buf = Vec::with_capacity(HASH_BYTES);
+        let mut result = [0; HASH_BYTES];
+
+        for _ in 0..HASH_BYTES {
+            buf.push(0);
+        }
+
+        result.copy_from_slice(&buf);
+
+        Hash(result)
+    }
+}
+
+impl Hasher for Hash {
+    type Out = Hash;
+    type StdHasher = BlakeHasher;
+    const LENGTH: usize = HASH_BYTES;
+
+    fn hash(bin: &[u8]) -> Self::Out {
+        hash_slice(bin)
+    }
+}
+
+impl AsMut<[u8]> for Hash {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut()
+    }
+}
+
+impl AsRef<[u8]> for Hash {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
 pub fn hash_slice(val: &[u8]) -> Hash {
-    let mut hasher = Blake2s::new();
+    let mut hasher = Blake2b::new();
     let mut result: [u8; HASH_BYTES] = [0; HASH_BYTES];
 
     hasher.input(&val);

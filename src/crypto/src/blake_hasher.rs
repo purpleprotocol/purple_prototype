@@ -16,25 +16,38 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![feature(extern_prelude)]
+use std::hash::Hasher;
+use hash::*;
+use std::default::Default;
+use std::u64;
 
-#[macro_use]
-extern crate serde_derive;
+pub struct BlakeHasher {
+    buffer: Vec<u8>
+}
 
-extern crate hashdb;
-extern crate rand;
-extern crate hex;
-extern crate blake2;
-extern crate rust_sodium;
-extern crate quickcheck;
+impl BlakeHasher {
+    pub fn new() -> BlakeHasher {
+        BlakeHasher {
+            buffer: Vec::new()
+        }
+    }
+}
 
-pub use hash::*;
-pub use signature::*;
-pub use blake_hasher::*;
-pub use rust_sodium::crypto::sign::{
-    gen_keypair, sign_detached, verify_detached, PublicKey, SecretKey,
-};
+impl Default for BlakeHasher {
+    fn default() -> Self {
+        BlakeHasher::new()
+    }
+}
 
-mod hash;
-mod signature;
-mod blake_hasher;
+impl Hasher for BlakeHasher {
+    fn write(&mut self, bytes: &[u8]) -> () {
+        &self.buffer.append(&mut bytes.to_vec());
+    }
+
+    fn finish(&self) -> u64 {
+        let result = hash_slice(&self.buffer);
+        let hex_encoded = hex::encode(result);
+
+        u64::from_str_radix(&hex_encoded, 16).unwrap()
+    }
+}

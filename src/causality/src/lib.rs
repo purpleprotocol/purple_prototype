@@ -23,14 +23,12 @@ extern crate rand;
 
 
 use quickcheck::Arbitrary;
-use rand::Rng;
 use itc::Stamp as ItcStamp;
 use itc::{IntervalTreeClock, LessThanOrEqual};
 use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::{Serialize, Serializer};
 use std::str::from_utf8;
 use std::str::FromStr;
-use std::cmp::PartialEq;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stamp(ItcStamp);
@@ -146,7 +144,7 @@ impl<'a> Deserialize<'a> for Stamp {
 }
 
 impl Arbitrary for Stamp {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Stamp {
+    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Stamp {
         let stamp = Stamp::seed();
 
         // TODO: Make this more random and complex

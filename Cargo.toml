@@ -6,16 +6,22 @@ license = "GPL-3.0"
 [workspace]
 
 [dependencies]
+clap = "2.32.0"
+unwrap = "~1.1.0"
 hex = "0.3.2"
 tokio = "0.1.11"
 itc = "0.1.2"
 log = "0.4.0"
 env_logger = "0.6.0"
+parking_lot = "0.6"
+kvdb = { git = "https://github.com/paritytech/parity-common" }
+kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
 account = { path = "src/account" }
 purple_vm = { path = "src/purple_vm" }
 crypto = { path = "src/crypto" } 
 jump = { path = "src/jump" }
 events = { path = "src/events" }
+persistence = { path = "src/persistence" }
 transactions = { path = "src/transactions" }
 
 [lib]

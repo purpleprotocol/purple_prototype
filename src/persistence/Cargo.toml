@@ -1,0 +1,12 @@
+[package]
+name = "persistence"
+version = "0.1.0"
+authors = ["octavonce <octavonce@gmail.com>"]
+
+[dependencies]
+hashdb = "0.3.0"
+patricia-trie = "0.3.0"
+parking_lot = "0.6"
+kvdb = { git = "https://github.com/paritytech/parity-common" }
+kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
+crypto = { path = "../crypto" }

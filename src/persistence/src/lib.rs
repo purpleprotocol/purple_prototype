@@ -18,23 +18,6 @@
 
 #![feature(extern_prelude)]
 
-#[macro_use]
-extern crate serde_derive;
-
+extern crate crypto;
 extern crate hashdb;
-extern crate rand;
-extern crate hex;
-extern crate blake2;
-extern crate rust_sodium;
-extern crate quickcheck;
-
-pub use hash::*;
-pub use signature::*;
-pub use blake_hasher::*;
-pub use rust_sodium::crypto::sign::{
-    gen_keypair, sign_detached, verify_detached, PublicKey, SecretKey,
-};
-
-mod hash;
-mod signature;
-mod blake_hasher;
+extern crate parking_lot;
