@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Shares};
+use account::{NormalAddress, Balance, Shares};
 use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
 use transaction::*;
@@ -24,7 +24,7 @@ use transaction::*;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Genesis {
     treasury_balance: Balance,
-    treasury_address: Address,
+    treasury_address: NormalAddress,
     treasury_shares: Shares,
     treasury_stock_hash: Hash,
     currency_hash: Hash,

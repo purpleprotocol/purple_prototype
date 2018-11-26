@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature, Shares, ShareMap};
+use account::{NormalAddress, Balance, Signature, Shares, ShareMap};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenShares {
-    creator: Address,
+    creator: NormalAddress,
     shares: Shares,
     share_map: ShareMap,
     amount: Balance,
@@ -34,7 +34,7 @@ pub struct OpenShares {
     fee_hash: Hash,
     nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    address: Option<Address>,
+    address: Option<NormalAddress>,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -219,14 +219,14 @@ impl OpenShares {
 
         let creator = if buf.len() > 32 as usize {
             let creator_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&creator_vec)
+            NormalAddress::from_bytes(&creator_vec)
         } else {
             return Err("Incorrect packet structure");
         };
 
         let address = if buf.len() > 32 as usize {
             let address_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&address_vec)
+            NormalAddress::from_bytes(&address_vec)
         } else {
             return Err("Incorrect packet structure");
         };

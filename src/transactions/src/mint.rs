@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature};
+use account::{NormalAddress, Balance, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Mint {
-    minter: Address,
+    minter: NormalAddress,
     amount: Balance,
     currency_hash: Hash, 
     fee_hash: Hash,
@@ -135,7 +135,7 @@ impl Mint {
 
         let minter = if buf.len() > 32 as usize {
             let minter_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&minter_vec)
+            NormalAddress::from_bytes(&minter_vec)
         } else {
             return Err("Incorrect packet structure");
         };

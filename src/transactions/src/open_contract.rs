@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature};
+use account::{NormalAddress, Balance, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,7 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenContract {
-    owner: Address,
+    owner: NormalAddress,
     code: String,
     default_state: String,
     fee: Balance,
@@ -149,7 +149,7 @@ impl OpenContract {
 
         let owner = if buf.len() > 32 as usize {
             let owner_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&owner_vec)
+            NormalAddress::from_bytes(&owner_vec)
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the size for the owner field");
         };

@@ -16,11 +16,11 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use Address;
+use NormalAddress;
 
-#[derive(PartialEq, Serialize, Deserialize, Debug)]
+#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
 pub struct MultiSigAddress {
-    keys: Vec<Address>,
+    keys: Vec<NormalAddress>,
     keys_required: u8,
     address: [u8; 32],
 }

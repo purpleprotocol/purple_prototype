@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance};
+use account::{NormalAddress, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Signature, Hash};
 use serde::{Deserialize, Serialize};
@@ -25,8 +25,8 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenMultiSig {
-    creator: Address,
-    keys: Vec<Address>,
+    creator: NormalAddress,
+    keys: Vec<NormalAddress>,
     required_keys: u8,
     amount: Balance,
     currency_hash: Hash,
@@ -34,7 +34,7 @@ pub struct OpenMultiSig {
     fee_hash: Hash,
     nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    address: Option<Address>,
+    address: Option<NormalAddress>,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -54,7 +54,7 @@ impl OpenMultiSig {
     /// 7) Fee hash                 - 32byte binary
     /// 8) Currency hash            - 32byte binary
     /// 9) Creator                  - 32byte binary
-    /// 10) Address                 - 32byte binary
+    /// 10) NormalAddress                 - 32byte binary
     /// 11) Hash                    - 32byte binary
     /// 12) Signature               - 64byte binary
     /// 13) Amount                  - Binary of amount length
@@ -67,7 +67,7 @@ impl OpenMultiSig {
         let address = if let Some(address) = &self.address {
             address.to_bytes()
         } else {
-            return Err("Address field is missing");
+            return Err("NormalAddress field is missing");
         };
 
         let hash = if let Some(hash) = &self.hash {
@@ -203,14 +203,14 @@ impl OpenMultiSig {
 
         let creator = if buf.len() > 32 as usize {
             let creator_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&creator_vec)
+            NormalAddress::from_bytes(&creator_vec)
         } else {
             return Err("Incorrect packet structure");
         };
 
         let address = if buf.len() > 32 as usize {
             let address_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&address_vec)
+            NormalAddress::from_bytes(&address_vec)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -262,11 +262,11 @@ impl OpenMultiSig {
         let keys = if buf.len() == keys_len as usize {
             let keys_vec: Vec<u8> = buf.drain(..keys_len as usize).collect();
             let deserialized_keys: Vec<Vec<u8>> = rlp::decode_list(&keys_vec);
-            let mut keys: Vec<Address> = Vec::with_capacity(keys_len as usize);
+            let mut keys: Vec<NormalAddress> = Vec::with_capacity(keys_len as usize);
 
             for k in deserialized_keys {
                 if k.len() == 32 {
-                    keys.push(Address::from_slice(&k));
+                    keys.push(NormalAddress::from_bytes(&k));
                 } else {
                     return Err("Bad key");
                 }

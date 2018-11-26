@@ -28,18 +28,16 @@ extern crate regex;
 extern crate rand;
 extern crate rust_decimal;
 
-mod address;
+mod addresses;
 mod balance;
 mod signature;
 mod multi_sig;
-mod multi_sig_address;
 mod shares;
 mod share_map;
 
-pub use address::*;
+pub use addresses::*;
 pub use balance::*;
 pub use signature::*;
 pub use multi_sig::*;
-pub use multi_sig_address::*;
 pub use shares::*;
 pub use share_map::*;

@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, MultiSig};
+use account::{NormalAddress, Balance, MultiSig};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
@@ -25,8 +25,8 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct IssueShares {
-    issuer: Address,
-    receiver: Address,
+    issuer: NormalAddress,
+    receiver: NormalAddress,
     shares: u64,
     fee_hash: Hash,
     fee: Balance,
@@ -132,14 +132,14 @@ impl IssueShares {
 
         let issuer = if buf.len() > 32 as usize {
             let issuer_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&issuer_vec)
+            NormalAddress::from_bytes(&issuer_vec)
         } else {
             return Err("Incorrect packet structure");
         };
 
         let receiver = if buf.len() > 32 as usize {
             let receiver_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&receiver_vec)
+            NormalAddress::from_bytes(&receiver_vec)
         } else {
             return Err("Incorrect packet structure");
         };

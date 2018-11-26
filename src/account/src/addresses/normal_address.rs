@@ -21,23 +21,32 @@ use rand::Rng;
 use quickcheck::Arbitrary;
 
 #[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
-pub struct Address(PublicKey);
+pub struct NormalAddress(PublicKey);
 
-impl Address {
-    pub fn from_slice(bin: &[u8]) -> Address {
-        if bin.len() == 32 {
+impl NormalAddress {
+    pub const ADDR_TYPE: u8 = 1;
+
+    pub fn from_bytes(bin: &[u8]) -> Result<NormalAddress, &'static str> {
+        let addr_type = bin[0];
+        
+        if bin.len() == 33 && addr_type == Self::ADDR_TYPE {
             let mut pkey = [0; 32];
             pkey.copy_from_slice(&bin);
 
-            Address(PublicKey(pkey))
+            Ok(NormalAddress(PublicKey(pkey)))
+        } else if addr_type != Self::ADDR_TYPE {
+            Err("Bad address type!")
         } else {
-            panic!("Bad slice length! Expected 32 found {}", bin.len());
+            Err("Bad slice length!")
         }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::new();
         let bytes = (&&self.0).0;
+
+        // Push address type
+        result.push(Self::ADDR_TYPE);
 
         for byte in bytes.iter() {
             result.push(*byte);
@@ -47,8 +56,8 @@ impl Address {
     }
 }
 
-impl Arbitrary for Address {
-    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Address {
+impl Arbitrary for NormalAddress {
+    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> NormalAddress {
         let mut rng = rand::thread_rng();
         let bytes: Vec<u8> = (0..32).map(|_| {
             rng.gen_range(1, 255)
@@ -57,7 +66,7 @@ impl Arbitrary for Address {
         let mut result = [0; 32];
         result.copy_from_slice(&bytes);
 
-        Address(PublicKey(result))
+        NormalAddress(PublicKey(result))
     }
 
     fn shrink(&self) -> Box<Iterator<Item=Self>> {
@@ -65,7 +74,18 @@ impl Arbitrary for Address {
             let mut result = [0; 32];
             result.copy_from_slice(&p);
             
-            Address(PublicKey(result))
+            NormalAddress(PublicKey(result))
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(tx: NormalAddress) -> bool {
+            tx == NormalAddress::from_bytes(&NormalAddress::to_bytes(&tx)).unwrap()
+        }
     }
 }

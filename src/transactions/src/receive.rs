@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance};
+use account::{NormalAddress, Balance};
 use crypto::{Hash, Signature, PublicKey};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use network::NodeId;
@@ -28,7 +28,7 @@ use std::io::Cursor;
 pub struct Receive {
     src_event: Hash,
     source: Hash,
-    receiver: Address,
+    receiver: NormalAddress,
     sequencer: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
@@ -120,7 +120,7 @@ impl Receive {
 
         let receiver = if buf.len() > 32 as usize {
             let receiver_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&receiver_vec)
+            NormalAddress::from_bytes(&receiver_vec)
         } else {
             return Err("Incorrect packet structure");
         };

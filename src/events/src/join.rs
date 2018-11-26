@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::Address;
+use account::NormalAddress;
 use causality::Stamp;
 use crypto::{Hash, PublicKey, Signature};
 use network::NodeId;
@@ -27,7 +27,7 @@ use std::io::Cursor;
 pub struct Join {
     node_id: NodeId,
     stamp: Stamp,
-    collector_address: Address,
+    collector_address: NormalAddress,
     nonce: u64,
     proof: Vec<u32>,
     parent_hash: Hash,
@@ -151,7 +151,7 @@ impl Join {
 
         let collector_address = if buf.len() > 32 as usize {
             let collector_address_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&collector_address_vec)
+            NormalAddress::from_bytes(&collector_address_vec)
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the collector address");
         };

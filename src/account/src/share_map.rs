@@ -16,14 +16,14 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use Address;
+use addresses::normal_address::NormalAddress;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::collections::HashMap;
 use quickcheck::Arbitrary;
 use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct ShareMap(HashMap<Address, u32>);
+pub struct ShareMap(HashMap<NormalAddress, u32>);
 
 impl ShareMap {
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -46,7 +46,7 @@ impl ShareMap {
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<ShareMap, &'static str> {
-        let mut buf: HashMap<Address, u32> = HashMap::new();
+        let mut buf: HashMap<NormalAddress, u32> = HashMap::new();
         let decoded: Vec<Vec<u8>> = rlp::decode_list(bin);
 
         for bytes in decoded {
@@ -62,9 +62,11 @@ impl ShareMap {
                 let _: Vec<u8> = b.drain(..4).collect();
 
                 let address_vec: Vec<u8> = b.drain(..32).collect();
-                let address = Address::from_slice(&address_vec);
 
-                buf.insert(address, shares);
+                match NormalAddress::from_bytes(&address_vec) {
+                    Ok(address) => buf.insert(address, shares),
+                    Err(err)    => return Err(err)
+                };
             } else {
                 return Err("Bad address");
             }
@@ -76,7 +78,7 @@ impl ShareMap {
 
 impl Arbitrary for ShareMap {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> ShareMap {
-        let share_map: HashMap<Address, u32> = Arbitrary::arbitrary(g);
+        let share_map: HashMap<NormalAddress, u32> = Arbitrary::arbitrary(g);
         ShareMap(share_map)
     }
 }

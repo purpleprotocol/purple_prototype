@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance};
+use account::{NormalAddress, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
@@ -25,8 +25,8 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateCurrency {
-    creator: Address,
-    receiver: Address,
+    creator: NormalAddress,
+    receiver: NormalAddress,
     currency_hash: Hash,
     coin_supply: u64,
     precision: u8,
@@ -137,14 +137,14 @@ impl CreateCurrency {
 
         let creator = if buf.len() > 32 as usize {
             let creator_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&creator_vec)
+            NormalAddress::from_bytes(&creator_vec)
         } else {
             return Err("Incorrect packet structure");
         };
 
         let receiver = if buf.len() > 32 as usize {
             let receiver_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&receiver_vec)
+            NormalAddress::from_bytes(&receiver_vec)
         } else {
             return Err("Incorrect packet structure");
         };

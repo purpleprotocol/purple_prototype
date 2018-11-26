@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature};
+use account::{NormalAddress, Balance, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
@@ -25,8 +25,8 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Send {
-    from: Address,
-    to: Address,
+    from: NormalAddress,
+    to: NormalAddress,
     amount: Balance,
     fee: Balance,
     currency_hash: Hash,
@@ -139,14 +139,14 @@ impl Send {
 
         let from = if buf.len() > 32 as usize {
             let from_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&from_vec)
+            NormalAddress::from_bytes(&from_vec)
         } else {
             return Err("Incorrect packet structure");
         };
 
         let to = if buf.len() > 32 as usize {
             let to_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&to_vec)
+            NormalAddress::from_bytes(&to_vec)
         } else {
             return Err("Incorrect packet structure");
         };

@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature};
+use account::{NormalAddress, Balance, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,7 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Burn {
-    burner: Address,
+    burner: NormalAddress,
     amount: Balance,
     fee: Balance,
     currency_hash: Hash,
@@ -136,7 +136,7 @@ impl Burn {
 
         let burner = if buf.len() > 32 as usize {
             let burner_vec: Vec<u8> = buf.drain(..32).collect();
-            Address::from_slice(&burner_vec)
+            NormalAddress::from_bytes(&burner_vec)
         } else {
             return Err("Incorrect packet structure");
         };
