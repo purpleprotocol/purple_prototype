@@ -17,6 +17,10 @@
 */
 
 #![feature(extern_prelude)]
+#![feature(test)]
+
+#[cfg(test)]
+extern crate test;
 
 #[cfg(test)]
 #[macro_use]
@@ -25,6 +29,8 @@ extern crate quickcheck;
 #[macro_use]
 extern crate serde_derive;
 
+extern crate parking_lot;
+extern crate rayon;
 extern crate account;
 extern crate byteorder;
 extern crate causality;

@@ -23,8 +23,7 @@ use network::NodeId;
 use std::boxed::Box;
 use std::io::Cursor;
 use transactions::*;
-
-const HEARTBEAT_MAX_SIZE: usize = 16;
+use rayon::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Heartbeat {
@@ -55,11 +54,6 @@ impl Heartbeat {
     /// 8) Stamp         - Binary of stamp length
     /// 9) Transactions  - Binary of txs length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
-        // Max size guard
-        if self.transactions.len() > HEARTBEAT_MAX_SIZE {
-            return Err("Too many transactions!");
-        }
-
         let mut buffer: Vec<u8> = Vec::new();
         let event_type: u8 = 0;
 
@@ -81,18 +75,23 @@ impl Heartbeat {
             return Err("Signature field is missing");
         };
 
-        let mut transactions: Vec<Vec<u8>> = Vec::with_capacity(HEARTBEAT_MAX_SIZE);
-
         // Serialize transactions
-        for tx in &self.transactions {
-            match (*tx).to_bytes() {
-                Ok(tx) => transactions.push(tx),
-                Err(_) => return Err("Bad transaction"),
-            }
+        let transactions: Result<Vec<Vec<u8>>, _> = self.transactions
+            .par_iter()
+            .map(|tx| {
+                match (*tx).to_bytes() {
+                    Ok(tx) => Ok(tx),
+                    Err(_) => Err("Bad transaction")
+                }
+            }) 
+            .collect();
+
+        if let Err(err) = transactions {
+            return Err(err);
         }
 
         let node_id = &(&&self.node_id.0).0;
-        let mut transactions: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&transactions);
+        let mut transactions: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&transactions.unwrap());
         let mut stamp: Vec<u8> = self.stamp.to_bytes();
 
         let txs_len = transactions.len();
@@ -113,6 +112,7 @@ impl Heartbeat {
     }
 
     /// Deserializes a heartbeat struct from a byte array
+    #[inline]
     pub fn from_bytes(bin: &[u8]) -> Result<Heartbeat, &'static str> {
         let mut rdr = Cursor::new(bin.to_vec());
         let event_type = if let Ok(result) = rdr.read_u8() {
@@ -153,7 +153,7 @@ impl Heartbeat {
 
             NodeId(PublicKey(node_id))
         } else {
-            return Err("Incorrect packet structure");
+            return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the node id");
         };
 
         let root_hash = if buf.len() > 32 as usize {
@@ -164,7 +164,7 @@ impl Heartbeat {
 
             Hash(hash)
         } else {
-            return Err("Incorrect packet structure");
+            return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the root hash");
         };
 
         let hash = if buf.len() > 32 as usize {
@@ -175,7 +175,7 @@ impl Heartbeat {
 
             Hash(hash)
         } else {
-            return Err("Incorrect packet structure");
+            return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the hash");
         };
 
         let signature = if buf.len() > 64 as usize {
@@ -183,7 +183,7 @@ impl Heartbeat {
 
             Signature::new(&sig_vec)
         } else {
-            return Err("Incorrect packet structure");
+            return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the signature");
         };
 
         let stamp = if buf.len() > stamp_len as usize {
@@ -195,116 +195,116 @@ impl Heartbeat {
                 return Err("Bad stamp");
             }
         } else {
-            return Err("Incorrect packet structure");
+            return Err("Incorrect packet structure! Buffer size is smaller than the stamp length");
         };
 
         let transactions = if buf.len() == txs_len as usize {
             let ser_txs: Vec<Vec<u8>> = rlp::decode_list(&buf);
-            let mut txs: Vec<Box<Tx>> = Vec::new();
+            let txs: Result<Vec<Box<Tx>>, _> = ser_txs
+                .par_iter()
+                .map(|tx| {
+                    let tx_type = &tx[0];
 
-            if ser_txs.len() > HEARTBEAT_MAX_SIZE {
-                return Err("Too many transactions!");
+                    match *tx_type {
+                        1 => {
+                            let deserialized = match Call::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_)     => return Err("Invalid call transaction")
+                            };
+
+                            Ok(Box::new(Tx::Call(deserialized)))
+                        },
+                        2 => {
+                            let deserialized = match OpenContract::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(e)     => return Err(e)
+                            };
+
+                            Ok(Box::new(Tx::OpenContract(deserialized)))
+                        },
+                        3 => {
+                            let deserialized = match Send::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_)     => return Err("Invalid receive transaction")
+                            };
+
+                            Ok(Box::new(Tx::Send(deserialized)))
+                        },
+                        4 => {
+                            let deserialized = match Receive::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_)     => return Err("Invalid receive transaction")
+                            };
+
+                            Ok(Box::new(Tx::Receive(deserialized)))
+                        },
+                        5 => {
+                            let deserialized = match OpenMultiSig::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_)     => return Err("Invalid open multi signature transaction")
+                            };
+
+                            Ok(Box::new(Tx::OpenMultiSig(deserialized)))
+                        },
+                        6 => {
+                            let deserialized = match OpenShares::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_)     => return Err("Invalid shares transaction")
+                            };
+
+                            Ok(Box::new(Tx::OpenShares(deserialized)))
+                        },
+                        7 => {
+                            let deserialized = match IssueShares::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_)     => return Err("Invalid create currency transaction")
+                            };
+
+                            Ok(Box::new(Tx::IssueShares(deserialized)))
+                        },
+                        8 => {
+                            let deserialized = match CreateCurrency::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_)     => return Err("Invalid create currency transaction")
+                            };
+
+                            Ok(Box::new(Tx::CreateCurrency(deserialized)))
+                        },
+                        9 => {
+                            let deserialized = match CreateMintable::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_)     => return Err("Invalid create mintable transaction")
+                            };
+
+                            Ok(Box::new(Tx::CreateMintable(deserialized)))
+                        },
+                        10 => {
+                            let deserialized = match Mint::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_)     => return Err("Invalid mint transaction")
+                            };
+
+                            Ok(Box::new(Tx::Mint(deserialized)))
+                        },
+                        11 => {
+                            let deserialized = match Burn::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_)     => return Err("Invalid burn transaction")
+                            };
+
+                            Ok(Box::new(Tx::Burn(deserialized)))
+                        },
+                        _ => return Err("Bad transaction type"),
+                    }
+                })
+                .collect();
+
+            match txs {
+                Ok(result) => result,
+                Err(err)   => return Err(err)
             }
-
-            for tx in ser_txs {
-                let tx_type = &tx[0];
-
-                match *tx_type {
-                    1 => {
-                        let deserialized = match Call::from_bytes(&tx) {
-                            Ok(result) => result,
-                            Err(_)     => return Err("Invalid call transaction")
-                        };
-
-                        txs.push(Box::new(Tx::Call(deserialized)));
-                    },
-                    2 => {
-                        let deserialized = match OpenContract::from_bytes(&tx) {
-                            Ok(result) => result,
-                            Err(_)     => return Err("Invalid open conract transaction")
-                        };
-
-                        txs.push(Box::new(Tx::OpenContract(deserialized)));
-                    },
-                    3 => {
-                        let deserialized = match Send::from_bytes(&tx) {
-                            Ok(result) => result,
-                            Err(_)     => return Err("Invalid receive transaction")
-                        };
-
-                        txs.push(Box::new(Tx::Send(deserialized)));
-                    },
-                    4 => {
-                        let deserialized = match Receive::from_bytes(&tx) {
-                            Ok(result) => result,
-                            Err(_)     => return Err("Invalid receive transaction")
-                        };
-
-                        txs.push(Box::new(Tx::Receive(deserialized)));
-                    },
-                    5 => {
-                        let deserialized = match OpenMultiSig::from_bytes(&tx) {
-                            Ok(result) => result,
-                            Err(_)     => return Err("Invalid open multi signature transaction")
-                        };
-
-                        txs.push(Box::new(Tx::OpenMultiSig(deserialized)));
-                    },
-                    6 => {
-                        let deserialized = match OpenShares::from_bytes(&tx) {
-                            Ok(result) => result,
-                            Err(_)     => return Err("Invalid shares transaction")
-                        };
-
-                        txs.push(Box::new(Tx::OpenShares(deserialized)));
-                    },
-                    7 => {
-                        let deserialized = match IssueShares::from_bytes(&tx) {
-                            Ok(result) => result,
-                            Err(_)     => return Err("Invalid create currency transaction")
-                        };
-
-                        txs.push(Box::new(Tx::IssueShares(deserialized)));
-                    },
-                    8 => {
-                        let deserialized = match CreateCurrency::from_bytes(&tx) {
-                            Ok(result) => result,
-                            Err(_)     => return Err("Invalid create currency transaction")
-                        };
-
-                        txs.push(Box::new(Tx::CreateCurrency(deserialized)));
-                    },
-                    9 => {
-                        let deserialized = match CreateMintable::from_bytes(&tx) {
-                            Ok(result) => result,
-                            Err(_)     => return Err("Invalid create mintable transaction")
-                        };
-
-                        txs.push(Box::new(Tx::CreateMintable(deserialized)));
-                    },
-                    10 => {
-                        let deserialized = match Mint::from_bytes(&tx) {
-                            Ok(result) => result,
-                            Err(_)     => return Err("Invalid mint transaction")
-                        };
-
-                        txs.push(Box::new(Tx::Mint(deserialized)));
-                    },
-                    11 => {
-                        let deserialized = match Burn::from_bytes(&tx) {
-                            Ok(result) => result,
-                            Err(_)     => return Err("Invalid burn transaction")
-                        };
-
-                        txs.push(Box::new(Tx::Burn(deserialized)));
-                    },
-                    _ => return Err("Bad transaction type"),
-                }
-            }
-
-            txs
         } else {
-            return Err("Incorrect packet structure");
+            return Err("Incorrect packet structure! Buffer size is smaller than the size of the transactions");
         };
 
         let heartbeat = Heartbeat {
@@ -326,9 +326,9 @@ use quickcheck::Arbitrary;
 #[cfg(test)]
 impl Arbitrary for Heartbeat {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Heartbeat {
-        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(16);
+        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(500);
 
-        for _ in 0..16 {
+        for _ in 0..500 {
             txs.push(Arbitrary::arbitrary(g));
         }
 

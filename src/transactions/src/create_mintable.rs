@@ -41,6 +41,8 @@ pub struct CreateMintable {
 }
 
 impl CreateMintable {
+    pub const TX_TYPE: u8 = 9;
+
     /// Serializes the transaction struct to a binary format.
     ///
     /// Fields:
@@ -53,13 +55,12 @@ impl CreateMintable {
     /// 7) Receiver             - 32byte binary
     /// 8) Minter address       - 32byte binary
     /// 9) Currency hash        - 32byte binary
-    /// 10) Fee hash             - 32byte binary
+    /// 10) Fee hash            - 32byte binary
     /// 11) Hash                - 32byte binary
     /// 12) Signature           - 64byte binary
     /// 13) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-        let tx_type: u8 = 9;
 
         let hash = if let Some(hash) = &self.hash {
             &hash.0
@@ -85,7 +86,7 @@ impl CreateMintable {
 
         let fee_len = fee.len();
 
-        buffer.write_u8(tx_type).unwrap();
+        buffer.write_u8(Self::TX_TYPE).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u8(*precision).unwrap();
         buffer.write_u64::<BigEndian>(*coin_supply).unwrap();
@@ -111,7 +112,7 @@ impl CreateMintable {
             return Err("Bad transaction type");
         };
 
-        if tx_type != 9 {
+        if tx_type != Self::TX_TYPE {
             return Err("Bad transation type");
         }
 
