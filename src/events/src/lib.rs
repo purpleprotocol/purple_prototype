@@ -43,3 +43,7 @@ extern crate transactions;
 mod heartbeat;
 mod join;
 mod leave;
+
+pub use heartbeat::*;
+pub use join::*;
+pub use leave::*;

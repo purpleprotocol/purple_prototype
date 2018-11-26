@@ -39,6 +39,8 @@ pub struct Heartbeat {
 }
 
 impl Heartbeat {
+    pub const EVENT_TYPE: u8 = 0; 
+
     /// Serializes a heartbeat struct.
     ///
     /// All fields are written in big endian.
@@ -55,7 +57,7 @@ impl Heartbeat {
     /// 9) Transactions  - Binary of txs length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-        let event_type: u8 = 0;
+        let event_type: u8 = Self::EVENT_TYPE;
 
         let root_hash = if let Some(root_hash) = &self.root_hash {
             &root_hash.0
@@ -121,7 +123,7 @@ impl Heartbeat {
             return Err("Bad event type");
         };
 
-        if event_type != 0 {
+        if event_type != Self::EVENT_TYPE {
             return Err("Bad event type");
         }
 
@@ -326,9 +328,9 @@ use quickcheck::Arbitrary;
 #[cfg(test)]
 impl Arbitrary for Heartbeat {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Heartbeat {
-        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(500);
+        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(200);
 
-        for _ in 0..500 {
+        for _ in 0..200 {
             txs.push(Arbitrary::arbitrary(g));
         }
 

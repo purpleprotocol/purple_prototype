@@ -38,6 +38,8 @@ pub struct OpenContract {
 }
 
 impl OpenContract {
+    pub const TX_TYPE: u8 = 2;
+
     /// Serializes the transaction struct to a binary format.
     ///
     /// Fields:
@@ -55,7 +57,7 @@ impl OpenContract {
     /// 12) Code                    - Binary of code length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-        let tx_type: u8 = 2;
+        let tx_type: u8 = Self::TX_TYPE;
 
         let hash = if let Some(hash) = &self.hash {
             &hash.0
@@ -105,7 +107,7 @@ impl OpenContract {
             return Err("Bad transaction type");
         };
 
-        if tx_type != 2 {
+        if tx_type != Self::TX_TYPE {
             return Err("Bad transation type");
         }
 
@@ -149,7 +151,7 @@ impl OpenContract {
             let owner_vec: Vec<u8> = buf.drain(..32).collect();
             Address::from_slice(&owner_vec)
         } else {
-            return Err("Incorrect packet structure");
+            return Err("Incorrect packet structure! Buffer size is smaller than the size for the owner field");
         };
 
         let fee_hash = if buf.len() > 32 as usize {
@@ -160,7 +162,7 @@ impl OpenContract {
 
             Hash(hash)
         } else {
-            return Err("Incorrect packet structure");
+            return Err("Incorrect packet structure! Buffer size is smaller than the size for the fee hash field");
         };
 
         let hash = if buf.len() > 32 as usize {
@@ -171,7 +173,7 @@ impl OpenContract {
 
             Hash(hash)
         } else {
-            return Err("Incorrect packet structure");
+            return Err("Incorrect packet structure! Buffer size is smaller than the size for the hash field");
         };
 
         let signature = if buf.len() > signature_len as usize {
@@ -182,10 +184,10 @@ impl OpenContract {
                 Err(err)  => return Err(err)
             }
         } else {
-            return Err("Incorrect packet structure");
+            return Err("Incorrect packet structure! Buffer size is smaller than the size of the signature field");
         };
 
-        let fee = if buf.len() > fee_len as usize {
+        let fee = if buf.len() >= fee_len as usize {
             let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
 
             match Balance::from_bytes(&fee_vec) {
@@ -193,7 +195,7 @@ impl OpenContract {
                 Err(_)     => return Err("Bad fee")
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure! Buffer size is smaller than the size for the fee field")
         };
 
         let default_state = if buf.len() >= state_len as usize {
@@ -204,7 +206,7 @@ impl OpenContract {
                 Err(_)     => return Err("Bad state")
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure! Buffer size is smaller than the size for the default state field")
         };
 
         let code = if buf.len() == code_len as usize {
@@ -215,7 +217,7 @@ impl OpenContract {
                 Err(_)     => return Err("Bad code")
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure! Buffer size is not equal with the size for the code field")
         };
 
         let open_contract = OpenContract {

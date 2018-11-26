@@ -38,6 +38,8 @@ pub struct Join {
 }
 
 impl Join {
+    pub const EVENT_TYPE: u8 = 1; 
+
     /// Serializes a heartbeat struct.
     ///
     /// All fields are written in big endian.
@@ -56,7 +58,7 @@ impl Join {
     /// 11) Proof             - Binary of proof length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-        let event_type: u8 = 1;
+        let event_type: u8 = Self::EVENT_TYPE;
 
         let hash = if let Some(hash) = &self.hash {
             &hash.0
@@ -104,7 +106,7 @@ impl Join {
             return Err("Bad event type");
         };
 
-        if event_type != 1 {
+        if event_type != Self::EVENT_TYPE {
             return Err("Bad event type");
         }
 
