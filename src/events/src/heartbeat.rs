@@ -329,9 +329,9 @@ use quickcheck::Arbitrary;
 #[cfg(test)]
 impl Arbitrary for Heartbeat {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Heartbeat {
-        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(200);
+        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(30);
 
-        for _ in 0..200 {
+        for _ in 0..30 {
             txs.push(Arbitrary::arbitrary(g));
         }
 

@@ -25,6 +25,4 @@ pub trait Transaction {
     fn verify_sig(&mut self) -> bool;
     fn verify_hash(&mut self) -> bool;
     fn send(&mut self);
-    fn to_bytes(&mut self) -> Vec<u8>;
-    fn from_bytes(&[u8]) -> Self;
 }

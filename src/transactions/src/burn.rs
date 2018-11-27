@@ -38,6 +38,47 @@ pub struct Burn {
 }
 
 impl Burn {
+    pub const TX_TYPE: u8 = 11;
+
+    /// Computes the transaction's hash.
+    ///
+    /// This function will panic if the signature field is missing.
+    pub fn hash(&mut self) {
+        // Assemble data
+        let message = assemble_hash_message(&self);
+
+        // Hash data
+        let hash = crypto::hash_slice(&message);
+
+        self.hash = Some(hash);
+    }
+
+    /// Verifies the correctness of the hash of the transaction.
+    ///
+    /// This function will panic if the hash field or if the 
+    /// signature field is missing.
+    pub fn verify_hash(&mut self) -> bool {
+        let hash = if let Some(hash) = &self.hash {
+            hash.0
+        } else {
+            panic!("Hash field is missing!");
+        };
+        
+        // Assemble data
+        let oracle_message = assemble_hash_message(&self);
+        let oracle_hash = crypto::hash_slice(&oracle_message);
+
+        hash == oracle_hash.0
+    }
+
+    // pub fn sign(&mut self, skey: SecretKey) {
+
+    // }
+    
+    // pub fn verify_sig(&mut self) -> bool {
+
+    // }
+
     /// Serializes the transaction struct to a binary format.
     ///
     /// Fields:
@@ -54,7 +95,7 @@ impl Burn {
     /// 11) Signature           - Binary of signature length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-        let tx_type: u8 = 11;
+        let tx_type: u8 = Self::TX_TYPE;
 
         let hash = if let Some(hash) = &self.hash {
             &hash.0
@@ -102,7 +143,7 @@ impl Burn {
             return Err("Bad transaction type");
         };
 
-        if tx_type != 11 {
+        if tx_type != Self::TX_TYPE {
             return Err("Bad transation type");
         }
 
@@ -225,6 +266,31 @@ impl Burn {
     }
 }
 
+fn assemble_hash_message(obj: &Burn) -> Vec<u8> {
+    let mut signature = if let Some(ref sig) = obj.signature {
+        sig.to_bytes()
+    } else {
+        panic!("Signature field is missing!");
+    };
+
+    let mut buf: Vec<u8> = Vec::new();
+    let mut burner = obj.burner.to_bytes();
+    let mut amount = obj.amount.to_bytes();
+    let mut fee = obj.fee.to_bytes();
+    let currency_hash = obj.currency_hash.0;
+    let fee_hash = obj.fee_hash.0;
+
+    // Compose data to hash
+    buf.append(&mut burner);
+    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut fee_hash.to_vec());
+    buf.append(&mut amount);
+    buf.append(&mut fee);
+    buf.append(&mut signature);
+
+    buf
+}
+
 use quickcheck::Arbitrary;
 
 impl Arbitrary for Burn {
@@ -248,6 +314,13 @@ mod tests {
     quickcheck! {
         fn serialize_deserialize(tx: Burn) -> bool {
             tx == Burn::from_bytes(&Burn::to_bytes(&tx).unwrap()).unwrap()
+        }
+
+        fn verify_hash(tx: Burn) -> bool {
+            let mut tx = tx;
+            
+            tx.hash();
+            tx.verify_hash()
         }
     }
 }
