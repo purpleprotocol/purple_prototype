@@ -30,14 +30,15 @@ impl ShareholdersAddress {
         let addr_type = bin[0];
         
         if bin.len() == 33 && addr_type == Self::ADDR_TYPE {
+            let (_, tail) = bin.split_at(1);
             let mut addr = [0; 32];
-            addr.copy_from_slice(&bin);
+            addr.copy_from_slice(&tail);
 
             Ok(ShareholdersAddress(addr))
         } else if addr_type != Self::ADDR_TYPE {
-            Err("Bad address type!")
+            Err("Bad address type")
         } else {
-            Err("Bad slice length!")
+            Err("Bad slice length")
         }
     }
 

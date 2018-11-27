@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, Balance, Signature};
+use account::{Address, Balance, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Mint {
-    minter: NormalAddress,
+    minter: Address,
     amount: Balance,
     currency_hash: Hash, 
     fee_hash: Hash,
@@ -37,6 +37,8 @@ pub struct Mint {
 }
 
 impl Mint {
+    pub const TX_TYPE: u8 = 10;
+
     /// Serializes the transaction struct to a binary format.
     ///
     /// Fields:
@@ -44,7 +46,7 @@ impl Mint {
     /// 2) Fee length               - 8bits
     /// 3) Amount length            - 8bits
     /// 4) Signature length         - 16bits
-    /// 5) Minter                   - 32byte binary
+    /// 5) Minter                   - 33byte binary
     /// 6) Currency hash            - 32byte binary
     /// 7) Fee hash                 - 32byte binary
     /// 8) Hash                     - 32byte binary
@@ -53,7 +55,7 @@ impl Mint {
     /// 11) Signature               - Binary of signature length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-        let tx_type: u8 = 10;
+        let tx_type: u8 = Self::TX_TYPE;
 
         let hash = if let Some(hash) = &self.hash {
             &hash.0
@@ -101,7 +103,7 @@ impl Mint {
             return Err("Bad transaction type");
         };
 
-        if tx_type != 10 {
+        if tx_type != Self::TX_TYPE {
             return Err("Bad transation type");
         }
 
@@ -133,9 +135,13 @@ impl Mint {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..5).collect();
 
-        let minter = if buf.len() > 32 as usize {
-            let minter_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&minter_vec)
+        let minter = if buf.len() > 33 as usize {
+            let minter_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match Address::from_bytes(&minter_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };

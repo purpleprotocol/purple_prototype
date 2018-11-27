@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, Balance, Signature};
+use account::{Address, Balance, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
@@ -26,8 +26,8 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Call {
-    from: NormalAddress,
-    to: NormalAddress,
+    from: Address,
+    to: Address,
     inputs: String, // TODO: Change to contract inputs type
     amount: Balance,
     fee: Balance,
@@ -42,6 +42,8 @@ pub struct Call {
 }
 
 impl Call {
+    pub const TX_TYPE: u8 = 1;
+
     /// Serializes the transaction struct to a binary format.
     ///
     /// Fields:
@@ -52,8 +54,8 @@ impl Call {
     /// 5) Signature length     - 16bits
     /// 6) Inputs length        - 16bits
     /// 7) Gas limit            - 64bits
-    /// 8) From                 - 32byte binary
-    /// 9) To                   - 32byte binary
+    /// 8) From                 - 33byte binary
+    /// 9) To                   - 33byte binary
     /// 10) Currency hash       - 32byte binary
     /// 11) Fee hash            - 32byte binary
     /// 12) Hash                - 32byte binary
@@ -64,7 +66,7 @@ impl Call {
     /// 17) Inputs              - Binary of inputs length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-        let tx_type: u8 = 1;
+        let tx_type: u8 = Self::TX_TYPE;
 
         let hash = if let Some(hash) = &self.hash {
             &hash.0
@@ -124,7 +126,7 @@ impl Call {
             return Err("Bad transaction type");
         };
 
-        if tx_type != 1 {
+        if tx_type != Self::TX_TYPE {
             return Err("Bad transation type");
         }
 
@@ -180,16 +182,24 @@ impl Call {
         let mut buf = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..16).collect();
 
-        let from = if buf.len() > 32 as usize {
-            let from_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&from_vec)
+        let from = if buf.len() > 33 as usize {
+            let from_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match Address::from_bytes(&from_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };
 
-        let to = if buf.len() > 32 as usize {
-            let to_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&to_vec)
+        let to = if buf.len() > 33 as usize {
+            let to_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match Address::from_bytes(&to_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };

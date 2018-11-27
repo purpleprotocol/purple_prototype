@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use addresses::normal_address::NormalAddress;
+use addresses::normal::NormalAddress;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::collections::HashMap;
 use quickcheck::Arbitrary;
@@ -50,7 +50,7 @@ impl ShareMap {
         let decoded: Vec<Vec<u8>> = rlp::decode_list(bin);
 
         for bytes in decoded {
-            if bytes.len() == 36 {
+            if bytes.len() == 37 {
                 let mut rdr = Cursor::new(bytes);
                 let shares = if let Ok(result) = rdr.read_u32::<BigEndian>() {
                     result
@@ -61,7 +61,7 @@ impl ShareMap {
                 let mut b = rdr.into_inner();
                 let _: Vec<u8> = b.drain(..4).collect();
 
-                let address_vec: Vec<u8> = b.drain(..32).collect();
+                let address_vec: Vec<u8> = b.drain(..33).collect();
 
                 match NormalAddress::from_bytes(&address_vec) {
                     Ok(address) => buf.insert(address, shares),

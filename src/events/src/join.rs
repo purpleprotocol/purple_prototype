@@ -149,9 +149,13 @@ impl Join {
             return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the node id");
         };
 
-        let collector_address = if buf.len() > 32 as usize {
-            let collector_address_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&collector_address_vec)
+        let collector_address = if buf.len() > 33 as usize {
+            let collector_address_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match NormalAddress::from_bytes(&collector_address_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the collector address");
         };

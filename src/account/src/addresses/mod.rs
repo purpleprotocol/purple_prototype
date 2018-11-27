@@ -16,13 +16,13 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod normal_address;
-pub mod multi_sig_address;
-pub mod shareholders_address;
+pub mod normal;
+pub mod multi_sig;
+pub mod shareholders;
 
-pub use normal_address::*;
-pub use multi_sig_address::*;
-pub use shareholders_address::*;
+use addresses::normal::*;
+use addresses::multi_sig::*;
+use addresses::shareholders::*;
 
 #[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
 pub enum Address {
@@ -69,13 +69,9 @@ impl Address {
     }
 }
 
-#[cfg(test)]
 use quickcheck::Arbitrary;
-
-#[cfg(test)]
 use rand::Rng;
 
-#[cfg(test)]
 impl Arbitrary for Address {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Address {
         let mut rng = rand::thread_rng();

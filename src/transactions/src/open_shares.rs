@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, Balance, Signature, Shares, ShareMap};
+use account::{NormalAddress, ShareholdersAddress, Balance, Signature, Shares, ShareMap};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
@@ -34,7 +34,7 @@ pub struct OpenShares {
     fee_hash: Hash,
     nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    address: Option<NormalAddress>,
+    address: Option<ShareholdersAddress>,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -44,6 +44,8 @@ pub struct OpenShares {
 }
 
 impl OpenShares {
+    pub const TX_TYPE: u8 = 6;
+
     /// Serializes the transaction struct to a binary format.
     ///
     /// Fields:
@@ -56,8 +58,8 @@ impl OpenShares {
     /// 7) Stock hash               - 32byte binary
     /// 8) Fee hash                 - 32byte binary
     /// 9) Currency hash            - 32byte binary
-    /// 10) Creator                 - 32byte binary
-    /// 11) Address                 - 32byte binary
+    /// 10) Creator                 - 33byte binary
+    /// 11) Address                 - 33byte binary
     /// 12) Hash                    - 32byte binary
     /// 13) Signature               - 64byte binary
     /// 14) Amount                  - Binary of amount length
@@ -66,7 +68,7 @@ impl OpenShares {
     /// 17) Share map               - Binary of share map length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-        let tx_type: u8 = 6;
+        let tx_type: u8 = Self::TX_TYPE;
 
         let address = if let Some(address) = &self.address {
             address.to_bytes()
@@ -136,7 +138,7 @@ impl OpenShares {
             return Err("Bad transaction type");
         };
 
-        if tx_type != 6 {
+        if tx_type != Self::TX_TYPE {
             return Err("Bad transation type");
         }
 
@@ -217,16 +219,24 @@ impl OpenShares {
             return Err("Incorrect packet structure");
         };
 
-        let creator = if buf.len() > 32 as usize {
-            let creator_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&creator_vec)
+        let creator = if buf.len() > 33 as usize {
+            let creator_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match NormalAddress::from_bytes(&creator_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };
 
-        let address = if buf.len() > 32 as usize {
-            let address_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&address_vec)
+        let address = if buf.len() > 33 as usize {
+            let address_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match ShareholdersAddress::from_bytes(&address_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };

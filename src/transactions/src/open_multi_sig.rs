@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, Balance};
+use account::{NormalAddress, MultiSigAddress, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Signature, Hash};
 use serde::{Deserialize, Serialize};
@@ -34,7 +34,7 @@ pub struct OpenMultiSig {
     fee_hash: Hash,
     nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    address: Option<NormalAddress>,
+    address: Option<MultiSigAddress>,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -42,6 +42,8 @@ pub struct OpenMultiSig {
 }
 
 impl OpenMultiSig {
+    pub const TX_TYPE: u8 = 5;
+
     /// Serializes the transaction struct to a binary format.
     ///
     /// Fields:
@@ -53,16 +55,16 @@ impl OpenMultiSig {
     /// 6) Nonce                    - 64bits
     /// 7) Fee hash                 - 32byte binary
     /// 8) Currency hash            - 32byte binary
-    /// 9) Creator                  - 32byte binary
-    /// 10) NormalAddress                 - 32byte binary
-    /// 11) Hash                    - 32byte binary
+    /// 9) Creator                  - 33byte binary
+    /// 10) Address                 - 33byte binary
+    /// 11) Hash                    - 32bytse binary
     /// 12) Signature               - 64byte binary
     /// 13) Amount                  - Binary of amount length
     /// 14) Fee                     - Binary of fee length
     /// 15) Keys                    - Binary of keys length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-        let tx_type: u8 = 5;
+        let tx_type: u8 = Self::TX_TYPE;
 
         let address = if let Some(address) = &self.address {
             address.to_bytes()
@@ -131,7 +133,7 @@ impl OpenMultiSig {
             return Err("Bad transaction type");
         };
 
-        if tx_type != 5 {
+        if tx_type != Self::TX_TYPE {
             return Err("Bad transation type");
         }
 
@@ -201,16 +203,24 @@ impl OpenMultiSig {
             return Err("Incorrect packet structure");
         };
 
-        let creator = if buf.len() > 32 as usize {
-            let creator_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&creator_vec)
+        let creator = if buf.len() > 33 as usize {
+            let creator_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match NormalAddress::from_bytes(&creator_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };
 
-        let address = if buf.len() > 32 as usize {
-            let address_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&address_vec)
+        let address = if buf.len() > 33 as usize {
+            let address_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match MultiSigAddress::from_bytes(&address_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };
@@ -265,10 +275,9 @@ impl OpenMultiSig {
             let mut keys: Vec<NormalAddress> = Vec::with_capacity(keys_len as usize);
 
             for k in deserialized_keys {
-                if k.len() == 32 {
-                    keys.push(NormalAddress::from_bytes(&k));
-                } else {
-                    return Err("Bad key");
+                match NormalAddress::from_bytes(&k) {
+                    Ok(addr) => keys.push(addr),
+                    Err(err) => return Err(err)
                 }
             }
 

@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, Balance};
+use account::{Address, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
@@ -25,8 +25,8 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateCurrency {
-    creator: NormalAddress,
-    receiver: NormalAddress,
+    creator: Address,
+    receiver: Address,
     currency_hash: Hash,
     coin_supply: u64,
     precision: u8,
@@ -39,6 +39,8 @@ pub struct CreateCurrency {
 }
 
 impl CreateCurrency {
+    pub const TX_TYPE: u8 = 8;
+
     /// Serializes the transaction struct to a binary format.
     ///
     /// Fields:
@@ -46,8 +48,8 @@ impl CreateCurrency {
     /// 2) Fee length           - 8bits
     /// 3) Precision            - 8bits
     /// 4) Coin supply          - 64bits
-    /// 5) Creator              - 32byte binary
-    /// 6) Receiver             - 32byte binary
+    /// 5) Creator              - 33byte binary
+    /// 6) Receiver             - 33byte binary
     /// 7) Currency hash        - 32byte binary
     /// 8) Fee hash             - 32byte binary
     /// 9) Hash                 - 32byte binary
@@ -55,7 +57,7 @@ impl CreateCurrency {
     /// 11) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-        let tx_type: u8 = 8;
+        let tx_type: u8 = Self::TX_TYPE;
 
         let hash = if let Some(hash) = &self.hash {
             &hash.0
@@ -103,7 +105,7 @@ impl CreateCurrency {
             return Err("Bad transaction type");
         };
 
-        if tx_type != 8 {
+        if tx_type != Self::TX_TYPE {
             return Err("Bad transation type");
         }
 
@@ -135,16 +137,24 @@ impl CreateCurrency {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..11).collect();
 
-        let creator = if buf.len() > 32 as usize {
-            let creator_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&creator_vec)
+        let creator = if buf.len() > 33 as usize {
+            let creator_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match Address::from_bytes(&creator_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };
 
-        let receiver = if buf.len() > 32 as usize {
-            let receiver_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&receiver_vec)
+        let receiver = if buf.len() > 33 as usize {
+            let receiver_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match Address::from_bytes(&receiver_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };

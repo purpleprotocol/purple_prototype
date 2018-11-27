@@ -35,6 +35,9 @@ mod multi_sig;
 mod shares;
 mod share_map;
 
+pub use addresses::normal::*;
+pub use addresses::multi_sig::*;
+pub use addresses::shareholders::*;
 pub use addresses::*;
 pub use balance::*;
 pub use signature::*;

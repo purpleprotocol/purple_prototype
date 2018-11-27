@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, Balance};
+use account::{Address, Balance};
 use crypto::{Hash, Signature, PublicKey};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use network::NodeId;
@@ -28,7 +28,7 @@ use std::io::Cursor;
 pub struct Receive {
     src_event: Hash,
     source: Hash,
-    receiver: NormalAddress,
+    receiver: Address,
     sequencer: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
@@ -37,19 +37,21 @@ pub struct Receive {
 }
 
 impl Receive {
+    pub const TX_TYPE: u8 = 4;
+
     /// Serializes the transaction struct to a binary format.
     ///
     /// Fields:
     /// 1) Transaction type(4)      - 8bits
     /// 2) Source                   - 32byte binary
     /// 3) Source event hash        - 32byte binary
-    /// 4) Receiver                 - 32byte binary
+    /// 4) Receiver                 - 33byte binary
     /// 5) Sequencer                - 32byte binary
     /// 6) Hash                     - 32byte binary
     /// 7) Signature                - 64byte binary
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-        let tx_type: u8 = 4;
+        let tx_type: u8 = Self::TX_TYPE;
 
         let hash = if let Some(hash) = &self.hash {
             &hash.0
@@ -88,7 +90,7 @@ impl Receive {
             return Err("Bad transaction type");
         };
 
-        if tx_type != 4 {
+        if tx_type != Self::TX_TYPE {
             return Err("Bad transation type");
         }
 
@@ -118,9 +120,13 @@ impl Receive {
             return Err("Incorrect packet structure");
         };
 
-        let receiver = if buf.len() > 32 as usize {
-            let receiver_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&receiver_vec)
+        let receiver = if buf.len() > 33 as usize {
+            let receiver_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match Address::from_bytes(&receiver_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };

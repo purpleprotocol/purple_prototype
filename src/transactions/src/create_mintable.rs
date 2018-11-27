@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, Balance};
+use account::{Address, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
@@ -25,9 +25,9 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateMintable {
-    creator: NormalAddress,
-    receiver: NormalAddress,
-    minter_address: NormalAddress,
+    creator: Address,
+    receiver: Address,
+    minter_address: Address,
     currency_hash: Hash,
     coin_supply: u64,
     max_supply: u64,
@@ -51,9 +51,9 @@ impl CreateMintable {
     /// 3) Precision            - 8bits
     /// 4) Coin supply          - 64bits
     /// 5) Max supply           - 64bits
-    /// 6) Creator              - 32byte binary
-    /// 7) Receiver             - 32byte binary
-    /// 8) Minter address       - 32byte binary
+    /// 6) Creator              - 33byte binary
+    /// 7) Receiver             - 33byte binary
+    /// 8) Minter address       - 33byte binary
     /// 9) Currency hash        - 32byte binary
     /// 10) Fee hash            - 32byte binary
     /// 11) Hash                - 32byte binary
@@ -152,23 +152,35 @@ impl CreateMintable {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..19).collect();
 
-        let creator = if buf.len() > 32 as usize {
-            let creator_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&creator_vec)
+        let creator = if buf.len() > 33 as usize {
+            let creator_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match Address::from_bytes(&creator_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };
 
-        let receiver = if buf.len() > 32 as usize {
-            let receiver_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&receiver_vec)
+        let receiver = if buf.len() > 33 as usize {
+            let receiver_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match Address::from_bytes(&receiver_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };
 
-        let minter_address = if buf.len() > 32 as usize {
-            let minter_address_vec: Vec<u8> = buf.drain(..32).collect();
-            NormalAddress::from_bytes(&minter_address_vec)
+        let minter_address = if buf.len() > 33 as usize {
+            let minter_address_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match Address::from_bytes(&minter_address_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
         } else {
             return Err("Incorrect packet structure");
         };

@@ -55,6 +55,7 @@ impl Heartbeat {
     /// 7) Signature     - 64byte binary
     /// 8) Stamp         - Binary of stamp length
     /// 9) Transactions  - Binary of txs length
+    #[inline]
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let event_type: u8 = Self::EVENT_TYPE;

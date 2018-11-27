@@ -20,7 +20,7 @@ use crypto::PublicKey;
 use rand::Rng;
 use quickcheck::Arbitrary;
 
-#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
+#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Debug, PartialOrd, Ord)]
 pub struct NormalAddress(PublicKey);
 
 impl NormalAddress {
@@ -30,14 +30,15 @@ impl NormalAddress {
         let addr_type = bin[0];
         
         if bin.len() == 33 && addr_type == Self::ADDR_TYPE {
+            let (_, tail) = bin.split_at(1);
             let mut pkey = [0; 32];
-            pkey.copy_from_slice(&bin);
+            pkey.copy_from_slice(&tail);
 
             Ok(NormalAddress(PublicKey(pkey)))
         } else if addr_type != Self::ADDR_TYPE {
-            Err("Bad address type!")
+            Err("Bad address type")
         } else {
-            Err("Bad slice length!")
+            Err("Bad address length")
         }
     }
 
