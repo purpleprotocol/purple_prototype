@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature};
+use account::{Address, Balance, Signature, MultiSig};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::Hash;
+use crypto::{Hash, SecretKey as Sk, PublicKey as Pk};
 use serde::{Deserialize, Serialize};
 use transaction::*;
 use std::io::Cursor;
@@ -43,6 +43,107 @@ pub struct Call {
 
 impl Call {
     pub const TX_TYPE: u8 = 1;
+
+    /// Signs the transaction with the given secret key.
+    ///
+    /// This function will panic if there already exists
+    /// a signature and the address type doesn't match
+    /// the signature type.
+    pub fn sign(&mut self, skey: Sk) {
+        // Assemble data
+        let message = assemble_sign_message(&self);
+
+        // Sign data
+        let signature = crypto::sign(&message, skey);
+
+        match self.signature {
+            Some(Signature::Normal(_)) => { 
+                if let Address::Normal(_) = self.from {
+                    let result = Signature::Normal(signature);
+                    self.signature = Some(result);
+                } else {
+                    panic!("Invalid address type");
+                }
+            },
+            Some(Signature::MultiSig(ref mut sig)) => {
+                if let Address::Normal(_) = self.from {
+                    panic!("Invalid address type");
+                } else {
+                    // Append signature to the multi sig struct
+                    sig.append_sig(signature);
+                }           
+            },
+            None => {
+                if let Address::Normal(_) = self.from {
+                    // Create a normal signature
+                    let result = Signature::Normal(signature);
+                    
+                    // Attach signature to struct
+                    self.signature = Some(result);
+                } else {
+                    // Create a multi signature
+                    let result = Signature::MultiSig(MultiSig::from_sig(signature));
+
+                    // Attach signature to struct
+                    self.signature = Some(result);
+                }
+            }
+        };
+    }
+    
+    /// Verifies the signature of the transaction.
+    ///
+    /// Returns `false` if the signature field is missing.
+    ///
+    /// This function panics if the transaction has a multi 
+    /// signature attached to it or if the signer's address
+    /// is not a normal address.
+    pub fn verify_sig(&mut self) -> bool {
+        let message = assemble_sign_message(&self);
+
+        match self.signature {
+            Some(Signature::Normal(ref sig)) => { 
+                if let Address::Normal(ref addr) = self.from {
+                    crypto::verify(&message, sig.clone(), addr.pkey())
+                } else {
+                    panic!("The address of the signer is not a normal address!");
+                }
+            },
+            Some(Signature::MultiSig(_)) => {
+                panic!("Calling this function on a multi signature transaction is not permitted!");
+            },
+            None => {
+                false
+            }
+        }
+    }
+
+    /// Verifies the multi signature of the transaction.
+    ///
+    /// Returns `false` if the signature field is missing.
+    ///
+    /// This function panics if the transaction has a multi 
+    /// signature attached to it or if the signer's address
+    /// is not a normal address.
+    pub fn verify_multi_sig(&mut self, required_keys: u8, pkeys: &[Pk]) -> bool {
+        if pkeys.len() < required_keys as usize {
+            false
+        } else {
+            let message = assemble_sign_message(&self);
+
+            match self.signature {
+                Some(Signature::Normal(_)) => { 
+                    panic!("Calling this function on a transaction with a normal signature is not permitted!");
+                },
+                Some(Signature::MultiSig(ref sig)) => {
+                    sig.verify(&message, required_keys, pkeys)
+                },
+                None => {
+                    false
+                }
+            }
+        }
+    }
 
     /// Serializes the transaction struct to a binary format.
     ///
@@ -307,6 +408,69 @@ impl Call {
 
         Ok(call)
     }
+
+    impl_hash!();
+}
+
+fn assemble_hash_message(obj: &Call) -> Vec<u8> {
+    let mut signature = if let Some(ref sig) = obj.signature {
+        sig.to_bytes()
+    } else {
+        panic!("Signature field is missing!");
+    };
+
+    let mut buf: Vec<u8> = Vec::new();
+    let mut from = obj.from.to_bytes();
+    let mut to = obj.to.to_bytes();
+    let mut amount = obj.amount.to_bytes();
+    let mut fee = obj.fee.to_bytes();
+    let mut gas_price = obj.gas_price.to_bytes();
+    let inputs = obj.inputs.as_bytes();
+    let gas_limit = obj.gas_limit;
+    let currency_hash = obj.currency_hash.0;
+    let fee_hash = obj.fee_hash.0;
+
+    buf.write_u64::<BigEndian>(gas_limit).unwrap();
+
+    // Compose data to hash
+    buf.append(&mut from);
+    buf.append(&mut to);
+    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut fee_hash.to_vec());
+    buf.append(&mut amount);
+    buf.append(&mut fee);
+    buf.append(&mut gas_price);
+    buf.append(&mut inputs.to_vec());
+    buf.append(&mut signature);
+
+    buf
+}
+
+fn assemble_sign_message(obj: &Call) -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::new();
+    let mut from = obj.from.to_bytes();
+    let mut to = obj.to.to_bytes();
+    let mut amount = obj.amount.to_bytes();
+    let mut fee = obj.fee.to_bytes();
+    let mut gas_price = obj.gas_price.to_bytes();
+    let inputs = obj.inputs.as_bytes();
+    let gas_limit = obj.gas_limit;
+    let currency_hash = obj.currency_hash.0;
+    let fee_hash = obj.fee_hash.0;
+
+    buf.write_u64::<BigEndian>(gas_limit).unwrap();
+
+    // Compose data to hash
+    buf.append(&mut from);
+    buf.append(&mut to);
+    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut fee_hash.to_vec());
+    buf.append(&mut amount);
+    buf.append(&mut fee);
+    buf.append(&mut gas_price);
+    buf.append(&mut inputs.to_vec());
+
+    buf
 }
 
 use quickcheck::Arbitrary;
@@ -332,10 +496,51 @@ impl Arbitrary for Call {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crypto::Identity;
 
     quickcheck! {
         fn serialize_deserialize(tx: Call) -> bool {
             tx == Call::from_bytes(&Call::to_bytes(&tx).unwrap()).unwrap()
+        }
+
+        fn verify_hash(tx: Call) -> bool {
+            let mut tx = tx;
+
+            for _ in (0..3) {
+                tx.hash();
+            }
+
+            tx.verify_hash()
+        }
+
+        fn verify_signature(
+            to: Address,
+            amount: Balance, 
+            fee: Balance, 
+            inputs: String,
+            gas_price: Balance,
+            gas_limit: u64,
+            currency_hash: Hash, 
+            fee_hash: Hash
+        ) -> bool {
+            let id = Identity::new();
+
+            let mut tx = Call {
+                from: Address::normal_from_pkey(*id.pkey()),
+                to: to,
+                amount: amount,
+                fee: fee,
+                currency_hash: currency_hash,
+                fee_hash: fee_hash,
+                gas_price: gas_price,
+                gas_limit: gas_limit,
+                inputs: inputs,
+                signature: None,
+                hash: None
+            };
+
+            tx.sign(id.skey().clone());
+            tx.verify_sig()
         }
     }
 }

@@ -41,36 +41,6 @@ pub struct Burn {
 impl Burn {
     pub const TX_TYPE: u8 = 11;
 
-    /// Computes the transaction's hash.
-    ///
-    /// This function will panic if the signature field is missing.
-    pub fn hash(&mut self) {
-        // Assemble data
-        let message = assemble_hash_message(&self);
-
-        // Hash data
-        let hash = crypto::hash_slice(&message);
-
-        self.hash = Some(hash);
-    }
-
-    /// Verifies the correctness of the hash of the transaction.
-    ///
-    /// This function will panic if the hash field or if the 
-    /// signature field is missing.
-    pub fn verify_hash(&mut self) -> bool {
-        let hash = if let Some(hash) = &self.hash {
-            hash.0
-        } else {
-            panic!("Hash field is missing!");
-        };
-        
-        let oracle_message = assemble_hash_message(&self);
-        let oracle_hash = crypto::hash_slice(&oracle_message);
-
-        hash == oracle_hash.0
-    }
-
     /// Signs the transaction with the given secret key.
     ///
     /// This function will panic if there already exists
@@ -357,6 +327,8 @@ impl Burn {
 
         Ok(burn)
     }
+
+    impl_hash!();
 }
 
 fn assemble_hash_message(obj: &Burn) -> Vec<u8> {

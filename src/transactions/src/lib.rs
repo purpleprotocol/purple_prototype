@@ -32,6 +32,9 @@ extern crate serde;
 extern crate byteorder;
 extern crate rand;
 
+#[macro_use]
+mod macros;
+
 mod burn;
 mod call;
 mod create_currency;
