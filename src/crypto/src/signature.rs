@@ -33,6 +33,10 @@ impl Signature {
         Signature(PrimitiveSig(sig))
     }
 
+    pub fn inner(&self) -> PrimitiveSig {
+        self.0
+    }
+
     pub fn inner_bytes(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::with_capacity(64);
         let bytes = &&(&self.0).0;

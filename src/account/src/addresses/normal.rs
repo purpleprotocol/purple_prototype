@@ -26,6 +26,14 @@ pub struct NormalAddress(PublicKey);
 impl NormalAddress {
     pub const ADDR_TYPE: u8 = 1;
 
+    pub fn from_pkey(pkey: PublicKey) -> NormalAddress {
+        NormalAddress(pkey)
+    }
+
+    pub fn pkey(&self) -> PublicKey {
+        self.0.clone()
+    }
+
     pub fn from_bytes(bin: &[u8]) -> Result<NormalAddress, &'static str> {
         let addr_type = bin[0];
         

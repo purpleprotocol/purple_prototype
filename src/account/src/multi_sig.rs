@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::Signature;
+use crypto::{PublicKey, Signature};
 use quickcheck::Arbitrary;
 use rand::Rng;
 
@@ -26,6 +26,51 @@ const SIG_TYPE: u8 = 2;
 pub struct MultiSig(Vec<Signature>);
 
 impl MultiSig {
+    pub fn from_sig(signature: Signature) -> MultiSig {
+        let inner: Vec<Signature> = vec![signature];
+        MultiSig(inner)
+    } 
+
+    pub fn verify(&self, message: &[u8], required_keys: u8, pkeys: &[PublicKey]) -> bool {
+        if required_keys < 2 {
+            panic!("The required keys parameter cannot be less than 2!")
+        }
+
+        if pkeys.len() < required_keys as usize {
+            panic!("The length of the given public keys list is smaller than the required keys!")
+        }
+        
+        let mut validated_keys: u8 = 0;
+        
+        for sig in &self.0 {
+            let mut valid = false;
+
+            // Check signature against all public keys
+            for pk in pkeys {
+                if crypto::verify(message, sig.clone(), *pk) {
+                    valid = true;
+                    break;
+                }
+            } 
+
+            if !valid {
+                return false;
+            }
+
+            validated_keys += 1;
+
+            if validated_keys == required_keys {
+                return true;
+            }
+        }
+
+        true
+    }
+
+    pub fn append_sig(&mut self, signature: Signature) {
+        self.0.push(signature);
+    }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut sigs: Vec<Vec<u8>> = Vec::with_capacity(self.0.len() + 1);
 

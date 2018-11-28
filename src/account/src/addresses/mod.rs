@@ -20,6 +20,7 @@ pub mod normal;
 pub mod multi_sig;
 pub mod shareholders;
 
+use crypto::PublicKey;
 use addresses::normal::*;
 use addresses::multi_sig::*;
 use addresses::shareholders::*;
@@ -38,6 +39,10 @@ impl Address {
             Address::MultiSig(ref addr)      => addr.to_bytes(),
             Address::Shareholders(ref addr)  => addr.to_bytes()
         }
+    }
+
+    pub fn normal_from_pkey(pkey: PublicKey) -> Address {
+        Address::Normal(NormalAddress::from_pkey(pkey))
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<Address, &'static str> {
