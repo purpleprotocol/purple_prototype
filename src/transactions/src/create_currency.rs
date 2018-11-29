@@ -16,16 +16,16 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance};
+use account::{Address, NormalAddress, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, Signature};
+use crypto::{Hash, Signature, SecretKey as Sk};
 use serde::{Deserialize, Serialize};
 use transaction::*;
 use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateCurrency {
-    creator: Address,
+    creator: NormalAddress,
     receiver: Address,
     currency_hash: Hash,
     coin_supply: u64,
@@ -40,6 +40,37 @@ pub struct CreateCurrency {
 
 impl CreateCurrency {
     pub const TX_TYPE: u8 = 8;
+
+    /// Signs the transaction with the given secret key.
+    ///
+    /// This function will panic if there already exists
+    /// a signature and the address type doesn't match
+    /// the signature type.
+    pub fn sign(&mut self, skey: Sk) {
+        // Assemble data
+        let message = assemble_sign_message(&self);
+
+        // Sign data
+        let signature = crypto::sign(&message, skey);
+
+        self.signature = Some(signature);
+    }
+
+    /// Verifies the signature of the transaction.
+    ///
+    /// Returns `false` if the signature field is missing.
+    pub fn verify_sig(&mut self) -> bool {
+        let message = assemble_sign_message(&self);
+
+        match self.signature {
+            Some(ref sig) => { 
+                crypto::verify(&message, sig.clone(), self.creator.pkey())
+            },
+            None => {
+                false
+            }
+        }
+    }
 
     /// Serializes the transaction struct to a binary format.
     ///
@@ -140,7 +171,7 @@ impl CreateCurrency {
         let creator = if buf.len() > 33 as usize {
             let creator_vec: Vec<u8> = buf.drain(..33).collect();
             
-            match Address::from_bytes(&creator_vec) {
+            match NormalAddress::from_bytes(&creator_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err)
             }
@@ -228,6 +259,61 @@ impl CreateCurrency {
 
         Ok(create_currency)
     }
+
+    impl_hash!();
+}
+
+fn assemble_hash_message(obj: &CreateCurrency) -> Vec<u8> {
+    let mut signature = if let Some(ref sig) = obj.signature {
+        sig.to_bytes()
+    } else {
+        panic!("Signature field is missing!");
+    };
+
+    let mut buf: Vec<u8> = Vec::new();
+    let mut creator = obj.creator.to_bytes();
+    let mut receiver = obj.receiver.to_bytes();
+    let mut fee = obj.fee.to_bytes();
+    let coin_supply = obj.coin_supply;
+    let precision = obj.precision;
+    let currency_hash = obj.currency_hash.0;
+    let fee_hash = obj.fee_hash.0;
+
+    buf.write_u8(precision).unwrap();
+    buf.write_u64::<BigEndian>(coin_supply).unwrap();
+
+    // Compose data to hash
+    buf.append(&mut creator);
+    buf.append(&mut receiver);
+    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut fee_hash.to_vec());
+    buf.append(&mut fee);
+    buf.append(&mut signature);
+
+    buf
+}
+
+fn assemble_sign_message(obj: &CreateCurrency) -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::new();
+    let mut creator = obj.creator.to_bytes();
+    let mut receiver = obj.receiver.to_bytes();
+    let mut fee = obj.fee.to_bytes();
+    let precision = obj.precision;
+    let coin_supply = obj.coin_supply;
+    let currency_hash = obj.currency_hash.0;
+    let fee_hash = obj.fee_hash.0;
+
+    buf.write_u8(precision).unwrap();
+    buf.write_u64::<BigEndian>(coin_supply).unwrap();
+
+    // Compose data to hash
+    buf.append(&mut creator);
+    buf.append(&mut receiver);
+    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut fee_hash.to_vec());
+    buf.append(&mut fee);
+
+    buf
 }
 
 use quickcheck::Arbitrary;
@@ -251,10 +337,47 @@ impl Arbitrary for CreateCurrency {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crypto::Identity;
 
     quickcheck! {
         fn serialize_deserialize(tx: CreateCurrency) -> bool {
             tx == CreateCurrency::from_bytes(&CreateCurrency::to_bytes(&tx).unwrap()).unwrap()
+        }
+
+        fn verify_hash(tx: CreateCurrency) -> bool {
+            let mut tx = tx;
+
+            for _ in (0..3) {
+                tx.hash();
+            }
+
+            tx.verify_hash()
+        }
+
+        fn verify_signature(
+            receiver: Address,
+            fee: Balance, 
+            coin_supply: u64,
+            precision: u8,
+            currency_hash: Hash, 
+            fee_hash: Hash
+        ) -> bool {
+            let id = Identity::new();
+
+            let mut tx = CreateCurrency {
+                creator: NormalAddress::from_pkey(*id.pkey()),
+                receiver: receiver,
+                coin_supply: coin_supply,
+                precision: precision,
+                fee: fee,
+                currency_hash: currency_hash,
+                fee_hash: fee_hash,
+                signature: None,
+                hash: None
+            };
+
+            tx.sign(id.skey().clone());
+            tx.verify_sig()
         }
     }
 }

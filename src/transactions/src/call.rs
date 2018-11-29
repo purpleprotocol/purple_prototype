@@ -506,7 +506,7 @@ mod tests {
         fn verify_hash(tx: Call) -> bool {
             let mut tx = tx;
 
-            for _ in (0..3) {
+            for _ in 0..3 {
                 tx.hash();
             }
 
@@ -541,6 +541,49 @@ mod tests {
 
             tx.sign(id.skey().clone());
             tx.verify_sig()
+        }
+
+        fn verify_multi_signature(
+            to: Address,
+            amount: Balance, 
+            fee: Balance, 
+            inputs: String,
+            gas_price: Balance,
+            gas_limit: u64,
+            currency_hash: Hash, 
+            fee_hash: Hash
+        ) -> bool {
+            let mut ids: Vec<Identity> = (0..30)
+                .into_iter()
+                .map(|_| Identity::new())
+                .collect();
+
+            let creator_id = ids.pop().unwrap();
+            let pkeys: Vec<Pk> = ids
+                .iter()
+                .map(|i| *i.pkey())
+                .collect();
+
+            let mut tx = Call {
+                from: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
+                to: to,
+                amount: amount,
+                fee: fee,
+                currency_hash: currency_hash,
+                fee_hash: fee_hash,
+                gas_price: gas_price,
+                gas_limit: gas_limit,
+                inputs: inputs,
+                signature: None,
+                hash: None
+            };
+
+            // Sign using each identity
+            for id in ids {
+                tx.sign(id.skey().clone());
+            }
+            
+            tx.verify_multi_sig(10, &pkeys)
         }
     }
 }
