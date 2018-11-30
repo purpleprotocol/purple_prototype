@@ -306,7 +306,7 @@ fn assemble_sign_message(obj: &CreateCurrency) -> Vec<u8> {
     buf.write_u8(precision).unwrap();
     buf.write_u64::<BigEndian>(coin_supply).unwrap();
 
-    // Compose data to hash
+    // Compose data to sign
     buf.append(&mut creator);
     buf.append(&mut receiver);
     buf.append(&mut currency_hash.to_vec());

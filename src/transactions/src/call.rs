@@ -460,7 +460,7 @@ fn assemble_sign_message(obj: &Call) -> Vec<u8> {
 
     buf.write_u64::<BigEndian>(gas_limit).unwrap();
 
-    // Compose data to hash
+    // Compose data to sign
     buf.append(&mut from);
     buf.append(&mut to);
     buf.append(&mut currency_hash.to_vec());
