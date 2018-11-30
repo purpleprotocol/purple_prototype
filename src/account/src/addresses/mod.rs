@@ -50,6 +50,15 @@ impl Address {
         Address::MultiSig(MultiSigAddress::compute(&addresses, NormalAddress::from_pkey(creator_address), nonce))
     }
 
+    pub fn shareholders_from_pkeys(pkeys: &[PublicKey], creator_address: PublicKey, nonce: u64) -> Address {
+        let addresses: Vec<NormalAddress> = pkeys
+            .iter()
+            .map(|pk| NormalAddress::from_pkey(*pk))
+            .collect();
+        
+        Address::Shareholders(ShareholdersAddress::compute(&addresses, NormalAddress::from_pkey(creator_address), nonce))
+    }
+
     pub fn normal_from_pkey(pkey: PublicKey) -> Address {
         Address::Normal(NormalAddress::from_pkey(pkey))
     }

@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature, MultiSig};
+use account::{Address, Balance, Signature, ShareMap, MultiSig};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, SecretKey as Sk, PublicKey as Pk};
 use serde::{Deserialize, Serialize};
@@ -141,6 +141,25 @@ impl Call {
                 None => {
                     false
                 }
+            }
+        }
+    }
+
+    /// Verifies the multi signature of the transaction.
+    ///
+    /// Returns `false` if the signature field is missing.
+    pub fn verify_multi_sig_shares(&mut self, required_percentile: u8, share_map: ShareMap) -> bool {
+        let message = assemble_sign_message(&self);
+
+        match self.signature {
+            Some(Signature::Normal(_)) => { 
+                panic!("Calling this function on a transaction with a normal signature is not permitted!");
+            },
+            Some(Signature::MultiSig(ref sig)) => {
+                sig.verify_shares(&message, required_percentile, share_map)
+            },
+            None => {
+                false
             }
         }
     }
@@ -496,6 +515,7 @@ impl Arbitrary for Call {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use account::NormalAddress;
     use crypto::Identity;
 
     quickcheck! {
@@ -584,6 +604,60 @@ mod tests {
             }
             
             tx.verify_multi_sig(10, &pkeys)
+        }
+
+        fn verify_multi_signature_shares(
+            to: Address,
+            amount: Balance, 
+            fee: Balance, 
+            inputs: String,
+            gas_price: Balance,
+            gas_limit: u64,
+            currency_hash: Hash, 
+            fee_hash: Hash
+        ) -> bool {
+            let mut ids: Vec<Identity> = (0..30)
+                .into_iter()
+                .map(|_| Identity::new())
+                .collect();
+
+            let creator_id = ids.pop().unwrap();
+            let pkeys: Vec<Pk> = ids
+                .iter()
+                .map(|i| *i.pkey())
+                .collect();
+
+            let addresses: Vec<NormalAddress> = pkeys
+                .iter()
+                .map(|pk| NormalAddress::from_pkey(*pk))
+                .collect();
+            
+            let mut share_map = ShareMap::new(); 
+
+            for addr in addresses.clone() {
+                share_map.add_shareholder(addr, 100);
+            }
+
+            let mut tx = Call {
+                from: Address::shareholders_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
+                to: to,
+                amount: amount,
+                fee: fee,
+                currency_hash: currency_hash,
+                fee_hash: fee_hash,
+                inputs: inputs,
+                gas_price: gas_price,
+                gas_limit: gas_limit,
+                signature: None,
+                hash: None
+            };
+
+            // Sign using each identity
+            for id in ids {
+                tx.sign(id.skey().clone());
+            }
+            
+            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

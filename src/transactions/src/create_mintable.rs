@@ -386,7 +386,7 @@ mod tests {
         fn verify_hash(tx: CreateMintable) -> bool {
             let mut tx = tx;
 
-            for _ in (0..3) {
+            for _ in 0..3 {
                 tx.hash();
             }
 

@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{ShareholdersAddress, Address, Balance, MultiSig};
+use account::{ShareholdersAddress, Address, Balance, MultiSig, ShareMap};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::Hash;
+use crypto::{Hash, SecretKey as Sk};
 use serde::{Deserialize, Serialize};
 use transaction::*;
 use std::io::Cursor;
@@ -38,6 +38,45 @@ pub struct IssueShares {
 
 impl IssueShares {
     pub const TX_TYPE: u8 = 7;
+
+    /// Signs the transaction with the given secret key.
+    pub fn sign(&mut self, skey: Sk) {
+        // Assemble data
+        let message = assemble_sign_message(&self);
+
+        // Sign data
+        let signature = crypto::sign(&message, skey);
+
+        match self.signature {
+            Some(ref mut sig) => {
+                // Append signature to the multi sig struct
+                sig.append_sig(signature);        
+            },
+            None => {
+                // Create a multi signature
+                let result = MultiSig::from_sig(signature);
+
+                // Attach signature to struct
+                self.signature = Some(result);
+            }
+        };
+    }
+
+    /// Verifies the multi signature of the transaction.
+    ///
+    /// Returns `false` if the signature field is missing.
+    pub fn verify_multi_sig_shares(&mut self, required_percentile: u8, share_map: ShareMap) -> bool {
+        let message = assemble_sign_message(&self);
+
+        match self.signature {
+            Some(ref sig) => {
+                sig.verify_shares(&message, required_percentile, share_map)
+            },
+            None => {
+                false
+            }
+        }
+    }
 
     /// Serializes the transaction struct to a binary format.
     ///
@@ -210,6 +249,53 @@ impl IssueShares {
 
         Ok(issue_shares)
     }
+
+    impl_hash!();
+}
+
+fn assemble_hash_message(obj: &IssueShares) -> Vec<u8> {
+    let mut signature = if let Some(ref sig) = obj.signature {
+        sig.to_bytes()
+    } else {
+        panic!("Signature field is missing!");
+    };
+
+    let mut buf: Vec<u8> = Vec::new();
+    let mut issuer = obj.issuer.to_bytes();
+    let mut receiver = obj.receiver.to_bytes();
+    let fee_hash = &obj.fee_hash.0;
+    let shares = obj.shares;
+    let mut fee = obj.fee.to_bytes();
+
+    buf.write_u64::<BigEndian>(shares).unwrap();
+
+    // Compose data to hash
+    buf.append(&mut issuer);
+    buf.append(&mut receiver);
+    buf.append(&mut fee_hash.to_vec());
+    buf.append(&mut fee);
+    buf.append(&mut signature);
+
+    buf
+}
+
+fn assemble_sign_message(obj: &IssueShares) -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::new();
+    let mut issuer = obj.issuer.to_bytes();
+    let mut receiver = obj.receiver.to_bytes();
+    let fee_hash = &obj.fee_hash.0;
+    let shares = obj.shares;
+    let mut fee = obj.fee.to_bytes();
+
+    buf.write_u64::<BigEndian>(shares).unwrap();
+
+    // Compose data to sign
+    buf.append(&mut issuer);
+    buf.append(&mut receiver);
+    buf.append(&mut fee_hash.to_vec());
+    buf.append(&mut fee);
+
+    buf
 }
 
 use quickcheck::Arbitrary;
@@ -231,10 +317,68 @@ impl Arbitrary for IssueShares {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use account::NormalAddress;
+    use crypto::{Identity, PublicKey as Pk};
 
     quickcheck! {
         fn serialize_deserialize(tx: IssueShares) -> bool {
             tx == IssueShares::from_bytes(&IssueShares::to_bytes(&tx).unwrap()).unwrap()
+        }
+
+        fn verify_hash(tx: IssueShares) -> bool {
+            let mut tx = tx;
+
+            for _ in 0..3 {
+                tx.hash();
+            }
+
+            tx.verify_hash()
+        }
+
+        fn verify_multi_signature_shares(
+            receiver: Address, 
+            fee: Balance, 
+            shares: u64,
+            fee_hash: Hash
+        ) -> bool {
+            let mut ids: Vec<Identity> = (0..30)
+                .into_iter()
+                .map(|_| Identity::new())
+                .collect();
+
+            let creator_id = ids.pop().unwrap();
+            let pkeys: Vec<Pk> = ids
+                .iter()
+                .map(|i| *i.pkey())
+                .collect();
+
+            let addresses: Vec<NormalAddress> = pkeys
+                .iter()
+                .map(|pk| NormalAddress::from_pkey(*pk))
+                .collect();
+            
+            let mut share_map = ShareMap::new(); 
+
+            for addr in addresses.clone() {
+                share_map.add_shareholder(addr, 100);
+            }
+
+            let mut tx = IssueShares {
+                issuer: ShareholdersAddress::compute(&addresses, NormalAddress::from_pkey(*creator_id.pkey()), 4314),
+                receiver: receiver,
+                shares: shares,
+                fee: fee,
+                fee_hash: fee_hash,
+                signature: None,
+                hash: None
+            };
+
+            // Sign using each identity
+            for id in ids {
+                tx.sign(id.skey().clone());
+            }
+            
+            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

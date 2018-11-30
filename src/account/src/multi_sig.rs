@@ -19,6 +19,7 @@
 use crypto::{PublicKey, Signature};
 use quickcheck::Arbitrary;
 use rand::Rng;
+use ShareMap;
 
 const SIG_TYPE: u8 = 2;
 
@@ -64,7 +65,25 @@ impl MultiSig {
             }
         }
 
-        true
+        false
+    }
+
+    pub fn verify_shares(&self, message: &[u8], required_percentile: u8, share_map: ShareMap) -> bool {
+        let mut signed_ratio: u8 = 0;
+
+        for sig in &self.0 {
+            // Find a matching address in the share map for the signature
+            match share_map.find_signer(message, sig.clone()) {
+                Some(sh_ratio) => signed_ratio += sh_ratio,
+                None           => return false
+            }
+
+            if signed_ratio >= required_percentile {
+                return true;
+            }
+        }
+
+        false
     }
 
     pub fn append_sig(&mut self, signature: Signature) {

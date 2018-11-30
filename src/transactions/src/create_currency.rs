@@ -347,7 +347,7 @@ mod tests {
         fn verify_hash(tx: CreateCurrency) -> bool {
             let mut tx = tx;
 
-            for _ in (0..3) {
+            for _ in 0..3 {
                 tx.hash();
             }
 

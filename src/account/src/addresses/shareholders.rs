@@ -17,6 +17,9 @@
 */
 
 use crypto::PublicKey;
+use NormalAddress;
+use rlp::*;
+use byteorder::{BigEndian, WriteBytesExt};
 use rand::Rng;
 use quickcheck::Arbitrary;
 
@@ -25,6 +28,33 @@ pub struct ShareholdersAddress([u8; 32]);
 
 impl ShareholdersAddress {
     pub const ADDR_TYPE: u8 = 3;
+
+    /// Computes a shareholders address from the public keys of the 
+    /// shareholders, the creator address and the creator's current nonce.
+    pub fn compute(
+        keys: &[NormalAddress], 
+        creator_address: NormalAddress, 
+        nonce: u64
+    ) -> ShareholdersAddress {
+        let mut buf: Vec<u8> = Vec::new();
+        let mut stream = RlpStream::new_list(keys.len());
+
+        // Encode keys with rlp
+        for k in keys {
+            stream.append(&k.to_bytes());
+        }
+
+        let mut encoded_keys = stream.out();
+ 
+        buf.write_u64::<BigEndian>(nonce).unwrap();
+        buf.append(&mut creator_address.to_bytes());
+        buf.append(&mut encoded_keys);
+
+        // Hash the buffer
+        let hash = crypto::hash_slice(&buf);
+
+        ShareholdersAddress(hash.0)
+    }
 
     pub fn from_bytes(bin: &[u8]) -> Result<ShareholdersAddress, &'static str> {
         let addr_type = bin[0];
