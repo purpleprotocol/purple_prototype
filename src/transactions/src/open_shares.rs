@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, ShareholdersAddress, Balance, Signature, Shares, ShareMap};
+use account::{NormalAddress, ShareholdersAddress, Balance, Shares, ShareMap};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::Hash;
+use crypto::{Hash, Signature, SecretKey as Sk};
 use serde::{Deserialize, Serialize};
 use transaction::*;
 use std::io::Cursor;
@@ -45,6 +45,37 @@ pub struct OpenShares {
 
 impl OpenShares {
     pub const TX_TYPE: u8 = 6;
+
+    /// Signs the transaction with the given secret key.
+    ///
+    /// This function will panic if there already exists
+    /// a signature and the address type doesn't match
+    /// the signature type.
+    pub fn sign(&mut self, skey: Sk) {
+        // Assemble data
+        let message = assemble_sign_message(&self);
+
+        // Sign data
+        let signature = crypto::sign(&message, skey);
+
+        self.signature = Some(signature);
+    }
+
+    /// Verifies the signature of the transaction.
+    ///
+    /// Returns `false` if the signature field is missing.
+    pub fn verify_sig(&mut self) -> bool {
+        let message = assemble_sign_message(&self);
+
+        match self.signature {
+            Some(ref sig) => { 
+                crypto::verify(&message, sig.clone(), self.creator.pkey())
+            },
+            None => {
+                false
+            }
+        }
+    }
 
     /// Serializes the transaction struct to a binary format.
     ///
@@ -324,6 +355,93 @@ impl OpenShares {
 
         Ok(open_shares)
     }
+
+    impl_hash!();
+}
+
+fn assemble_hash_message(obj: &OpenShares) -> Vec<u8> {
+    let mut signature = if let Some(ref sig) = obj.signature {
+        sig.to_bytes()
+    } else {
+        panic!("Signature field is missing!");
+    };
+
+    let mut address = if let Some(ref address) = obj.address {
+        address.to_bytes()
+    } else {
+        panic!("Address field is missing!");
+    };
+
+    let stock_hash = if let Some(ref stock_hash) = obj.stock_hash {
+        stock_hash.0
+    } else {
+        panic!("Stock hash field is missing!");
+    };
+
+    let mut buf: Vec<u8> = Vec::new();
+    let mut creator = obj.creator.to_bytes();
+    let fee_hash = &obj.fee_hash.0;
+    let currency_hash = &obj.currency_hash.0;
+    let mut amount = obj.amount.to_bytes();
+    let mut fee = obj.fee.to_bytes();
+    let nonce = obj.nonce;
+    let mut shares = obj.shares.to_bytes();
+    let mut share_map = obj.share_map.to_bytes();
+
+    buf.write_u64::<BigEndian>(nonce).unwrap();
+
+    // Compose data to hash
+    buf.append(&mut stock_hash.to_vec());
+    buf.append(&mut fee_hash.to_vec());
+    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut creator);
+    buf.append(&mut address);
+    buf.append(&mut amount);
+    buf.append(&mut fee);
+    buf.append(&mut signature);
+    buf.append(&mut shares);
+    buf.append(&mut share_map);
+
+    buf
+}
+
+fn assemble_sign_message(obj: &OpenShares) -> Vec<u8> {
+    let mut address = if let Some(ref address) = obj.address {
+        address.to_bytes()
+    } else {
+        panic!("Address field is missing!");
+    };
+
+    let stock_hash = if let Some(ref stock_hash) = obj.stock_hash {
+        stock_hash.0
+    } else {
+        panic!("Stock hash field is missing!");
+    };
+
+    let mut buf: Vec<u8> = Vec::new();
+    let mut creator = obj.creator.to_bytes();
+    let fee_hash = &obj.fee_hash.0;
+    let currency_hash = &obj.currency_hash.0;
+    let mut amount = obj.amount.to_bytes();
+    let mut fee = obj.fee.to_bytes();
+    let nonce = obj.nonce;
+    let mut shares = obj.shares.to_bytes();
+    let mut share_map = obj.share_map.to_bytes();
+
+    buf.write_u64::<BigEndian>(nonce).unwrap();
+
+    // Compose data to hash
+    buf.append(&mut stock_hash.to_vec());
+    buf.append(&mut fee_hash.to_vec());
+    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut creator);
+    buf.append(&mut address);
+    buf.append(&mut amount);
+    buf.append(&mut fee);
+    buf.append(&mut shares);
+    buf.append(&mut share_map);
+
+    buf
 }
 
 use quickcheck::Arbitrary;
@@ -350,10 +468,52 @@ impl Arbitrary for OpenShares {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crypto::Identity;
 
     quickcheck! {
         fn serialize_deserialize(tx: OpenShares) -> bool {
             tx == OpenShares::from_bytes(&OpenShares::to_bytes(&tx).unwrap()).unwrap()
+        }
+
+        fn verify_hash(tx: OpenShares) -> bool {
+            let mut tx = tx;
+
+            for _ in 0..3 {
+                tx.hash();
+            }
+
+            tx.verify_hash()
+        }
+
+        fn verify_signature(
+            address: ShareholdersAddress,
+            shares: Shares,
+            share_map: ShareMap,
+            amount: Balance,
+            fee: Balance,
+            hashes: (Hash, Hash, Hash),
+            nonce: u64
+        ) -> bool {
+            let id = Identity::new();
+            let (currency_hash, fee_hash, stock_hash) = hashes;
+
+            let mut tx = OpenShares {
+                creator: NormalAddress::from_pkey(*id.pkey()),
+                shares: shares,
+                share_map: share_map,
+                amount: amount,
+                currency_hash: currency_hash,
+                fee: fee,
+                fee_hash: fee_hash,
+                nonce: nonce,
+                stock_hash: Some(stock_hash),
+                address: Some(address),
+                signature: None,
+                hash: None
+            };
+
+            tx.sign(id.skey().clone());
+            tx.verify_sig()
         }
     }
 }
