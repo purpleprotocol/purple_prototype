@@ -17,7 +17,7 @@
 */
 
 use account::{Address, Balance};
-use crypto::{Hash, Signature, PublicKey};
+use crypto::{Hash, Signature, PublicKey, SecretKey as Sk};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use network::NodeId;
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,37 @@ pub struct Receive {
 
 impl Receive {
     pub const TX_TYPE: u8 = 4;
+
+    /// Signs the transaction with the given secret key.
+    ///
+    /// This function will panic if there already exists
+    /// a signature and the address type doesn't match
+    /// the signature type.
+    pub fn sign(&mut self, skey: Sk) {
+        // Assemble data
+        let message = assemble_sign_message(&self);
+
+        // Sign data
+        let signature = crypto::sign(&message, skey);
+
+        self.signature = Some(signature);
+    }
+
+    /// Verifies the signature of the transaction.
+    ///
+    /// Returns `false` if the signature field is missing.
+    pub fn verify_sig(&mut self) -> bool {
+        let message = assemble_sign_message(&self);
+
+        match self.signature {
+            Some(ref sig) => { 
+                crypto::verify(&message, sig.clone(), self.sequencer.0)
+            },
+            None => {
+                false
+            }
+        }
+    }
 
     /// Serializes the transaction struct to a binary format.
     ///
@@ -172,6 +203,47 @@ impl Receive {
 
         Ok(receive)
     }
+
+    impl_hash!();
+}
+
+fn assemble_hash_message(obj: &Receive) -> Vec<u8> {
+    let mut signature = if let Some(ref sig) = obj.signature {
+        sig.to_bytes()
+    } else {
+        panic!("Signature field is missing!");
+    };
+
+    let mut buf: Vec<u8> = Vec::new();
+    let source = &obj.source.0;
+    let mut receiver = obj.receiver.to_bytes();
+    let sequencer = &(&obj.sequencer.0).0;
+    let src_event = &obj.src_event.0;
+
+    // Compose data to hash
+    buf.append(&mut source.to_vec());
+    buf.append(&mut src_event.to_vec());
+    buf.append(&mut receiver);
+    buf.append(&mut sequencer.to_vec());
+    buf.append(&mut signature);
+
+    buf
+}
+
+fn assemble_sign_message(obj: &Receive) -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::new();
+    let source = &obj.source.0;
+    let mut receiver = obj.receiver.to_bytes();
+    let sequencer = &(&obj.sequencer.0).0;
+    let src_event = &obj.src_event.0;
+
+    // Compose data to hash
+    buf.append(&mut source.to_vec());
+    buf.append(&mut src_event.to_vec());
+    buf.append(&mut receiver);
+    buf.append(&mut sequencer.to_vec());
+
+    buf
 }
 
 use quickcheck::Arbitrary;
@@ -192,10 +264,41 @@ impl Arbitrary for Receive {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crypto::Identity;
 
     quickcheck! {
         fn serialize_deserialize(tx: Receive) -> bool {
             tx == Receive::from_bytes(&Receive::to_bytes(&tx).unwrap()).unwrap()
+        }
+
+        fn verify_hash(tx: Receive) -> bool {
+            let mut tx = tx;
+
+            for _ in 0..3 {
+                tx.hash();
+            }
+
+            tx.verify_hash()
+        }
+
+        fn verify_signature(
+            src_event: Hash,
+            source: Hash,
+            receiver: Address
+        ) -> bool {
+            let id = Identity::new();
+
+            let mut tx = Receive {
+                sequencer: NodeId(*id.pkey()),
+                src_event: src_event,
+                source: source,
+                receiver: receiver,
+                signature: None,
+                hash: None
+            };
+
+            tx.sign(id.skey().clone());
+            tx.verify_sig()
         }
     }
 }
