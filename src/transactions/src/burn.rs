@@ -21,7 +21,6 @@ use crypto::{PublicKey as Pk, SecretKey as Sk};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
 use serde::{Deserialize, Serialize};
-use transaction::*;
 use std::io::Cursor;
 use std::str;
 

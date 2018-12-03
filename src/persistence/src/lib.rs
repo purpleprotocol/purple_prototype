@@ -18,6 +18,16 @@
 
 #![feature(extern_prelude)]
 
+#[cfg(test)]
+extern crate tempfile;
+
 extern crate crypto;
 extern crate hashdb;
 extern crate parking_lot;
+extern crate kvdb_rocksdb;
+
+pub use persistent_db::*;
+pub use hasher::*;
+
+mod persistent_db;
+mod hasher;

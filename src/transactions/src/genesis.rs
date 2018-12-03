@@ -19,7 +19,6 @@
 use account::{NormalAddress, Balance, Shares};
 use crypto::{Hash, Signature};
 use serde::{Deserialize, Serialize};
-use transaction::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Genesis {

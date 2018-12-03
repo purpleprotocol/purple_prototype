@@ -16,7 +16,6 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::PublicKey;
 use NormalAddress;
 use rlp::*;
 use byteorder::{BigEndian, WriteBytesExt};

@@ -47,7 +47,6 @@ mod mint;
 mod issue_shares;
 mod open_multi_sig;
 mod open_shares;
-mod transaction;
 
 pub use burn::*;
 pub use call::*;
@@ -61,7 +60,6 @@ pub use issue_shares::*;
 pub use mint::*;
 pub use open_multi_sig::*;
 pub use open_shares::*;
-pub use transaction::*;
 
 use rand::Rng;
 use quickcheck::Arbitrary;

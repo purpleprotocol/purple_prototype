@@ -21,7 +21,6 @@ use crypto::{Hash, Signature, PublicKey, SecretKey as Sk};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use network::NodeId;
 use serde::{Deserialize, Serialize};
-use transaction::*;
 use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

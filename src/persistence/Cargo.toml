@@ -10,3 +10,6 @@ parking_lot = "0.6"
 kvdb = { git = "https://github.com/paritytech/parity-common" }
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
 crypto = { path = "../crypto" }
+
+[dev-dependencies]
+tempfile = "3.0.5"

@@ -15,3 +15,19 @@
   You should have received a copy of the GNU General Public License
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
+
+use hashdb::Hasher as HashDbHasher;
+use crypto::{Hash, BlakeHasher, HASH_BYTES};
+
+pub struct Hasher;
+
+impl HashDbHasher for Hasher {
+    const LENGTH: usize = HASH_BYTES;
+
+    type Out = Hash;
+    type StdHasher = BlakeHasher;
+
+    fn hash(bytes: &[u8]) -> Self::Out {
+        crypto::hash_slice(bytes)
+    }
+}

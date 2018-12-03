@@ -20,7 +20,6 @@ use account::{NormalAddress, ShareholdersAddress, Balance, Shares, ShareMap};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature, SecretKey as Sk};
 use serde::{Deserialize, Serialize};
-use transaction::*;
 use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
