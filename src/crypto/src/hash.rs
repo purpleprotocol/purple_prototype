@@ -24,6 +24,7 @@ use std::convert::{AsMut, AsRef};
 use std::default::Default;
 use hashdb::Hasher;
 use blake_hasher::BlakeHasher;
+use rlp::{Encodable, Decodable, Rlp, RlpStream, DecoderError};
 
 pub const HASH_BYTES: usize = 32;
 
@@ -31,6 +32,8 @@ pub const HASH_BYTES: usize = 32;
 pub struct Hash(pub [u8; HASH_BYTES]);
 
 impl Hash {
+    pub const NULL: Hash = Hash([14, 87, 81, 192, 38, 229, 67, 178, 232, 171, 46, 176, 96, 153, 218, 161, 209, 229, 223, 71, 119, 143, 119, 135, 250, 171, 69, 205, 241, 47, 227, 168]);
+
     pub fn null_rlp() -> Hash {
         let buf: Vec<Vec<u8>> = Vec::with_capacity(0); 
         let nul_buf: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&buf);
@@ -60,6 +63,26 @@ impl Default for Hash {
         result.copy_from_slice(&buf);
 
         Hash(result)
+    }
+}
+
+impl Encodable for Hash {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        stream.append(&self.0.to_vec());
+    }
+}
+
+impl Decodable for Hash {
+    fn decode(bytes: &Rlp) -> Result<Hash, DecoderError> {
+        match bytes.data() {
+            Ok(data) => {
+                let mut result = [0; HASH_BYTES];
+                result.copy_from_slice(data);
+
+                Ok(Hash(result))
+            },
+            _ => Err(DecoderError::Custom("Invalid rlp data"))
+        }
     }
 }
 

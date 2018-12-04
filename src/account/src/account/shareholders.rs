@@ -16,6 +16,12 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use BalanceMap;
+use ShareMap;
+
 pub struct Shareholders {
-    
+    balance_map: BalanceMap,
+    share_map: ShareMap,
+    nonce: u64,
+    code: Vec<u8>   
 }

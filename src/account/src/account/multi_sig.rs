@@ -16,6 +16,13 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub struct Contract {
-    
+use BalanceMap;
+use NormalAddress;
+
+pub struct MultiSig {
+    keys: Vec<NormalAddress>,
+    required_keys: u8,
+    balance_map: BalanceMap,
+    nonce: u64,
+    code: Vec<u8>   
 }

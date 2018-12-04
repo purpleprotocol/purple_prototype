@@ -19,7 +19,7 @@
 use BalanceMap;
 
 pub struct Normal {
-    balance: BalanceMap,
+    balance_map: BalanceMap,
     nonce: u64,
     code: Vec<u8>   
 }

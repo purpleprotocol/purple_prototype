@@ -12,6 +12,7 @@ hashdb = "0.3.0"
 patricia-trie = "0.3.0"
 elastic-array = "0.10.0"
 rand = "0.6.0"
+persistence = { path = "../persistence" }
 network = { path = "../network" }
 causality = { path = "../causality" }
 crypto = { path = "../crypto" }

@@ -21,6 +21,7 @@
 #[cfg(test)]
 extern crate tempfile;
 
+extern crate rlp;
 extern crate patricia_trie;
 extern crate elastic_array;
 extern crate crypto;

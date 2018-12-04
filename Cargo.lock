@@ -886,6 +886,7 @@ dependencies = [
  "kvdb-rocksdb 0.1.4 (git+https://github.com/paritytech/parity-common)",
  "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1515,6 +1516,7 @@ dependencies = [
  "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "network 0.1.0",
  "patricia-trie 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "persistence 0.1.0",
  "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",

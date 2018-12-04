@@ -19,6 +19,7 @@
 #[macro_use] extern crate log;
 #[macro_use] extern crate unwrap;
 
+extern crate crypto;
 extern crate env_logger;
 extern crate itc;
 extern crate jump;

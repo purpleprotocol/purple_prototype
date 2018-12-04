@@ -20,6 +20,12 @@ pub mod normal;
 pub mod multi_sig;
 pub mod shareholders;
 
+use account::normal::*;
+use account::multi_sig::*;
+use account::shareholders::*;
+
 pub enum Account {
-    
+    Normal(Normal),
+    MultiSig(MultiSig),
+    Shareholders(Shareholders)
 }

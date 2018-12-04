@@ -46,4 +46,5 @@ pub use balance::*;
 pub use signature::*;
 pub use multi_sig::*;
 pub use shares::*;
+pub use balance_map::*;
 pub use share_map::*;

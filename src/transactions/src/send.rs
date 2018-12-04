@@ -22,9 +22,9 @@ use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use hashdb::HashDB;
-use patricia_trie::TrieDBMut;
-use patricia_trie::TrieMut;
+use patricia_trie::{TrieMut, TrieDBMut, NodeCodec};
 use elastic_array::ElasticArray128;
+use persistence::{Hasher, Codec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Send {
@@ -44,7 +44,7 @@ impl Send {
     pub const TX_TYPE: u8 = 3;
 
     pub fn apply(&self, db: &mut HashDB<Hash, ElasticArray128<u8>>, root: &mut Hash) {
-        let mut trie = TrieDBMut::new(db, root);
+        let mut trie = TrieDBMut::<Hash, Codec>::new(db, root);
         let account_state = trie.get(&self.from.to_bytes());
 
         match account_state {
