@@ -22,6 +22,7 @@ use hashdb::{HashDB, AsHashDB};
 use std::collections::HashMap;
 use crypto::Hash;
 use Hasher;
+use elastic_array::ElasticArray128;
 
 pub struct PersistentDb {
     db_ref: Arc<Database>,
@@ -37,23 +38,17 @@ impl PersistentDb {
     }
 }
 
-impl HashDB<Hasher, Vec<u8>> for PersistentDb {
+impl HashDB<Hasher, ElasticArray128<u8>> for PersistentDb {
     fn keys(&self) -> HashMap<Hash, i32> {
         unimplemented!();
     }
 
-    fn get(&self, key: &Hash) -> Option<Vec<u8>> {
+    fn get(&self, key: &Hash) -> Option<ElasticArray128<u8>> {
         let db_ref = &self.db_ref;
 
         match db_ref.get(self.cf, &*key.0.to_vec()) {
-            Ok(result) => {
-                if let Some(res) = result {
-                    Some(res.to_vec())
-                } else {
-                    None
-                }
-            },
-            Err(err) => panic!(err)
+            Ok(result) => result,
+            Err(err)   => panic!(err)
         }
     }
 
@@ -84,7 +79,7 @@ impl HashDB<Hasher, Vec<u8>> for PersistentDb {
         }
     }
 
-    fn emplace(&mut self, key: Hash, val: Vec<u8>) {
+    fn emplace(&mut self, key: Hash, val: ElasticArray128<u8>) {
         let db_ref = &self.db_ref;
         let mut tx = db_ref.transaction();
 		
@@ -102,9 +97,9 @@ impl HashDB<Hasher, Vec<u8>> for PersistentDb {
     }
 }
 
-impl AsHashDB<Hasher, Vec<u8>> for PersistentDb {
-    fn as_hashdb(&self) -> &HashDB<Hasher, Vec<u8>> { self }
-    fn as_hashdb_mut(&mut self) -> &mut HashDB<Hasher, Vec<u8>> { self }
+impl AsHashDB<Hasher, ElasticArray128<u8>> for PersistentDb {
+    fn as_hashdb(&self) -> &HashDB<Hasher, ElasticArray128<u8>> { self }
+    fn as_hashdb_mut(&mut self) -> &mut HashDB<Hasher, ElasticArray128<u8>> { self }
 }
 
 #[cfg(test)] 
@@ -124,7 +119,7 @@ mod tests {
 
         let key = persistent_db.insert(data);
 
-        assert_eq!(persistent_db.get(&key).unwrap(), data);
+        assert_eq!(persistent_db.get(&key).unwrap().to_vec(), data.to_vec());
     }
 
     #[test]
@@ -137,9 +132,9 @@ mod tests {
         let key = crypto::hash_slice(b"the_key");
         let data = b"Hello world";
 
-        persistent_db.emplace(key, data.to_vec());
+        persistent_db.emplace(key, ElasticArray128::from_slice(data));
 
-        assert_eq!(persistent_db.get(&key).unwrap(), data);
+        assert_eq!(persistent_db.get(&key).unwrap().to_vec(), data.to_vec());
     }
 
     #[test]

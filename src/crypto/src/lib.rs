@@ -21,6 +21,7 @@
 #[macro_use]
 extern crate serde_derive;
 
+extern crate rlp;
 extern crate hashdb;
 extern crate rand;
 extern crate hex;

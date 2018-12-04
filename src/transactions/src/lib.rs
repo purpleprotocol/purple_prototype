@@ -24,6 +24,9 @@ extern crate quickcheck;
 #[macro_use]
 extern crate serde_derive;
 
+extern crate elastic_array;
+extern crate patricia_trie;
+extern crate hashdb;
 extern crate account;
 extern crate causality;
 extern crate crypto;

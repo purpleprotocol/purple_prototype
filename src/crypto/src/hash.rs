@@ -31,6 +31,12 @@ pub const HASH_BYTES: usize = 32;
 pub struct Hash(pub [u8; HASH_BYTES]);
 
 impl Hash {
+    pub fn null_rlp() -> Hash {
+        let buf: Vec<Vec<u8>> = Vec::with_capacity(0); 
+        let nul_buf: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&buf);
+        hash_slice(&nul_buf)
+    }
+
     pub fn to_vec(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::with_capacity(HASH_BYTES);
 

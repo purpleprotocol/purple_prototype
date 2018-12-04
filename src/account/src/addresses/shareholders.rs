@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use NormalAddress;
+use addresses::NormalAddress;
 use rlp::*;
 use byteorder::{BigEndian, WriteBytesExt};
 use rand::Rng;

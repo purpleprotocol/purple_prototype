@@ -16,22 +16,6 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![feature(extern_prelude)]
-
-#[cfg(test)]
-extern crate tempfile;
-
-extern crate patricia_trie;
-extern crate elastic_array;
-extern crate crypto;
-extern crate hashdb;
-extern crate parking_lot;
-extern crate kvdb_rocksdb;
-
-pub use persistent_db::*;
-pub use hasher::*;
-pub use node_codec::*;
-
-mod persistent_db;
-mod node_codec;
-mod hasher;
+pub struct Shareholders {
+    
+}

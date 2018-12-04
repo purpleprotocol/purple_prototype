@@ -8,6 +8,9 @@ serde = "1.0.59"
 serde_derive = "1.0.59"
 byteorder = "1.2.7"
 rlp = "0.3.0"
+hashdb = "0.3.0"
+patricia-trie = "0.3.0"
+elastic-array = "0.10.0"
 rand = "0.6.0"
 network = { path = "../network" }
 causality = { path = "../causality" }

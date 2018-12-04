@@ -6,6 +6,7 @@ authors = []
 [dependencies]
 blake2 = "0.8.0"
 hex = "0.3.2"
+rlp = "0.3.0"
 rust_sodium = "0.7.0"
 serde = "1.0.59"
 serde_derive = "1.0.59"
