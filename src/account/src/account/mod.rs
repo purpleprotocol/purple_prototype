@@ -19,13 +19,52 @@
 pub mod normal;
 pub mod multi_sig;
 pub mod shareholders;
+pub mod contract;
 
+use account::contract::*;
 use account::normal::*;
 use account::multi_sig::*;
 use account::shareholders::*;
 
+#[derive(Clone, Debug)]
 pub enum Account {
     Normal(Normal),
+    Contract(Contract),
     MultiSig(MultiSig),
     Shareholders(Shareholders)
+}
+
+impl Account {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Account, &'static str> {
+        let first_byte = bytes[0];
+
+        match first_byte {
+            1 => match Normal::from_bytes(bytes) {
+                Ok(result) => Ok(Account::Normal(result)),
+                Err(err)   => Err(err)
+            },
+            2 => match Contract::from_bytes(bytes) {
+                Ok(result) => Ok(Account::Contract(result)),
+                Err(err)   => Err(err)
+            },
+            3 => match MultiSig::from_bytes(bytes) {
+                Ok(result) => Ok(Account::MultiSig(result)),
+                Err(err)   => Err(err)
+            },
+            4 => match Shareholders::from_bytes(bytes) {
+                Ok(result) => Ok(Account::Shareholders(result)),
+                Err(err)   => Err(err)
+            },
+            _ => Err("Invalid first byte!")
+        }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        match *self {
+            Account::Normal(ref acc)       => acc.to_bytes(),
+            Account::Contract(ref acc)     => acc.to_bytes(),
+            Account::MultiSig(ref acc)     => acc.to_bytes(),
+            Account::Shareholders(ref acc) => acc.to_bytes()
+        }
+    }
 }

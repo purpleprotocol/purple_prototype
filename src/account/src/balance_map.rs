@@ -20,4 +20,22 @@ use Balance;
 use std::collections::HashMap;
 use crypto::Hash;
 
+#[derive(Clone, Debug)]
 pub struct BalanceMap(HashMap<Hash, Balance>);
+
+impl BalanceMap {
+    pub fn new() -> BalanceMap {
+        BalanceMap(HashMap::new())
+    }
+
+    /// Adds an amount of currency to the balance map.
+    ///
+    /// This function will panic if the given amount is negative.
+    pub fn add(currency_hash: Hash, amount: Balance) {
+        unimplemented!();
+    }
+
+    pub fn subtract(currency_hash: Hash, amount: Balance) {
+        unimplemented!();
+    }
+}

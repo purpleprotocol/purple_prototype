@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature, ShareMap, MultiSig, NormalAddress};
+use account::{Address, Balance, Signature, ShareMap, MultiSig, NormalAddress, Account, Normal};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
 use serde::{Deserialize, Serialize};
@@ -43,16 +43,37 @@ pub struct Send {
 impl Send {
     pub const TX_TYPE: u8 = 3;
 
+    /// Applies the send transction the the provided database.
+    ///
+    /// This function will panic if the `from` account does not exist.
     pub fn apply(&self, db: &mut HashDB<Hash, ElasticArray128<u8>>, root: &mut Hash) {
         let mut trie = TrieDBMut::<Hash, Codec>::new(db, root);
-        let account_state = trie.get(&self.from.to_bytes());
+        let mut from = Account::from_bytes(trie.get(&self.from.to_bytes()).unwrap().unwrap()).unwrap();
+        let to = trie.get(&self.to.to_bytes());
 
-        match account_state {
+        match to {
             Ok(Some(state)) => {
+                // The receiver account exists.
                 
+                // Increment sender nonce
+                from.increment_nonce();
             },
             Ok(None) => {
+                // The receiver account does not exist so we create it.
+                // 
+                // This can only happen if the receiver address is a normal address.
+                if let Address::Normal(addr) = to {
+                    let state = Normal::new();
+                    
+                    // Increment sender nonce
+                    from.increment_nonce();
 
+
+
+
+                } else {
+                    panic!("The receiving account does not exist and it's address is not a normal one!")
+                }
             },
             Err(err) => panic!(err) 
         }

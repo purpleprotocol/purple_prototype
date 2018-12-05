@@ -18,8 +18,35 @@
 
 use BalanceMap;
 
+#[derive(Clone, Debug)]
 pub struct Normal {
     balance_map: BalanceMap,
-    nonce: u64,
-    code: Vec<u8>   
+    nonce: u64 
+}
+
+impl Normal {
+    pub const ACCOUNT_TYPE: u8 = 1;
+
+    pub fn new() -> Normal {
+        Normal {
+            balance_map: BalanceMap::new(),
+            nonce: 0
+        }
+    }
+
+    pub fn nonce(&self) -> u64 {
+        self.nonce
+    }
+
+    pub fn increment_nonce(&mut self) {
+        self.nonce += 1;
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Normal, &'static str> {
+        unimplemented!();
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        unimplemented!();
+    }
 }

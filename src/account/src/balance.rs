@@ -69,3 +69,35 @@ impl Arbitrary for Balance {
         Balance(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_accepts_balances() {
+        if let Ok(_) = Balance::from_bytes(b"10.432") {
+            assert!(true);
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn it_rejects_negative_balances() {
+        if let Err(_) = Balance::from_bytes(b"-10.432") {
+            assert!(true);
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn it_rejects_balances_with_invalid_characters() {
+        if let Err(_) = Balance::from_bytes(b"10.4fds32") {
+            assert!(true);
+        } else {
+            assert!(false);
+        }
+    }
+}

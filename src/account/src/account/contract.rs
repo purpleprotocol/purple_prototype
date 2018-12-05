@@ -17,23 +17,20 @@
 */
 
 use BalanceMap;
-use NormalAddress;
 
 #[derive(Clone, Debug)]
-pub struct MultiSig {
-    keys: Vec<NormalAddress>,
-    required_keys: u8,
+pub struct Contract {
     balance_map: BalanceMap,
-    nonce: u64  
+    nonce: u64,
+    code: Vec<u8>  
 }
 
-impl MultiSig {
-    pub const ACCOUNT_TYPE: u8 = 3;
+impl Contract {
+    pub const ACCOUNT_TYPE: u8 = 2;
 
-    pub fn new(keys: Vec<NormalAddress>, required_keys: u8) -> MultiSig {
-        MultiSig {
-            keys: keys,
-            required_keys: required_keys,
+    pub fn new(code: Vec<u8>) -> Contract {
+        Contract {
+            code: code,
             balance_map: BalanceMap::new(),
             nonce: 0
         }
@@ -47,7 +44,7 @@ impl MultiSig {
         self.nonce += 1;
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<MultiSig, &'static str> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Contract, &'static str> {
         unimplemented!();
     }
 

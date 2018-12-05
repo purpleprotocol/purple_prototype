@@ -19,9 +19,37 @@
 use BalanceMap;
 use ShareMap;
 
+#[derive(Clone, Debug)]
 pub struct Shareholders {
     balance_map: BalanceMap,
     share_map: ShareMap,
-    nonce: u64,
-    code: Vec<u8>   
+    nonce: u64
+}
+
+impl Shareholders {
+    pub const ACCOUNT_TYPE: u8 = 4;
+
+    pub fn new() -> Shareholders {
+        Shareholders {
+            balance_map: BalanceMap::new(),
+            share_map: ShareMap::new(),
+            nonce: 0
+        }
+    }
+
+    pub fn nonce(&self) -> u64 {
+        self.nonce
+    }
+
+    pub fn increment_nonce(&mut self) {
+        self.nonce += 1;
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Shareholders, &'static str> {
+        unimplemented!();
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        unimplemented!();
+    }
 }
