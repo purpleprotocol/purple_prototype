@@ -17,18 +17,23 @@
 */
 
 use BalanceMap;
+use NormalAddress;
 
 #[derive(Clone, Debug)]
-pub struct Normal {
-    balance_map: BalanceMap,
-    nonce: u64 
+pub struct MultiSigState {
+    keys: Vec<NormalAddress>,
+    required_keys: u8,
+    pub balance_map: BalanceMap,
+    nonce: u64  
 }
 
-impl Normal {
-    pub const ACCOUNT_TYPE: u8 = 1;
+impl MultiSigState {
+    pub const ACCOUNT_TYPE: u8 = 3;
 
-    pub fn new() -> Normal {
-        Normal {
+    pub fn new(keys: Vec<NormalAddress>, required_keys: u8) -> MultiSigState {
+        MultiSigState {
+            keys: keys,
+            required_keys: required_keys,
             balance_map: BalanceMap::new(),
             nonce: 0
         }
@@ -42,7 +47,7 @@ impl Normal {
         self.nonce += 1;
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Normal, &'static str> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<MultiSigState, &'static str> {
         unimplemented!();
     }
 

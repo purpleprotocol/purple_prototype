@@ -515,7 +515,7 @@ dependencies = [
 [[package]]
 name = "kvdb"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common#048951f0c32d193bdc402e8e67ccb55d5c539ebd"
+source = "git+https://github.com/paritytech/parity-common#ac6914908c018546580614d754a995c4d762e8a4"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-bytes 0.1.0 (git+https://github.com/paritytech/parity-common)",
@@ -524,7 +524,7 @@ dependencies = [
 [[package]]
 name = "kvdb-rocksdb"
 version = "0.1.4"
-source = "git+https://github.com/paritytech/parity-common#048951f0c32d193bdc402e8e67ccb55d5c539ebd"
+source = "git+https://github.com/paritytech/parity-common#ac6914908c018546580614d754a995c4d762e8a4"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fs-swap 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -805,7 +805,7 @@ dependencies = [
 [[package]]
 name = "parity-bytes"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common#048951f0c32d193bdc402e8e67ccb55d5c539ebd"
+source = "git+https://github.com/paritytech/parity-common#ac6914908c018546580614d754a995c4d762e8a4"
 
 [[package]]
 name = "parity-bytes"
@@ -1514,6 +1514,7 @@ dependencies = [
  "crypto 0.1.0",
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "kvdb-rocksdb 0.1.4 (git+https://github.com/paritytech/parity-common)",
  "network 0.1.0",
  "patricia-trie 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "persistence 0.1.0",
@@ -1522,6 +1523,7 @@ dependencies = [
  "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.59 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tempfile 3.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

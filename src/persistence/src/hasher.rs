@@ -16,12 +16,12 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use hashdb::Hasher as HashDbHasher;
+use hashdb::Hasher;
 use crypto::{Hash, BlakeHasher, HASH_BYTES};
 
-pub struct Hasher;
+pub struct BlakeDbHasher;
 
-impl HashDbHasher for Hasher {
+impl Hasher for BlakeDbHasher {
     const LENGTH: usize = HASH_BYTES;
 
     type Out = Hash;

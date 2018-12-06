@@ -19,20 +19,22 @@
 use BalanceMap;
 
 #[derive(Clone, Debug)]
-pub struct Contract {
-    balance_map: BalanceMap,
+pub struct ContractState {
+    pub balance_map: BalanceMap,
     nonce: u64,
-    code: Vec<u8>  
+    code: Vec<u8>,
+    contract_state: Vec<u8> 
 }
 
-impl Contract {
+impl ContractState {
     pub const ACCOUNT_TYPE: u8 = 2;
 
-    pub fn new(code: Vec<u8>) -> Contract {
-        Contract {
+    pub fn new(code: Vec<u8>, default_state: Vec<u8>) -> ContractState {
+        ContractState {
             code: code,
             balance_map: BalanceMap::new(),
-            nonce: 0
+            nonce: 0,
+            contract_state: default_state
         }
     }
 
@@ -44,7 +46,7 @@ impl Contract {
         self.nonce += 1;
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Contract, &'static str> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<ContractState, &'static str> {
         unimplemented!();
     }
 

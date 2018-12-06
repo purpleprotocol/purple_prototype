@@ -22,6 +22,7 @@ use rand::Rng;
 use quickcheck::Arbitrary;
 use rust_decimal::Decimal;
 use std::str::FromStr;
+use std::ops::{Add, Sub, AddAssign, SubAssign};
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
 pub struct Balance(Decimal);
@@ -57,6 +58,34 @@ impl Balance {
     }
 }
 
+impl Add for Balance {
+    type Output = Balance;
+
+    fn add(self, other: Balance) -> Balance {
+        Balance(self.0 + other.0)
+    }
+}
+
+impl Sub for Balance {
+    type Output = Balance;
+
+    fn sub(self, other: Balance) -> Balance {
+        Balance(self.0 - other.0)
+    }
+}
+
+impl AddAssign for Balance {
+    fn add_assign(&mut self, other: Balance) {
+        *self = Balance(self.0 + other.0);
+    }
+}
+
+impl SubAssign for Balance {
+    fn sub_assign(&mut self, other: Balance) {
+        *self = Balance(self.0 - other.0);
+    }
+}
+
 impl Arbitrary for Balance {
     fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Balance {
         let mut rng = rand::thread_rng();
@@ -73,6 +102,42 @@ impl Arbitrary for Balance {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn it_adds_balances() {
+        let b1 = Balance::from_bytes(b"10.0").unwrap();
+        let b2 = Balance::from_bytes(b"20.0").unwrap();
+
+        assert_eq!(b1 + b2, Balance::from_bytes(b"30.0").unwrap());
+    }
+
+    #[test]
+    fn it_subtracts_balances() {
+        let b1 = Balance::from_bytes(b"10.0").unwrap();
+        let b2 = Balance::from_bytes(b"20.0").unwrap();
+
+        assert_eq!(b2 - b1, Balance::from_bytes(b"10.0").unwrap());
+    }
+
+    #[test]
+    fn it_add_assigns_balances() {
+        let mut b1 = Balance::from_bytes(b"10.0").unwrap();
+        let b2 = Balance::from_bytes(b"20.0").unwrap();
+
+        b1 += b2;
+
+        assert_eq!(b1, Balance::from_bytes(b"30.0").unwrap());
+    }
+
+    #[test]
+    fn it_sub_assigns_balances() {
+        let mut b1 = Balance::from_bytes(b"20.0").unwrap();
+        let b2 = Balance::from_bytes(b"10.0").unwrap();
+
+        b1 -= b2;
+
+        assert_eq!(b1, Balance::from_bytes(b"10.0").unwrap());
+    }
 
     #[test]
     fn it_accepts_balances() {
@@ -98,6 +163,24 @@ mod tests {
             assert!(true);
         } else {
             assert!(false);
+        }
+    }
+
+    #[test]
+    fn it_rejects_balances_with_higher_precision_than_allowed() {
+        if let Err(_) = Balance::from_bytes(b"10.0000000000000000001") {
+            assert!(true);
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn it_accepts_balances_with_maximum_allowed_precision() {
+        if let Err(_) = Balance::from_bytes(b"10.000000000000000001") {
+            assert!(false);
+        } else {
+            assert!(true);
         }
     }
 }

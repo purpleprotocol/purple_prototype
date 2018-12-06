@@ -22,14 +22,14 @@
 use patricia_trie::node::Node;
 use patricia_trie::{NibbleSlice, NodeCodec, ChildReference};
 use hashdb::Hasher;
-use Hasher as DbHasher;
+use BlakeDbHasher;
 use crypto::Hash;
 use rlp::{DecoderError, Rlp, RlpStream, Prototype};
 use elastic_array::ElasticArray128;
 
 pub struct Codec;
 
-impl NodeCodec<Hash> for Codec {
+impl NodeCodec<BlakeDbHasher> for Codec {
     type Error = DecoderError;
     const HASHED_NULL_NODE: Hash = Hash::NULL;
 
@@ -59,7 +59,7 @@ impl NodeCodec<Hash> for Codec {
 	fn try_decode_hash(data: &[u8]) -> Option<Hash> {
 		let r = Rlp::new(data);
 
-		if r.is_data() && r.size() == DbHasher::LENGTH {
+		if r.is_data() && r.size() == BlakeDbHasher::LENGTH {
 			Some(r.as_val().unwrap())
 		} else {
 			None

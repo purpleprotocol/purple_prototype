@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature, ShareMap, MultiSig, NormalAddress, Account, Normal};
+use account::{Address, Balance, Signature, ShareMap, MultiSig, NormalAddress, AccountState, NormalState};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,7 @@ use std::io::Cursor;
 use hashdb::HashDB;
 use patricia_trie::{TrieMut, TrieDBMut, NodeCodec};
 use elastic_array::ElasticArray128;
-use persistence::{Hasher, Codec};
+use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Send {
@@ -46,31 +46,56 @@ impl Send {
     /// Applies the send transction the the provided database.
     ///
     /// This function will panic if the `from` account does not exist.
-    pub fn apply(&self, db: &mut HashDB<Hash, ElasticArray128<u8>>, root: &mut Hash) {
-        let mut trie = TrieDBMut::<Hash, Codec>::new(db, root);
-        let mut from = Account::from_bytes(trie.get(&self.from.to_bytes()).unwrap().unwrap()).unwrap();
-        let to = trie.get(&self.to.to_bytes());
+    pub fn apply(&self, db: &mut HashDB<BlakeDbHasher, ElasticArray128<u8>>, root: &mut Hash) {
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(db, root);
+        let bin_from = self.from.to_bytes();
+        let bin_to = self.to.to_bytes();
+        let mut from_state = AccountState::from_bytes(&trie.get(&bin_from).unwrap().unwrap()).unwrap();
+        let to_state = trie.get(&bin_to);
 
-        match to {
-            Ok(Some(state)) => {
+        match to_state {
+            Ok(Some(to_state)) => { 
                 // The receiver account exists.
-                
+                let mut to_state = AccountState::from_bytes(&to_state).unwrap();
+
                 // Increment sender nonce
-                from.increment_nonce();
+                from_state.increment_nonce();
+
+                // Subtract fee from sender
+                from_state.balance_map().subtract(self.fee_hash, self.fee.clone());
+
+                // Subtract funds from sender
+                from_state.balance_map().subtract(self.currency_hash, self.amount.clone());
+
+                // Add funds to receiver
+                to_state.balance_map().add(self.currency_hash, self.amount.clone());
+
+                // Update trie
+                trie.insert(&bin_from, &from_state.to_bytes()).unwrap();
+                trie.insert(&bin_to, &to_state.to_bytes()).unwrap();
             },
             Ok(None) => {
                 // The receiver account does not exist so we create it.
                 // 
                 // This can only happen if the receiver address is a normal address.
-                if let Address::Normal(addr) = to {
-                    let state = Normal::new();
+                if let Address::Normal(_) = &self.to {
+                    let mut to_state = NormalState::new();
                     
                     // Increment sender nonce
-                    from.increment_nonce();
+                    from_state.increment_nonce();
 
+                    // Subtract fee from sender
+                    from_state.balance_map().subtract(self.fee_hash, self.fee.clone());
 
+                    // Subtract funds from sender
+                    from_state.balance_map().subtract(self.currency_hash, self.amount.clone());
 
+                    // Add funds to receiver
+                    to_state.balance_map.add(self.currency_hash, self.amount.clone());
 
+                    // Update trie
+                    trie.insert(&bin_from, &from_state.to_bytes()).unwrap();
+                    trie.insert(&bin_to, &to_state.to_bytes()).unwrap();
                 } else {
                     panic!("The receiving account does not exist and it's address is not a normal one!")
                 }
@@ -471,6 +496,82 @@ impl Arbitrary for Send {
 mod tests {
     use super::*;
     use crypto::Identity;
+    use hashdb::Hasher;
+    use tempfile::tempdir;
+    use persistence::PersistentDb;
+    use std::sync::Arc;
+    use kvdb_rocksdb::{Database, DatabaseConfig};
+
+    #[test]
+    fn apply_it_creates_a_new_account() {
+        let id = Identity::new();
+        let to_id = Identity::new();
+        let from_addr = Address::normal_from_pkey(*id.pkey());
+        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = init_tempdb();
+        let mut root = Hash::null_rlp();
+
+        // Manually initialize sender balance
+        init_balance(&mut db, &mut root, from_addr.clone(), cur_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"100.123").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Send {
+            from: from_addr.clone(),
+            to: to_addr.clone(),
+            amount: amount.clone(),
+            fee: fee,
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        // Apply transaction
+        tx.apply(&mut db, &mut root);
+
+        let trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut from_state = AccountState::from_bytes(&trie.get(&from_addr.to_bytes()).unwrap().unwrap()).unwrap();
+        let mut to_state = AccountState::from_bytes(&trie.get(&to_addr.to_bytes()).unwrap().unwrap()).unwrap();
+
+        // Verify that the correct amount of funds have been subtracted from the sender
+        assert_eq!(from_state.balance_map().get(cur_hash).unwrap(), Balance::from_bytes(b"10000.0").unwrap() - amount.clone());
+
+        // Verify that the receiver has received the correct amount of funds
+        assert_eq!(to_state.balance_map().get(cur_hash).unwrap(), amount);
+    }
+
+    fn init_tempdb() -> PersistentDb {
+        let config = DatabaseConfig::with_columns(None);
+        let dir = tempdir().unwrap();
+        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db_ref = Arc::new(db);
+
+        PersistentDb::new(db_ref, None)
+    }
+
+    fn init_balance(
+        db: &mut HashDB<BlakeDbHasher, ElasticArray128<u8>>, 
+        root: &mut Hash,
+        address: Address,
+        currency_hash: Hash,
+        amount: &[u8]
+    ) {
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(db, root);
+        let bin_address = address.to_bytes();
+        let mut account_state = NormalState::new();
+
+        account_state.balance_map.add(currency_hash, Balance::from_bytes(amount).unwrap());
+
+        trie.insert(&bin_address, &account_state.to_bytes()).unwrap();
+        trie.commit();
+    }
 
     quickcheck! {
         fn serialize_deserialize(tx: Send) -> bool {

@@ -18,6 +18,12 @@
 
 #![feature(extern_prelude)]
 
+#[cfg(test)]
+extern crate tempfile;
+
+#[cfg(test)]
+extern crate kvdb_rocksdb;
+
 #[macro_use]
 extern crate quickcheck;
 

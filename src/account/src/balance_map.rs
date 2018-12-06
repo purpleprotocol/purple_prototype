@@ -28,14 +28,39 @@ impl BalanceMap {
         BalanceMap(HashMap::new())
     }
 
-    /// Adds an amount of currency to the balance map.
+    /// Returns the amount of the given currency stored in the balance map.
     ///
-    /// This function will panic if the given amount is negative.
-    pub fn add(currency_hash: Hash, amount: Balance) {
-        unimplemented!();
+    /// Returns `None` if there is no entry for the given currency.
+    pub fn get(&self, currency_hash: Hash) -> Option<Balance> {
+        match self.0.get(&currency_hash) {
+            Some(result) => Some(result.clone()),
+            None         => None
+        }
     }
 
-    pub fn subtract(currency_hash: Hash, amount: Balance) {
-        unimplemented!();
+    /// Adds an amount of currency to the balance map.
+    pub fn add(&mut self, currency_hash: Hash, amount: Balance) {
+        match self.0.clone().get(&currency_hash) {
+            Some(result) => {
+                self.0.insert(currency_hash, amount + result.clone());
+            },
+            None => {
+                self.0.insert(currency_hash, amount);
+            }
+        }
+    }
+
+    /// Subtracts an amount from the balance map
+    ///
+    /// This funcion will panic if there is no entry for the given currency in the balance map.
+    pub fn subtract(&mut self, currency_hash: Hash, amount: Balance) {
+        match self.0.clone().get(&currency_hash) {
+            Some(result) => {
+                self.0.insert(currency_hash, amount - result.clone());
+            },
+            None => {
+                panic!("There is no entry for the currency {:#?}", currency_hash);
+            }
+        }
     }
 }

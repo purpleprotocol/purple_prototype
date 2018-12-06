@@ -20,17 +20,17 @@ use BalanceMap;
 use ShareMap;
 
 #[derive(Clone, Debug)]
-pub struct Shareholders {
-    balance_map: BalanceMap,
+pub struct ShareholdersState {
+    pub balance_map: BalanceMap,
     share_map: ShareMap,
     nonce: u64
 }
 
-impl Shareholders {
+impl ShareholdersState {
     pub const ACCOUNT_TYPE: u8 = 4;
 
-    pub fn new() -> Shareholders {
-        Shareholders {
+    pub fn new() -> ShareholdersState {
+        ShareholdersState {
             balance_map: BalanceMap::new(),
             share_map: ShareMap::new(),
             nonce: 0
@@ -45,7 +45,7 @@ impl Shareholders {
         self.nonce += 1;
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Shareholders, &'static str> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<ShareholdersState, &'static str> {
         unimplemented!();
     }
 

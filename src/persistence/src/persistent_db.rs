@@ -21,7 +21,7 @@ use kvdb_rocksdb::Database;
 use hashdb::{HashDB, AsHashDB};
 use std::collections::HashMap;
 use crypto::Hash;
-use Hasher;
+use BlakeDbHasher;
 use elastic_array::ElasticArray128;
 
 pub struct PersistentDb {
@@ -38,7 +38,7 @@ impl PersistentDb {
     }
 }
 
-impl HashDB<Hasher, ElasticArray128<u8>> for PersistentDb {
+impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     fn keys(&self) -> HashMap<Hash, i32> {
         unimplemented!();
     }
@@ -97,9 +97,9 @@ impl HashDB<Hasher, ElasticArray128<u8>> for PersistentDb {
     }
 }
 
-impl AsHashDB<Hasher, ElasticArray128<u8>> for PersistentDb {
-    fn as_hashdb(&self) -> &HashDB<Hasher, ElasticArray128<u8>> { self }
-    fn as_hashdb_mut(&mut self) -> &mut HashDB<Hasher, ElasticArray128<u8>> { self }
+impl AsHashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
+    fn as_hashdb(&self) -> &HashDB<BlakeDbHasher, ElasticArray128<u8>> { self }
+    fn as_hashdb_mut(&mut self) -> &mut HashDB<BlakeDbHasher, ElasticArray128<u8>> { self }
 }
 
 #[cfg(test)] 
