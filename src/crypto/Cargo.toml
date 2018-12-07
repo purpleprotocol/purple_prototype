@@ -11,5 +11,5 @@ rust_sodium = "0.7.0"
 serde = "1.0.59"
 serde_derive = "1.0.59"
 quickcheck = "0.7.2"
-hashdb = "0.3.0"
+hashdb = { git = "https://github.com/paritytech/parity-common" }
 rand = "0.6.0"

@@ -244,7 +244,7 @@ name = "crypto"
 version = "0.1.0"
 dependencies = [
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hashdb 0.3.0 (git+https://github.com/paritytech/parity-common)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -452,7 +452,7 @@ dependencies = [
 [[package]]
 name = "hashdb"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/paritytech/parity-common#ac6914908c018546580614d754a995c4d762e8a4"
 
 [[package]]
 name = "heapsize"
@@ -808,11 +808,6 @@ version = "0.1.0"
 source = "git+https://github.com/paritytech/parity-common#ac6914908c018546580614d754a995c4d762e8a4"
 
 [[package]]
-name = "parity-bytes"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
 name = "parity-rocksdb"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -866,12 +861,12 @@ dependencies = [
 [[package]]
 name = "patricia-trie"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/paritytech/parity-common#ac6914908c018546580614d754a995c4d762e8a4"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hashdb 0.3.0 (git+https://github.com/paritytech/parity-common)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-bytes 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-bytes 0.1.0 (git+https://github.com/paritytech/parity-common)",
  "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -881,11 +876,11 @@ version = "0.1.0"
 dependencies = [
  "crypto 0.1.0",
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hashdb 0.3.0 (git+https://github.com/paritytech/parity-common)",
  "kvdb 0.1.0 (git+https://github.com/paritytech/parity-common)",
  "kvdb-rocksdb 0.1.4 (git+https://github.com/paritytech/parity-common)",
  "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "patricia-trie 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "patricia-trie 0.3.0 (git+https://github.com/paritytech/parity-common)",
  "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1513,11 +1508,11 @@ dependencies = [
  "causality 0.1.0",
  "crypto 0.1.0",
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hashdb 0.3.0 (git+https://github.com/paritytech/parity-common)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "kvdb-rocksdb 0.1.4 (git+https://github.com/paritytech/parity-common)",
  "network 0.1.0",
- "patricia-trie 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "patricia-trie 0.3.0 (git+https://github.com/paritytech/parity-common)",
  "persistence 0.1.0",
  "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1715,7 +1710,7 @@ dependencies = [
 "checksum gcc 0.3.54 (registry+https://github.com/rust-lang/crates.io-index)" = "5e33ec290da0d127825013597dbdfc28bee4964690c7ce1166cbc2a7bd08b1bb"
 "checksum generic-array 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3c0f28c2f5bfb5960175af447a2da7c18900693738343dc896ffbcabd9839592"
 "checksum getopts 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)" = "0a7292d30132fb5424b354f5dc02512a86e4c516fe544bb7a25e7f266951b797"
-"checksum hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d91261ee336dd046ac7df28306cb297b7a7228bd1ae25e9a57f4ed5e0ab628c7"
+"checksum hashdb 0.3.0 (git+https://github.com/paritytech/parity-common)" = "<none>"
 "checksum heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "1679e6ea370dee694f91f1dc469bf94cf8f52051d147aec3e1f9497c6fc22461"
 "checksum hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
 "checksum humantime 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0484fda3e7007f2a4a0d9c3a703ca38c71c54c55602ce4660c419fd32e188c9e"
@@ -1756,13 +1751,12 @@ dependencies = [
 "checksum opaque-debug 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "51ecbcb821e1bd256d456fe858aaa7f380b63863eab2eb86eee1bd9f33dd6682"
 "checksum owning_ref 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "49a4b8ea2179e6a2e27411d3bca09ca6dd630821cf6894c6c7c8467a8ee7ef13"
 "checksum parity-bytes 0.1.0 (git+https://github.com/paritytech/parity-common)" = "<none>"
-"checksum parity-bytes 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fa5168b4cf41f3835e4bc6ffb32f51bc9365dc50cb351904595b3931d917fd0c"
 "checksum parity-rocksdb 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "cd55d2d6d6000ec99f021cf52c9acc7d2a402e14f95ced4c5de230696fabe00b"
 "checksum parity-rocksdb-sys 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)" = "0e59eda423021494a6cf1be74f6989add403f53157409993f794e17b123cab51"
 "checksum parity-snappy-sys 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "c2086caac40c79289cb70d7e1c64f5888e1c53f5d38399d3e95101493739f423"
 "checksum parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)" = "f0802bff09003b291ba756dc7e79313e51cc31667e94afbe847def490424cde5"
 "checksum parking_lot_core 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ad7f7e6ebdc79edff6fdcb87a55b620174f7a989e3eb31b65231f4af57f00b8c"
-"checksum patricia-trie 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "10438ba40c2f6e9ceca55277d8e7f6a5dafd58cabd802e6d97e16f02aab83a03"
+"checksum patricia-trie 0.3.0 (git+https://github.com/paritytech/parity-common)" = "<none>"
 "checksum podio 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "780fb4b6698bbf9cf2444ea5d22411cef2953f0824b98f33cf454ec5615645bd"
 "checksum proc-macro2 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "a45f2f0ae0b5757f6fe9e68745ba25f5246aea3598984ed81d013865873c1f84"
 "checksum pulldown-cmark 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "8361e81576d2e02643b04950e487ec172b687180da65c731c03cf336784e6c07"

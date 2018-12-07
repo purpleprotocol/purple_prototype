@@ -33,13 +33,7 @@ pub struct Hash(pub [u8; HASH_BYTES]);
 
 impl Hash {
     pub const NULL: Hash = Hash([14, 87, 81, 192, 38, 229, 67, 178, 232, 171, 46, 176, 96, 153, 218, 161, 209, 229, 223, 71, 119, 143, 119, 135, 250, 171, 69, 205, 241, 47, 227, 168]);
-
-    pub fn null_rlp() -> Hash {
-        let buf: Vec<Vec<u8>> = Vec::with_capacity(0); 
-        let nul_buf: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&buf);
-
-        hash_slice(&nul_buf)
-    }
+    pub const NULL_RLP: Hash = Hash([218, 34, 59, 9, 150, 124, 91, 210, 17, 7, 67, 48, 126, 10, 246, 211, 159, 97, 114, 10, 167, 33, 138, 100, 10, 8, 238, 209, 45, 213, 117, 199]);
 
     pub fn to_vec(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::with_capacity(HASH_BYTES);

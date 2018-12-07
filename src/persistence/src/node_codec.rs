@@ -31,7 +31,7 @@ pub struct Codec;
 
 impl NodeCodec<BlakeDbHasher> for Codec {
     type Error = DecoderError;
-    const HASHED_NULL_NODE: Hash = Hash::NULL;
+    const HASHED_NULL_NODE: Hash = Hash::NULL_RLP;
 
     fn decode(data: &[u8]) -> ::std::result::Result<Node, Self::Error> {
 		let r = Rlp::new(data);

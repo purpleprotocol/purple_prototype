@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use crypto::Hash;
 use BlakeDbHasher;
 use elastic_array::ElasticArray128;
+use rlp::NULL_RLP;
 
 pub struct PersistentDb {
     db_ref: Arc<Database>,
@@ -44,6 +45,10 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     }
 
     fn get(&self, key: &Hash) -> Option<ElasticArray128<u8>> {
+        if key == &Hash::NULL_RLP {
+            return Some(ElasticArray128::from_slice(&NULL_RLP));
+        }
+        
         let db_ref = &self.db_ref;
 
         match db_ref.get(self.cf, &*key.0.to_vec()) {
@@ -53,6 +58,10 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     }
 
     fn insert(&mut self, val: &[u8]) -> Hash {
+        if val == &NULL_RLP {
+            return Hash::NULL_RLP;
+        }
+
         let db_ref = &self.db_ref;
         let val_hash = crypto::hash_slice(val);
         let mut tx = db_ref.transaction();
@@ -65,6 +74,10 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     }
 
     fn contains(&self, key: &Hash) -> bool {
+        if key == &Hash::NULL_RLP {
+            return true;
+        }
+
         let db_ref = &self.db_ref;
 
         match db_ref.get(self.cf, &*key.0.to_vec()) {
@@ -80,6 +93,10 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     }
 
     fn emplace(&mut self, key: Hash, val: ElasticArray128<u8>) {
+        if &val == &Hash::NULL_RLP.to_vec() {
+            return;
+        }
+
         let db_ref = &self.db_ref;
         let mut tx = db_ref.transaction();
 		
@@ -89,6 +106,10 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     }
 
     fn remove(&mut self, key: &Hash) {
+        if key == &Hash::NULL_RLP {
+            return;
+        }
+
         let db_ref = &self.db_ref;
         let mut tx = db_ref.transaction();
 		

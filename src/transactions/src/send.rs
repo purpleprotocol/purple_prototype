@@ -669,12 +669,11 @@ mod tests {
         let cur_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = init_tempdb();
-        let mut root = Hash::null_rlp();
+        let mut root = Hash::NULL_RLP;
 
         // Manually insert null root
         let _ = db.insert(&root.to_vec());
-
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::from_existing(&mut db, &mut root).unwrap();
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize sender balance
         init_balance(&mut trie, from_addr.clone(), cur_hash, b"10000.0");
@@ -722,8 +721,8 @@ mod tests {
         let receiver_balance = Balance::from_bytes(&trie.get(&receiver_balance_key).unwrap().unwrap()).unwrap();
 
         // Check nonces
-        assert_eq!(bin_from_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 1]);
-        assert_eq!(bin_to_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(bin_from_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
+        assert_eq!(bin_to_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 0]);
 
         // Verify that the correct amount of funds have been subtracted from the sender
         assert_eq!(sender_balance, Balance::from_bytes(b"10000.0").unwrap() - amount.clone() - fee.clone());
