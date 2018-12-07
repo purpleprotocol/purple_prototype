@@ -76,7 +76,7 @@ impl ShareMap {
 
             // Fields:
             // 1) Shares       - 64bits
-            // 2) Shareholder  - 32byte binary
+            // 2) Shareholder  - 33byte binary
             b.write_u64::<BigEndian>(*v).unwrap();
             b.append(&mut k);
 
