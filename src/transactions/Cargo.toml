@@ -24,3 +24,4 @@ quickcheck = "0.7.2"
 [dev-dependencies]
 tempfile = "3.0.5"
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
+test-helpers = { path = "../util/test-helpers" }

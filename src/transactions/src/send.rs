@@ -22,7 +22,6 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
-use hashdb::HashDB;
 use patricia_trie::{TrieMut, TrieDBMut, NodeCodec};
 use elastic_array::ElasticArray128;
 use persistence::{BlakeDbHasher, Codec};
@@ -652,6 +651,8 @@ impl Arbitrary for Send {
 
 #[cfg(test)]
 mod tests {
+    extern crate test_helpers;
+    
     use super::*;
     use crypto::Identity;
     use hashdb::Hasher;
@@ -668,15 +669,12 @@ mod tests {
         let to_addr = Address::normal_from_pkey(*to_id.pkey());
         let cur_hash = crypto::hash_slice(b"Test currency");
 
-        let mut db = init_tempdb();
+        let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
-
-        // Manually insert null root
-        let _ = db.insert(&root.to_vec());
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize sender balance
-        init_balance(&mut trie, from_addr.clone(), cur_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, from_addr.clone(), cur_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"100.123").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -729,38 +727,6 @@ mod tests {
 
         // Verify that the receiver has received the correct amount of funds
         assert_eq!(receiver_balance, amount);
-    }
-
-    fn init_tempdb() -> PersistentDb {
-        let config = DatabaseConfig::with_columns(None);
-        let dir = tempdir().unwrap();
-        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
-        let db_ref = Arc::new(db);
-
-        PersistentDb::new(db_ref, None)
-    }
-
-    fn init_balance(
-        trie: &mut TrieDBMut<BlakeDbHasher, Codec>,
-        address: Address,
-        currency_hash: Hash,
-        amount: &[u8]
-    ) {
-        let bin_address = address.to_bytes();
-        let bin_cur_hash = currency_hash.to_vec();
-
-        let hex_address = hex::encode(&bin_address);
-        let hex_cur_hash = hex::encode(&bin_cur_hash);
-
-        let cur_key = format!("{}.{}", hex_address, hex_cur_hash);
-        let nonce_key = format!("{}.n", hex_address);
-
-        // Re-serialize balance to validate with regex
-        let balance = Balance::from_bytes(amount).unwrap().to_bytes();
-
-        trie.insert(&cur_key.as_bytes(), &balance).unwrap();
-        trie.insert(&nonce_key.as_bytes(), &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
-        trie.commit();
     }
 
     quickcheck! {

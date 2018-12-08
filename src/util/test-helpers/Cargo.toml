@@ -1,0 +1,13 @@
+[package]
+name = "test-helpers"
+version = "0.1.0"
+authors = ["Octavian Oncescu <octavonce@gmail.com>"]
+
+[dependencies]
+hex = "0.3.2"
+tempfile = "3.0.5"
+kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
+patricia-trie = { git = "https://github.com/paritytech/parity-common" }
+account = { path = "../../account" }
+persistence = { path = "../../persistence" }
+crypto = { path = "../../crypto" }

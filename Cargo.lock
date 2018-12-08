@@ -1317,6 +1317,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-helpers"
+version = "0.1.0"
+dependencies = [
+ "account 0.1.0",
+ "crypto 0.1.0",
+ "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "kvdb-rocksdb 0.1.4 (git+https://github.com/paritytech/parity-common)",
+ "patricia-trie 0.3.0 (git+https://github.com/paritytech/parity-common)",
+ "persistence 0.1.0",
+ "tempfile 3.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1520,6 +1533,7 @@ dependencies = [
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.59 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "test-helpers 0.1.0",
  "unwrap 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

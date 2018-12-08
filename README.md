@@ -5,7 +5,7 @@
 
 This is a full rust implementation of the Purple Protocol.
 
-Purple is a decentralized, programmable, multi-asset blockchain protocol that is capable of processing an immense volume of transactions with ease. It has been built from the ground up and is using a completely new consensus algorithm.
+Purple is a decentralized, programmable, multi-asset blockchain protocol that is capable of processing a large volume of transactions with ease. It has been built from the ground up and is using a completely new consensus algorithm.
 
 The main features of the protocol are its open and decentralized nature, it's capability of processing a large amount of transactions, its multi-asset capabilities and the ability to run decentralized applications and smart contracts.  
 
