@@ -729,6 +729,75 @@ mod tests {
         assert_eq!(receiver_balance, amount);
     }
 
+    #[test]
+    fn apply_it_sends_to_an_existing_account() {
+        let id = Identity::new();
+        let to_id = Identity::new();
+        let from_addr = Address::normal_from_pkey(*id.pkey());
+        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize sender and receiver balances
+        test_helpers::init_balance(&mut trie, from_addr.clone(), cur_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, to_addr.clone(), cur_hash, b"10.0");
+
+        let amount = Balance::from_bytes(b"100.123").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Send {
+            from: from_addr.clone(),
+            to: to_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        // Apply transaction
+        tx.apply(&mut trie);
+        
+        // Commit changes
+        trie.commit();
+        
+        let from_nonce_key = format!("{}.n", hex::encode(&from_addr.to_bytes()));
+        let to_nonce_key = format!("{}.n", hex::encode(&to_addr.to_bytes()));
+        let from_nonce_key = from_nonce_key.as_bytes();
+        let to_nonce_key = to_nonce_key.as_bytes(); 
+
+        let bin_from_nonce = &trie.get(&from_nonce_key).unwrap().unwrap();
+        let bin_to_nonce = &trie.get(&to_nonce_key).unwrap().unwrap();
+
+        let bin_cur_hash = cur_hash.to_vec();
+        let hex_cur_hash = hex::encode(&bin_cur_hash);
+
+        let sender_balance_key = format!("{}.{}", hex::encode(&from_addr.to_bytes()), hex_cur_hash);
+        let receiver_balance_key = format!("{}.{}", hex::encode(&to_addr.to_bytes()), hex_cur_hash);
+        let sender_balance_key = sender_balance_key.as_bytes();
+        let receiver_balance_key = receiver_balance_key.as_bytes();
+
+        let sender_balance = Balance::from_bytes(&trie.get(&sender_balance_key).unwrap().unwrap()).unwrap();
+        let receiver_balance = Balance::from_bytes(&trie.get(&receiver_balance_key).unwrap().unwrap()).unwrap();
+
+        // Check nonces
+        assert_eq!(bin_from_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
+        assert_eq!(bin_to_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 0]);
+
+        // Verify that the correct amount of funds have been subtracted from the sender
+        assert_eq!(sender_balance, Balance::from_bytes(b"10000.0").unwrap() - amount.clone() - fee.clone());
+
+        // Verify that the receiver has received the correct amount of funds
+        assert_eq!(receiver_balance, Balance::from_bytes(b"10.0").unwrap() + amount);
+    }
+
     quickcheck! {
         fn serialize_deserialize(tx: Send) -> bool {
             tx == Send::from_bytes(&Send::to_bytes(&tx).unwrap()).unwrap()

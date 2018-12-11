@@ -16,8 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(non_camel_case_types)]
+pub struct Vm {
+    state: Vec<u8>,
+    code: Vec<u8>,
+    gas: u64,
+    gas_limit: u64,
 
-mod instruction_set;
-mod stack;
-mod virtual_machine;
+}

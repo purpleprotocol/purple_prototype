@@ -1,3 +1,0 @@
-[submodule "src/purple_vm/wasm-jit-prototype"]
-	path = src/purple_vm/wasm-jit-prototype
-	url = https://github.com/WebAssembly/wasm-jit-prototype
