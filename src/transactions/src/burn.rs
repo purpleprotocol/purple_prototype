@@ -24,6 +24,9 @@ use hashdb::HashDB;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::str;
+use patricia_trie::{TrieMut, TrieDBMut};
+use elastic_array::ElasticArray128;
+use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Burn {
@@ -40,6 +43,109 @@ pub struct Burn {
 
 impl Burn {
     pub const TX_TYPE: u8 = 11;
+
+    /// Applies the send transaction to the provided database.
+    ///
+    /// This function will panic if the `burner` account does not exist.
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        let bin_burner = &self.burner.to_bytes();
+        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+
+        // Convert address to strings
+        let burner = hex::encode(bin_burner);
+
+        // Convert hashes to strings
+        let cur_hash = hex::encode(bin_cur_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        // Calculate nonce key
+        // 
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let nonce_key = format!("{}.n", burner);
+        let nonce_key = nonce_key.as_bytes();
+
+        // Retrieve serialized nonce
+        let bin_nonce = &trie.get(&nonce_key).unwrap().unwrap();
+
+        let mut nonce_rdr = Cursor::new(bin_nonce);
+
+        // Read the nonce of the burner
+        let mut nonce = nonce_rdr.read_u64::<BigEndian>().unwrap();
+
+        // Increment burner nonce
+        nonce += 1;
+
+        let mut nonce_buf: Vec<u8> = Vec::with_capacity(8);
+
+        // Write new nonce to buffer
+        nonce_buf.write_u64::<BigEndian>(nonce).unwrap();
+
+        // Calculate currency keys
+        //
+        // The key of a currency entry has the following format:
+        // `<account-address>.<currency-hash>`
+        let cur_key = format!("{}.{}", burner, cur_hash);
+        let fee_key = format!("{}.{}", burner, fee_hash);
+
+        if fee_hash == cur_hash {
+            // The transaction's fee is paid in the same currency
+            // that is being burned, so we only retrieve one balance.
+            let mut balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&cur_key.as_bytes()).unwrap(),
+                        "The burner does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            // Subtract fee from balance
+            balance -= self.fee.clone();
+
+            // Subtract amount transferred from balance
+            balance -= self.amount.clone();
+
+            // Update trie
+            trie.insert(cur_key.as_bytes(), &balance.to_bytes()).unwrap();
+            trie.insert(nonce_key, &nonce_buf).unwrap();
+        } else {
+            // The transaction's fee is paid in a different currency
+            // than the one being transferred so we retrieve both balances.
+            let mut cur_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&cur_key.as_bytes()).unwrap(),
+                        "The burner does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            let mut fee_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&fee_key.as_bytes()).unwrap(),
+                        "The burner does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            // Subtract fee from burner
+            fee_balance -= self.fee.clone();
+
+            // Subtract amount transferred from burner
+            cur_balance -= self.amount.clone();
+
+            // Update trie
+            trie.insert(cur_key.as_bytes(), &cur_balance.to_bytes()).unwrap();
+            trie.insert(fee_key.as_bytes(), &fee_balance.to_bytes()).unwrap();
+            trie.insert(nonce_key, &nonce_buf).unwrap();
+        }
+    }
 
     /// Signs the transaction with the given secret key.
     ///
@@ -411,9 +517,71 @@ impl Arbitrary for Burn {
 
 #[cfg(test)]
 mod tests {
+    extern crate test_helpers;
+    
     use super::*;
     use account::NormalAddress;
     use crypto::Identity;
+    use hashdb::Hasher;
+    use tempfile::tempdir;
+    use persistence::PersistentDb;
+    use std::sync::Arc;
+    use kvdb_rocksdb::{Database, DatabaseConfig};
+
+    #[test]
+    fn apply_it_burns_coins() {
+        let id = Identity::new();
+        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize burner balance
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Burn {
+            burner: burner_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        // Apply transaction
+        tx.apply(&mut trie);
+        
+        // Commit changes
+        trie.commit();
+        
+        let burner_nonce_key = format!("{}.n", hex::encode(&burner_addr.to_bytes()));
+        let burner_nonce_key = burner_nonce_key.as_bytes();
+
+        let bin_burner_nonce = &trie.get(&burner_nonce_key).unwrap().unwrap();
+
+        let bin_cur_hash = cur_hash.to_vec();
+        let hex_cur_hash = hex::encode(&bin_cur_hash);
+
+        let burner_balance_key = format!("{}.{}", hex::encode(&burner_addr.to_bytes()), hex_cur_hash);
+        let burner_balance_key = burner_balance_key.as_bytes();
+
+        let balance = Balance::from_bytes(&trie.get(&burner_balance_key).unwrap().unwrap()).unwrap();
+
+        // Check nonces
+        assert_eq!(bin_burner_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
+
+        // Verify that the correct amount of funds have been subtracted from the sender
+        assert_eq!(balance, Balance::from_bytes(b"10000.0").unwrap() - amount.clone() - fee.clone());
+    }
 
     quickcheck! {
         fn serialize_deserialize(tx: Burn) -> bool {
