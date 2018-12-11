@@ -16,10 +16,31 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub struct Vm {
-    state: Vec<u8>,
-    code: Vec<u8>,
-    gas: u64,
-    gas_limit: u64,
+use stack::Stack;
+use frame::Frame;
+use value::VmValue;
+use code::Code;
+use state::State;
 
+pub struct Vm {
+    state: State,
+    code: Code,
+    gas: u64,
+    stack: Stack<Frame<VmValue>>
+}
+
+impl Vm {
+    pub fn new(state: State, code: Code, gas: u64) -> Result<Vm, &'static str> {
+        // TODO: Add state and code validations
+        Ok(Vm {
+            state: state,
+            code: code,
+            gas: gas,
+            stack: Stack::<Frame<VmValue>>::new()
+        })
+    }
+
+    pub fn execute(&mut self) -> Result<State, &'static str> {
+        unimplemented!();
+    }
 }

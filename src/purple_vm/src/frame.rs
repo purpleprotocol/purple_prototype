@@ -16,16 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(non_camel_case_types)]
-
-pub use virtual_machine::*;
-pub use state::*;
-pub use code::*;
-
-mod instruction_set;
-mod stack;
-mod virtual_machine;
-mod frame;
-mod value;
-mod code;
-mod state;
+#[derive(Debug)]
+pub struct Frame<T> {
+    locals: Vec<T>
+}

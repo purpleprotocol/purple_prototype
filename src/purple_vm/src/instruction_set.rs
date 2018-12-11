@@ -16,6 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#[derive(Debug)]
 pub enum InstructionSet {
     Halt                  = 0x00,
     Nop                   = 0x01,
@@ -225,6 +226,7 @@ pub enum InstructionSet {
     CreateMintable        = 0xe6,
     CallerAddress         = 0xe7,
     CallCurrency          = 0xe8,
+    RandomNumber          = 0xe9,
     Suicide               = 0xff
 
 }
