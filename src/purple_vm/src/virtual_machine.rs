@@ -29,6 +29,12 @@ pub struct Vm {
     stack: Stack<Frame<VmValue>>
 }
 
+pub enum Status {
+    Halted,
+    Panicked,
+    Success
+}
+
 impl Vm {
     pub fn new(state: State, code: Code, gas: u64) -> Result<Vm, &'static str> {
         // TODO: Add state and code validations
@@ -40,7 +46,12 @@ impl Vm {
         })
     }
 
-    pub fn execute(&mut self) -> Result<State, &'static str> {
+    /// Executes the code loaded in the virtual machine
+    /// on the given state.
+    ///
+    /// If it succeeds, this function returns a 3 element 
+    /// tuple: (Status, New state, Gas consumed).
+    pub fn execute(&mut self) -> Result<(Status, State, u64), &'static str> {
         unimplemented!();
     }
 }

@@ -21,6 +21,9 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature, SecretKey as Sk};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
+use patricia_trie::{TrieMut, TrieDBMut, NodeCodec};
+use elastic_array::ElasticArray128;
+use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenShares {
@@ -44,6 +47,180 @@ pub struct OpenShares {
 
 impl OpenShares {
     pub const TX_TYPE: u8 = 6;
+
+    /// Applies the open shares transaction to the provided database.
+    ///
+    /// This function will panic if the `creator` account does not exist
+    /// or if the account address already exists in the ledger.
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        let bin_creator = &self.creator.to_bytes();
+        let bin_address = &self.address.clone().unwrap().to_bytes();
+        let bin_currency_hash = &self.currency_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+        let bin_stock_hash = &self.stock_hash.unwrap().to_vec();
+
+        // Convert addresses to strings
+        let creator = hex::encode(bin_creator);
+        let address = hex::encode(bin_address);
+
+        // Convert hashes to strings
+        let cur_hash = hex::encode(bin_currency_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        // Calculate nonce keys
+        // 
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let creator_nonce_key = format!("{}.n", creator);
+        let address_nonce_key = format!("{}.n", address);
+        let creator_nonce_key = creator_nonce_key.as_bytes();
+        let address_nonce_key = address_nonce_key.as_bytes();
+
+        // Retrieve serialized nonce
+        let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
+
+        let mut nonce_rdr = Cursor::new(bin_creator_nonce);
+
+        // Read the nonce of the creator
+        let mut nonce = nonce_rdr.read_u64::<BigEndian>().unwrap();
+
+        // Increment creator nonce
+        nonce += 1;
+
+        let mut nonce_buf: Vec<u8> = Vec::with_capacity(8);
+
+        // Write new nonce to buffer
+        nonce_buf.write_u64::<BigEndian>(nonce).unwrap();
+
+        // Calculate currency keys
+        //
+        // The key of a currency entry has the following format:
+        // `<account-address>.<currency-hash>`
+        let creator_cur_key = format!("{}.{}", creator, cur_hash);
+        let creator_fee_key = format!("{}.{}", creator, fee_hash);
+        let address_cur_key = format!("{}.{}", address, cur_hash);
+
+        // Calculate shares and share map keys
+        //
+        // The keys of shares objects have the following format:
+        // `<account-address>.s`
+        //
+        // The keys of share map objects have the following format:
+        // `<account-address>.sm`
+        let shares_key = format!("{}.s", address);
+        let share_map_key = format!("{}.sm", address);
+        let shares_key = shares_key.as_bytes();
+        let share_map_key = share_map_key.as_bytes();
+
+        // Calculate stock hash key
+        //
+        // The key of a shareholders account's stock hash has the following format:
+        // `<account-address>.sh`
+        let stock_hash_key = format!("{}.sh", address);
+
+        if fee_hash == cur_hash {
+            // The transaction's fee is paid in the same currency
+            // that is being transferred, so we only retrieve one
+            // balance.
+            let mut creator_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&creator_cur_key.as_bytes()).unwrap(),
+                        "The creator does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            // Subtract fee from creator balance
+            creator_balance -= self.fee.clone();
+
+            // Subtract amount transferred from creator balance
+            creator_balance -= self.amount.clone();
+
+            let receiver_balance = self.amount.clone();
+
+            allocate_shares(trie, &self.stock_hash.unwrap(), &self.share_map);
+
+            // Update trie
+            trie.insert(creator_cur_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
+            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+            trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+            trie.insert(shares_key, &self.shares.to_bytes()).unwrap();
+            trie.insert(share_map_key, &self.share_map.to_bytes()).unwrap();
+            trie.insert(stock_hash_key.as_bytes(), bin_stock_hash).unwrap();
+        } else {
+            // The transaction's fee is paid in a different currency
+            // than the one being transferred so we retrieve both balances.
+            let mut creator_cur_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&creator_cur_key.as_bytes()).unwrap(),
+                        "The creator does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            let mut creator_fee_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                        "The creator does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            // Subtract fee from creator
+            creator_fee_balance -= self.fee.clone();
+
+            // Subtract amount transferred from creator
+            creator_cur_balance -= self.amount.clone();
+
+            let receiver_balance = self.amount.clone();
+
+            allocate_shares(trie, &self.stock_hash.unwrap(), &self.share_map);
+
+            // Update trie
+            trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes()).unwrap();
+            trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes()).unwrap();
+            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+            trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+            trie.insert(shares_key, &self.shares.to_bytes()).unwrap();
+            trie.insert(share_map_key, &self.share_map.to_bytes()).unwrap();
+            trie.insert(stock_hash_key.as_bytes(), bin_stock_hash).unwrap();
+        }
+    }
+
+    pub fn compute_address(&mut self) {
+        let addr = ShareholdersAddress::compute(&self.share_map.keys(), self.creator.clone(), self.nonce);
+        self.address = Some(addr);
+    }
+
+    pub fn compute_stock_hash(&mut self) {
+        let mut buf: Vec<u8> = vec![];
+        let keys: Vec<Vec<u8>> = self.share_map
+            .keys()
+            .iter()
+            .map(|k| k.to_bytes())
+            .collect();
+
+        let mut encoded_list = rlp::encode_list::<Vec<u8>, _>(&keys);
+
+        // Write nonce to buf
+        buf.write_u64::<BigEndian>(self.nonce).unwrap();
+
+        // Write keys to buf
+        buf.append(&mut encoded_list);
+
+        let stock_hash = crypto::hash_slice(&buf);
+
+        // Add stock hash to tx
+        self.stock_hash = Some(stock_hash);
+    }
 
     /// Signs the transaction with the given secret key.
     ///
@@ -443,6 +620,44 @@ fn assemble_sign_message(obj: &OpenShares) -> Vec<u8> {
     buf
 }
 
+// Writes the shares in the given share map to each shareholder.
+//
+// If a listed shareholder's account is not created, this will also create it.
+fn allocate_shares(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, stock_hash: &Hash, share_map: &ShareMap) {
+    for shareholder in share_map.keys() {
+        let stock_hash = stock_hash.to_vec();
+        let stock_hash = hex::encode(stock_hash);
+        let shares = share_map.get(shareholder.clone()).unwrap();
+        let str_shares = format!("{}.0", shares);
+        let shares = Balance::from_bytes(str_shares.as_bytes()).unwrap();
+        let bin_shareholder_address = shareholder.clone().to_bytes();
+        let shareholder_address = hex::encode(bin_shareholder_address);
+
+        let stock_key = format!("{}.{}", shareholder_address, stock_hash);
+        let stock_key = stock_key.as_bytes();
+        let nonce_key = format!("{}.n", shareholder_address);
+        let nonce_key = nonce_key.as_bytes();
+        let shareholder_nonce = trie.get(&nonce_key);
+
+        match shareholder_nonce {
+            // The shareholder's account exists
+            Ok(Some(_)) => {
+                // Write shares to account
+                trie.insert(stock_key, &shares.to_bytes()).unwrap();
+            },
+            // The shareholder's account does not exist so we create it
+            Ok(None) => {
+                // Create account by adding writing a `0` nonce
+                trie.insert(nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+
+                // Write shares to account
+                trie.insert(stock_key, &shares.to_bytes()).unwrap();
+            },
+            Err(err) => panic!(err)
+        }
+    }
+}
+
 use quickcheck::Arbitrary;
 
 impl Arbitrary for OpenShares {
@@ -466,8 +681,112 @@ impl Arbitrary for OpenShares {
 
 #[cfg(test)]
 mod tests {
+    extern crate test_helpers;
+    
     use super::*;
+    use account::Address;
     use crypto::Identity;
+    use hashdb::Hasher;
+
+    #[test]
+    fn apply_it_correctly_creates_a_shares_account() {
+        let id = Identity::new();
+        let sh1 = Identity::new();
+        let sh2 = Identity::new();
+        let sh3 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, Address::Normal(creator_addr.clone()), cur_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"30.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+        let shares = Shares::new(1000, 1000000, 60);
+        let mut share_map = ShareMap::new();
+
+        share_map.add_shareholder(NormalAddress::from_pkey(*sh1.pkey()), 300);
+        share_map.add_shareholder(NormalAddress::from_pkey(*sh2.pkey()), 400);
+        share_map.add_shareholder(NormalAddress::from_pkey(*sh3.pkey()), 300);
+
+        let mut tx = OpenShares {
+            creator: creator_addr.clone(),
+            fee: fee.clone(),
+            shares: shares.clone(),
+            share_map: share_map.clone(),
+            fee_hash: cur_hash,
+            amount: amount.clone(),
+            currency_hash: cur_hash,
+            nonce: 3429,
+            address: None,
+            stock_hash: None,
+            signature: None,
+            hash: None
+        };
+
+        tx.compute_address();
+        tx.compute_stock_hash();
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        // Apply transaction
+        tx.apply(&mut trie);
+        
+        // Commit changes
+        trie.commit();
+        
+        let creator_nonce_key = format!("{}.n", hex::encode(&creator_addr.to_bytes()));
+        let creator_nonce_key = creator_nonce_key.as_bytes();
+        let receiver_nonce_key = format!("{}.n", hex::encode(tx.address.clone().unwrap().to_bytes()));
+        let receiver_nonce_key = receiver_nonce_key.as_bytes();
+
+        let share_map_key = format!("{}.sm", hex::encode(tx.address.clone().unwrap().to_bytes()));
+        let share_map_key = share_map_key.as_bytes();
+        let shares_key = format!("{}.s", hex::encode(tx.address.unwrap().to_bytes()));
+        let shares_key = shares_key.as_bytes();
+
+        let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
+        let bin_receiver_nonce = &trie.get(&receiver_nonce_key).unwrap().unwrap();
+
+        let bin_cur_hash = cur_hash.to_vec();
+        let hex_cur_hash = hex::encode(&bin_cur_hash);
+        let bin_stock_hash = tx.stock_hash.unwrap().to_vec();
+        let hex_stock_hash = hex::encode(&bin_stock_hash);
+
+        let creator_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_cur_hash);
+        let creator_balance_key = creator_balance_key.as_bytes();
+
+        let balance = Balance::from_bytes(&trie.get(&creator_balance_key).unwrap().unwrap()).unwrap();
+        let written_shares = Shares::from_bytes(&trie.get(&shares_key).unwrap().unwrap()).unwrap();
+        let written_share_map = ShareMap::from_bytes(&trie.get(&share_map_key).unwrap().unwrap()).unwrap();
+
+        // Check nonces
+        assert_eq!(bin_creator_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
+        assert_eq!(bin_receiver_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 0]);
+
+        // Verify that the correct amount of funds have been subtracted from the sender
+        assert_eq!(balance, Balance::from_bytes(b"10000.0").unwrap() - amount.clone() - fee.clone());
+
+        // Verify shares and share map
+        assert_eq!(written_shares, shares);
+        assert_eq!(written_share_map, share_map);
+
+        // Verify that shares have been allocated to each shareholder
+        for shareholder in share_map.keys() {
+            let shares = share_map.get(shareholder.clone()).unwrap();
+            let bin_shareholder = shareholder.to_bytes();
+            let hex_shareholder = hex::encode(bin_shareholder);
+            let cur_key = format!("{}.{}", hex_shareholder, hex_stock_hash);
+            let balance = Balance::from_bytes(&trie.get(cur_key.as_bytes()).unwrap().unwrap()).unwrap();
+            let expected_balance = format!("{}.0", shares);
+
+            assert_eq!(balance, Balance::from_bytes(expected_balance.as_bytes()).unwrap());
+        }
+    }
 
     quickcheck! {
         fn serialize_deserialize(tx: OpenShares) -> bool {

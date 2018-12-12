@@ -44,7 +44,7 @@ pub struct Burn {
 impl Burn {
     pub const TX_TYPE: u8 = 11;
 
-    /// Applies the send transaction to the provided database.
+    /// Applies the burn transaction to the provided database.
     ///
     /// This function will panic if the `burner` account does not exist.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {

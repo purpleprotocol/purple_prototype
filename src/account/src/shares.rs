@@ -28,6 +28,14 @@ pub struct Shares {
 }
 
 impl Shares {
+    pub fn new(issued_shares: u32, authorized_shares: u32, required_percentile: u8) -> Shares {
+        Shares {
+            issued_shares: issued_shares,
+            authorized_shares: authorized_shares,
+            required_percentile: required_percentile
+        }
+    }
+
     /// Fields:
     /// 1) Required percentile   - 8bits
     /// 2) Issued shares         - 32bits

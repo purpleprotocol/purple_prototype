@@ -25,8 +25,8 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ShareMap {
-    share_map: HashMap<NormalAddress, u64>,
-    issued_shares: u64
+    share_map: HashMap<NormalAddress, u32>,
+    issued_shares: u32
 }
 
 impl ShareMap {
@@ -37,7 +37,24 @@ impl ShareMap {
         }
     }
 
-    pub fn add_shareholder(&mut self, addr: NormalAddress, shares: u64) {
+    pub fn keys(&self) -> Vec<NormalAddress> {
+        let mut buf: Vec<NormalAddress> = vec![];
+
+        for (k, _) in self.share_map.iter() {
+            buf.push(k.clone());
+        }
+
+        buf
+    }
+
+    pub fn get(&self, key: NormalAddress) -> Option<u32> {
+        match self.share_map.get(&key) {
+            Some(res) => Some(res.clone()),
+            None      => None
+        }
+    }
+
+    pub fn add_shareholder(&mut self, addr: NormalAddress, shares: u32) {
         self.share_map.insert(addr, shares);
         self.issued_shares += shares;
     }
@@ -57,7 +74,7 @@ impl ShareMap {
         for (addr, shares) in self.share_map.iter() {
             if crypto::verify(message, signature.clone(), addr.pkey()) {
                 // A match has been found
-                let signer_ratio: u8 = (self.issued_shares / (*shares as u64) * 100) as u8;
+                let signer_ratio: u8 = (self.issued_shares / (*shares as u32) * 100) as u8;
                 
                 result = Some(signer_ratio);
                 break;
@@ -75,9 +92,9 @@ impl ShareMap {
             let mut k = k.to_bytes();
 
             // Fields:
-            // 1) Shares       - 64bits
+            // 1) Shares       - 32bits
             // 2) Shareholder  - 33byte binary
-            b.write_u64::<BigEndian>(*v).unwrap();
+            b.write_u32::<BigEndian>(*v).unwrap();
             b.append(&mut k);
 
             buf.push(b);
@@ -87,21 +104,21 @@ impl ShareMap {
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<ShareMap, &'static str> {
-        let mut buf: HashMap<NormalAddress, u64> = HashMap::new();
+        let mut buf: HashMap<NormalAddress, u32> = HashMap::new();
         let decoded: Vec<Vec<u8>> = rlp::decode_list(bin);
-        let mut issued_shares: u64 = 0;
+        let mut issued_shares: u32 = 0;
 
         for bytes in decoded {
-            if bytes.len() == 41 {
+            if bytes.len() == 37 {
                 let mut rdr = Cursor::new(bytes);
-                let shares = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+                let shares = if let Ok(result) = rdr.read_u32::<BigEndian>() {
                     result
                 } else {
                     return Err("Bad shares");
                 };
 
                 let mut b = rdr.into_inner();
-                let _: Vec<u8> = b.drain(..8).collect();
+                let _: Vec<u8> = b.drain(..4).collect();
 
                 let address_vec: Vec<u8> = b.drain(..33).collect();
 
@@ -128,8 +145,8 @@ impl ShareMap {
 
 impl Arbitrary for ShareMap {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> ShareMap {
-        let sm: HashMap<NormalAddress, u64> = Arbitrary::arbitrary(g);
-        let mut shares: u64 = 0;
+        let sm: HashMap<NormalAddress, u32> = Arbitrary::arbitrary(g);
+        let mut shares: u32 = 0;
 
         for (_, v) in sm.iter() {
             shares += v;

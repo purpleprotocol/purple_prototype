@@ -34,7 +34,6 @@ use clap::{Arg, App};
 use tokio::io::copy;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
-use parking_lot::RwLock;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use std::path::Path;
 use std::env;
@@ -47,7 +46,7 @@ fn main() {
     env_logger::init();
 
     let argv = parse_cli_args();
-    let _db_rw_lock: RwLock<Database> = RwLock::new(open_database(&argv.network_name)); 
+    let _db = open_database(&argv.network_name); 
 
     start_listener();
 }
