@@ -52,6 +52,7 @@ impl CreateCurrency {
         let bin_receiver = &self.receiver.to_bytes();
         let bin_cur_hash = &self.currency_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
+        let coin_supply = &self.coin_supply;
 
         // Convert addresses to strings
         let creator = hex::encode(bin_creator);
@@ -71,6 +72,13 @@ impl CreateCurrency {
         // `<currency-hash>.p`
         let cur_hash_prec_key = format!("{}.p", cur_hash);
         let cur_hash_prec_key = cur_hash_prec_key.as_bytes();
+
+        // Calculate coin supply key
+        //
+        // The key of a currency's coin supply entry has the following format:
+        // `<currency-hash>.s`
+        let cur_hash_supply_key = format!("{}.s", cur_hash);
+        let cur_hash_supply_key = cur_hash_supply_key.as_bytes();
 
         // Calculate nonce keys
         // 
@@ -97,6 +105,11 @@ impl CreateCurrency {
 
         // Write new nonce to buffer
         nonce_buf.write_u64::<BigEndian>(nonce).unwrap();
+
+        let mut coin_supply_buf: Vec<u8> = Vec::with_capacity(8);
+
+        // Write coin supply to buffer
+        coin_supply_buf.write_u64::<BigEndian>(*coin_supply).unwrap();
 
         // Calculate currency keys
         //
@@ -163,6 +176,7 @@ impl CreateCurrency {
             }
 
             // Update trie
+            trie.insert(cur_hash_supply_key, &coin_supply_buf).unwrap();
             trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
             trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes()).unwrap();
             trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes()).unwrap();
@@ -211,6 +225,7 @@ impl CreateCurrency {
                     }
 
                     // Update trie
+                    trie.insert(cur_hash_supply_key, &coin_supply_buf).unwrap();
                     trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
                     trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
                     trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
@@ -257,6 +272,7 @@ impl CreateCurrency {
                     }
 
                     // Update trie
+                    trie.insert(cur_hash_supply_key, &coin_supply_buf).unwrap();
                     trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
                     trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
                     trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
@@ -620,6 +636,8 @@ mod tests {
         let cur_hash_prec_key = cur_hash_prec_key.as_bytes();
         let fee_hash_prec_key = format!("{}.p", hex_fee_hash);
         let fee_hash_prec_key = fee_hash_prec_key.as_bytes(); 
+        let cur_hash_supply_key = format!("{}.s", hex_cur_hash);
+        let cur_hash_supply_key = cur_hash_supply_key.as_bytes();
         let current_index_key = b"ci".to_vec();
         let currencies_idx_key = b"c.0".to_vec(); // Currency group 0
 
@@ -637,7 +655,6 @@ mod tests {
 
         let cur_listing = &trie.get(&currencies_idx_key).unwrap().unwrap();
         let mut cur_listing: Vec<Vec<u8>> = rlp::decode_list(&cur_listing);
-
         let mut oracle_listing = [bin_cur_hash, bin_fee_hash].to_vec();
 
         test_helpers::qs(&mut cur_listing);
@@ -659,6 +676,9 @@ mod tests {
         // Check currencies precisions
         assert_eq!(&trie.get(&cur_hash_prec_key).unwrap().unwrap(), &vec![18]);
         assert_eq!(&trie.get(&fee_hash_prec_key).unwrap().unwrap(), &vec![18]);
+
+        // Check currency supply
+        assert_eq!(&trie.get(&cur_hash_supply_key).unwrap().unwrap(), &vec![0, 0, 0, 0, 0, 0, 0, 100]);
     }
 
     // #[test]
