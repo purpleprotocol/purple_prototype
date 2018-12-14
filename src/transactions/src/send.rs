@@ -20,10 +20,8 @@ use std::str;
 use account::{Address, Balance, Signature, ShareMap, MultiSig, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
-use serde::{Deserialize, Serialize};
 use std::io::Cursor;
-use patricia_trie::{TrieMut, TrieDBMut, NodeCodec};
-use elastic_array::ElasticArray128;
+use patricia_trie::{TrieMut, TrieDBMut};
 use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -655,11 +653,6 @@ mod tests {
     
     use super::*;
     use crypto::Identity;
-    use hashdb::Hasher;
-    use tempfile::tempdir;
-    use persistence::PersistentDb;
-    use std::sync::Arc;
-    use kvdb_rocksdb::{Database, DatabaseConfig};
 
     #[test]
     fn apply_it_creates_a_new_account() {

@@ -5,6 +5,7 @@ authors = ["Octavian Oncescu <octavonce@gmail.com>"]
 
 [dependencies]
 hex = "0.3.2"
+rlp = "0.3.0"
 tempfile = "3.0.5"
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
 patricia-trie = { git = "https://github.com/paritytech/parity-common" }

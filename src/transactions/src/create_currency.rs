@@ -19,8 +19,12 @@
 use account::{Address, NormalAddress, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature, SecretKey as Sk};
-use serde::{Deserialize, Serialize};
 use std::io::Cursor;
+use patricia_trie::{TrieMut, TrieDBMut};
+use persistence::{BlakeDbHasher, Codec};
+
+// Currency hashes per key
+pub const CUR_GROUP_CAPACITY: usize = 50;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateCurrency {
@@ -39,6 +43,230 @@ pub struct CreateCurrency {
 
 impl CreateCurrency {
     pub const TX_TYPE: u8 = 8;
+
+    /// Applies the CreateCurrency transaction to the provided database.
+    ///
+    /// This function will panic if the `creator` account does not exist.
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        let bin_creator = &self.creator.to_bytes();
+        let bin_receiver = &self.receiver.to_bytes();
+        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+
+        // Convert addresses to strings
+        let creator = hex::encode(bin_creator);
+        let receiver = hex::encode(bin_receiver);
+
+        // Convert hashes to strings
+        let cur_hash = hex::encode(bin_cur_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        if cur_hash == fee_hash {
+            panic!("The created currency hash cannot be the same as the fee hash!");
+        }
+
+        // Calculate precision key
+        //
+        // The key of a currency's precision has the following format:
+        // `<currency-hash>.p`
+        let cur_hash_prec_key = format!("{}.p", cur_hash);
+        let cur_hash_prec_key = cur_hash_prec_key.as_bytes();
+
+        // Calculate nonce keys
+        // 
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let creator_nonce_key = format!("{}.n", creator);
+        let creator_nonce_key = creator_nonce_key.as_bytes();
+        let receiver_nonce_key = format!("{}.n", receiver);
+        let receiver_nonce_key = receiver_nonce_key.as_bytes();
+
+        // Retrieve serialized nonce
+        let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
+        let bin_receiver_nonce = trie.get(&receiver_nonce_key);
+
+        let mut nonce_rdr = Cursor::new(bin_creator_nonce);
+
+        // Read the nonce of the creator
+        let mut nonce = nonce_rdr.read_u64::<BigEndian>().unwrap();
+
+        // Increment creator nonce
+        nonce += 1;
+
+        let mut nonce_buf: Vec<u8> = Vec::with_capacity(8);
+
+        // Write new nonce to buffer
+        nonce_buf.write_u64::<BigEndian>(nonce).unwrap();
+
+        // Calculate currency keys
+        //
+        // The key of a currency entry has the following format:
+        // `<account-address>.<currency-hash>`
+        let creator_cur_key = format!("{}.{}", creator, cur_hash);
+        let creator_fee_key = format!("{}.{}", creator, fee_hash);
+        let receiver_cur_key = format!("{}.{}", receiver, cur_hash);
+
+        // Retrieve current index
+        let bin_cur_idx = trie.get(b"ci").unwrap().unwrap();
+        let mut ci_reader = Cursor::new(bin_cur_idx);
+        let mut cur_idx = ci_reader.read_u64::<BigEndian>().unwrap();
+
+        // Calculate current currencies key
+        let current_curs_key = format!("c.{}", cur_idx);
+        let current_curs_key = current_curs_key.as_bytes();
+        let next_curs_key = format!("c.{}", cur_idx + 1);
+        let next_curs_key = next_curs_key.as_bytes();
+
+        // Get currencies stored at the current index
+        let currencies = trie.get(current_curs_key).unwrap().unwrap();
+        let mut currencies: Vec<Vec<u8>> = rlp::decode_list(&currencies);
+
+        // The creator is the same as the receiver, so we
+        // just add all the new currency to it's address.
+        if bin_creator == bin_receiver {
+            let mut creator_fee_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                        "The creator does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            // Subtract fee from sender balance
+            creator_fee_balance -= self.fee.clone();
+                    
+            // Calculate creator balance
+            let creator_cur_balance = format!("{}.0", self.coin_supply);
+            let creator_cur_balance = Balance::from_bytes(creator_cur_balance.as_bytes()).unwrap();
+
+            // If the current group is maxed out, create a new entry at the next index
+            if currencies.len() == CUR_GROUP_CAPACITY {
+                let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_cur_hash]);
+                let mut encoded_idx: Vec<u8> = Vec::new();
+
+                // Increment current index
+                cur_idx += 1;
+
+                // Write new index to buffer
+                encoded_idx.write_u64::<BigEndian>(cur_idx).unwrap();
+
+                trie.insert(b"ci", &encoded_idx).unwrap();
+                trie.insert(next_curs_key, &encoded).unwrap();
+            } else {
+                // Push new currency
+                currencies.push(bin_cur_hash.to_vec());
+
+                let encoded = rlp::encode_list::<Vec<u8>, _>(&currencies);
+                trie.insert(current_curs_key, &encoded).unwrap();
+            }
+
+            // Update trie
+            trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
+            trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes()).unwrap();
+            trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes()).unwrap();
+            trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+        } else {
+            // The receiver is another account
+            match bin_receiver_nonce {
+                // The receiver account exists
+                Ok(Some(_)) => {
+                    let mut creator_balance = unwrap!(
+                        Balance::from_bytes(
+                            &unwrap!(
+                                trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                                "The creator does not have an entry for the given currency"
+                            )
+                        ),
+                        "Invalid stored balance format"
+                    );
+
+                    // Subtract fee from sender balance
+                    creator_balance -= self.fee.clone();
+                    
+                    // Calculate receiver balance
+                    let receiver_balance = format!("{}.0", self.coin_supply);
+                    let receiver_balance = Balance::from_bytes(receiver_balance.as_bytes()).unwrap();
+
+                    // If the current group is maxed out, create a new entry at the next index
+                    if currencies.len() == CUR_GROUP_CAPACITY {
+                        let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_cur_hash]);
+                        let mut encoded_idx: Vec<u8> = Vec::new();
+
+                        // Increment current index
+                        cur_idx += 1;
+
+                        // Write new index to buffer
+                        encoded_idx.write_u64::<BigEndian>(cur_idx).unwrap();
+
+                        trie.insert(b"ci", &encoded_idx).unwrap();
+                        trie.insert(next_curs_key, &encoded).unwrap();
+                    } else {
+                        // Push new currency
+                        currencies.push(bin_cur_hash.to_vec());
+
+                        let encoded = rlp::encode_list::<Vec<u8>, _>(&currencies);
+                        trie.insert(current_curs_key, &encoded).unwrap();
+                    }
+
+                    // Update trie
+                    trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
+                    trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
+                    trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+                    trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+                },
+                // The receiver account does not exist so we create it 
+                Ok(None) => {
+                    let mut creator_balance = unwrap!(
+                        Balance::from_bytes(
+                            &unwrap!(
+                                trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                                "The creator does not have an entry for the given currency"
+                            )
+                        ),
+                        "Invalid stored balance format"
+                    );
+
+                    // Subtract fee from sender balance
+                    creator_balance -= self.fee.clone();
+                    
+                    // Calculate receiver balance
+                    let receiver_balance = format!("{}.0", self.coin_supply);
+                    let receiver_balance = Balance::from_bytes(receiver_balance.as_bytes()).unwrap();
+
+                    // If the current group is maxed out, create a new entry at the next index
+                    if currencies.len() == CUR_GROUP_CAPACITY {
+                        let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_cur_hash]);
+                        let mut encoded_idx: Vec<u8> = Vec::new();
+
+                        // Increment current index
+                        cur_idx += 1;
+
+                        // Write new index to buffer
+                        encoded_idx.write_u64::<BigEndian>(cur_idx).unwrap();
+
+                        trie.insert(b"ci", &encoded_idx).unwrap();
+                        trie.insert(next_curs_key, &encoded).unwrap();
+                    } else {
+                        // Push new currency
+                        currencies.push(bin_cur_hash.to_vec());
+
+                        let encoded = rlp::encode_list::<Vec<u8>, _>(&currencies);
+                        trie.insert(current_curs_key, &encoded).unwrap();
+                    }
+
+                    // Update trie
+                    trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
+                    trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
+                    trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+                    trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+                    trie.insert(receiver_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+                },
+                Err(err) => panic!(err)
+            }
+        }
+    }
 
     /// Signs the transaction with the given secret key.
     ///
@@ -335,8 +563,108 @@ impl Arbitrary for CreateCurrency {
 
 #[cfg(test)]
 mod tests {
+    extern crate test_helpers;
+    
     use super::*;
     use crypto::Identity;
+
+    #[test]
+    fn apply_it_creates_currencies_and_adds_them_to_the_creator() {
+        let id = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = CreateCurrency {
+            creator: creator_norm_address.clone(),
+            receiver: creator_addr.clone(),
+            coin_supply: 100,
+            precision: 18,
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        // Apply transaction
+        tx.apply(&mut trie);
+        
+        // Commit changes
+        trie.commit();
+        
+        let creator_nonce_key = format!("{}.n", hex::encode(&creator_addr.to_bytes()));
+        let creator_nonce_key = creator_nonce_key.as_bytes();
+
+        let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
+
+        let bin_cur_hash = cur_hash.to_vec();
+        let bin_fee_hash = fee_hash.to_vec();
+        let hex_cur_hash = hex::encode(&bin_cur_hash);
+        let hex_fee_hash = hex::encode(&bin_fee_hash);
+        let cur_hash_prec_key = format!("{}.p", hex_cur_hash);
+        let cur_hash_prec_key = cur_hash_prec_key.as_bytes();
+        let fee_hash_prec_key = format!("{}.p", hex_fee_hash);
+        let fee_hash_prec_key = fee_hash_prec_key.as_bytes(); 
+        let current_index_key = b"ci".to_vec();
+        let currencies_idx_key = b"c.0".to_vec(); // Currency group 0
+
+        let creator_cur_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_cur_hash);
+        let creator_cur_balance_key = creator_cur_balance_key.as_bytes();
+        let creator_fee_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_fee_hash);
+        let creator_fee_balance_key = creator_fee_balance_key.as_bytes();
+
+        let creator_fee_balance = Balance::from_bytes(&trie.get(&creator_fee_balance_key).unwrap().unwrap()).unwrap();
+        let creator_cur_balance = Balance::from_bytes(&trie.get(&creator_cur_balance_key).unwrap().unwrap()).unwrap();
+
+        let current_index = &trie.get(&current_index_key).unwrap().unwrap();
+        let mut ci_rdr = Cursor::new(current_index);
+        let current_index = ci_rdr.read_u64::<BigEndian>().unwrap();
+
+        let cur_listing = &trie.get(&currencies_idx_key).unwrap().unwrap();
+        let mut cur_listing: Vec<Vec<u8>> = rlp::decode_list(&cur_listing);
+
+        let mut oracle_listing = [bin_cur_hash, bin_fee_hash].to_vec();
+
+        test_helpers::qs(&mut cur_listing);
+        test_helpers::qs(&mut oracle_listing);
+
+        // Check nonce
+        assert_eq!(bin_creator_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
+        
+        // Check balances
+        assert_eq!(creator_fee_balance, Balance::from_bytes(b"10000.0").unwrap() - fee.clone());
+        assert_eq!(creator_cur_balance, amount.clone());
+
+        // Check current index
+        assert_eq!(current_index, 0);
+
+        // Check that the currency has been created correctly
+        assert_eq!(cur_listing, oracle_listing);
+
+        // Check currencies precisions
+        assert_eq!(&trie.get(&cur_hash_prec_key).unwrap().unwrap(), &vec![18]);
+        assert_eq!(&trie.get(&fee_hash_prec_key).unwrap().unwrap(), &vec![18]);
+    }
+
+    // #[test]
+    // fn apply_it_creates_currencies_and_adds_them_to_a_receiver() {
+
+    // }
 
     quickcheck! {
         fn serialize_deserialize(tx: CreateCurrency) -> bool {

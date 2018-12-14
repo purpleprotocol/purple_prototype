@@ -19,7 +19,6 @@
 use account::{Address, Balance, Signature, ShareMap, MultiSig};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, SecretKey as Sk, PublicKey as Pk};
-use serde::{Deserialize, Serialize};
 use std::str;
 use std::io::Cursor;
 

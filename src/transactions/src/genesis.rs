@@ -16,17 +16,15 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, ShareMap, Balance, Shares};
+use account::{ShareholdersAddress, ShareMap, Balance, Shares};
 use crypto::{Hash, Signature};
-use serde::{Deserialize, Serialize};
-use patricia_trie::{TrieMut, TrieDBMut, NodeCodec};
-use elastic_array::ElasticArray128;
+use patricia_trie::{TrieMut, TrieDBMut};
 use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Genesis {
     treasury_balance: Balance,
-    treasury_address: NormalAddress,
+    treasury_address: ShareholdersAddress,
     treasury_shares: Shares,
     treasury_share_map: ShareMap,
     treasury_stock_hash: Hash,
@@ -36,6 +34,8 @@ pub struct Genesis {
 
 impl Genesis {
     /// Applies the genesis transaction to the provided database.
+    ///
+    /// This function will panic if the treasury account already exists.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         unimplemented!();
     }

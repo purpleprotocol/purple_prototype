@@ -1326,6 +1326,7 @@ dependencies = [
  "kvdb-rocksdb 0.1.4 (git+https://github.com/paritytech/parity-common)",
  "patricia-trie 0.3.0 (git+https://github.com/paritytech/parity-common)",
  "persistence 0.1.0",
+ "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

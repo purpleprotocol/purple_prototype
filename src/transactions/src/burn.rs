@@ -20,12 +20,9 @@ use account::{Address, Balance, Signature, ShareMap, MultiSig};
 use crypto::{PublicKey as Pk, SecretKey as Sk};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
-use hashdb::HashDB;
-use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::str;
 use patricia_trie::{TrieMut, TrieDBMut};
-use elastic_array::ElasticArray128;
 use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -522,11 +519,6 @@ mod tests {
     use super::*;
     use account::NormalAddress;
     use crypto::Identity;
-    use hashdb::Hasher;
-    use tempfile::tempdir;
-    use persistence::PersistentDb;
-    use std::sync::Arc;
-    use kvdb_rocksdb::{Database, DatabaseConfig};
 
     #[test]
     fn apply_it_burns_coins() {

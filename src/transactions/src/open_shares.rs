@@ -19,10 +19,8 @@
 use account::{NormalAddress, ShareholdersAddress, Balance, Shares, ShareMap};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature, SecretKey as Sk};
-use serde::{Deserialize, Serialize};
 use std::io::Cursor;
-use patricia_trie::{TrieMut, TrieDBMut, NodeCodec};
-use elastic_array::ElasticArray128;
+use patricia_trie::{TrieMut, TrieDBMut};
 use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -686,7 +684,6 @@ mod tests {
     use super::*;
     use account::Address;
     use crypto::Identity;
-    use hashdb::Hasher;
 
     #[test]
     fn apply_it_correctly_creates_a_shares_account() {

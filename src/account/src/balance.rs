@@ -28,6 +28,33 @@ use std::ops::{Add, Sub, AddAssign, SubAssign};
 pub struct Balance(Decimal);
 
 impl Balance {
+    pub fn validate_smaller_precision(&self, precision: u8) -> bool {
+        // Validate balance with corresponding precision
+        let rgx = match precision {
+            0  => Regex::new(r"^[0-9]*$").unwrap(),
+            2  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,2})?$").unwrap(),
+            3  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,3})?$").unwrap(),
+            4  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,4})?$").unwrap(),
+            5  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,5})?$").unwrap(),
+            6  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,6})?$").unwrap(),
+            7  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,7})?$").unwrap(),
+            8  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,8})?$").unwrap(),
+            9  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,9})?$").unwrap(),
+            10 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,10})?$").unwrap(),
+            11 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,11})?$").unwrap(),
+            12 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,12})?$").unwrap(),
+            13 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,13})?$").unwrap(),
+            14 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,14})?$").unwrap(),
+            15 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,15})?$").unwrap(),
+            16 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,16})?$").unwrap(),
+            17 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,17})?$").unwrap(),
+            18 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,18})?$").unwrap(),
+            _  => panic!("Invalid precision! The value must either be 0 or a number between 2 and 18!")
+        };
+
+        rgx.is_match(&self.0.to_string())
+    }
+    
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::new();
         let formatted = format!("{}", &self.0);
@@ -42,10 +69,11 @@ impl Balance {
 
     pub fn from_bytes(bin: &[u8]) -> Result<Balance, &'static str> {
         let rgx = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,18})?$").unwrap();
-
+        let no_precision_rgx = Regex::new(r"^[0-9]*$").unwrap();
+        
         match str::from_utf8(bin) {
             Ok(result) => {
-                if rgx.is_match(result) {
+                if rgx.is_match(result) || no_precision_rgx.is_match(result) {
                     Ok(Balance(Decimal::from_str(result).unwrap()))
                 } else {
                     Err("Invalid balance")
