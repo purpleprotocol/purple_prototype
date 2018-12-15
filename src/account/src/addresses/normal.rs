@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::PublicKey;
+use crypto::{ToBase58, FromBase58, PublicKey};
 use rand::Rng;
 use quickcheck::Arbitrary;
 
@@ -25,6 +25,18 @@ pub struct NormalAddress(PublicKey);
 
 impl NormalAddress {
     pub const ADDR_TYPE: u8 = 1;
+
+    pub fn to_base58(&self) -> String {
+        let bin_addr = &self.to_bytes();
+        bin_addr.to_base58()
+    }
+
+    pub fn from_base58(input: &str) -> Result<NormalAddress, &'static str> {
+        match input.from_base58() {
+            Ok(bin) => Self::from_bytes(&bin),
+            _       => Err("Invalid base58 string!")
+        }
+    }
 
     pub fn from_pkey(pkey: PublicKey) -> NormalAddress {
         NormalAddress(pkey)
@@ -93,8 +105,13 @@ mod tests {
     use super::*;
 
     quickcheck! {
-        fn serialize_deserialize(tx: NormalAddress) -> bool {
-            tx == NormalAddress::from_bytes(&NormalAddress::to_bytes(&tx)).unwrap()
+        fn base58(addr: NormalAddress) -> bool {
+            let encoded = addr.to_base58();
+            NormalAddress::from_base58(&encoded).unwrap() == addr
+        }
+        
+        fn serialize_deserialize(addr: NormalAddress) -> bool {
+            addr == NormalAddress::from_bytes(&NormalAddress::to_bytes(&addr)).unwrap()
         }
     }
 }

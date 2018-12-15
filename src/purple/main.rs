@@ -18,7 +18,10 @@
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate unwrap;
+#[macro_use] extern crate jsonrpc_macros;
 
+extern crate dirs;
+extern crate jsonrpc_core;
 extern crate crypto;
 extern crate env_logger;
 extern crate itc;
@@ -53,7 +56,7 @@ fn main() {
 
 fn open_database(network_name: &str) -> Database {
     let config = DatabaseConfig::with_columns(Some(NUM_OF_COLUMNS));
-    let path = Path::new(&env::home_dir().unwrap())
+    let path = Path::new(&dirs::home_dir().unwrap())
         .join("purple")
         .join(network_name)
         .join("db");

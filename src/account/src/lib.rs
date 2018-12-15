@@ -16,10 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![feature(extern_prelude)]
-
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate quickcheck;
+#[macro_use] extern crate lazy_static;
 
 extern crate crypto;
 extern crate rlp;

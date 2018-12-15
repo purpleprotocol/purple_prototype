@@ -10,4 +10,4 @@ Purple is a decentralized, programmable, multi-asset blockchain protocol that is
 The main features of the protocol are its open and decentralized nature, it's capability of processing a large amount of transactions, its multi-asset capabilities and the ability to run decentralized applications and smart contracts.  
 
 ## Building
-Building the project requires the latest rust nightly toolchain, llvm and libsodium. After all these are installed, run `cargo build`.
+Building the project requires the latest rust nightly toolchain.

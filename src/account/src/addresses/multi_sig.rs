@@ -16,6 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crypto::{ToBase58, FromBase58};
 use addresses::NormalAddress;
 use rlp::*;
 use byteorder::{BigEndian, WriteBytesExt};
@@ -25,6 +26,18 @@ pub struct MultiSigAddress([u8; 32]);
 
 impl MultiSigAddress {
     pub const ADDR_TYPE: u8 = 2;
+
+    pub fn to_base58(&self) -> String {
+        let bin_addr = &self.to_bytes();
+        bin_addr.to_base58()
+    }
+
+    pub fn from_base58(input: &str) -> Result<MultiSigAddress, &'static str> {
+        match input.from_base58() {
+            Ok(bin) => Self::from_bytes(&bin),
+            _       => Err("Invalid base58 string!")
+        }
+    }
 
     /// Computes a multi signature address from the public keys of the
     /// the owners, the creator address and the creator's current nonce.
@@ -114,6 +127,11 @@ mod tests {
     use super::*;
 
     quickcheck! {
+        fn base58(addr: MultiSigAddress) -> bool {
+            let encoded = addr.to_base58();
+            MultiSigAddress::from_base58(&encoded).unwrap() == addr
+        }
+
         fn serialize_deserialize(tx: MultiSigAddress) -> bool {
             tx == MultiSigAddress::from_bytes(&MultiSigAddress::to_bytes(&tx)).unwrap()
         }

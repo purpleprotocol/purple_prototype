@@ -24,35 +24,54 @@ use rust_decimal::Decimal;
 use std::str::FromStr;
 use std::ops::{Add, Sub, AddAssign, SubAssign};
 
+lazy_static! {
+    static ref PREC0: Regex = Regex::new(r"^[0-9]*$").unwrap();
+    static ref PREC2: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,2})?$").unwrap();
+    static ref PREC3: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,3})?$").unwrap();
+    static ref PREC4: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,4})?$").unwrap();
+    static ref PREC5: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,5})?$").unwrap();
+    static ref PREC6: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,6})?$").unwrap();
+    static ref PREC7: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,7})?$").unwrap();
+    static ref PREC8: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,8})?$").unwrap();
+    static ref PREC9: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,9})?$").unwrap();
+    static ref PREC10: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,10})?$").unwrap();
+    static ref PREC11: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,11})?$").unwrap(); 
+    static ref PREC12: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,12})?$").unwrap();
+    static ref PREC13: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,13})?$").unwrap();
+    static ref PREC14: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,14})?$").unwrap();
+    static ref PREC15: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,15})?$").unwrap();
+    static ref PREC16: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,16})?$").unwrap();
+    static ref PREC17: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,17})?$").unwrap();
+    static ref PREC18: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,18})?$").unwrap();
+}
+
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
 pub struct Balance(Decimal);
 
 impl Balance {
     pub fn validate_smaller_precision(&self, precision: u8) -> bool {
         // Validate balance with corresponding precision
-        let rgx = match precision {
-            0  => Regex::new(r"^[0-9]*$").unwrap(),
-            2  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,2})?$").unwrap(),
-            3  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,3})?$").unwrap(),
-            4  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,4})?$").unwrap(),
-            5  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,5})?$").unwrap(),
-            6  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,6})?$").unwrap(),
-            7  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,7})?$").unwrap(),
-            8  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,8})?$").unwrap(),
-            9  => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,9})?$").unwrap(),
-            10 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,10})?$").unwrap(),
-            11 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,11})?$").unwrap(),
-            12 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,12})?$").unwrap(),
-            13 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,13})?$").unwrap(),
-            14 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,14})?$").unwrap(),
-            15 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,15})?$").unwrap(),
-            16 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,16})?$").unwrap(),
-            17 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,17})?$").unwrap(),
-            18 => Regex::new(r"^[0-9]{1,18}([.][0-9]{1,18})?$").unwrap(),
+        match precision {
+            0  => PREC0.is_match(&self.0.to_string()),
+            2  => PREC2.is_match(&self.0.to_string()),
+            3  => PREC3.is_match(&self.0.to_string()),
+            4  => PREC4.is_match(&self.0.to_string()),
+            5  => PREC5.is_match(&self.0.to_string()),
+            6  => PREC6.is_match(&self.0.to_string()),
+            7  => PREC7.is_match(&self.0.to_string()),
+            8  => PREC8.is_match(&self.0.to_string()),
+            9  => PREC9.is_match(&self.0.to_string()),
+            10 => PREC10.is_match(&self.0.to_string()),
+            11 => PREC11.is_match(&self.0.to_string()),
+            12 => PREC12.is_match(&self.0.to_string()),
+            13 => PREC13.is_match(&self.0.to_string()),
+            14 => PREC14.is_match(&self.0.to_string()),
+            15 => PREC15.is_match(&self.0.to_string()),
+            16 => PREC16.is_match(&self.0.to_string()),
+            17 => PREC17.is_match(&self.0.to_string()),
+            18 => PREC18.is_match(&self.0.to_string()),
             _  => panic!("Invalid precision! The value must either be 0 or a number between 2 and 18!")
-        };
-
-        rgx.is_match(&self.0.to_string())
+        }
     }
     
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -68,12 +87,9 @@ impl Balance {
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<Balance, &'static str> {
-        let rgx = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,18})?$").unwrap();
-        let no_precision_rgx = Regex::new(r"^[0-9]*$").unwrap();
-        
         match str::from_utf8(bin) {
             Ok(result) => {
-                if rgx.is_match(result) || no_precision_rgx.is_match(result) {
+                if PREC0.is_match(result) || PREC18.is_match(result) {
                     Ok(Balance(Decimal::from_str(result).unwrap()))
                 } else {
                     Err("Invalid balance")

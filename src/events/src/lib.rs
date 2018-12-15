@@ -16,7 +16,6 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![feature(extern_prelude)]
 #![feature(test)]
 
 #[cfg(test)]

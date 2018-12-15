@@ -16,11 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![feature(extern_prelude)]
-
 #[macro_use]
 extern crate serde_derive;
 
+extern crate rust_base58;
 extern crate rlp;
 extern crate hashdb;
 extern crate rand;
@@ -29,6 +28,7 @@ extern crate blake2;
 extern crate rust_sodium;
 extern crate quickcheck;
 
+pub use rust_base58::base58::*;
 pub use hash::*;
 pub use signature::*;
 pub use blake_hasher::*;

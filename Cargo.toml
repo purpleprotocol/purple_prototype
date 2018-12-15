@@ -15,6 +15,9 @@ itc = "0.1.2"
 log = "0.4.0"
 env_logger = "0.6.0"
 parking_lot = "0.6"
+dirs = "1.0.4"
+jsonrpc-core = "9.0.0"
+jsonrpc-macros = "9.0.0"
 kvdb = { git = "https://github.com/paritytech/parity-common" }
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
 account = { path = "src/account" }
