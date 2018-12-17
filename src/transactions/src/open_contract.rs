@@ -25,10 +25,11 @@ use std::io::Cursor;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenContract {
     owner: Address,
-    code: String,
-    default_state: String,
+    code: Vec<u8>,
+    default_state: Vec<u8>,
     fee: Balance,
     fee_hash: Hash,
+    self_payable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -162,17 +163,18 @@ impl OpenContract {
     ///
     /// Fields:
     /// 1) Transaction type(2)      - 8bits
-    /// 2) Fee length               - 8bits
-    /// 3) Signature length         - 16bits
-    /// 4) State length             - 16bits
-    /// 5) Code length              - 16bits
-    /// 6) Owner                    - 33byte binary
-    /// 7) Fee hash                 - 32byte binary
-    /// 8) Hash                     - 32byte binary
-    /// 9) Signature                - Binary of signature length
-    /// 10) Fee                     - Binary of fee length
-    /// 11) Default state           - Binary of state length
-    /// 12) Code                    - Binary of code length
+    /// 2) Self payable             - 8bits
+    /// 3) Fee length               - 8bits
+    /// 4) Signature length         - 16bits
+    /// 5) State length             - 16bits
+    /// 6) Code length              - 16bits
+    /// 7) Owner                    - 33byte binary
+    /// 8) Fee hash                 - 32byte binary
+    /// 9) Hash                     - 32byte binary
+    /// 10) Signature               - Binary of signature length
+    /// 11) Fee                     - Binary of fee length
+    /// 12) Default state           - Binary of state length
+    /// 13) Code                    - Binary of code length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -189,10 +191,11 @@ impl OpenContract {
             return Err("Signature field is missing");
         };
 
+        let self_payable: u8 = if self.self_payable { 1 } else { 0 };
         let owner = &self.owner.to_bytes();
         let fee_hash = &&self.fee_hash.0;
-        let code = &self.code.as_bytes();
-        let default_state = &self.default_state.as_bytes();
+        let code = &self.code;
+        let default_state = &self.default_state;
         let fee = &self.fee.to_bytes();
 
         let fee_len = fee.len();
@@ -201,6 +204,7 @@ impl OpenContract {
         let state_len = default_state.len();
 
         buffer.write_u8(tx_type).unwrap();
+        buffer.write_u8(self_payable).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
         buffer.write_u16::<BigEndian>(state_len as u16).unwrap();
@@ -231,13 +235,25 @@ impl OpenContract {
 
         rdr.set_position(1);
 
+        let self_payable = if let Ok(result) = rdr.read_u8() {
+            match result {
+                0 => false,
+                1 => true,
+                _ => return Err("Invalid self payable field")
+            }
+        } else {
+            return Err("Bad self payable field");
+        };
+
+        rdr.set_position(2);
+
         let fee_len = if let Ok(result) = rdr.read_u8() {
             result
         } else {
             return Err("Bad fee len");
         };
 
-        rdr.set_position(2);
+        rdr.set_position(3);
 
         let signature_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
@@ -245,7 +261,7 @@ impl OpenContract {
             return Err("Bad signature len");
         };
 
-        rdr.set_position(4);
+        rdr.set_position(5);
 
         let state_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
@@ -253,7 +269,7 @@ impl OpenContract {
             return Err("Bad state len");
         };
 
-        rdr.set_position(6);
+        rdr.set_position(7);
 
         let code_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
@@ -263,7 +279,7 @@ impl OpenContract {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..8).collect();
+        let _: Vec<u8> = buf.drain(..9).collect();
 
         let owner = if buf.len() > 33 as usize {
             let owner_vec: Vec<u8> = buf.drain(..33).collect();
@@ -321,23 +337,13 @@ impl OpenContract {
         };
 
         let default_state = if buf.len() >= state_len as usize {
-            let state_vec: Vec<u8> = buf.drain(..state_len as usize).collect();
-
-            match str::from_utf8(&state_vec) {
-                Ok(result) => result.to_owned(),
-                Err(_)     => return Err("Bad state")
-            }
+            buf.drain(..state_len as usize).collect()
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the size for the default state field")
         };
 
         let code = if buf.len() == code_len as usize {
-            let code_vec: Vec<u8> = buf.drain(..code_len as usize).collect();
-
-            match str::from_utf8(&code_vec) {
-                Ok(result) => result.to_owned(),
-                Err(_)     => return Err("Bad code")
-            }
+            buf.drain(..code_len as usize).collect()
         } else {
             return Err("Incorrect packet structure! Buffer size is not equal with the size for the code field")
         };
@@ -347,6 +353,7 @@ impl OpenContract {
             fee_hash: fee_hash,
             fee: fee,
             default_state: default_state,
+            self_payable: self_payable,
             code: code,
             hash: Some(hash),
             signature: Some(signature),
@@ -367,10 +374,13 @@ fn assemble_hash_message(obj: &OpenContract) -> Vec<u8> {
 
     let mut buf: Vec<u8> = Vec::new();
     let mut owner = obj.owner.to_bytes();
+    let self_payable: u8 = if obj.self_payable { 1 } else { 0 };
     let fee_hash = &obj.fee_hash.0;
-    let code = obj.code.as_bytes();
-    let default_state = obj.default_state.as_bytes();
+    let code = &obj.code;
+    let default_state = &obj.default_state;
     let mut fee = obj.fee.to_bytes();
+
+    buf.write_u8(self_payable).unwrap();
 
     // Compose data to hash
     buf.append(&mut owner);
@@ -386,10 +396,13 @@ fn assemble_hash_message(obj: &OpenContract) -> Vec<u8> {
 fn assemble_sign_message(obj: &OpenContract) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut owner = obj.owner.to_bytes();
+    let self_payable: u8 = if obj.self_payable { 1 } else { 0 };
     let fee_hash = &obj.fee_hash.0;
-    let code = obj.code.as_bytes();
-    let default_state = obj.default_state.as_bytes();
+    let code = &obj.code;
+    let default_state = &obj.default_state;
     let mut fee = obj.fee.to_bytes();
+
+    buf.write_u8(self_payable).unwrap();
 
     // Compose data to hash
     buf.append(&mut owner);
@@ -409,6 +422,7 @@ impl Arbitrary for OpenContract {
             owner: Arbitrary::arbitrary(g),
             code: Arbitrary::arbitrary(g),
             default_state: Arbitrary::arbitrary(g),
+            self_payable: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
@@ -439,10 +453,11 @@ mod tests {
         }
 
         fn verify_signature(
-            code: String,
-            default_state: String,
+            code: Vec<u8>,
+            default_state: Vec<u8>,
             fee: Balance,
-            fee_hash: Hash
+            fee_hash: Hash,
+            self_payable: bool
         ) -> bool {
             let id = Identity::new();
 
@@ -450,6 +465,7 @@ mod tests {
                 owner: Address::normal_from_pkey(*id.pkey()),
                 fee_hash: fee_hash,
                 fee: fee,
+                self_payable: self_payable,
                 default_state: default_state,
                 code: code,
                 signature: None,
@@ -461,8 +477,9 @@ mod tests {
         }
 
         fn verify_multi_signature(
-            code: String,
-            default_state: String,
+            code: Vec<u8>,
+            default_state: Vec<u8>,
+            self_payable: bool,
             fee: Balance,
             fee_hash: Hash
         ) -> bool {
@@ -480,6 +497,7 @@ mod tests {
             let mut tx = OpenContract {
                 owner: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
                 fee_hash: fee_hash,
+                self_payable: self_payable,
                 fee: fee,
                 default_state: default_state,
                 code: code,
@@ -496,10 +514,11 @@ mod tests {
         }
 
         fn verify_multi_signature_shares(
-            code: String,
-            default_state: String,
+            code: Vec<u8>,
+            default_state: Vec<u8>,
             fee: Balance,
-            fee_hash: Hash
+            fee_hash: Hash,
+            self_payable: bool
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
                 .into_iter()
@@ -529,6 +548,7 @@ mod tests {
                 fee: fee,
                 default_state: default_state,
                 code: code,
+                self_payable: self_payable,
                 signature: None,
                 hash: None
             };
