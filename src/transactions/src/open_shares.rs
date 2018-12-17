@@ -74,6 +74,10 @@ impl OpenShares {
         let creator_nonce_key = creator_nonce_key.as_bytes();
         let address_nonce_key = address_nonce_key.as_bytes();
 
+        if let Ok(Some(_)) = trie.get(&address_nonce_key) {
+            panic!("The created address already exists in the ledger!");
+        }
+
         // Retrieve serialized nonce
         let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
 

@@ -39,7 +39,6 @@ use tokio::net::TcpListener;
 use tokio::prelude::*;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use std::path::Path;
-use std::env;
 
 const PORT: u16 = 44034;
 const NUM_OF_COLUMNS: u32 = 5;

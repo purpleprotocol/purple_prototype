@@ -20,6 +20,8 @@ use account::{NormalAddress, MultiSigAddress, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Signature, Hash, SecretKey as Sk};
 use std::io::Cursor;
+use patricia_trie::{TrieMut, TrieDBMut};
+use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenMultiSig {
@@ -41,6 +43,158 @@ pub struct OpenMultiSig {
 
 impl OpenMultiSig {
     pub const TX_TYPE: u8 = 5;
+
+    /// Applies the open shares transaction to the provided database.
+    ///
+    /// This function will panic if the `creator` account does not exist
+    /// or if the account address already exists in the ledger.
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        let bin_creator = &self.creator.to_bytes();
+        let bin_address = &self.address.clone().unwrap().to_bytes();
+        let bin_currency_hash = &self.currency_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+        let required_keys = &self.required_keys;
+        let keys: Vec<Vec<u8>> = self.keys
+            .iter()
+            .map(|k| k.to_bytes())
+            .collect();
+
+        let bin_keys: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&keys);
+
+        // Convert addresses to strings
+        let creator = hex::encode(bin_creator);
+        let address = hex::encode(bin_address);
+
+        // Convert hashes to strings
+        let cur_hash = hex::encode(bin_currency_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        // Calculate nonce keys
+        // 
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let creator_nonce_key = format!("{}.n", creator);
+        let address_nonce_key = format!("{}.n", address);
+        let creator_nonce_key = creator_nonce_key.as_bytes();
+        let address_nonce_key = address_nonce_key.as_bytes();
+
+        if let Ok(Some(_)) = trie.get(&address_nonce_key) {
+            panic!("The created address already exists in the ledger!");
+        }
+
+        // Calculate `required keys` key
+        //
+        // The key of the `required keys` entry has the following format:
+        // `<account-address>.r`
+        let required_ks_key = format!("{}.r", address);
+        let required_ks_key = required_ks_key.as_bytes(); 
+
+        // Calculate `keys` key
+        //
+        // The key of the `keys` entry has the following format:
+        // `<account-address>.k`
+        let ks_key = format!("{}.k", address);
+        let ks_key = ks_key.as_bytes();
+
+        // Retrieve serialized nonce
+        let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
+
+        let mut nonce_rdr = Cursor::new(bin_creator_nonce);
+
+        // Read the nonce of the creator
+        let mut nonce = nonce_rdr.read_u64::<BigEndian>().unwrap();
+
+        // Increment creator nonce
+        nonce += 1;
+
+        let mut nonce_buf: Vec<u8> = Vec::with_capacity(8);
+
+        // Write new nonce to buffer
+        nonce_buf.write_u64::<BigEndian>(nonce).unwrap();
+
+        // Calculate currency keys
+        //
+        // The key of a currency entry has the following format:
+        // `<account-address>.<currency-hash>`
+        let creator_cur_key = format!("{}.{}", creator, cur_hash);
+        let creator_fee_key = format!("{}.{}", creator, fee_hash);
+        let address_cur_key = format!("{}.{}", address, cur_hash);
+
+        if fee_hash == cur_hash {
+            // The transaction's fee is paid in the same currency
+            // that is being transferred, so we only retrieve one
+            // balance.
+            let mut creator_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&creator_cur_key.as_bytes()).unwrap(),
+                        "The creator does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            // Subtract fee from creator balance
+            creator_balance -= self.fee.clone();
+
+            // Subtract amount transferred from creator balance
+            creator_balance -= self.amount.clone();
+
+            let receiver_balance = self.amount.clone();
+
+            // Update trie
+            trie.insert(ks_key, &bin_keys).unwrap();
+            trie.insert(required_ks_key, &vec![*required_keys]).unwrap();
+            trie.insert(creator_cur_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
+            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+            trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+        } else {
+            // The transaction's fee is paid in a different currency
+            // than the one being transferred so we retrieve both balances.
+            let mut creator_cur_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&creator_cur_key.as_bytes()).unwrap(),
+                        "The creator does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            let mut creator_fee_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                        "The creator does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            // Subtract fee from creator
+            creator_fee_balance -= self.fee.clone();
+
+            // Subtract amount transferred from creator
+            creator_cur_balance -= self.amount.clone();
+
+            let receiver_balance = self.amount.clone();
+
+            // Update trie
+            trie.insert(ks_key, &bin_keys).unwrap();
+            trie.insert(required_ks_key, &vec![*required_keys]).unwrap();
+            trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes()).unwrap();
+            trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes()).unwrap();
+            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+            trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+        }
+    }
+
+    pub fn compute_address(&mut self) {
+        let addr = MultiSigAddress::compute(&self.keys, self.creator.clone(), self.nonce);
+        self.address = Some(addr);
+    }
 
     /// Signs the transaction with the given secret key.
     ///
@@ -444,8 +598,100 @@ impl Arbitrary for OpenMultiSig {
 
 #[cfg(test)]
 mod tests {
+    extern crate test_helpers;
+    
     use super::*;
+    use account::Address;
     use crypto::Identity;
+
+    #[test]
+    fn apply_it_correctly_creates_a_shares_account() {
+        let id = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, Address::Normal(creator_addr.clone()), cur_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"30.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+        let keys: Vec<NormalAddress> = (0..10)
+            .into_iter()
+            .map(|_| {
+                let id = Identity::new();
+                NormalAddress::from_pkey(*id.pkey())
+            })
+            .collect();
+
+        let required_keys = 6;
+
+        let mut tx = OpenMultiSig {
+            creator: creator_addr.clone(),
+            fee: fee.clone(),
+            keys: keys.clone(),
+            required_keys: required_keys.clone(),
+            fee_hash: cur_hash,
+            amount: amount.clone(),
+            currency_hash: cur_hash,
+            nonce: 3429,
+            address: None,
+            signature: None,
+            hash: None
+        };
+
+        tx.compute_address();
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        // Apply transaction
+        tx.apply(&mut trie);
+        
+        // Commit changes
+        trie.commit();
+        
+        let creator_nonce_key = format!("{}.n", hex::encode(&creator_addr.to_bytes()));
+        let creator_nonce_key = creator_nonce_key.as_bytes();
+        let receiver_nonce_key = format!("{}.n", hex::encode(tx.address.clone().unwrap().to_bytes()));
+        let receiver_nonce_key = receiver_nonce_key.as_bytes();
+
+        let required_ks_key = format!("{}.r", hex::encode(tx.address.clone().unwrap().to_bytes()));
+        let required_ks_key = required_ks_key.as_bytes();
+        let ks_key = format!("{}.k", hex::encode(tx.address.unwrap().to_bytes()));
+        let ks_key = ks_key.as_bytes();
+
+        let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
+        let bin_receiver_nonce = &trie.get(&receiver_nonce_key).unwrap().unwrap();
+
+        let bin_cur_hash = cur_hash.to_vec();
+        let hex_cur_hash = hex::encode(&bin_cur_hash);
+
+        let creator_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_cur_hash);
+        let creator_balance_key = creator_balance_key.as_bytes();
+
+        let balance = Balance::from_bytes(&trie.get(&creator_balance_key).unwrap().unwrap()).unwrap();
+        let decoded_keys: Vec<Vec<u8>> = rlp::decode_list(&trie.get(&ks_key).unwrap().unwrap());
+        let written_keys: Vec<NormalAddress> = decoded_keys
+            .iter()
+            .map(|k| NormalAddress::from_bytes(k).unwrap())
+            .collect();
+        
+        let written_required_keys = trie.get(&required_ks_key).unwrap().unwrap().pop().unwrap();
+
+        // Check nonces
+        assert_eq!(bin_creator_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
+        assert_eq!(bin_receiver_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 0]);
+
+        // Verify that the correct amount of funds have been subtracted from the sender
+        assert_eq!(balance, Balance::from_bytes(b"10000.0").unwrap() - amount.clone() - fee.clone());
+
+        // Verify shares and share map
+        assert_eq!(written_keys, keys);
+        assert_eq!(written_required_keys, required_keys);
+    }
 
     quickcheck! {
         fn serialize_deserialize(tx: OpenMultiSig) -> bool {
