@@ -38,6 +38,7 @@ pub use addresses::*;
 pub use addresses::normal::*;
 pub use addresses::multi_sig::*;
 pub use addresses::shareholders::*;
+pub use addresses::contract::*;
 pub use balance::*;
 pub use signature::*;
 pub use multi_sig::*;

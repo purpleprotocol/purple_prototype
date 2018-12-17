@@ -28,7 +28,7 @@ use rlp::{Encodable, Decodable, Rlp, RlpStream, DecoderError};
 
 pub const HASH_BYTES: usize = 32;
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Hash(pub [u8; HASH_BYTES]);
 
 impl Hash {

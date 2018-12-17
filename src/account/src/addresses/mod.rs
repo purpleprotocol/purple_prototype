@@ -19,8 +19,10 @@
 pub mod normal;
 pub mod multi_sig;
 pub mod shareholders;
+pub mod contract;
 
 use crypto::PublicKey;
+use addresses::contract::*;
 use addresses::normal::*;
 use addresses::multi_sig::*;
 use addresses::shareholders::*;
@@ -29,7 +31,8 @@ use addresses::shareholders::*;
 pub enum Address {
     Normal(NormalAddress),
     MultiSig(MultiSigAddress),
-    Shareholders(ShareholdersAddress)
+    Shareholders(ShareholdersAddress),
+    Contract(ContractAddress),
 }
 
 impl Address {
@@ -37,7 +40,8 @@ impl Address {
         match *self {
             Address::Normal(ref addr)        => addr.to_bytes(),
             Address::MultiSig(ref addr)      => addr.to_bytes(),
-            Address::Shareholders(ref addr)  => addr.to_bytes()
+            Address::Shareholders(ref addr)  => addr.to_bytes(),
+            Address::Contract(ref addr)      => addr.to_bytes()
         }
     }
 
@@ -85,6 +89,12 @@ impl Address {
                     Err(err)   => Err(err)
                 }
             },
+            4 => {
+                match ContractAddress::from_bytes(bin) {
+                    Ok(result) => Ok(Address::Contract(result)),
+                    Err(err)   => Err(err)
+                }
+            },
             _ => {
                 Err("Bad address type!")
             }
@@ -98,12 +108,13 @@ use rand::Rng;
 impl Arbitrary for Address {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Address {
         let mut rng = rand::thread_rng();
-        let random = rng.gen_range(1, 3);
+        let random = rng.gen_range(1, 4);
 
         match random {
             1  => Address::Normal(Arbitrary::arbitrary(g)),
             2  => Address::MultiSig(Arbitrary::arbitrary(g)),
             3  => Address::Shareholders(Arbitrary::arbitrary(g)),
+            4  => Address::Contract(Arbitrary::arbitrary(g)),
             _  => panic!()
         }
     }

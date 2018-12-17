@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature, ShareMap, MultiSig};
+use account::{Address, ContractAddress, Balance, Signature, ShareMap, MultiSig};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, SecretKey as Sk, PublicKey as Pk};
 use std::io::Cursor;
@@ -25,7 +25,7 @@ use std::str;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Call {
     from: Address,
-    to: Address,
+    to: ContractAddress,
     inputs: String, // TODO: Change to contract inputs type
     amount: Balance,
     fee: Balance,
@@ -314,7 +314,7 @@ impl Call {
         let to = if buf.len() > 33 as usize {
             let to_vec: Vec<u8> = buf.drain(..33).collect();
             
-            match Address::from_bytes(&to_vec) {
+            match ContractAddress::from_bytes(&to_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err)
             }
@@ -532,7 +532,7 @@ mod tests {
         }
 
         fn verify_signature(
-            to: Address,
+            to: ContractAddress,
             amount: Balance, 
             fee: Balance, 
             inputs: String,
@@ -562,7 +562,7 @@ mod tests {
         }
 
         fn verify_multi_signature(
-            to: Address,
+            to: ContractAddress,
             amount: Balance, 
             fee: Balance, 
             inputs: String,
@@ -605,7 +605,7 @@ mod tests {
         }
 
         fn verify_multi_signature_shares(
-            to: Address,
+            to: ContractAddress,
             amount: Balance, 
             fee: Balance, 
             inputs: String,
