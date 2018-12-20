@@ -27,30 +27,74 @@ extern crate env_logger;
 extern crate itc;
 extern crate jump;
 extern crate tokio;
+extern crate futures;
+extern crate hashdb;
 extern crate parking_lot;
 extern crate persistence;
 extern crate kvdb;
 extern crate kvdb_rocksdb;
 extern crate clap;
+extern crate network;
+extern crate elastic_array;
 
 use clap::{Arg, App};
 use tokio::io::copy;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use kvdb_rocksdb::{Database, DatabaseConfig};
+use parking_lot::Mutex;
 use std::path::Path;
+use std::sync::Arc;
+use network::{NodeId, Network};
+use hashdb::HashDB;
+use persistence::PersistentDb;
+use crypto::Identity;
+use elastic_array::ElasticArray128;
 
 const PORT: u16 = 44034;
-const NUM_OF_COLUMNS: u32 = 5;
-const DEFAULT_NETWORK_NAME: &'static str = "purple-mainnet";
+const NUM_OF_COLUMNS: u32 = 3;
+const DEFAULT_NETWORK_NAME: &'static str = "purple";
 
 fn main() {
     env_logger::init();
 
     let argv = parse_cli_args();
-    let _db = open_database(&argv.network_name); 
+    let db = Arc::new(open_database(&argv.network_name));
 
-    start_listener();
+    let mut node_storage = PersistentDb::new(db.clone(), Some(0));
+    let ledger = PersistentDb::new(db, Some(1));
+
+    let node_id = fetch_node_id(&mut node_storage);
+    let network = Arc::new(Mutex::new(Network::new(node_id, argv.network_name.to_owned())));
+
+    start_listener(network);
+}
+
+// Fetch stored node id or create new identity and store it
+fn fetch_node_id(db: &mut PersistentDb) -> NodeId {
+    let node_id_key = crypto::hash_slice(b"node_id");
+    
+    match db.get(&node_id_key) {
+        Some(id) => {
+            let mut buf = [0; 32];
+            buf.copy_from_slice(&id);
+
+            NodeId::new(buf)
+        },
+        None => {
+            // Create new identity and write keys to database
+            let identity = Identity::new();
+            let node_skey_key = crypto::hash_slice(b"node_skey");
+
+            let bin_pkey = identity.pkey().0;
+            let bin_skey = identity.skey().0;
+
+            db.emplace(node_id_key, ElasticArray128::<u8>::from_slice(&bin_pkey));
+            db.emplace(node_skey_key, ElasticArray128::<u8>::from_slice(&bin_skey));
+
+            NodeId::new(bin_pkey)
+        }
+    }
 }
 
 fn open_database(network_name: &str) -> Database {
@@ -63,7 +107,7 @@ fn open_database(network_name: &str) -> Database {
     Database::open(&config, path.to_str().unwrap()).unwrap()
 }
 
-fn start_listener() {
+fn start_listener(network: Arc<Mutex<Network>>) {
     info!("Starting TCP listener on port {}", PORT);
 
     // Bind the server's socket.
@@ -75,6 +119,8 @@ fn start_listener() {
         .incoming()
         .map_err(|e| warn!("accept failed = {:?}", e))
         .for_each(|sock| {
+            let addr = sock.peer_addr().unwrap();
+
             // Split up the reading and writing parts of the
             // socket.
             let (reader, writer) = sock.split();
@@ -99,6 +145,7 @@ fn start_listener() {
 struct Argv {
     network_name: String,
     mempool_size: u16,
+    max_peers: usize,
 }
 
 fn parse_cli_args() -> Argv {
@@ -115,6 +162,13 @@ fn parse_cli_args() -> Argv {
                 .long("mempool-size")
                 .value_name("MEMPOOL_SIZE")
                 .help("The size in megabytes of the mempool")
+                .takes_value(true)
+        )
+        .arg(
+            Arg::with_name("max_peers")
+                .long("max-peers")
+                .value_name("MAX_PEERS")
+                .help("The maximum number of allowed peer connections")
                 .takes_value(true)
         )
         .get_matches();
@@ -136,9 +190,19 @@ fn parse_cli_args() -> Argv {
     } else {
         150
     };
+
+    let max_peers: usize = if let Some(arg) = matches.value_of("max_peers") {
+        unwrap!(
+            arg.parse(),
+            "Bad value for <MAX_PEERS>"
+        )
+    } else {
+        8
+    };
     
     Argv {
         network_name: network_name,
+        max_peers: max_peers,
         mempool_size: mempool_size
     }
 }

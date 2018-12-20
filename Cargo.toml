@@ -15,9 +15,12 @@ itc = "0.1.2"
 log = "0.4.0"
 env_logger = "0.6.0"
 parking_lot = "0.6"
+futures = "0.1.25"
 dirs = "1.0.4"
+elastic-array = "0.10.0"
 jsonrpc-core = "9.0.0"
 jsonrpc-macros = "9.0.0"
+hashdb = { git = "https://github.com/paritytech/parity-common" }
 kvdb = { git = "https://github.com/paritytech/parity-common" }
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
 account = { path = "src/account" }
@@ -26,6 +29,7 @@ crypto = { path = "src/crypto" }
 jump = { path = "src/jump" }
 events = { path = "src/events" }
 persistence = { path = "src/persistence" }
+network = { path = "src/network" }
 transactions = { path = "src/transactions" }
 
 [lib]

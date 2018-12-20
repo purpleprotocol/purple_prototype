@@ -24,6 +24,12 @@ use rand::Rng;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct NodeId(pub PublicKey);
 
+impl NodeId {
+    pub fn new(bin: [u8; 32]) -> NodeId {
+        NodeId(PublicKey(bin))
+    }
+}
+
 impl Arbitrary for NodeId {
     fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> NodeId {
         let mut rng = rand::thread_rng();

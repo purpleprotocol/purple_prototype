@@ -24,3 +24,13 @@ pub struct Network {
     node_id: NodeId,
     network_name: String
 }
+
+impl Network {
+    pub fn new(node_id: NodeId, network_name: String) -> Network {
+        Network {
+            peers: Vec::new(),
+            node_id: node_id,
+            network_name: network_name
+        }
+    }
+}
