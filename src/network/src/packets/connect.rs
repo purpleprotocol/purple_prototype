@@ -38,8 +38,32 @@ impl Connect {
         }
     }
 
+    /// Signs the packet with the given secret key.
     pub fn sign(&mut self, skey: Sk) {
-        unimplemented!();
+        // Assemble data
+        let message = assemble_sign_message(&self);
+
+        // Sign data
+        let signature = crypto::sign(&message, skey);
+
+        // Attach signature to struct
+        self.signature = Some(signature);
+    }
+    
+    /// Verifies the signature of the packet.
+    ///
+    /// Returns `false` if the signature field is missing.
+    pub fn verify_sig(&mut self) -> bool {
+        let message = assemble_sign_message(&self);
+
+        match self.signature {
+            Some(ref sig) => { 
+                crypto::verify(&message, sig.clone(), self.node_id)
+            },
+            None => {
+                false
+            }
+        }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -123,6 +147,18 @@ impl Connect {
     }
 }
 
+fn assemble_sign_message(obj: &Connect) -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::with_capacity(64);
+
+    let kx_key = obj.kx_key.0;
+    let node_id = obj.node_id.0;
+
+    buf.append(&mut kx_key.to_vec());
+    buf.append(&mut node_id.to_vec());
+
+    buf
+}
+
 #[cfg(test)]
 use quickcheck::Arbitrary;
 
@@ -151,5 +187,17 @@ mod tests {
         fn serialize_deserialize(tx: Connect) -> bool {
             tx == Connect::from_bytes(&Connect::to_bytes(&tx)).unwrap()
         }
+
+        fn verify_signature(id1: Identity, id2: Identity) -> bool {
+            let mut packet = Connect {
+                node_id: *id1.pkey(),
+                kx_key: *id2.pkey(),
+                signature: None
+            };
+
+            packet.sign(id1.skey().clone());
+            packet.verify_sig()
+        }
+
     }
 }
