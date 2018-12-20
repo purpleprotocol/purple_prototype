@@ -38,7 +38,7 @@ extern crate network;
 extern crate elastic_array;
 
 use clap::{Arg, App};
-use tokio::io::copy;
+use tokio::io;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use kvdb_rocksdb::{Database, DatabaseConfig};
@@ -50,6 +50,8 @@ use hashdb::HashDB;
 use persistence::PersistentDb;
 use crypto::Identity;
 use elastic_array::ElasticArray128;
+use std::io::BufReader;
+use std::iter;
 
 const PORT: u16 = 44034;
 const NUM_OF_COLUMNS: u32 = 3;
@@ -61,8 +63,8 @@ fn main() {
     let argv = parse_cli_args();
     let db = Arc::new(open_database(&argv.network_name));
 
-    let mut node_storage = PersistentDb::new(db.clone(), Some(0));
-    let ledger = PersistentDb::new(db, Some(1));
+    let mut node_storage = PersistentDb::new(db.clone(), Some(1));
+    let ledger = PersistentDb::new(db, Some(2));
 
     let node_id = fetch_node_id(&mut node_storage);
     let network = Arc::new(Mutex::new(Network::new(node_id, argv.network_name.to_owned())));
@@ -118,24 +120,50 @@ fn start_listener(network: Arc<Mutex<Network>>) {
     let server = listener
         .incoming()
         .map_err(|e| warn!("accept failed = {:?}", e))
-        .for_each(|sock| {
+        .for_each(move |sock| {
             let addr = sock.peer_addr().unwrap();
+
+            info!("Received connection request from {}", addr);
 
             // Split up the reading and writing parts of the
             // socket.
-            let (reader, writer) = sock.split();
+            let (reader, _writer) = sock.split();
+            let reader = BufReader::new(reader);
 
-            // A future that echos the data and returns how
-            // many bytes were copied...
-            let bytes_copied = copy(reader, writer);
+            // Model the read portion of this socket by mapping an infinite
+            // iterator to each line off the socket. This "loop" is then
+            // terminated with an error once we hit EOF on the socket.
+            let iter = stream::iter_ok::<_, io::Error>(iter::repeat(()));
 
-            // ... after which we'll print what happened.
-            let handle_conn = bytes_copied
-                .map(|amt| debug!("wrote {:?} bytes", amt))
-                .map_err(|err| warn!("IO error {:?}", err));
+            let socket_reader = iter.fold(reader, move |reader, _| {
+                // Read a line off the socket, failing if we're at EOF
+                let line = io::read_until(reader, b'\n', Vec::new());
+                let line = line.and_then(|(reader, vec)| {
+                    if vec.len() == 0 {
+                        Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
+                    } else {
+                        Ok((reader, vec))
+                    }
+                });
 
-            // Spawn the future as a concurrent task.
-            tokio::spawn(handle_conn)
+                line.map(move |(reader, message)| {
+                    info!("{}: {:?}", addr, message);
+                    reader
+                })
+            });
+
+            // Now that we've got futures representing each half of the socket, we
+            // use the `select` combinator to wait for either half to be done to
+            // tear down the other. Then we spawn off the result.
+            let network = network.clone();
+            let socket_reader = socket_reader.map_err(|_| ());
+
+            // Spawn a task to process the connection
+            tokio::spawn(socket_reader.then(move |_| {
+                network.lock().remove_peer_with_addr(&addr);
+                info!("Connection {} closed.", addr);
+                Ok(())
+            }))
         });
     
     // Start the Tokio runtime

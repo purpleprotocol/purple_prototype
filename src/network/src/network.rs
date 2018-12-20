@@ -18,6 +18,7 @@
 
 use Peer;
 use NodeId;
+use std::net::SocketAddr;
 
 pub struct Network {
     peers: Vec<Peer>,
@@ -32,5 +33,9 @@ impl Network {
             node_id: node_id,
             network_name: network_name
         }
+    }
+
+    pub fn remove_peer_with_addr(&self, addr: &SocketAddr) {
+        unimplemented!();
     }
 }
