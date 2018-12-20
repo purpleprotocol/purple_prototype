@@ -7,5 +7,6 @@ authors = []
 serde = "1.0.59"
 serde_derive = "1.0.59"
 rand = "0.6.0"
+byteorder = "1.2.7"
 crypto = { path = "../crypto" }
 quickcheck = "0.7.2"

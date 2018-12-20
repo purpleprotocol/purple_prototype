@@ -16,18 +16,4 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate quickcheck;
-
-extern crate byteorder;
-extern crate crypto;
-extern crate rand;
-
-mod node_id;
-mod network;
-mod peer;
-mod packets;
-
-pub use node_id::*;
-pub use network::*;
-pub use peer::*;
+mod connect;
