@@ -26,7 +26,7 @@ extern crate rand;
 mod node_id;
 mod network;
 mod peer;
-mod packets;
+pub mod packets;
 
 pub use node_id::*;
 pub use network::*;

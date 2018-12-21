@@ -45,13 +45,18 @@ use kvdb_rocksdb::{Database, DatabaseConfig};
 use parking_lot::Mutex;
 use std::path::Path;
 use std::sync::Arc;
-use network::{NodeId, Network};
+use network::{NodeId, Network, Peer};
+use network::packets::Connect;
 use hashdb::HashDB;
 use persistence::PersistentDb;
 use crypto::Identity;
 use elastic_array::ElasticArray128;
 use std::io::BufReader;
 use std::iter;
+use std::net::Shutdown;
+use std::sync::atomic::{AtomicBool, Ordering};
+use futures::future::{self, FutureResult};
+use tokio::prelude::future::ok;
 
 const PORT: u16 = 44034;
 const NUM_OF_COLUMNS: u32 = 3;
@@ -121,9 +126,16 @@ fn start_listener(network: Arc<Mutex<Network>>) {
         .incoming()
         .map_err(|e| warn!("accept failed = {:?}", e))
         .for_each(move |sock| {
+            let refuse_connection = Arc::new(AtomicBool::new(false));
             let addr = sock.peer_addr().unwrap();
 
             info!("Received connection request from {}", addr);
+
+            let network = network.clone();
+
+            // Create new peer and add it to the peer table
+            let peer = Peer::new(None, addr);
+            network.lock().add_peer(peer);
 
             // Split up the reading and writing parts of the
             // socket.
@@ -134,23 +146,55 @@ fn start_listener(network: Arc<Mutex<Network>>) {
             // iterator to each line off the socket. This "loop" is then
             // terminated with an error once we hit EOF on the socket.
             let iter = stream::iter_ok::<_, io::Error>(iter::repeat(()));
+            let network_clone = network.clone();
+            let refuse_connection_clone = refuse_connection.clone();
 
-            let socket_reader = iter.fold(reader, move |reader, _| {
-                // Read a line off the socket, failing if we're at EOF
-                let line = io::read_until(reader, b'\n', Vec::new());
-                let line = line.and_then(|(reader, vec)| {
-                    if vec.len() == 0 {
-                        Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
-                    } else {
-                        Ok((reader, vec))
-                    }
+            let socket_reader = iter
+                .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
+                .fold(reader, move |reader, _| {
+                    let network = network_clone.clone();
+                    let refuse_connection_clone = refuse_connection.clone();
+
+                    // Read a line off the socket, failing if we're at EOF
+                    // or if any check has failed.
+                    let line = io::read_until(reader, b'\n', Vec::new());
+                    let line = line.and_then(move |(reader, vec)| {
+                        if vec.len() == 0 {
+                            Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
+                        } else if refuse_connection_clone.load(Ordering::Relaxed) {
+                            Err(io::Error::new(io::ErrorKind::ConnectionRefused, "connection refused"))
+                        } else {
+                            Ok((reader, vec))
+                        }
+                    });
+
+                    let refuse_connection = refuse_connection.clone();
+                    
+                    line
+                        .map(move |(reader, message)| {
+                            if network.lock().is_none_id(&addr) {
+                                // We should receive a connect packet
+                                match Connect::from_bytes(&message) {
+                                    Ok(connect_packet) => {
+                                        debug!("Received connect packet from {}: {:?}", addr, connect_packet);
+                                        reader
+                                    },
+                                    _ => {
+                                        // Invalid packet, remove peer
+                                        debug!("Invalid connect packet from {}", addr);
+
+                                        // Flag socket for connection refusal
+                                        refuse_connection.store(true, Ordering::Relaxed);
+
+                                        reader
+                                    }
+                                }
+                            } else {
+                                info!("{}: {}", addr, hex::encode(message));
+                                reader   
+                            }
+                        })
                 });
-
-                line.map(move |(reader, message)| {
-                    info!("{}: {:?}", addr, message);
-                    reader
-                })
-            });
 
             // Now that we've got futures representing each half of the socket, we
             // use the `select` combinator to wait for either half to be done to

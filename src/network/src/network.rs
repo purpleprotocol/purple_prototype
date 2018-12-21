@@ -20,6 +20,7 @@ use Peer;
 use NodeId;
 use std::net::SocketAddr;
 
+#[derive(Debug, Clone)]
 pub struct Network {
     peers: Vec<Peer>,
     node_id: NodeId,
@@ -35,7 +36,27 @@ impl Network {
         }
     }
 
-    pub fn remove_peer_with_addr(&self, addr: &SocketAddr) {
-        unimplemented!();
+    pub fn add_peer(&mut self, peer: Peer) {
+        self.peers.push(peer);
+    }
+
+    /// Removes the peer entry with the given address.
+    ///
+    /// This function will panic if there is no entry for the given address.
+    pub fn remove_peer_with_addr(&mut self, addr: &SocketAddr) {
+        match self.peers.iter().position(|x| x.ip == *addr) {
+            Some(index) => self.peers.remove(index),
+            None        => panic!("There is no listed peer with the given address!")
+        };
+    }
+
+    /// Returns true if the peer with the given address has a `None` id field.
+    ///
+    /// This function will panic if there is no entry for the given address.
+    pub fn is_none_id(&self, addr: &SocketAddr) -> bool {
+        match self.peers.iter().position(|x| x.ip == *addr) {
+            Some(index) => self.peers[index].id.is_none(),
+            None        => panic!("There is no listed peer with the given address!")
+        }
     }
 }

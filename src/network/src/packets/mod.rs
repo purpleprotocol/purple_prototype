@@ -16,4 +16,5 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-mod connect;
+pub mod connect;
+pub use self::connect::*;

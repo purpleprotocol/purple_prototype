@@ -19,7 +19,21 @@
 use NodeId;
 use std::net::SocketAddr;
 
+#[derive(Debug, Clone)]
 pub struct Peer {
-    id: NodeId,
-    ip: SocketAddr
+    pub id: Option<NodeId>,
+    pub ip: SocketAddr
+}
+
+impl Peer {
+    pub fn new(id: Option<NodeId>, ip: SocketAddr) -> Peer {
+        Peer {
+            id: id,
+            ip: ip
+        }
+    }
+
+    pub fn set_id(&mut self, id: NodeId) {
+        self.id = Some(id);
+    } 
 }
