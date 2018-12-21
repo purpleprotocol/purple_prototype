@@ -40,6 +40,11 @@ impl Network {
         self.peers.push(peer);
     }
 
+    /// Returns the number of listed peers.
+    pub fn peer_count(&self) -> usize {
+        self.peers.len()
+    }
+
     /// Removes the peer entry with the given address.
     ///
     /// This function will panic if there is no entry for the given address.

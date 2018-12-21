@@ -74,7 +74,7 @@ fn main() {
     let node_id = fetch_node_id(&mut node_storage);
     let network = Arc::new(Mutex::new(Network::new(node_id, argv.network_name.to_owned())));
 
-    start_listener(network);
+    start_listener(network, argv.max_peers);
 }
 
 // Fetch stored node id or create new identity and store it
@@ -114,17 +114,20 @@ fn open_database(network_name: &str) -> Database {
     Database::open(&config, path.to_str().unwrap()).unwrap()
 }
 
-fn start_listener(network: Arc<Mutex<Network>>) {
+fn start_listener(network: Arc<Mutex<Network>>, max_peers: usize) {
     info!("Starting TCP listener on port {}", PORT);
 
     // Bind the server's socket.
     let addr = format!("127.0.0.1:{}", PORT).parse().unwrap();
     let listener = TcpListener::bind(&addr).expect("unable to bind TCP listener");
+    let accept_connections = Arc::new(AtomicBool::new(true));
+    let accept_connections_clone = accept_connections.clone();
 
     // Pull out a stream of sockets for incoming connections
     let server = listener
         .incoming()
         .map_err(|e| warn!("accept failed = {:?}", e))
+        .filter(move |_| accept_connections_clone.load(Ordering::Relaxed))
         .for_each(move |sock| {
             let refuse_connection = Arc::new(AtomicBool::new(false));
             let addr = sock.peer_addr().unwrap();
@@ -137,6 +140,13 @@ fn start_listener(network: Arc<Mutex<Network>>) {
             let peer = Peer::new(None, addr);
             network.lock().add_peer(peer);
 
+            let peer_count = network.lock().peer_count();
+
+            if peer_count >= max_peers {
+                // Stop accepting peers
+                accept_connections.store(false, Ordering::Relaxed);
+            }
+ 
             // Split up the reading and writing parts of the
             // socket.
             let (reader, _writer) = sock.split();
@@ -153,16 +163,12 @@ fn start_listener(network: Arc<Mutex<Network>>) {
                 .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
                 .fold(reader, move |reader, _| {
                     let network = network_clone.clone();
-                    let refuse_connection_clone = refuse_connection.clone();
 
-                    // Read a line off the socket, failing if we're at EOF
-                    // or if any check has failed.
+                    // Read a line off the socket, failing if we're at EOF.
                     let line = io::read_until(reader, b'\n', Vec::new());
                     let line = line.and_then(move |(reader, vec)| {
                         if vec.len() == 0 {
                             Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
-                        } else if refuse_connection_clone.load(Ordering::Relaxed) {
-                            Err(io::Error::new(io::ErrorKind::ConnectionRefused, "connection refused"))
                         } else {
                             Ok((reader, vec))
                         }
@@ -202,9 +208,17 @@ fn start_listener(network: Arc<Mutex<Network>>) {
             let network = network.clone();
             let socket_reader = socket_reader.map_err(|_| ());
 
+            let accept_connections = accept_connections.clone();
+
             // Spawn a task to process the connection
             tokio::spawn(socket_reader.then(move |_| {
                 network.lock().remove_peer_with_addr(&addr);
+
+                // Re-enable connections
+                if network.lock().peer_count() < max_peers {
+                    accept_connections.store(true, Ordering::Relaxed);
+                }
+
                 info!("Connection {} closed.", addr);
                 Ok(())
             }))
