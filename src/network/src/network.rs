@@ -45,13 +45,23 @@ impl Network {
         self.peers.len()
     }
 
+    /// Sets the node id of the peer with the given address.
+    ///
+    /// This function will panic if there is no entry for the given address.
+    pub fn set_node_id(&mut self, addr: &SocketAddr, node_id: NodeId) {
+        match self.peers.iter().position(|x| x.ip == *addr) {
+            Some(idx) => self.peers[idx].set_id(node_id),
+            None      => panic!("There is no listed peer with the given address!")
+        };
+    }
+
     /// Removes the peer entry with the given address.
     ///
     /// This function will panic if there is no entry for the given address.
     pub fn remove_peer_with_addr(&mut self, addr: &SocketAddr) {
         match self.peers.iter().position(|x| x.ip == *addr) {
-            Some(index) => self.peers.remove(index),
-            None        => panic!("There is no listed peer with the given address!")
+            Some(idx) => self.peers.remove(idx),
+            None      => panic!("There is no listed peer with the given address!")
         };
     }
 
@@ -60,8 +70,8 @@ impl Network {
     /// This function will panic if there is no entry for the given address.
     pub fn is_none_id(&self, addr: &SocketAddr) -> bool {
         match self.peers.iter().position(|x| x.ip == *addr) {
-            Some(index) => self.peers[index].id.is_none(),
-            None        => panic!("There is no listed peer with the given address!")
+            Some(idx) => self.peers[idx].id.is_none(),
+            None      => panic!("There is no listed peer with the given address!")
         }
     }
 }

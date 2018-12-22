@@ -1,0 +1,1 @@
+RUST_LOG=purple,network RUST_BACKTRACE=1 cargo run -- --max-peers=2

@@ -26,7 +26,6 @@ extern crate crypto;
 extern crate env_logger;
 extern crate itc;
 extern crate jump;
-extern crate tokio;
 extern crate futures;
 extern crate hashdb;
 extern crate parking_lot;
@@ -38,27 +37,16 @@ extern crate network;
 extern crate elastic_array;
 
 use clap::{Arg, App};
-use tokio::io;
-use tokio::net::TcpListener;
-use tokio::prelude::*;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use parking_lot::Mutex;
 use std::path::Path;
 use std::sync::Arc;
-use network::{NodeId, Network, Peer};
-use network::packets::Connect;
+use network::{NodeId, Network, Peer, start_listener};
 use hashdb::HashDB;
 use persistence::PersistentDb;
 use crypto::Identity;
 use elastic_array::ElasticArray128;
-use std::io::BufReader;
-use std::iter;
-use std::net::Shutdown;
-use std::sync::atomic::{AtomicBool, Ordering};
-use futures::future::{self, FutureResult};
-use tokio::prelude::future::ok;
 
-const PORT: u16 = 44034;
 const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
 
@@ -112,120 +100,6 @@ fn open_database(network_name: &str) -> Database {
         .join("db");
 
     Database::open(&config, path.to_str().unwrap()).unwrap()
-}
-
-fn start_listener(network: Arc<Mutex<Network>>, max_peers: usize) {
-    info!("Starting TCP listener on port {}", PORT);
-
-    // Bind the server's socket.
-    let addr = format!("127.0.0.1:{}", PORT).parse().unwrap();
-    let listener = TcpListener::bind(&addr).expect("unable to bind TCP listener");
-    let accept_connections = Arc::new(AtomicBool::new(true));
-    let accept_connections_clone = accept_connections.clone();
-
-    // Pull out a stream of sockets for incoming connections
-    let server = listener
-        .incoming()
-        .map_err(|e| warn!("accept failed = {:?}", e))
-        .filter(move |_| accept_connections_clone.load(Ordering::Relaxed))
-        .for_each(move |sock| {
-            let refuse_connection = Arc::new(AtomicBool::new(false));
-            let addr = sock.peer_addr().unwrap();
-
-            info!("Received connection request from {}", addr);
-
-            let network = network.clone();
-
-            // Create new peer and add it to the peer table
-            let peer = Peer::new(None, addr);
-            network.lock().add_peer(peer);
-
-            let peer_count = network.lock().peer_count();
-
-            if peer_count >= max_peers {
-                // Stop accepting peers
-                accept_connections.store(false, Ordering::Relaxed);
-            }
- 
-            // Split up the reading and writing parts of the
-            // socket.
-            let (reader, _writer) = sock.split();
-            let reader = BufReader::new(reader);
-
-            // Model the read portion of this socket by mapping an infinite
-            // iterator to each line off the socket. This "loop" is then
-            // terminated with an error once we hit EOF on the socket.
-            let iter = stream::iter_ok::<_, io::Error>(iter::repeat(()));
-            let network_clone = network.clone();
-            let refuse_connection_clone = refuse_connection.clone();
-
-            let socket_reader = iter
-                .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
-                .fold(reader, move |reader, _| {
-                    let network = network_clone.clone();
-
-                    // Read a line off the socket, failing if we're at EOF.
-                    let line = io::read_until(reader, b'\n', Vec::new());
-                    let line = line.and_then(move |(reader, vec)| {
-                        if vec.len() == 0 {
-                            Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
-                        } else {
-                            Ok((reader, vec))
-                        }
-                    });
-
-                    let refuse_connection = refuse_connection.clone();
-                    
-                    line
-                        .map(move |(reader, message)| {
-                            if network.lock().is_none_id(&addr) {
-                                // We should receive a connect packet
-                                match Connect::from_bytes(&message) {
-                                    Ok(connect_packet) => {
-                                        debug!("Received connect packet from {}: {:?}", addr, connect_packet);
-                                        reader
-                                    },
-                                    _ => {
-                                        // Invalid packet, remove peer
-                                        debug!("Invalid connect packet from {}", addr);
-
-                                        // Flag socket for connection refusal
-                                        refuse_connection.store(true, Ordering::Relaxed);
-
-                                        reader
-                                    }
-                                }
-                            } else {
-                                info!("{}: {}", addr, hex::encode(message));
-                                reader   
-                            }
-                        })
-                });
-
-            // Now that we've got futures representing each half of the socket, we
-            // use the `select` combinator to wait for either half to be done to
-            // tear down the other. Then we spawn off the result.
-            let network = network.clone();
-            let socket_reader = socket_reader.map_err(|_| ());
-
-            let accept_connections = accept_connections.clone();
-
-            // Spawn a task to process the connection
-            tokio::spawn(socket_reader.then(move |_| {
-                network.lock().remove_peer_with_addr(&addr);
-
-                // Re-enable connections
-                if network.lock().peer_count() < max_peers {
-                    accept_connections.store(true, Ordering::Relaxed);
-                }
-
-                info!("Connection {} closed.", addr);
-                Ok(())
-            }))
-        });
-    
-    // Start the Tokio runtime
-    tokio::run(server);
 }
 
 struct Argv {

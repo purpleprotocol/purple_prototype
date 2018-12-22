@@ -1,13 +1,32 @@
-# Purple
+# purple-rs
 [![Build Status](https://travis-ci.org/purpleprotocol/purple-rs.svg?branch=master)](https://travis-ci.org/purpleprotocol/purple-rs)
 [![Discord](https://img.shields.io/discord/435827644915777536.svg)](https://discord.gg/UCYWSsd)
 [![_pdf whitepaper](https://img.shields.io/badge/_pdf-whitepaper-blue.svg)](https://purpleprotocol.org/whitepaper/)
 
-This is a full rust implementation of the Purple Protocol.
+A full Rust re-write of the Purple Protocol. This is intended to be the de facto implementantion protocol and the most performant one.
 
-Purple is a decentralized, programmable, multi-asset blockchain protocol that is capable of processing a large volume of transactions with ease. It has been built from the ground up and is using a completely new consensus algorithm.
+Purple is a decentralized, programmable, multi-asset blockchain protocol that is capable of processing a large volume of transactions with ease. 
 
-The main features of the protocol are its open and decentralized nature, it's capability of processing a large amount of transactions, its multi-asset capabilities and the ability to run decentralized applications and smart contracts.  
+This is done by using a novel consensus algorithm which leverages the properties of semi-synchronous systems in order to balance scalability with security.
+
+
 
 ## Building
-Building the project requires the latest rust nightly toolchain.
+Building the project requires the latest rust nightly toolchain, llvm and libsodium. After all dependencies are installed, run:
+
+```
+cargo build
+```
+
+## Running
+To run the node in development mode with all logging enabled:
+
+##### Set permission to run the script
+```
+chmod ug+x ./run_debug.sh
+```
+
+##### Run node
+```
+./run_debug.sh
+```
