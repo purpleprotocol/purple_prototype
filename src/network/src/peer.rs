@@ -18,22 +18,55 @@
 
 use NodeId;
 use std::net::SocketAddr;
+use crypto::{KxPublicKey as Pk, KxSecretKey as Sk, SessionKey, gen_kx_keypair};
 
 #[derive(Debug, Clone)]
 pub struct Peer {
+    /// The id of the peer 
+    /// 
+    /// An option is used in order to store the peer's
+    /// session before a connect packet containing the
+    /// node's id has been received.
     pub id: Option<NodeId>,
-    pub ip: SocketAddr
+
+    /// The ip address of the peer
+    pub ip: SocketAddr,
+
+    /// Session generated public key
+    pk: Pk,
+
+    /// Session generated secret key
+    sk: Sk,
+
+    /// Our encryption key
+    rx: Option<SessionKey>,
+
+    /// The peer's encryption key
+    tx: Option<SessionKey>
 }
 
 impl Peer {
     pub fn new(id: Option<NodeId>, ip: SocketAddr) -> Peer {
+        let (pk, sk) = gen_kx_keypair();
+
         Peer {
             id: id,
-            ip: ip
+            ip: ip,
+            pk: pk,
+            sk: sk,
+            rx: None,
+            tx: None
         }
     }
 
+    /// Sets the id of the peer to the given value
     pub fn set_id(&mut self, id: NodeId) {
         self.id = Some(id);
     } 
+
+    /// Sets the session keys associated with the peer
+    pub fn set_session_keys(&mut self, rx: SessionKey, tx: SessionKey) {
+        self.rx = Some(rx);
+        self.tx = Some(tx);
+    }
 }
