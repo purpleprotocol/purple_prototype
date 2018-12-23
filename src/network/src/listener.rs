@@ -19,6 +19,7 @@
 use tokio::io;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
+use tokio_io_timeout::TimeoutStream;
 use futures::future::{self, FutureResult};
 use tokio::prelude::future::ok;
 use network::Network;
@@ -29,9 +30,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::io::BufReader;
 use std::iter;
 use parking_lot::Mutex;
+use std::time::Duration;
 
 /// Purple network port
 pub const PORT: u16 = 44034;
+const PEER_TIMEOUT: u64 = 3000;
 
 /// Initializes the listener for the given network 
 pub fn start_listener(network: Arc<Mutex<Network>>, max_peers: usize) {
@@ -49,8 +52,14 @@ pub fn start_listener(network: Arc<Mutex<Network>>, max_peers: usize) {
         .map_err(|e| warn!("accept failed = {:?}", e))
         .filter(move |_| accept_connections_clone.load(Ordering::Relaxed))
         .for_each(move |sock| {
+            let mut sock = TimeoutStream::new(sock);
+            
+            // Set timeout 
+            sock.set_read_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
+            sock.set_write_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
+
             let refuse_connection = Arc::new(AtomicBool::new(false));
-            let addr = sock.peer_addr().unwrap();
+            let addr = sock.get_ref().peer_addr().unwrap();
 
             info!("Received connection request from {}", addr);
 
@@ -98,8 +107,9 @@ pub fn start_listener(network: Arc<Mutex<Network>>, max_peers: usize) {
                     
                     line
                         .map(move |(reader, message)| {
+                            // We should receive a connect packet 
+                            // if the peer's id is non-existent.
                             if network.lock().is_none_id(&addr) {
-                                // We should receive a connect packet
                                 match Connect::from_bytes(&message) {
                                     Ok(connect_packet) => {
                                         debug!("Received connect packet from {}: {:?}", addr, connect_packet);
@@ -139,7 +149,7 @@ pub fn start_listener(network: Arc<Mutex<Network>>, max_peers: usize) {
                     accept_connections.store(true, Ordering::Relaxed);
                 }
 
-                info!("Connection {} closed.", addr);
+                info!("Connection to {} closed", addr);
                 Ok(())
             }))
         });
