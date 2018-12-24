@@ -46,6 +46,7 @@ use hashdb::HashDB;
 use persistence::PersistentDb;
 use crypto::Identity;
 use elastic_array::ElasticArray128;
+use std::sync::atomic::AtomicBool;
 
 const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
@@ -61,8 +62,9 @@ fn main() {
 
     let node_id = fetch_node_id(&mut node_storage);
     let network = Arc::new(Mutex::new(Network::new(node_id, argv.network_name.to_owned())));
+    let accept_connections = Arc::new(AtomicBool::new(true));
 
-    start_listener(network, argv.max_peers);
+    start_listener(network, accept_connections, argv.max_peers);
 }
 
 // Fetch stored node id or create new identity and store it

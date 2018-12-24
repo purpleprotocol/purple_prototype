@@ -22,8 +22,13 @@ use std::net::SocketAddr;
 
 #[derive(Debug, Clone)]
 pub struct Network {
+    /// List of peers we are connected to
     peers: Vec<Peer>,
+
+    /// Our node id
     node_id: NodeId,
+
+    /// The name of the network we are on
     network_name: String
 }
 
