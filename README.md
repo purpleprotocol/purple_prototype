@@ -12,7 +12,7 @@ This is done by using a novel consensus algorithm which leverages the properties
 
 
 ## Building
-Building the project requires the latest rust nightly toolchain, llvm and libsodium. After all dependencies are installed, run:
+Building the project requires the latest rust nightly toolchain, cmake, llvm and libsodium. After all dependencies are installed, run:
 
 ```
 cargo build
