@@ -20,6 +20,7 @@
 #[macro_use] extern crate unwrap;
 #[macro_use] extern crate jsonrpc_macros;
 
+extern crate tokio;
 extern crate dirs;
 extern crate jsonrpc_core;
 extern crate crypto;
@@ -41,12 +42,14 @@ use kvdb_rocksdb::{Database, DatabaseConfig};
 use parking_lot::Mutex;
 use std::path::Path;
 use std::sync::Arc;
-use network::{NodeId, Network, Peer, start_listener};
+use network::*;
+use futures::Future;
 use hashdb::HashDB;
 use persistence::PersistentDb;
 use crypto::Identity;
 use elastic_array::ElasticArray128;
 use std::sync::atomic::AtomicBool;
+use futures::future::ok;
 
 const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
@@ -64,7 +67,16 @@ fn main() {
     let network = Arc::new(Mutex::new(Network::new(node_id, argv.network_name.to_owned())));
     let accept_connections = Arc::new(AtomicBool::new(true));
 
-    start_listener(network, accept_connections, argv.max_peers);
+    // Start the tokio runtime
+    tokio::run(ok(()).and_then(move |_| {
+        // Start listening to connections
+        start_listener(network.clone(), accept_connections.clone(), argv.max_peers);
+
+        // Start bootstrap process
+        bootstrap(network, accept_connections, node_storage.clone(), argv.max_peers);
+
+        Ok(())
+    }));
 }
 
 // Fetch stored node id or create new identity and store it

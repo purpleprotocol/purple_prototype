@@ -20,9 +20,13 @@
 #[macro_use] extern crate quickcheck;
 #[macro_use] extern crate log;
 
+
 extern crate hex;
 extern crate byteorder;
 extern crate env_logger;
+extern crate persistence;
+extern crate hashdb;
+extern crate rlp;
 extern crate crypto;
 extern crate rand;
 extern crate parking_lot;
@@ -35,9 +39,11 @@ mod node_id;
 mod network;
 mod peer;
 mod connection;
+mod bootstrap;
 pub mod packets;
 
 pub use node_id::*;
 pub use network::*;
 pub use peer::*;
 pub use connection::*;
+pub use bootstrap::*;

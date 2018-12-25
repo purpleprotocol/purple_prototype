@@ -20,7 +20,6 @@ use tokio::io;
 use tokio::net::{TcpStream, TcpListener};
 use tokio::prelude::*;
 use tokio_io_timeout::TimeoutStream;
-use futures::future::{self, FutureResult};
 use tokio::prelude::future::ok;
 use network::Network;
 use peer::Peer;
@@ -39,7 +38,7 @@ pub const PORT: u16 = 44034;
 const PEER_TIMEOUT: u64 = 3000;
 
 /// Initializes the listener for the given network 
-pub fn start_listener(network: Arc<Mutex<Network>>, accept_connections: Arc<AtomicBool>, max_peers: usize) {
+pub fn start_listener(network: Arc<Mutex<Network>>, accept_connections: Arc<AtomicBool>, max_peers: usize) -> Spawn {
     info!("Starting TCP listener on port {}", PORT);
 
     // Bind the server's socket.
@@ -54,16 +53,15 @@ pub fn start_listener(network: Arc<Mutex<Network>>, accept_connections: Arc<Atom
         .filter(move |_| accept_connections_clone.load(Ordering::Relaxed))
         .for_each(move |s| process_connection(network.clone(), s, max_peers, accept_connections.clone(), ConnectionType::Server));
     
-    // Start the Tokio runtime
-    tokio::run(server);
+    tokio::spawn(server)
 }
 
-pub fn connect_to_peer(network: Arc<Mutex<Network>>, accept_connections: Arc<AtomicBool>, max_peers: usize, addr: &SocketAddr) {
+pub fn connect_to_peer(network: Arc<Mutex<Network>>, accept_connections: Arc<AtomicBool>, max_peers: usize, addr: &SocketAddr) -> Spawn {
     let connect = TcpStream::connect(addr)
         .map_err(|e| warn!("connect failed = {:?}", e))
         .and_then(move |sock| process_connection(network, sock, max_peers, accept_connections, ConnectionType::Client));
 
-    tokio::run(connect);
+    tokio::spawn(connect)
 }
 
 fn process_connection(

@@ -25,6 +25,7 @@ use BlakeDbHasher;
 use elastic_array::ElasticArray128;
 use rlp::NULL_RLP;
 
+#[derive(Clone)]
 pub struct PersistentDb {
     db_ref: Arc<Database>,
     cf: Option<u32>
