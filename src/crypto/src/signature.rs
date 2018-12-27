@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use sodiumoxide::crypto::sign::Signature as PrimitiveSig;
+use rust_sodium::crypto::sign::Signature as PrimitiveSig;
 use rand::Rng;
 use quickcheck::Arbitrary;
 

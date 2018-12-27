@@ -18,6 +18,13 @@ Building the project requires the latest rust nightly toolchain, cmake, llvm and
 cargo build
 ```
 
+#### Using docker
+A Purple node can also be run from a docker container:
+
+```
+docker build .
+```
+
 ## Running
 To run the node in development mode with all logging enabled:
 

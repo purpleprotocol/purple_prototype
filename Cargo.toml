@@ -32,9 +32,6 @@ persistence = { path = "src/persistence" }
 network = { path = "src/network" }
 transactions = { path = "src/transactions" }
 
-[lib]
-path = "src/purple/lib.rs"
-
 [[bin]]
 path = "src/purple/main.rs"
 name = "purple"

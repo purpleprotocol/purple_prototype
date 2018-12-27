@@ -25,21 +25,21 @@ extern crate hashdb;
 extern crate rand;
 extern crate hex;
 extern crate blake2;
-extern crate sodiumoxide;
+extern crate rust_sodium;
 extern crate quickcheck;
 
 pub use rust_base58::base58::*;
 pub use hash::*;
 pub use signature::*;
 pub use blake_hasher::*;
-pub use sodiumoxide::crypto::sign::{gen_keypair, PublicKey, SecretKey};
-pub use sodiumoxide::crypto::kx::{gen_keypair as gen_kx_keypair, PublicKey as KxPublicKey, SecretKey as KxSecretKey, SessionKey};
+pub use rust_sodium::crypto::sign::{gen_keypair, PublicKey, SecretKey};
+pub use rust_sodium::crypto::kx::{gen_keypair as gen_kx_keypair, PublicKey as KxPublicKey, SecretKey as KxSecretKey, SessionKey};
 
 mod hash;
 mod signature;
 mod blake_hasher;
 
-use sodiumoxide::crypto::sign::{sign_detached, verify_detached};
+use rust_sodium::crypto::sign::{sign_detached, verify_detached};
 
 pub fn sign(message: &[u8], skey: SecretKey) -> Signature {
     let sig = sign_detached(message, &skey);
