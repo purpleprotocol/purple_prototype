@@ -104,6 +104,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bin-tools"
+version = "0.1.0"
+dependencies = [
+ "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "bitflags"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2176,6 +2184,7 @@ name = "transactions"
 version = "0.1.0"
 dependencies = [
  "account 0.1.0",
+ "bin-tools 0.1.0",
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "causality 0.1.0",
  "crypto 0.1.0",

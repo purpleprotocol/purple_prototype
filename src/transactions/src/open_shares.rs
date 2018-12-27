@@ -623,16 +623,18 @@ fn assemble_sign_message(obj: &OpenShares) -> Vec<u8> {
     buf
 }
 
-// Writes the shares in the given share map to each shareholder.
-//
-// If a listed shareholder's account is not created, this will also create it.
+/// Writes the shares in the given share map to each shareholder.
+///
+/// If a listed shareholder's account is not created, this will also create it.
 fn allocate_shares(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, stock_hash: &Hash, share_map: &ShareMap) {
     for shareholder in share_map.keys() {
         let stock_hash = stock_hash.to_vec();
         let stock_hash = hex::encode(stock_hash);
         let shares = share_map.get(shareholder.clone()).unwrap();
-        let str_shares = format!("{}.0", shares);
-        let shares = Balance::from_bytes(str_shares.as_bytes()).unwrap();
+
+        // Store shares currency entry as big endian u32
+        let shares = encode_be_u32!(shares);
+
         let bin_shareholder_address = shareholder.clone().to_bytes();
         let shareholder_address = hex::encode(bin_shareholder_address);
 
@@ -646,7 +648,7 @@ fn allocate_shares(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, stock_hash: &Hash
             // The shareholder's account exists
             Ok(Some(_)) => {
                 // Write shares to account
-                trie.insert(stock_key, &shares.to_bytes()).unwrap();
+                trie.insert(stock_key, &shares).unwrap();
             },
             // The shareholder's account does not exist so we create it
             Ok(None) => {
@@ -654,7 +656,7 @@ fn allocate_shares(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, stock_hash: &Hash
                 trie.insert(nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
 
                 // Write shares to account
-                trie.insert(stock_key, &shares.to_bytes()).unwrap();
+                trie.insert(stock_key, &shares).unwrap();
             },
             Err(err) => panic!(err)
         }
@@ -783,10 +785,10 @@ mod tests {
             let bin_shareholder = shareholder.to_bytes();
             let hex_shareholder = hex::encode(bin_shareholder);
             let cur_key = format!("{}.{}", hex_shareholder, hex_stock_hash);
-            let balance = Balance::from_bytes(&trie.get(cur_key.as_bytes()).unwrap().unwrap()).unwrap();
-            let expected_balance = format!("{}.0", shares);
+            let balance = &trie.get(cur_key.as_bytes()).unwrap().unwrap();
+            let balance = decode_be_u32!(balance).unwrap();
 
-            assert_eq!(balance, Balance::from_bytes(expected_balance.as_bytes()).unwrap());
+            assert_eq!(balance, shares);
         }
     }
 

@@ -17,7 +17,7 @@
 */
 
 use account::{ShareholdersAddress, NormalAddress, ShareMap, Balance, Shares};
-use crypto::{Hash, Signature};
+use crypto::Hash;
 use patricia_trie::{TrieMut, TrieDBMut};
 use persistence::{BlakeDbHasher, Codec};
 use std::default::Default;

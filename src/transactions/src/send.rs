@@ -17,7 +17,7 @@
 */
 
 use std::str;
-use account::{Address, Balance, Signature, ShareMap, MultiSig, NormalAddress};
+use account::{Address, Balance, Signature, ShareMap, MultiSig};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
 use std::io::Cursor;
@@ -71,18 +71,13 @@ impl Send {
         let bin_from_nonce = &trie.get(&from_nonce_key).unwrap().unwrap();
         let bin_to_nonce = trie.get(&to_nonce_key);
 
-        let mut from_nonce_rdr = Cursor::new(bin_from_nonce);
-
         // Read the nonce of the sender
-        let mut from_nonce = from_nonce_rdr.read_u64::<BigEndian>().unwrap();
+        let mut from_nonce = decode_be_u64!(bin_from_nonce).unwrap();
 
         // Increment sender nonce
         from_nonce += 1;
 
-        let mut from_nonce_buf: Vec<u8> = Vec::with_capacity(8);
-
-        // Write new nonce to buffer
-        from_nonce_buf.write_u64::<BigEndian>(from_nonce).unwrap();
+        let from_nonce: Vec<u8> = encode_be_u64!(from_nonce);
 
         // Calculate currency keys
         //
@@ -129,7 +124,7 @@ impl Send {
                     // Update trie
                     trie.insert(from_cur_key.as_bytes(), &sender_balance.to_bytes()).unwrap();
                     trie.insert(to_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
-                    trie.insert(from_nonce_key, &from_nonce_buf).unwrap();
+                    trie.insert(from_nonce_key, &from_nonce).unwrap();
                 } else {
                     // The transaction's fee is paid in a different currency
                     // than the one being transferred so we retrieve both balances.
@@ -174,7 +169,7 @@ impl Send {
                     trie.insert(from_cur_key.as_bytes(), &sender_cur_balance.to_bytes()).unwrap();
                     trie.insert(from_fee_key.as_bytes(), &sender_fee_balance.to_bytes()).unwrap();
                     trie.insert(to_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
-                    trie.insert(from_nonce_key, &from_nonce_buf).unwrap();
+                    trie.insert(from_nonce_key, &from_nonce).unwrap();
                 }
             },
             Ok(None) => {
@@ -210,7 +205,7 @@ impl Send {
                         // Update balances
                         trie.insert(from_cur_key.as_bytes(), &sender_balance.to_bytes()).unwrap();
                         trie.insert(to_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
-                        trie.insert(from_nonce_key, &from_nonce_buf).unwrap();
+                        trie.insert(from_nonce_key, &from_nonce).unwrap();
                     } else {
                         // The transaction's fee is paid in a different currency
                         // than the one being transferred so we retrieve both balances.
@@ -249,7 +244,7 @@ impl Send {
                         trie.insert(from_cur_key.as_bytes(), &sender_cur_balance.to_bytes()).unwrap();
                         trie.insert(from_fee_key.as_bytes(), &sender_fee_balance.to_bytes()).unwrap();
                         trie.insert(to_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
-                        trie.insert(from_nonce_key, &from_nonce_buf).unwrap();
+                        trie.insert(from_nonce_key, &from_nonce).unwrap();
                     }
                 } else {
                     panic!("The receiving account does not exist and it's address is not a normal one!")
@@ -652,6 +647,7 @@ mod tests {
     extern crate test_helpers;
     
     use super::*;
+    use account::NormalAddress;
     use crypto::Identity;
 
     #[test]

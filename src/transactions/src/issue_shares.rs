@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{ShareholdersAddress, Address, Balance, MultiSig, ShareMap};
+use account::{ShareholdersAddress, NormalAddress, Balance, MultiSig, ShareMap, Shares};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, SecretKey as Sk};
 use std::io::Cursor;
@@ -26,8 +26,8 @@ use persistence::{BlakeDbHasher, Codec};
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct IssueShares {
     issuer: ShareholdersAddress,
-    receiver: Address,
-    shares: u64,
+    receiver: NormalAddress,
+    shares: u32,
     fee_hash: Hash,
     fee: Balance,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,7 +84,7 @@ impl IssueShares {
     /// 1) Transaction type(7)      - 8bits
     /// 2) Fee length               - 8bits
     /// 3) Signature length         - 16bits
-    /// 4) Amount of issued shares  - 64bits
+    /// 4) Amount of issued shares  - 32bits
     /// 5) Issuer                   - 33byte binary
     /// 6) Receiver                 - 33byte binary
     /// 7) Fee hash                 - 32byte binary
@@ -119,7 +119,7 @@ impl IssueShares {
         buffer.write_u8(tx_type).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
-        buffer.write_u64::<BigEndian>(*shares).unwrap();
+        buffer.write_u32::<BigEndian>(*shares).unwrap();
 
         buffer.append(&mut issuer.to_vec());
         buffer.append(&mut receiver.to_vec());
@@ -161,7 +161,7 @@ impl IssueShares {
 
         rdr.set_position(4);
 
-        let shares = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+        let shares = if let Ok(result) = rdr.read_u32::<BigEndian>() {
             result
         } else {
             return Err("Bad shares");
@@ -169,7 +169,7 @@ impl IssueShares {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..12).collect();
+        let _: Vec<u8> = buf.drain(..8).collect();
 
         let issuer = if buf.len() > 33 as usize {
             let issuer_vec: Vec<u8> = buf.drain(..33).collect();
@@ -185,7 +185,7 @@ impl IssueShares {
         let receiver = if buf.len() > 33 as usize {
             let receiver_vec: Vec<u8> = buf.drain(..33).collect();
             
-            match Address::from_bytes(&receiver_vec) {
+            match NormalAddress::from_bytes(&receiver_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err)
             }
@@ -267,7 +267,7 @@ fn assemble_hash_message(obj: &IssueShares) -> Vec<u8> {
     let shares = obj.shares;
     let mut fee = obj.fee.to_bytes();
 
-    buf.write_u64::<BigEndian>(shares).unwrap();
+    buf.write_u32::<BigEndian>(shares).unwrap();
 
     // Compose data to hash
     buf.append(&mut issuer);
@@ -287,7 +287,7 @@ fn assemble_sign_message(obj: &IssueShares) -> Vec<u8> {
     let shares = obj.shares;
     let mut fee = obj.fee.to_bytes();
 
-    buf.write_u64::<BigEndian>(shares).unwrap();
+    buf.write_u32::<BigEndian>(shares).unwrap();
 
     // Compose data to sign
     buf.append(&mut issuer);
@@ -336,9 +336,9 @@ mod tests {
         }
 
         fn verify_multi_signature_shares(
-            receiver: Address, 
+            receiver: NormalAddress, 
             fee: Balance, 
-            shares: u64,
+            shares: u32,
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)

@@ -36,6 +36,19 @@ impl Shares {
         }
     }
 
+    /// Issues the amount of shares by the given amount.
+    ///
+    /// This function will panic if the sum of the current
+    /// issued shares and the amount to be issued is greater
+    /// than the authorized amount.
+    pub fn issue_shares(&mut self, amount: u32) {
+        if self.issued_shares + amount > self.authorized_shares {
+            panic!("Cannot issue more shares than authorized");
+        }
+
+        self.issued_shares += amount;
+    }
+
     /// Fields:
     /// 1) Required percentile   - 8bits
     /// 2) Issued shares         - 32bits

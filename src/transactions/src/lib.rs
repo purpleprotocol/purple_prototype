@@ -31,6 +31,9 @@ extern crate quickcheck;
 #[macro_use]
 extern crate serde_derive;
 
+#[macro_use]
+extern crate bin_tools;
+
 extern crate hex;
 extern crate persistence;
 extern crate elastic_array;

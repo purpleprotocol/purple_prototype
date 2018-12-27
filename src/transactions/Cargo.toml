@@ -21,6 +21,7 @@ causality = { path = "../causality" }
 crypto = { path = "../crypto" }
 account = { path = "../account" }
 quickcheck = "0.7.2"
+bin-tools = { path = "../util/bin-tools/" }
 
 [dev-dependencies]
 tempfile = "3.0.5"
