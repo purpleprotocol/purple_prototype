@@ -20,6 +20,8 @@ use account::{ShareholdersAddress, Address, Balance, MultiSig, ShareMap};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, SecretKey as Sk};
 use std::io::Cursor;
+use patricia_trie::{TrieMut, TrieDBMut};
+use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct IssueShares {

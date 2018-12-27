@@ -2,6 +2,7 @@
 name = "account"
 version = "0.1.0"
 authors = []
+publish = false
 
 [dependencies]
 serde = "1.0.59"

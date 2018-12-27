@@ -119,6 +119,7 @@ impl OpenShares {
         // The key of a shareholders account's stock hash has the following format:
         // `<account-address>.sh`
         let stock_hash_key = format!("{}.sh", address);
+        let stock_hash_key = stock_hash_key.as_bytes();
 
         if fee_hash == cur_hash {
             // The transaction's fee is paid in the same currency
@@ -151,7 +152,7 @@ impl OpenShares {
             trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
             trie.insert(shares_key, &self.shares.to_bytes()).unwrap();
             trie.insert(share_map_key, &self.share_map.to_bytes()).unwrap();
-            trie.insert(stock_hash_key.as_bytes(), bin_stock_hash).unwrap();
+            trie.insert(stock_hash_key, bin_stock_hash).unwrap();
         } else {
             // The transaction's fee is paid in a different currency
             // than the one being transferred so we retrieve both balances.
@@ -193,7 +194,7 @@ impl OpenShares {
             trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
             trie.insert(shares_key, &self.shares.to_bytes()).unwrap();
             trie.insert(share_map_key, &self.share_map.to_bytes()).unwrap();
-            trie.insert(stock_hash_key.as_bytes(), bin_stock_hash).unwrap();
+            trie.insert(stock_hash_key, bin_stock_hash).unwrap();
         }
     }
 

@@ -2,6 +2,7 @@
 name = "jump"
 version = "0.1.0"
 authors = []
+publish = false
 
 [build-dependencies]
 cc = "1.0"

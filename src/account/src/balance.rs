@@ -227,4 +227,10 @@ mod tests {
             assert!(true);
         }
     }
+
+    quickcheck! {
+        fn serialize_deserialize(b: Balance) -> bool {
+            b == Balance::from_bytes(&Balance::to_bytes(&b)).unwrap()
+        }
+    }
 }

@@ -55,7 +55,6 @@ impl Heartbeat {
     /// 7) Signature     - 64byte binary
     /// 8) Stamp         - Binary of stamp length
     /// 9) Transactions  - Binary of txs length
-    #[inline]
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let event_type: u8 = Self::EVENT_TYPE;
@@ -115,7 +114,6 @@ impl Heartbeat {
     }
 
     /// Deserializes a heartbeat struct from a byte array
-    #[inline]
     pub fn from_bytes(bin: &[u8]) -> Result<Heartbeat, &'static str> {
         let mut rdr = Cursor::new(bin.to_vec());
         let event_type = if let Ok(result) = rdr.read_u8() {

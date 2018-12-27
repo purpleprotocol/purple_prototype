@@ -2,6 +2,7 @@
 name = "causality"
 version = "0.1.0"
 authors = []
+publish = false
 
 [dependencies]
 itc = "0.1.2"

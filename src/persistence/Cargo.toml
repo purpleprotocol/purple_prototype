@@ -2,6 +2,7 @@
 name = "persistence"
 version = "0.1.0"
 authors = ["octavonce <octavonce@gmail.com>"]
+publish = false
 
 [dependencies]
 hashdb = { git = "https://github.com/paritytech/parity-common" }

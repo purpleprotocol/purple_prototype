@@ -20,8 +20,10 @@ use crypto::Signature;
 use addresses::normal::NormalAddress;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::collections::HashMap;
+use rust_decimal::Decimal;
 use quickcheck::Arbitrary;
 use std::io::Cursor;
+use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ShareMap {
@@ -54,9 +56,67 @@ impl ShareMap {
         }
     }
 
+    /// Lists a new shareholder with the given amount of shares
     pub fn add_shareholder(&mut self, addr: NormalAddress, shares: u32) {
         self.share_map.insert(addr, shares);
         self.issued_shares += shares;
+    }
+
+    /// Adds the given amount of shares to the shareholder with the 
+    /// given address, raising the total amount of issued shares.
+    pub fn issue_shares(&mut self, addr: NormalAddress, shares: u32) {
+        let shares = match self.share_map.get(&addr) {
+            Some(current_shares) => {
+                current_shares + shares
+            },
+            None => {
+                shares
+            }
+        };
+
+        self.share_map.insert(addr, shares);
+        self.issued_shares += shares;
+    }
+
+    /// Transfers a given amount of shares from a shareholder.
+    ///
+    /// The receiving address will be listed in the share map if 
+    /// it isn't so already.
+    ///
+    /// This function will panic if the `from` address isn't listed
+    /// in the share map or the given amount is greater than the 
+    /// owned shares of the `from` address.
+    pub fn transfer_shares(&mut self, from: NormalAddress, to: NormalAddress, amount: u32) {
+        let from_shares = match self.share_map.get(&from) {
+            Some(current_shares) => {
+                if current_shares < &amount {
+                    panic!("Given amount is greater than owned shares!");
+                }
+
+                current_shares - &amount
+            },
+            None => {
+                panic!("From address isn't listed!");
+            }
+        };
+
+        let to_shares = match self.share_map.get(&to) {
+            Some(current_shares) => {
+                current_shares + &amount
+            },
+            None => {
+                amount
+            }
+        };
+
+        // Remove entry from share map if all shares are transferred
+        if from_shares == 0 {
+            self.share_map.remove(&from);
+        } else {
+            self.share_map.insert(from, from_shares);
+        } 
+
+        self.share_map.insert(to, to_shares);
     }
 
     /// Given a message and a signature, attempts to find a
@@ -67,14 +127,18 @@ impl ShareMap {
     /// ratio of shares of the signer.
     ///
     /// Returns `None` if no match is found.
-    pub fn find_signer(&self, message: &[u8], signature: Signature) -> Option<u8> {
-        let mut result: Option<u8> = None;
+    pub fn find_signer(&self, message: &[u8], signature: Signature) -> Option<Decimal> {
+        let mut result: Option<Decimal> = None;
 
         // Attempt to find a matching key
         for (addr, shares) in self.share_map.iter() {
             if crypto::verify(message, signature.clone(), addr.pkey()) {
                 // A match has been found
-                let signer_ratio: u8 = (self.issued_shares / (*shares as u32) * 100) as u8;
+                let signer_ratio = (
+                    Decimal::from_str(&format!("{}.0", *shares)).unwrap() 
+                    / 
+                    Decimal::from_str(&format!("{}.0", self.issued_shares)).unwrap()
+                ) * Decimal::from_str("100.0").unwrap();
                 
                 result = Some(signer_ratio);
                 break;
@@ -162,10 +226,102 @@ impl Arbitrary for ShareMap {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crypto::Identity;
+
+    #[test]
+    fn find_signer() {
+        let mut sm = ShareMap::new();
+        let id1 = Identity::new();
+        let id2 = Identity::new();
+        let id3 = Identity::new();
+
+        let addr1 = NormalAddress::from_pkey(*id1.pkey());
+        let addr2 = NormalAddress::from_pkey(*id2.pkey());
+        let addr3 = NormalAddress::from_pkey(*id3.pkey());
+
+        let message = b"test message";
+
+        let sh1_signature = crypto::sign(message, id1.skey().clone());
+        let sh2_signature = crypto::sign(message, id2.skey().clone());
+        let sh3_signature = crypto::sign(message, id3.skey().clone());
+
+        let sh1_oracle = Decimal::from_str("30.0").unwrap();
+        let sh2_oracle = Decimal::from_str("30.0").unwrap();
+        let sh3_oracle = Decimal::from_str("40.0").unwrap();
+
+        sm.add_shareholder(addr1, 15000);
+        sm.add_shareholder(addr2, 15000);
+        sm.add_shareholder(addr3, 20000);
+
+        let result = sm.find_signer(message, sh1_signature).unwrap();
+
+        assert_eq!(result, sh1_oracle);
+        assert_eq!(sm.find_signer(message, sh2_signature).unwrap(), sh2_oracle);
+        assert_eq!(sm.find_signer(message, sh3_signature).unwrap(), sh3_oracle);
+    }
 
     quickcheck! {
-        fn serialize_deserialize(tx: ShareMap) -> bool {
-            tx == ShareMap::from_bytes(&ShareMap::to_bytes(&tx)).unwrap()
+        fn add_shareholder(sm: ShareMap, shareholder: NormalAddress, shares: u32) -> bool {
+            let mut sm = sm.clone();
+            
+            sm.add_shareholder(shareholder, shares); 
+            sm.get(shareholder).unwrap() == shares
+        }
+
+        fn issue_shares_to_existing(shares: u32) -> bool {
+            let mut sm = ShareMap::new();
+            let id = Identity::new();
+            let addr = NormalAddress::from_pkey(*id.pkey());
+
+            sm.add_shareholder(addr, 1000);
+
+            let keys = sm.keys();
+            let (h, _) = keys.split_at(1);
+            let k = h.to_vec().pop().unwrap();
+            let current = sm.get(k).unwrap();
+
+            sm.issue_shares(k, shares);
+            sm.get(k).unwrap() == current + shares
+        }
+
+        fn issue_shares_to_new(sm: ShareMap, shareholder: NormalAddress, shares: u32) -> bool {
+            let mut sm = sm.clone();
+
+            sm.issue_shares(shareholder.clone(), shares); 
+            sm.get(shareholder).unwrap() == shares
+        }
+
+        fn transfer_shares() -> bool {
+            let mut sm = ShareMap::new();
+            let id1 = Identity::new();
+            let id2 = Identity::new();
+            let id3 = Identity::new();
+
+            let addr1 = NormalAddress::from_pkey(*id1.pkey());
+            let addr2 = NormalAddress::from_pkey(*id2.pkey());
+            let addr3 = NormalAddress::from_pkey(*id3.pkey());
+
+            sm.add_shareholder(addr1, 15000);
+            sm.add_shareholder(addr2, 15000);
+            sm.add_shareholder(addr3, 20000);
+
+            let keys = sm.keys();
+            let (h, t) = keys.split_at(1);
+            let (h1, _) = t.split_at(1);
+
+            let k1 = h.to_vec().pop().unwrap();
+            let k2 = h1.to_vec().pop().unwrap();
+
+            let sh1_current = sm.get(k1.clone()).unwrap();
+            let sh2_current = sm.get(k2.clone()).unwrap();
+
+            sm.transfer_shares(k1.clone(), k2.clone(), sh1_current - 1);
+
+            sm.get(k1).unwrap() == 1 && sm.get(k2).unwrap() == sh2_current + sh1_current - 1
+        }
+
+        fn serialize_deserialize(sm: ShareMap) -> bool {
+            sm == ShareMap::from_bytes(&ShareMap::to_bytes(&sm)).unwrap()
         }
     }
 }

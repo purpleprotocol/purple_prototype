@@ -18,6 +18,8 @@
 
 use crypto::{PublicKey, Signature};
 use quickcheck::Arbitrary;
+use rust_decimal::Decimal;
+use std::str::FromStr;
 use rand::Rng;
 use ShareMap;
 
@@ -69,7 +71,12 @@ impl MultiSig {
     }
 
     pub fn verify_shares(&self, message: &[u8], required_percentile: u8, share_map: ShareMap) -> bool {
-        let mut signed_ratio: u8 = 0;
+        if required_percentile > 100 || required_percentile == 0 {
+            panic!("Invalid required percentile!");
+        }
+        
+        let mut signed_ratio = Decimal::from_str("0").unwrap();
+        let required_percentile = Decimal::from_str(&format!("{}", required_percentile)).unwrap();
 
         for sig in &self.0 {
             // Find a matching address in the share map for the signature

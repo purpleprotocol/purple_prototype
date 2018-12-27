@@ -2,5 +2,6 @@
 name = "purple_vm"
 version = "0.1.0"
 authors = ["Octavian Oncescu <octavonce@gmail.com>"]
+publish = false
 
 [dependencies]
