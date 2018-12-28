@@ -23,7 +23,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use rand::Rng;
 use quickcheck::Arbitrary;
 
-#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
+#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct ShareholdersAddress([u8; 32]);
 
 impl ShareholdersAddress {

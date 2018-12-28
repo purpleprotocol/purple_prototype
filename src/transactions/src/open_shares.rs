@@ -25,22 +25,22 @@ use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenShares {
-    creator: NormalAddress,
-    shares: Shares,
-    share_map: ShareMap,
-    amount: Balance,
-    currency_hash: Hash,
-    fee: Balance,
-    fee_hash: Hash,
-    nonce: u64,
+    pub creator: NormalAddress,
+    pub shares: Shares,
+    pub share_map: ShareMap,
+    pub amount: Balance,
+    pub currency_hash: Hash,
+    pub fee: Balance,
+    pub fee_hash: Hash,
+    pub nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    address: Option<ShareholdersAddress>,
+    pub address: Option<ShareholdersAddress>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<Hash>,
+    pub hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    stock_hash: Option<Hash>,
+    pub stock_hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
+    pub signature: Option<Signature>,
 }
 
 impl OpenShares {

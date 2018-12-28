@@ -39,6 +39,129 @@ pub struct IssueShares {
 impl IssueShares {
     pub const TX_TYPE: u8 = 7;
 
+    /// Applies the open shares transaction to the provided database.
+    ///
+    /// This function will panic if the `issuer` account does not exist.
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        let bin_issuer = &self.issuer.to_bytes();
+        let bin_receiver = &self.receiver.to_bytes();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+        let shares = &self.shares;
+
+        // Convert addresses to strings
+        let issuer = hex::encode(bin_issuer);
+        let receiver = hex::encode(bin_receiver);
+
+        // Convert fee hash to string
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        let issuer_fee_key = format!("{}.{}", issuer, fee_hash);
+        let issuer_fee_key = issuer_fee_key.as_bytes();
+
+        // Calculate nonce key
+        // 
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let issuer_nonce_key = format!("{}.n", issuer);
+        let issuer_nonce_key = issuer_nonce_key.as_bytes();
+
+        // Calculate shares and share map keys
+        //
+        // The keys of shares objects have the following format:
+        // `<account-address>.s`
+        //
+        // The keys of share map objects have the following format:
+        // `<account-address>.sm`
+        let shares_key = format!("{}.s", issuer);
+        let share_map_key = format!("{}.sm", issuer);
+        let shares_key = shares_key.as_bytes();
+        let share_map_key = share_map_key.as_bytes();
+
+        // Calculate stock hash key
+        //
+        // The key of a shareholders account's stock hash has the following format:
+        // `<account-address>.sh`
+        let stock_hash_key = format!("{}.sh", issuer);
+        let stock_hash_key = stock_hash_key.as_bytes();
+
+        // Retrieve stock hash
+        let stock_hash = trie.get(&stock_hash_key).unwrap().unwrap();
+        let stock_hash = hex::encode(stock_hash);
+
+        // Calculate receiver shares key
+        let receiver_shares_key = format!("{}.{}", receiver, stock_hash);
+        let receiver_shares_key = receiver_shares_key.as_bytes();
+
+        // Retrieve serialized nonce
+        let bin_issuer_nonce = &trie.get(&issuer_nonce_key).unwrap().unwrap();
+
+        // Read the nonce of the issuer
+        let mut nonce = decode_be_u64!(bin_issuer_nonce).unwrap();
+
+        // Increment issuer nonce
+        nonce += 1;
+
+        let nonce: Vec<u8> = encode_be_u64!(nonce);
+
+        let mut issuer_balance = unwrap!(
+            Balance::from_bytes(
+                &unwrap!(
+                    trie.get(&issuer_fee_key).unwrap(),
+                    "The issuer does not have an entry for the given currency"
+                )
+            ),
+            "Invalid stored balance format"
+        );
+
+        let mut share_map = unwrap!(
+            ShareMap::from_bytes(
+                &unwrap!(
+                    trie.get(&share_map_key).unwrap(),
+                    "The issuer does not have a stored share map"
+                )
+            ),
+            "Invalid stored share map"
+        );
+
+        let mut shares_obj = unwrap!(
+            Shares::from_bytes(
+                &unwrap!(
+                    trie.get(&shares_key).unwrap(),
+                    "The issuer does not have a stored shares object"
+                )
+            ),
+            "Invalid stored shares"
+        );  
+
+        let receiver_balance: Vec<u8> = match trie.get(&receiver_shares_key) {
+            // The receiver is already a shareholder
+            Ok(Some(balance)) => {
+                let balance = decode_be_u32!(balance).unwrap();
+                let result = balance + shares;
+                
+                encode_be_u32!(result)
+            },
+            Ok(None) => {
+                encode_be_u32!(*shares)
+            },
+            Err(err) => panic!(err)
+        };
+
+        // Subtract fee from issuer balance
+        issuer_balance -= self.fee.clone();
+
+        // Add shares to receiver
+        share_map.issue_shares(self.receiver.clone(), *shares);
+        shares_obj.issue_shares(*shares);
+
+        // Update trie
+        trie.insert(issuer_nonce_key, &nonce).unwrap();
+        trie.insert(issuer_fee_key, &issuer_balance.to_bytes()).unwrap();
+        trie.insert(receiver_shares_key, &receiver_balance).unwrap();
+        trie.insert(share_map_key, &share_map.to_bytes()).unwrap();
+        trie.insert(shares_key, &shares_obj.to_bytes()).unwrap();
+    }
+
     /// Signs the transaction with the given secret key.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data
@@ -317,8 +440,95 @@ impl Arbitrary for IssueShares {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use account::NormalAddress;
+    use OpenShares;
+    use account::{Address, NormalAddress};
     use crypto::{Identity, PublicKey as Pk};
+
+    #[test]
+    fn apply_it_issues_shares_and_adds_them_to_the_creator() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let issuer_addr = Address::normal_from_pkey(*id2.pkey());
+        let issuer_norm_addr = NormalAddress::from_pkey(*id2.pkey());
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        let mut shares = Shares::new(1000, 1000000, 60);
+        let mut share_map = ShareMap::new();
+
+        share_map.add_shareholder(NormalAddress::from_pkey(*id2.pkey()), 1000);
+        
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+
+        // Create shares account
+        let mut open_shares = OpenShares {
+            creator: creator_norm_address.clone(),
+            share_map: share_map,
+            shares: shares.clone(),
+            currency_hash: fee_hash.clone(),
+            fee_hash: fee_hash.clone(),
+            amount: Balance::from_bytes(b"100.0").unwrap(),
+            fee: Balance::from_bytes(b"30.0").unwrap(),
+            nonce: 1,
+            address: None,
+            stock_hash: None,
+            signature: None,
+            hash: None,
+        };
+
+        open_shares.compute_address();
+        open_shares.compute_stock_hash();
+        open_shares.sign(id2.skey().clone());
+        open_shares.hash();
+        open_shares.apply(&mut trie);
+
+        let mut tx = IssueShares {
+            issuer: open_shares.address.unwrap(),
+            receiver: issuer_norm_addr.clone(),
+            shares: 1000,
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+        tx.apply(&mut trie);
+
+        // Commit changes
+        trie.commit();
+
+        let stock_hash = hex::encode(open_shares.stock_hash.unwrap().to_vec());
+        let address = hex::encode(open_shares.address.unwrap().to_bytes());
+        let receiver_addr = hex::encode(issuer_norm_addr.clone().to_bytes());
+
+        let shares_key = format!("{}.s", address);
+        let shares_key = shares_key.as_bytes();
+        let share_map_key = format!("{}.sm", address);
+        let share_map_key = share_map_key.as_bytes();
+        let stock_balance_key = format!("{}.{}", receiver_addr, stock_hash);
+        let stock_balance_key = stock_balance_key.as_bytes();
+
+        let written_shares = trie.get(&shares_key).unwrap().unwrap();
+        let written_shares = Shares::from_bytes(&written_shares).unwrap();
+        let written_share_map = trie.get(&share_map_key).unwrap().unwrap();
+        let written_share_map = ShareMap::from_bytes(&written_share_map).unwrap();
+        let written_stock_balance = trie.get(&stock_balance_key).unwrap().unwrap();
+        let written_stock_balance = decode_be_u32!(written_stock_balance).unwrap();
+
+        shares.issue_shares(1000);
+
+        assert_eq!(written_stock_balance, 2000);
+        assert_eq!(written_share_map.get(issuer_norm_addr).unwrap(), 2000);
+        assert_eq!(written_shares, shares);
+    }
 
     quickcheck! {
         fn serialize_deserialize(tx: IssueShares) -> bool {
