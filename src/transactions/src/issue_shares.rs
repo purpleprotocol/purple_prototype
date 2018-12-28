@@ -450,7 +450,6 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let issuer_addr = Address::normal_from_pkey(*id2.pkey());
         let issuer_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 

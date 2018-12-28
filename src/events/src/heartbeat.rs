@@ -231,14 +231,6 @@ impl Heartbeat {
 
                             Ok(Box::new(Tx::Send(deserialized)))
                         },
-                        4 => {
-                            let deserialized = match Receive::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_)     => return Err("Invalid receive transaction")
-                            };
-
-                            Ok(Box::new(Tx::Receive(deserialized)))
-                        },
                         5 => {
                             let deserialized = match OpenMultiSig::from_bytes(&tx) {
                                 Ok(result) => result,

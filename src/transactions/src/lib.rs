@@ -56,7 +56,6 @@ mod create_currency;
 mod create_mintable;
 mod genesis;
 mod open_contract;
-mod receive;
 mod send;
 mod mint;
 mod issue_shares;
@@ -69,7 +68,6 @@ pub use create_currency::*;
 pub use create_mintable::*;
 pub use genesis::*;
 pub use open_contract::*;
-pub use receive::*;
 pub use send::*;
 pub use issue_shares::*;
 pub use mint::*;
@@ -83,7 +81,6 @@ use quickcheck::Arbitrary;
 pub enum Tx {
     Call(Call),
     OpenContract(OpenContract),
-    Receive(Receive),
     Send(Send),
     Burn(Burn),
     CreateCurrency(CreateCurrency),
@@ -99,7 +96,6 @@ impl Tx {
         match *self {
             Tx::Call(ref tx)            => tx.to_bytes(),
             Tx::OpenContract(ref tx)    => tx.to_bytes(),
-            Tx::Receive(ref tx)         => tx.to_bytes(),
             Tx::Send(ref tx)            => tx.to_bytes(),
             Tx::Burn(ref tx)            => tx.to_bytes(),
             Tx::CreateCurrency(ref tx)  => tx.to_bytes(),
@@ -115,20 +111,19 @@ impl Tx {
 impl Arbitrary for Tx {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Tx {
         let mut rng = rand::thread_rng();
-        let random = rng.gen_range(1, 11);
+        let random = rng.gen_range(1, 10);
 
         match random {
             1  => Tx::Call(Arbitrary::arbitrary(g)),
             2  => Tx::OpenContract(Arbitrary::arbitrary(g)),
-            3  => Tx::Receive(Arbitrary::arbitrary(g)),
-            4  => Tx::Send(Arbitrary::arbitrary(g)),
-            5  => Tx::Burn(Arbitrary::arbitrary(g)),
-            6  => Tx::CreateCurrency(Arbitrary::arbitrary(g)),
-            7  => Tx::CreateMintable(Arbitrary::arbitrary(g)),
-            8  => Tx::Mint(Arbitrary::arbitrary(g)),
-            9  => Tx::IssueShares(Arbitrary::arbitrary(g)),
-            10 => Tx::OpenMultiSig(Arbitrary::arbitrary(g)),
-            11 => Tx::OpenShares(Arbitrary::arbitrary(g)),
+            3  => Tx::Send(Arbitrary::arbitrary(g)),
+            4  => Tx::Burn(Arbitrary::arbitrary(g)),
+            5  => Tx::CreateCurrency(Arbitrary::arbitrary(g)),
+            6  => Tx::CreateMintable(Arbitrary::arbitrary(g)),
+            7  => Tx::Mint(Arbitrary::arbitrary(g)),
+            8  => Tx::IssueShares(Arbitrary::arbitrary(g)),
+            9  => Tx::OpenMultiSig(Arbitrary::arbitrary(g)),
+            10 => Tx::OpenShares(Arbitrary::arbitrary(g)),
             _  => panic!()
         }
     }
