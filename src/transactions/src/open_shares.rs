@@ -64,6 +64,7 @@ impl OpenShares {
         // Convert hashes to strings
         let cur_hash = hex::encode(bin_currency_hash);
         let fee_hash = hex::encode(bin_fee_hash);
+        let stock_hash = hex::encode(bin_stock_hash);
 
         // Calculate nonce keys
         // 
@@ -81,18 +82,13 @@ impl OpenShares {
         // Retrieve serialized nonce
         let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
 
-        let mut nonce_rdr = Cursor::new(bin_creator_nonce);
-
         // Read the nonce of the creator
-        let mut nonce = nonce_rdr.read_u64::<BigEndian>().unwrap();
+        let mut nonce = decode_be_u64!(bin_creator_nonce).unwrap();
 
         // Increment creator nonce
         nonce += 1;
 
-        let mut nonce_buf: Vec<u8> = Vec::with_capacity(8);
-
-        // Write new nonce to buffer
-        nonce_buf.write_u64::<BigEndian>(nonce).unwrap();
+        let nonce = encode_be_u64!(nonce);
 
         // Calculate currency keys
         //
@@ -121,6 +117,15 @@ impl OpenShares {
         let stock_hash_key = format!("{}.sh", address);
         let stock_hash_key = stock_hash_key.as_bytes();
 
+        // Calculate stock address key. This entry will
+        // point to the account address of what the stock
+        // represents.
+        //
+        // The key of the stock address has the following format:
+        // `<stock-hash>.adr`
+        let stock_address_key = format!("{}.adr", stock_hash);
+        let stock_address_key = stock_address_key.as_bytes();
+
         if fee_hash == cur_hash {
             // The transaction's fee is paid in the same currency
             // that is being transferred, so we only retrieve one
@@ -146,9 +151,10 @@ impl OpenShares {
             allocate_shares(trie, &self.stock_hash.unwrap(), &self.share_map);
 
             // Update trie
+            trie.insert(stock_address_key, bin_address).unwrap();
             trie.insert(creator_cur_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
             trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
-            trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+            trie.insert(creator_nonce_key, &nonce).unwrap();
             trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
             trie.insert(shares_key, &self.shares.to_bytes()).unwrap();
             trie.insert(share_map_key, &self.share_map.to_bytes()).unwrap();
@@ -187,10 +193,11 @@ impl OpenShares {
             allocate_shares(trie, &self.stock_hash.unwrap(), &self.share_map);
 
             // Update trie
+            trie.insert(stock_address_key, bin_address).unwrap();
             trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes()).unwrap();
             trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes()).unwrap();
             trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
-            trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+            trie.insert(creator_nonce_key, &nonce).unwrap();
             trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
             trie.insert(shares_key, &self.shares.to_bytes()).unwrap();
             trie.insert(share_map_key, &self.share_map.to_bytes()).unwrap();

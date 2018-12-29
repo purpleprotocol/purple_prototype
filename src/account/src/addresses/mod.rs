@@ -36,6 +36,16 @@ pub enum Address {
 }
 
 impl Address {
+    /// Unwraps an `Address` enum into a normal address.
+    ///
+    /// This function panics if the enum variant isn't a `NormalAddress`.
+    pub fn unwrap_normal(&self) -> NormalAddress {
+        match *self {
+            Address::Normal(ref addr) => *addr,
+            _                         => panic!("Unwrap normal called on a non normal address")
+        }
+    }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         match *self {
             Address::Normal(ref addr)        => addr.to_bytes(),

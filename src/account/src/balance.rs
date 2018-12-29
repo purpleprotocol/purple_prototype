@@ -23,6 +23,7 @@ use quickcheck::Arbitrary;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 use std::ops::{Add, Sub, AddAssign, SubAssign};
+use std::fmt;
 
 lazy_static! {
     static ref PREC0: Regex = Regex::new(r"^[0-9]*$").unwrap();
@@ -99,6 +100,12 @@ impl Balance {
                 Err("Invalid utf8 string given")
             }
         }
+    }
+}
+
+impl fmt::Display for Balance {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

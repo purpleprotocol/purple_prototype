@@ -86,8 +86,8 @@ impl ShareMap {
     /// This function will panic if the `from` address isn't listed
     /// in the share map or the given amount is greater than the 
     /// owned shares of the `from` address.
-    pub fn transfer_shares(&mut self, from: NormalAddress, to: NormalAddress, amount: u32) {
-        let from_shares = match self.share_map.get(&from) {
+    pub fn transfer_shares(&mut self, from: &NormalAddress, to: &NormalAddress, amount: u32) {
+        let from_shares = match self.share_map.get(from) {
             Some(current_shares) => {
                 if current_shares < &amount {
                     panic!("Given amount is greater than owned shares!");
@@ -100,7 +100,7 @@ impl ShareMap {
             }
         };
 
-        let to_shares = match self.share_map.get(&to) {
+        let to_shares = match self.share_map.get(to) {
             Some(current_shares) => {
                 current_shares + &amount
             },
@@ -111,12 +111,12 @@ impl ShareMap {
 
         // Remove entry from share map if all shares are transferred
         if from_shares == 0 {
-            self.share_map.remove(&from);
+            self.share_map.remove(from);
         } else {
-            self.share_map.insert(from, from_shares);
+            self.share_map.insert(*from, from_shares);
         } 
 
-        self.share_map.insert(to, to_shares);
+        self.share_map.insert(*to, to_shares);
     }
 
     /// Given a message and a signature, attempts to find a
@@ -315,7 +315,7 @@ mod tests {
             let sh1_current = sm.get(k1.clone()).unwrap();
             let sh2_current = sm.get(k2.clone()).unwrap();
 
-            sm.transfer_shares(k1.clone(), k2.clone(), sh1_current - 1);
+            sm.transfer_shares(&k1, &k2, sh1_current - 1);
 
             sm.get(k1).unwrap() == 1 && sm.get(k2).unwrap() == sh2_current + sh1_current - 1
         }
