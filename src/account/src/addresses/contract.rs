@@ -20,7 +20,7 @@ use crypto::{ToBase58, FromBase58, Hash};
 use rand::Rng;
 use quickcheck::Arbitrary;
 
-#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Debug, PartialOrd, Ord)]
+#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, PartialOrd, Ord)]
 pub struct ContractAddress(Hash);
 
 impl ContractAddress {

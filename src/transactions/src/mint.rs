@@ -20,10 +20,13 @@ use account::{Address, Balance, ShareMap, MultiSig, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, SecretKey as Sk, PublicKey as Pk};
 use std::io::Cursor;
+use patricia_trie::{TrieMut, TrieDBMut};
+use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Mint {
     minter: Address,
+    receiver: Address,
     amount: Balance,
     currency_hash: Hash, 
     fee_hash: Hash,
@@ -36,6 +39,167 @@ pub struct Mint {
 
 impl Mint {
     pub const TX_TYPE: u8 = 10;
+
+    /// Applies the mint transaction to the provided database.
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        let bin_minter = &self.minter.to_bytes();
+        let bin_receiver = &self.receiver.to_bytes();
+        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+
+        // Convert addresses to strings
+        let minter = hex::encode(bin_minter);
+        let receiver = hex::encode(bin_receiver);
+
+        // Convert hashes to strings
+        let cur_hash = hex::encode(bin_cur_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        let minter_cur_key = format!("{}.{}", minter, cur_hash);
+        let minter_cur_key = minter_cur_key.as_bytes();
+        let minter_fee_key = format!("{}.{}", minter, fee_hash);
+        let minter_fee_key = minter_fee_key.as_bytes();
+        let receiver_cur_key = format!("{}.{}", receiver, cur_hash);
+        let receiver_cur_key = receiver_cur_key.as_bytes();
+
+        // Calculate nonce keys
+        // 
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let minter_nonce_key = format!("{}.n", minter);
+        let minter_nonce_key = minter_nonce_key.as_bytes();
+        let receiver_nonce_key = format!("{}.n", receiver);
+        let receiver_nonce_key = receiver_nonce_key.as_bytes();
+
+        // Retrieve serialized nonce
+        let bin_minter_nonce = trie.get(&minter_nonce_key);
+        let bin_receiver_nonce = trie.get(&receiver_nonce_key);
+
+        // Create minter account if it doesn't exist
+        let nonce: Vec<u8> = match bin_minter_nonce {
+            Ok(Some(nonce)) => {
+                // Read the nonce of the minter
+                let mut nonce = decode_be_u64!(nonce).unwrap();
+
+                // Increment minter nonce
+                nonce += 1;
+
+                encode_be_u64!(nonce)
+            },
+            Ok(None) => {
+                vec![0, 0, 0, 0, 0, 0, 0, 0]
+            },
+            Err(err) => panic!(err)
+        };
+
+        match bin_receiver_nonce {
+            // The receiver account exists
+            Ok(Some(_)) => {
+                if minter == receiver {
+                    if cur_hash == fee_hash {
+                        let mut minter_balance = unwrap!(
+                            Balance::from_bytes(
+                                &unwrap!(
+                                    trie.get(&minter_cur_key).unwrap(),
+                                    "The minter does not have an entry for the given currency"
+                                )
+                            ),
+                            "Invalid stored balance format"
+                        );
+
+                        // Subtract fee from minter balance
+                        minter_balance -= self.fee.clone();
+
+                        // Add minted amount to minter balance
+                        minter_balance += self.amount.clone();
+
+                        // Update trie
+                        trie.insert(&minter_nonce_key, &nonce).unwrap();
+                        trie.insert(&minter_cur_key, &minter_balance.to_bytes()).unwrap();
+                    } else {
+                        let mut minter_fee_balance = unwrap!(
+                            Balance::from_bytes(
+                                &unwrap!(
+                                    trie.get(&minter_fee_key).unwrap(),
+                                    "The minter does not have an entry for the given currency"
+                                )
+                            ),
+                            "Invalid stored balance format"
+                        );
+
+                        // Subtract fee from minter balance
+                        minter_fee_balance -= self.fee.clone();
+
+                        let minter_balance: Balance = match trie.get(&minter_cur_key) {
+                            Ok(Some(balance)) => {
+                                Balance::from_bytes(&balance).unwrap() + self.amount.clone() 
+                            },
+                            Ok(None) => {
+                                self.amount.clone()
+                            },
+                            Err(err) => panic!(err)
+                        };
+
+                        // Update trie
+                        trie.insert(&minter_nonce_key, &nonce).unwrap();
+                        trie.insert(&minter_cur_key, &minter_balance.to_bytes()).unwrap();
+                        trie.insert(&minter_fee_key, &minter_fee_balance.to_bytes()).unwrap();
+                    }
+                } else {
+                    let mut minter_balance = unwrap!(
+                        Balance::from_bytes(
+                            &unwrap!(
+                                trie.get(&minter_fee_key).unwrap(),
+                                "The minter does not have an entry for the given currency"
+                            )
+                        ),
+                        "Invalid stored balance format"
+                    );
+
+                    // Subtract fee from minter balance
+                    minter_balance -= self.fee.clone();
+
+                    // The receiver account exists so we try to retrieve his balance
+                    let receiver_balance: Balance = match trie.get(&receiver_cur_key) {
+                        Ok(Some(balance)) => {
+                            Balance::from_bytes(&balance).unwrap() + self.amount.clone() 
+                        },
+                        Ok(None) => {
+                            self.amount.clone()
+                        },
+                        Err(err) => panic!(err)
+                    };
+
+                    // Update trie
+                    trie.insert(&minter_nonce_key, &nonce).unwrap();
+                    trie.insert(&minter_fee_key, &minter_balance.to_bytes()).unwrap();
+                    trie.insert(&receiver_cur_key, &receiver_balance.to_bytes()).unwrap();
+                }
+            },
+            // The receiver account doesn't exist so we create it
+            Ok(None) => {
+                let mut minter_balance = unwrap!(
+                    Balance::from_bytes(
+                        &unwrap!(
+                            trie.get(&minter_cur_key).unwrap(),
+                            "The minter does not have an entry for the given currency"
+                        )
+                    ),
+                    "Invalid stored balance format"
+                );
+
+                // Subtract fee from minter balance
+                minter_balance -= self.fee.clone();
+
+                // Update trie
+                trie.insert(&minter_nonce_key, &nonce).unwrap();
+                trie.insert(&receiver_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+                trie.insert(&minter_cur_key, &minter_balance.to_bytes()).unwrap();
+                trie.insert(&receiver_cur_key, &self.amount.to_bytes()).unwrap();
+            },
+            Err(err) => panic!(err)
+        }
+    }
 
     /// Signs the transaction with the given secret key.
     ///
@@ -165,12 +329,13 @@ impl Mint {
     /// 3) Amount length            - 8bits
     /// 4) Signature length         - 16bits
     /// 5) Minter                   - 33byte binary
-    /// 6) Currency hash            - 32byte binary
-    /// 7) Fee hash                 - 32byte binary
-    /// 8) Hash                     - 32byte binary
-    /// 9) Amount                   - Binary of amount length
-    /// 10) Fee                     - Binary of fee length
-    /// 11) Signature               - Binary of signature length
+    /// 6) Receiver                 - 33byte binary
+    /// 7) Currency hash            - 32byte binary
+    /// 8) Fee hash                 - 32byte binary
+    /// 9) Hash                     - 32byte binary
+    /// 10) Amount                  - Binary of amount length
+    /// 11) Fee                     - Binary of fee length
+    /// 12) Signature               - Binary of signature length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -188,6 +353,7 @@ impl Mint {
         };
 
         let minter = &self.minter.to_bytes();
+        let receiver = &self.receiver.to_bytes();
         let currency_hash = &&self.currency_hash.0;
         let fee_hash = &&self.fee_hash.0;
         let amount = &self.amount.to_bytes();
@@ -203,6 +369,7 @@ impl Mint {
         buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
 
         buffer.append(&mut minter.to_vec());
+        buffer.append(&mut receiver.to_vec());
         buffer.append(&mut currency_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
@@ -257,6 +424,17 @@ impl Mint {
             let minter_vec: Vec<u8> = buf.drain(..33).collect();
             
             match Address::from_bytes(&minter_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err)
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let receiver = if buf.len() > 33 as usize {
+            let receiver_vec: Vec<u8> = buf.drain(..33).collect();
+            
+            match Address::from_bytes(&receiver_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err)
             }
@@ -332,6 +510,7 @@ impl Mint {
 
         let mint = Mint {
             minter: minter,
+            receiver: receiver,
             currency_hash: currency_hash,
             fee_hash: fee_hash,
             fee: fee,
@@ -355,6 +534,7 @@ fn assemble_hash_message(obj: &Mint) -> Vec<u8> {
 
     let mut buf: Vec<u8> = Vec::new();
     let mut minter = obj.minter.to_bytes();
+    let mut receiver = obj.receiver.to_bytes();
     let currency_hash = &obj.currency_hash.0;
     let fee_hash = &obj.fee_hash.0;
     let mut amount = obj.amount.to_bytes();
@@ -362,6 +542,7 @@ fn assemble_hash_message(obj: &Mint) -> Vec<u8> {
 
     // Compose data to hash
     buf.append(&mut minter);
+    buf.append(&mut receiver);
     buf.append(&mut currency_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
@@ -374,6 +555,7 @@ fn assemble_hash_message(obj: &Mint) -> Vec<u8> {
 fn assemble_sign_message(obj: &Mint) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut minter = obj.minter.to_bytes();
+    let mut receiver = obj.receiver.to_bytes();
     let currency_hash = &obj.currency_hash.0;
     let fee_hash = &obj.fee_hash.0;
     let mut amount = obj.amount.to_bytes();
@@ -381,6 +563,7 @@ fn assemble_sign_message(obj: &Mint) -> Vec<u8> {
 
     // Compose data to hash
     buf.append(&mut minter);
+    buf.append(&mut receiver);
     buf.append(&mut currency_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
@@ -395,6 +578,7 @@ impl Arbitrary for Mint {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Mint {
         Mint {
             minter: Arbitrary::arbitrary(g),
+            receiver: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
             currency_hash: Arbitrary::arbitrary(g), 
             fee_hash: Arbitrary::arbitrary(g),
@@ -408,8 +592,257 @@ impl Arbitrary for Mint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use CreateMintable;
     use account::NormalAddress;
     use crypto::Identity;
+
+    #[test]
+    fn apply_it_mints_tokens_and_adds_them_to_the_creator() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        // Manually initialize creator and minter balances
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+
+        // Create mintable token
+        let mut create_mintable = CreateMintable {
+            creator: creator_norm_address,
+            receiver: creator_addr,
+            minter_address: minter_addr,
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            coin_supply: 10000,
+            max_supply: 100000000,
+            precision: 18,
+            fee: Balance::from_bytes(b"30.0").unwrap(),
+            signature: None,
+            hash: None
+        };
+
+        create_mintable.sign(id2.skey().clone());
+        create_mintable.hash();
+        create_mintable.apply(&mut trie);
+
+        let mut tx = Mint {
+            minter: minter_addr,
+            receiver: creator_addr,
+            amount: Balance::from_bytes(b"100.0").unwrap(),
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+        tx.apply(&mut trie);
+
+        // Commit changes
+        trie.commit();
+
+        let cur_hash = hex::encode(cur_hash.to_vec());
+        let fee_hash = hex::encode(fee_hash.to_vec());
+        let address = hex::encode(creator_addr.to_bytes());
+        let minter = hex::encode(minter_addr.to_bytes());
+
+        let cur_key = format!("{}.{}", address, cur_hash);
+        let cur_key = cur_key.as_bytes();
+        let fee_key = format!("{}.{}", address, fee_hash);
+        let fee_key = fee_key.as_bytes();
+        let minter_fee_key = format!("{}.{}", minter, fee_hash);
+        let minter_fee_key = minter_fee_key.as_bytes();
+        let creator_nonce_key = format!("{}.n", address);
+        let creator_nonce_key = creator_nonce_key.as_bytes();
+        let minter_nonce_key = format!("{}.n", minter);
+        let minter_nonce_key = minter_nonce_key.as_bytes();
+
+        let cur_balance = trie.get(&cur_key).unwrap().unwrap();
+        let fee_balance = trie.get(&fee_key).unwrap().unwrap();
+        let minter_balance = trie.get(&minter_fee_key).unwrap().unwrap();
+        let creator_nonce = trie.get(&creator_nonce_key).unwrap().unwrap();
+        let minter_nonce = trie.get(&minter_nonce_key).unwrap().unwrap();
+
+        assert_eq!(cur_balance, Balance::from_bytes(b"10100.0").unwrap().to_bytes());
+        assert_eq!(fee_balance, Balance::from_bytes(b"9970.0").unwrap().to_bytes());
+        assert_eq!(minter_balance, Balance::from_bytes(b"90.0").unwrap().to_bytes());
+        assert_eq!(&creator_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
+        assert_eq!(&minter_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
+    }
+
+    #[test]
+    fn apply_it_mints_tokens_and_adds_them_to_the_minter() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        // Manually initialize creator and minter balances
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+
+        // Create mintable token
+        let mut create_mintable = CreateMintable {
+            creator: creator_norm_address,
+            receiver: creator_addr,
+            minter_address: minter_addr,
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            coin_supply: 10000,
+            max_supply: 100000000,
+            precision: 18,
+            fee: Balance::from_bytes(b"30.0").unwrap(),
+            signature: None,
+            hash: None
+        };
+
+        create_mintable.sign(id2.skey().clone());
+        create_mintable.hash();
+        create_mintable.apply(&mut trie);
+
+        let mut tx = Mint {
+            minter: minter_addr,
+            receiver: minter_addr,
+            amount: Balance::from_bytes(b"100.0").unwrap(),
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+        tx.apply(&mut trie);
+
+        // Commit changes
+        trie.commit();
+
+        let cur_hash = hex::encode(cur_hash.to_vec());
+        let fee_hash = hex::encode(fee_hash.to_vec());
+        let address = hex::encode(creator_addr.to_bytes());
+        let minter = hex::encode(minter_addr.to_bytes());
+
+        let cur_key = format!("{}.{}", minter, cur_hash);
+        let cur_key = cur_key.as_bytes();
+        let fee_key = format!("{}.{}", address, fee_hash);
+        let fee_key = fee_key.as_bytes();
+        let minter_fee_key = format!("{}.{}", minter, fee_hash);
+        let minter_fee_key = minter_fee_key.as_bytes();
+        let creator_nonce_key = format!("{}.n", address);
+        let creator_nonce_key = creator_nonce_key.as_bytes();
+        let minter_nonce_key = format!("{}.n", minter);
+        let minter_nonce_key = minter_nonce_key.as_bytes();
+
+        let cur_balance = trie.get(&cur_key).unwrap().unwrap();
+        let fee_balance = trie.get(&fee_key).unwrap().unwrap();
+        let minter_balance = trie.get(&minter_fee_key).unwrap().unwrap();
+        let creator_nonce = trie.get(&creator_nonce_key).unwrap().unwrap();
+        let minter_nonce = trie.get(&minter_nonce_key).unwrap().unwrap();
+
+        assert_eq!(cur_balance, Balance::from_bytes(b"100.0").unwrap().to_bytes());
+        assert_eq!(fee_balance, Balance::from_bytes(b"9970.0").unwrap().to_bytes());
+        assert_eq!(minter_balance, Balance::from_bytes(b"90.0").unwrap().to_bytes());
+        assert_eq!(&creator_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
+        assert_eq!(&minter_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
+    }
+    
+    #[test]
+    fn apply_it_mints_tokens_and_adds_them_to_the_minter_same_currency() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        // Manually initialize creator and minter balances
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+
+        // Create mintable token
+        let mut create_mintable = CreateMintable {
+            creator: creator_norm_address,
+            receiver: minter_addr,
+            minter_address: minter_addr,
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            coin_supply: 10000,
+            max_supply: 100000000,
+            precision: 18,
+            fee: Balance::from_bytes(b"30.0").unwrap(),
+            signature: None,
+            hash: None
+        };
+
+        create_mintable.sign(id2.skey().clone());
+        create_mintable.hash();
+        create_mintable.apply(&mut trie);
+
+        let mut tx = Mint {
+            minter: minter_addr,
+            receiver: minter_addr,
+            amount: Balance::from_bytes(b"100.0").unwrap(),
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+        tx.apply(&mut trie);
+
+        // Commit changes
+        trie.commit();
+
+        let cur_hash = hex::encode(cur_hash.to_vec());
+        let fee_hash = hex::encode(fee_hash.to_vec());
+        let address = hex::encode(creator_addr.to_bytes());
+        let minter = hex::encode(minter_addr.to_bytes());
+
+        let cur_key = format!("{}.{}", minter, cur_hash);
+        let cur_key = cur_key.as_bytes();
+        let fee_key = format!("{}.{}", address, fee_hash);
+        let fee_key = fee_key.as_bytes();
+        let creator_nonce_key = format!("{}.n", address);
+        let creator_nonce_key = creator_nonce_key.as_bytes();
+        let minter_nonce_key = format!("{}.n", minter);
+        let minter_nonce_key = minter_nonce_key.as_bytes();
+
+        let cur_balance = trie.get(&cur_key).unwrap().unwrap();
+        let fee_balance = trie.get(&fee_key).unwrap().unwrap();
+        let creator_nonce = trie.get(&creator_nonce_key).unwrap().unwrap();
+        let minter_nonce = trie.get(&minter_nonce_key).unwrap().unwrap();
+
+        assert_eq!(cur_balance, Balance::from_bytes(b"10090.0").unwrap().to_bytes());
+        assert_eq!(fee_balance, Balance::from_bytes(b"9970.0").unwrap().to_bytes());
+        assert_eq!(&creator_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
+        assert_eq!(&minter_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
+    }
 
     quickcheck! {
         fn serialize_deserialize(tx: Mint) -> bool {
@@ -427,6 +860,7 @@ mod tests {
         }
 
         fn verify_signature(
+            receiver: Address,
             amount: Balance, 
             fee: Balance, 
             currency_hash: Hash, 
@@ -436,6 +870,7 @@ mod tests {
 
             let mut tx = Mint {
                 minter: Address::normal_from_pkey(*id.pkey()),
+                receiver: receiver,
                 amount: amount,
                 fee: fee,
                 currency_hash: currency_hash,
@@ -449,6 +884,7 @@ mod tests {
         }
 
         fn verify_multi_signature(
+            receiver: Address,
             amount: Balance, 
             fee: Balance, 
             currency_hash: Hash, 
@@ -467,6 +903,7 @@ mod tests {
 
             let mut tx = Mint {
                 minter: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
+                receiver: receiver,
                 amount: amount,
                 fee: fee,
                 currency_hash: currency_hash,
@@ -484,6 +921,7 @@ mod tests {
         }
 
         fn verify_multi_signature_shares(
+            receiver: Address,
             amount: Balance, 
             fee: Balance, 
             currency_hash: Hash, 
@@ -513,6 +951,7 @@ mod tests {
 
             let mut tx = Mint {
                 minter: Address::shareholders_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
+                receiver: receiver,
                 amount: amount,
                 fee: fee,
                 currency_hash: currency_hash,

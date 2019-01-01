@@ -27,7 +27,7 @@ use addresses::normal::*;
 use addresses::multi_sig::*;
 use addresses::shareholders::*;
 
-#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
+#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug)]
 pub enum Address {
     Normal(NormalAddress),
     MultiSig(MultiSigAddress),

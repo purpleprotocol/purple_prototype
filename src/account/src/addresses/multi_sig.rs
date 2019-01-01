@@ -21,7 +21,7 @@ use addresses::NormalAddress;
 use rlp::*;
 use byteorder::{BigEndian, WriteBytesExt};
 
-#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
+#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct MultiSigAddress([u8; 32]);
 
 impl MultiSigAddress {
