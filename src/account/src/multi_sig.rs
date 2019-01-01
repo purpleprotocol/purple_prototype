@@ -98,7 +98,7 @@ impl MultiSig {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut sigs: Vec<Vec<u8>> = Vec::with_capacity(self.0.len() + 1);
+        let mut sigs: Vec<Vec<u8>> = Vec::with_capacity(self.0.len());
 
         for sig in self.0.iter() {
             sigs.push(sig.to_bytes());

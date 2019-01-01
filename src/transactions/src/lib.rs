@@ -61,6 +61,7 @@ mod mint;
 mod issue_shares;
 mod open_multi_sig;
 mod open_shares;
+mod pay;
 
 pub use burn::*;
 pub use call::*;
@@ -73,6 +74,7 @@ pub use issue_shares::*;
 pub use mint::*;
 pub use open_multi_sig::*;
 pub use open_shares::*;
+pub use pay::*;
 
 use rand::Rng;
 use quickcheck::Arbitrary;
@@ -88,7 +90,8 @@ pub enum Tx {
     Mint(Mint),
     IssueShares(IssueShares),
     OpenMultiSig(OpenMultiSig),
-    OpenShares(OpenShares)
+    OpenShares(OpenShares),
+    Pay(Pay)
 }
 
 impl Tx {
@@ -103,7 +106,8 @@ impl Tx {
             Tx::Mint(ref tx)            => tx.to_bytes(),
             Tx::IssueShares(ref tx)     => tx.to_bytes(),
             Tx::OpenMultiSig(ref tx)    => tx.to_bytes(),
-            Tx::OpenShares(ref tx)      => tx.to_bytes()
+            Tx::OpenShares(ref tx)      => tx.to_bytes(),
+            Tx::Pay(ref tx)             => tx.to_bytes()
         }
     }
 }
@@ -111,7 +115,7 @@ impl Tx {
 impl Arbitrary for Tx {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Tx {
         let mut rng = rand::thread_rng();
-        let random = rng.gen_range(1, 10);
+        let random = rng.gen_range(1, 12);
 
         match random {
             1  => Tx::Call(Arbitrary::arbitrary(g)),
@@ -124,6 +128,7 @@ impl Arbitrary for Tx {
             8  => Tx::IssueShares(Arbitrary::arbitrary(g)),
             9  => Tx::OpenMultiSig(Arbitrary::arbitrary(g)),
             10 => Tx::OpenShares(Arbitrary::arbitrary(g)),
+            11 => Tx::Pay(Arbitrary::arbitrary(g)),
             _  => panic!()
         }
     }
