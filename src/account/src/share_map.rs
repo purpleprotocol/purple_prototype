@@ -19,16 +19,16 @@
 use crypto::Signature;
 use addresses::normal::NormalAddress;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::collections::HashMap;
 use rust_decimal::Decimal;
 use quickcheck::Arbitrary;
 use std::io::Cursor;
 use std::str::FromStr;
+use hashbrown::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ShareMap {
     share_map: HashMap<NormalAddress, u32>,
-    issued_shares: u32
+    pub issued_shares: u32
 }
 
 impl ShareMap {
@@ -206,6 +206,16 @@ impl ShareMap {
         Ok(share_map)
     }
 }
+
+impl IntoIterator for ShareMap {
+    type Item = (NormalAddress, u32);
+    type IntoIter = ::hashbrown::hash_map::IntoIter<NormalAddress, u32>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.share_map.into_iter()
+    }
+}
+
 
 impl Arbitrary for ShareMap {
     fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> ShareMap {

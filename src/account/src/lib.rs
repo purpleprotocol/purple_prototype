@@ -26,6 +26,7 @@ extern crate byteorder;
 extern crate regex;
 extern crate rand;
 extern crate rust_decimal;
+extern crate hashbrown;
 
 pub mod addresses;
 pub mod balance;

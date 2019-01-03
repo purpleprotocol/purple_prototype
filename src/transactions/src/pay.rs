@@ -16,12 +16,14 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{ShareholdersAddress, NormalAddress, Balance, MultiSig, ShareMap, Shares};
+use account::{ShareholdersAddress, NormalAddress, Balance, MultiSig, ShareMap};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, SecretKey as Sk};
 use std::io::Cursor;
 use patricia_trie::{TrieMut, TrieDBMut};
 use persistence::{BlakeDbHasher, Codec};
+use rust_decimal::Decimal;
+use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Pay {
@@ -38,6 +40,138 @@ pub struct Pay {
 
 impl Pay {
     pub const TX_TYPE: u8 = 4;
+
+    /// Applies the open shares transaction to the provided database.
+    ///
+    /// This function will panic if the `payer` account does not exist.
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        let bin_payer = &self.payer.to_bytes();
+        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+
+        // Convert address to string
+        let payer = hex::encode(bin_payer);
+
+        // Convert hashes to strings
+        let cur_hash = hex::encode(bin_cur_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        let payer_cur_key = format!("{}.{}", payer, cur_hash);
+        let payer_cur_key = payer_cur_key.as_bytes();
+        let payer_fee_key = format!("{}.{}", payer, fee_hash);
+        let payer_fee_key = payer_fee_key.as_bytes();
+
+        // Calculate nonce key
+        // 
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let payer_nonce_key = format!("{}.n", payer);
+        let payer_nonce_key = payer_nonce_key.as_bytes();
+
+        // Calculate share map key
+        // The keys of share map objects have the following format:
+        // `<account-address>.sm`
+        let share_map_key = format!("{}.sm", payer);
+        let share_map_key = share_map_key.as_bytes();
+
+        // Retrieve serialized nonce
+        let bin_payer_nonce = &trie.get(&payer_nonce_key).unwrap().unwrap();
+
+        // Read the nonce of the payer
+        let mut nonce = decode_be_u64!(bin_payer_nonce).unwrap();
+
+        // Increment payer nonce
+        nonce += 1;
+
+        let nonce: Vec<u8> = encode_be_u64!(nonce);
+
+        if cur_hash == fee_hash {
+            let mut payer_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&payer_cur_key).unwrap(),
+                        "The payer does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            let share_map = unwrap!(
+                ShareMap::from_bytes(
+                    &unwrap!(
+                        trie.get(&share_map_key).unwrap(),
+                        "The payer does not have a stored share map"
+                    )
+                ),
+                "Invalid stored share map"
+            );
+
+            // Subtract fee from payer balance
+            payer_balance -= self.fee.clone();
+
+            // Subtract amount from payer balance
+            payer_balance -= self.amount.clone();
+
+            let issued_shares = share_map.issued_shares;
+
+            // Add dividend to each shareholder
+            for (k, v) in share_map {
+                pay_dividend(trie, &self.amount, &self.currency_hash, k, v, issued_shares);
+            }
+
+            // Update trie
+            trie.insert(payer_nonce_key, &nonce).unwrap();
+            trie.insert(payer_cur_key, &payer_balance.to_bytes()).unwrap();
+        } else {
+            let mut payer_cur_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&payer_cur_key).unwrap(),
+                        "The payer does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            let mut payer_fee_balance = unwrap!(
+                Balance::from_bytes(
+                    &unwrap!(
+                        trie.get(&payer_fee_key).unwrap(),
+                        "The payer does not have an entry for the given currency"
+                    )
+                ),
+                "Invalid stored balance format"
+            );
+
+            let share_map = unwrap!(
+                ShareMap::from_bytes(
+                    &unwrap!(
+                        trie.get(&share_map_key).unwrap(),
+                        "The payer does not have a stored share map"
+                    )
+                ),
+                "Invalid stored share map"
+            );
+
+            // Subtract fee from payer balance
+            payer_fee_balance -= self.fee.clone();
+
+            // Subtract amount from payer balance
+            payer_cur_balance -= self.amount.clone();
+
+            let issued_shares = share_map.issued_shares;
+
+            // Add dividend to each shareholder
+            for (k, v) in share_map {
+                pay_dividend(trie, &self.amount, &self.currency_hash, k, v, issued_shares);
+            }
+
+            // Update trie
+            trie.insert(payer_nonce_key, &nonce).unwrap();
+            trie.insert(payer_cur_key, &payer_cur_balance.to_bytes()).unwrap();
+            trie.insert(payer_fee_key, &payer_fee_balance.to_bytes()).unwrap();
+        }
+    }
 
     /// Signs the transaction with the given secret key.
     pub fn sign(&mut self, skey: Sk) {
@@ -267,6 +401,42 @@ impl Pay {
     impl_hash!();
 }
 
+fn pay_dividend(
+    trie: &mut TrieDBMut<BlakeDbHasher, Codec>, 
+    amount: &Balance,
+    cur_hash: &Hash,
+    address: NormalAddress, 
+    address_shares: u32, 
+    issued_shares: u32
+) {
+    let address = hex::encode(&address.to_bytes());
+    let cur_hash = hex::encode(cur_hash.to_vec());
+
+    // Calculate balance key
+    let balance_key = format!("{}.{}", address, cur_hash);
+    let balance_key = balance_key.as_bytes();
+
+    // Convert shares to decimals
+    let address_shares = format!("{}.0", address_shares);
+    let address_shares = Decimal::from_str(&address_shares).unwrap();
+    let issued_shares = format!("{}.0", issued_shares);
+    let issued_shares = Decimal::from_str(&issued_shares).unwrap();
+    let one_hundred = Decimal::from_str("100.0").unwrap();
+
+    // Calculate address percentage
+    let percentage = (address_shares / issued_shares) * one_hundred;
+    let amount_deci = amount.to_inner();
+
+    // Calculate amount to be paid 
+    let amount = (percentage / one_hundred) * amount_deci;
+    let amount = format!("{}", amount);
+    let amount = amount.as_bytes();
+    let amount = Balance::from_bytes(amount).unwrap().to_bytes();
+
+    // Update trie
+    trie.insert(balance_key, &amount).unwrap();
+}
+
 fn assemble_hash_message(obj: &Pay) -> Vec<u8> {
     let mut signature = if let Some(ref sig) = obj.signature {
         sig.to_bytes()
@@ -329,7 +499,115 @@ impl Arbitrary for Pay {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use OpenShares;
+    use account::{Address, Shares, NormalAddress};
     use crypto::{Identity, PublicKey as Pk};
+
+    #[test]
+    fn apply_it_pays_dividends() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let id3 = Identity::new();
+        let id4 = Identity::new();
+        let id5 = Identity::new();
+
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        
+        // Create shareholders addresses and skeys
+        let sh1_addr = NormalAddress::from_pkey(*id2.pkey());
+        let sh1_skey = id2.skey().clone();
+        let sh2_addr = NormalAddress::from_pkey(*id3.pkey());
+        let sh2_skey = id3.skey().clone();
+        let sh3_addr = NormalAddress::from_pkey(*id4.pkey());
+        let sh3_skey = id4.skey().clone();
+        let sh4_addr = NormalAddress::from_pkey(*id5.pkey());
+        let sh4_skey = id5.skey().clone();
+
+        let cur_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        let shares = Shares::new(4000, 1000000, 60);
+        let mut share_map = ShareMap::new();
+
+        share_map.add_shareholder(sh1_addr, 1000);
+        share_map.add_shareholder(sh2_addr, 1000);
+        share_map.add_shareholder(sh3_addr, 1000);
+        share_map.add_shareholder(sh4_addr, 1000);
+        
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr, cur_hash, b"10000.0");
+
+        // Create shares account
+        let mut open_shares = OpenShares {
+            creator: creator_norm_address,
+            share_map: share_map,
+            shares: shares,
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            amount: Balance::from_bytes(b"1000.0").unwrap(),
+            fee: Balance::from_bytes(b"30.0").unwrap(),
+            nonce: 1,
+            address: None,
+            stock_hash: None,
+            signature: None,
+            hash: None,
+        };
+
+        open_shares.compute_address();
+        open_shares.compute_stock_hash();
+        open_shares.sign(id2.skey().clone());
+        open_shares.hash();
+        open_shares.apply(&mut trie);
+
+        let mut tx = Pay {
+            payer: open_shares.address.unwrap(),
+            amount: Balance::from_bytes(b"100.0").unwrap(),
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(sh1_skey);
+        tx.sign(sh2_skey);
+        tx.sign(sh3_skey);
+        tx.sign(sh4_skey);
+        tx.hash();
+        tx.apply(&mut trie);
+
+        // Commit changes
+        trie.commit();
+
+        let cur_hash = hex::encode(&cur_hash.to_vec());
+        let sh1_addr = hex::encode(&sh1_addr.to_bytes());
+        let sh2_addr = hex::encode(&sh2_addr.to_bytes());
+        let sh3_addr = hex::encode(&sh3_addr.to_bytes());
+        let sh4_addr = hex::encode(&sh4_addr.to_bytes());
+
+        let sh1_balance_key = format!("{}.{}", sh1_addr, cur_hash);
+        let sh1_balance_key = sh1_balance_key.as_bytes();
+        let sh2_balance_key = format!("{}.{}", sh2_addr, cur_hash);
+        let sh2_balance_key = sh2_balance_key.as_bytes();
+        let sh3_balance_key = format!("{}.{}", sh3_addr, cur_hash);
+        let sh3_balance_key = sh3_balance_key.as_bytes();
+        let sh4_balance_key = format!("{}.{}", sh4_addr, cur_hash);
+        let sh4_balance_key = sh4_balance_key.as_bytes();
+
+        let sh1_balance = trie.get(sh1_balance_key).unwrap().unwrap();
+        let sh2_balance = trie.get(sh2_balance_key).unwrap().unwrap();
+        let sh3_balance = trie.get(sh3_balance_key).unwrap().unwrap();
+        let sh4_balance = trie.get(sh4_balance_key).unwrap().unwrap();
+
+        assert_eq!(Balance::from_bytes(&sh1_balance).unwrap(), Balance::from_bytes(b"25.0").unwrap());
+        assert_eq!(Balance::from_bytes(&sh2_balance).unwrap(), Balance::from_bytes(b"25.0").unwrap());
+        assert_eq!(Balance::from_bytes(&sh3_balance).unwrap(), Balance::from_bytes(b"25.0").unwrap());
+        assert_eq!(Balance::from_bytes(&sh4_balance).unwrap(), Balance::from_bytes(b"25.0").unwrap());
+    }
 
     quickcheck! {
         fn serialize_deserialize(tx: Pay) -> bool {

@@ -22,19 +22,13 @@ extern crate tempfile;
 #[cfg(test)]
 extern crate kvdb_rocksdb;
 
-#[macro_use] 
-extern crate unwrap;
-
-#[macro_use]
-extern crate quickcheck;
-
-#[macro_use]
-extern crate serde_derive;
-
-#[macro_use]
-extern crate bin_tools;
+#[macro_use] extern crate unwrap;
+#[macro_use] extern crate quickcheck;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate bin_tools;
 
 extern crate hex;
+extern crate rust_decimal;
 extern crate persistence;
 extern crate elastic_array;
 extern crate patricia_trie;

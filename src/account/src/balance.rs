@@ -74,6 +74,10 @@ impl Balance {
             _  => panic!("Invalid precision! The value must either be 0 or a number between 2 and 18!")
         }
     }
+
+    pub fn to_inner(&self) -> Decimal {
+        self.0.clone()
+    }
     
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::new();

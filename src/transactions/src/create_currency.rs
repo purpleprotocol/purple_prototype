@@ -121,8 +121,7 @@ impl CreateCurrency {
 
         // Retrieve current index
         let bin_cur_idx = trie.get(b"ci").unwrap().unwrap();
-        let mut ci_reader = Cursor::new(bin_cur_idx);
-        let mut cur_idx = ci_reader.read_u64::<BigEndian>().unwrap();
+        let mut cur_idx = decode_be_u64!(&bin_cur_idx).unwrap();
 
         // Calculate current currencies key
         let current_curs_key = format!("c.{}", cur_idx);
