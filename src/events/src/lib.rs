@@ -16,6 +16,11 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#![feature(test)]
+
+#[cfg(test)]
+extern crate test;
+
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
@@ -23,6 +28,7 @@ extern crate quickcheck;
 #[macro_use]
 extern crate serde_derive;
 
+extern crate merkle;
 extern crate parking_lot;
 extern crate rayon;
 extern crate account;
@@ -33,7 +39,11 @@ extern crate network;
 extern crate rlp;
 extern crate serde;
 extern crate transactions;
+extern crate patricia_trie;
+extern crate persistence;
 
+#[macro_use]
+mod macros;
 mod heartbeat;
 mod join;
 mod leave;

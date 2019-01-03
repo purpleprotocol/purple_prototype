@@ -72,6 +72,8 @@ pub use pay::*;
 
 use rand::Rng;
 use quickcheck::Arbitrary;
+use patricia_trie::{TrieMut, TrieDBMut};
+use persistence::{BlakeDbHasher, Codec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Tx {
@@ -103,6 +105,10 @@ impl Tx {
             Tx::OpenShares(ref tx)      => tx.to_bytes(),
             Tx::Pay(ref tx)             => tx.to_bytes()
         }
+    }
+
+    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>) -> Tx {
+        unimplemented!();
     }
 }
 

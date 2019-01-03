@@ -18,7 +18,7 @@
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use causality::Stamp;
-use crypto::{Hash, PublicKey, Signature};
+use crypto::{Hash, PublicKey, Signature, SecretKey as Sk};
 use network::NodeId;
 use std::boxed::Box;
 use std::io::Cursor;
@@ -40,6 +40,28 @@ pub struct Heartbeat {
 
 impl Heartbeat {
     pub const EVENT_TYPE: u8 = 0; 
+
+    /// Calculates the root hash of the merkle
+    /// tree formed by the transactions stored
+    /// in the heartbeat event.
+    pub fn calculate_root_hash(&mut self) {
+        unimplemented!();
+    }
+
+    /// Signs the event with the given secret key.
+    ///
+    /// This function will panic if there already exists
+    /// a signature and the address type doesn't match
+    /// the signature type.
+    pub fn sign(&mut self, skey: Sk) {
+        // Assemble data
+        let message = assemble_sign_message(&self);
+
+        // Sign data
+        let signature = crypto::sign(&message, skey);
+
+        self.signature = Some(signature);
+    }
 
     /// Serializes a heartbeat struct.
     ///
@@ -319,6 +341,16 @@ impl Heartbeat {
 
         Ok(heartbeat)
     }
+
+    impl_hash!();
+}
+
+fn assemble_hash_message(obj: &Heartbeat) -> Vec<u8> {
+    unimplemented!();
+}
+
+fn assemble_sign_message(obj: &Heartbeat) -> Vec<u8> {
+    unimplemented!();
 }
 
 #[cfg(test)]
@@ -352,5 +384,64 @@ mod tests {
         fn serialize_deserialize(tx: Heartbeat) -> bool {
             tx == Heartbeat::from_bytes(&Heartbeat::to_bytes(&tx).unwrap()).unwrap()
         }
+    }
+}
+
+#[cfg(test)]
+mod benches {
+    extern crate test_helpers;
+
+    use super::*;
+    use crypto::Identity;
+    use test::Bencher;
+    use patricia_trie::{TrieMut, TrieDBMut};
+    use persistence::{BlakeDbHasher, Codec};
+
+    #[bench]
+    fn calculate_root_hash_30(b: &mut Bencher) {
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let id = Identity::new();
+        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(30);
+
+        for _ in 0..30 {
+            txs.push(Box::new(Tx::arbitrary_valid(&mut trie)));
+        }
+        
+        let mut hb = Heartbeat {
+            node_id: NodeId::from_pkey(*id.pkey()),
+            stamp: Stamp::seed(),
+            transactions: txs,
+            root_hash: None,
+            signature: None,
+            hash: None
+        };
+
+        b.iter(|| hb.calculate_root_hash());
+    }
+
+    #[bench]
+    fn deserialize_no_multi_sigs_30(b: &mut Bencher) {
+        let id = Identity::new();
+        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(30);
+        
+        let mut hb = Heartbeat {
+            node_id: NodeId::from_pkey(*id.pkey()),
+            stamp: Stamp::seed(),
+            transactions: txs,
+            root_hash: None,
+            signature: None,
+            hash: None
+        };
+
+        hb.calculate_root_hash();
+        hb.sign(id.skey().clone());
+        hb.hash();
+
+        let serialized = hb.to_bytes().unwrap();
+
+        b.iter(|| Heartbeat::from_bytes(&serialized));
     }
 }

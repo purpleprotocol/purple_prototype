@@ -10,12 +10,16 @@ serde_derive = "1.0.59"
 byteorder = "1.2.7"
 rlp = "0.3.0"
 rayon = "1.0.3"
+merkle = "1.10.0"
 parking_lot = "0.6.4"
 account = { path = "../account" }
 causality = { path = "../causality" }
 network = { path = "../network" }
 crypto = { path = "../crypto" }
 transactions = { path = "../transactions" }
+persistence = { path = "../persistence" }
+patricia-trie = { git = "https://github.com/paritytech/parity-common" }
 
 [dev-dependencies]
 quickcheck = "0.7.2"
+test-helpers = { path = "../util/test-helpers" }

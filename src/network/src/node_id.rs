@@ -28,6 +28,10 @@ impl NodeId {
     pub fn new(bin: [u8; 32]) -> NodeId {
         NodeId(PublicKey(bin))
     }
+
+    pub fn from_pkey(pk: PublicKey) -> NodeId {
+        NodeId(pk)
+    }
 }
 
 impl Arbitrary for NodeId {
