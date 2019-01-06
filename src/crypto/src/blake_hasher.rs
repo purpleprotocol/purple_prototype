@@ -20,6 +20,7 @@ use std::hash::Hasher;
 use hash::*;
 use std::default::Default;
 use std::u64;
+use merkle_light::hash::Algorithm;
 
 pub struct BlakeHasher {
     buffer: Vec<u8>
@@ -40,14 +41,28 @@ impl Default for BlakeHasher {
 }
 
 impl Hasher for BlakeHasher {
+    #[inline]
     fn write(&mut self, bytes: &[u8]) -> () {
         &self.buffer.append(&mut bytes.to_vec());
     }
 
+    #[inline]
     fn finish(&self) -> u64 {
         let result = hash_slice(&self.buffer);
         let hex_encoded = hex::encode(result);
 
         u64::from_str_radix(&hex_encoded, 16).unwrap()
+    }
+}
+
+impl Algorithm<Hash> for BlakeHasher {
+    #[inline]
+    fn hash(&mut self) -> Hash {
+        hash_slice(&self.buffer)
+    }
+
+    #[inline]
+    fn reset(&mut self) {
+        self.buffer = Vec::new();
     }
 }

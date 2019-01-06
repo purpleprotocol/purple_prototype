@@ -19,6 +19,7 @@
 #[macro_use]
 extern crate serde_derive;
 
+extern crate merkle_light;
 extern crate rust_base58;
 extern crate rlp;
 extern crate hashdb;

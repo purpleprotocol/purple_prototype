@@ -28,7 +28,7 @@ extern crate quickcheck;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate merkle;
+extern crate merkle_light;
 extern crate parking_lot;
 extern crate rayon;
 extern crate account;

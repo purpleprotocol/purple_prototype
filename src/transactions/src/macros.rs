@@ -31,6 +31,12 @@ macro_rules! impl_hash {
             self.hash = Some(hash);
         }
 
+        /// Computes the message that is passed to the 
+        /// hash function of this transaction.
+        ///
+        /// This function will panic if the signature field is missing.
+        pub fn compute_hash_message(&self) -> Vec<u8> { assemble_hash_message(&self) }
+
         /// Verifies the correctness of the hash of the transaction.
         ///
         /// This function will panic if the hash field or if the 

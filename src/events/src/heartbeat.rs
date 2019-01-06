@@ -18,24 +18,40 @@
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use causality::Stamp;
-use crypto::{Hash, PublicKey, Signature, SecretKey as Sk};
+use crypto::{Hash, PublicKey, BlakeHasher, Signature, SecretKey as Sk};
 use network::NodeId;
 use std::boxed::Box;
 use std::io::Cursor;
 use transactions::*;
 use rayon::prelude::*;
+use merkle_light::hash::Algorithm;
+use merkle_light::merkle::MerkleTree;
+use std::hash::Hasher;
+use std::iter::FromIterator;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Heartbeat {
-    node_id: NodeId,
-    stamp: Stamp,
+    /// The node id of the event sender
+    pub node_id: NodeId,
+    
+    /// The current timestamp of the sender
+    pub stamp: Stamp,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
-    root_hash: Option<Hash>,
+    /// The root hash of the transactions contained
+    /// by the heartbeat event.
+    pub root_hash: Option<Hash>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<Hash>,
+    /// The hash of the event
+    pub hash: Option<Hash>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
-    transactions: Vec<Box<Tx>>,
+    /// The signature of the sender
+    pub signature: Option<Signature>,
+
+    /// The transactions contained by the heartbeat event
+    pub transactions: Vec<Box<Tx>>,
 }
 
 impl Heartbeat {
@@ -45,7 +61,20 @@ impl Heartbeat {
     /// tree formed by the transactions stored
     /// in the heartbeat event.
     pub fn calculate_root_hash(&mut self) {
-        unimplemented!();
+        let mut hasher = BlakeHasher::new();
+        let txs_hashes: Vec<Hash> = self.transactions
+            .iter()
+            .map(|tx| {
+                let message: Vec<u8> = tx.compute_hash_message(); 
+                
+                hasher.write(&message);
+                hasher.hash()             
+            })
+            .collect();
+
+        let mt: MerkleTree<Hash, BlakeHasher> = MerkleTree::from_iter(txs_hashes);
+
+        self.root_hash = Some(mt.root());
     }
 
     /// Signs the event with the given secret key.
@@ -384,64 +413,5 @@ mod tests {
         fn serialize_deserialize(tx: Heartbeat) -> bool {
             tx == Heartbeat::from_bytes(&Heartbeat::to_bytes(&tx).unwrap()).unwrap()
         }
-    }
-}
-
-#[cfg(test)]
-mod benches {
-    extern crate test_helpers;
-
-    use super::*;
-    use crypto::Identity;
-    use test::Bencher;
-    use patricia_trie::{TrieMut, TrieDBMut};
-    use persistence::{BlakeDbHasher, Codec};
-
-    #[bench]
-    fn calculate_root_hash_30(b: &mut Bencher) {
-        let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-
-        let id = Identity::new();
-        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(30);
-
-        for _ in 0..30 {
-            txs.push(Box::new(Tx::arbitrary_valid(&mut trie)));
-        }
-        
-        let mut hb = Heartbeat {
-            node_id: NodeId::from_pkey(*id.pkey()),
-            stamp: Stamp::seed(),
-            transactions: txs,
-            root_hash: None,
-            signature: None,
-            hash: None
-        };
-
-        b.iter(|| hb.calculate_root_hash());
-    }
-
-    #[bench]
-    fn deserialize_no_multi_sigs_30(b: &mut Bencher) {
-        let id = Identity::new();
-        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(30);
-        
-        let mut hb = Heartbeat {
-            node_id: NodeId::from_pkey(*id.pkey()),
-            stamp: Stamp::seed(),
-            transactions: txs,
-            root_hash: None,
-            signature: None,
-            hash: None
-        };
-
-        hb.calculate_root_hash();
-        hb.sign(id.skey().clone());
-        hb.hash();
-
-        let serialized = hb.to_bytes().unwrap();
-
-        b.iter(|| Heartbeat::from_bytes(&serialized));
     }
 }

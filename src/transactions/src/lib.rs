@@ -107,6 +107,22 @@ impl Tx {
         }
     }
 
+    pub fn compute_hash_message(&self) -> Vec<u8> {
+       match *self {
+            Tx::Call(ref tx)            => tx.compute_hash_message(),
+            Tx::OpenContract(ref tx)    => tx.compute_hash_message(),
+            Tx::Send(ref tx)            => tx.compute_hash_message(),
+            Tx::Burn(ref tx)            => tx.compute_hash_message(),
+            Tx::CreateCurrency(ref tx)  => tx.compute_hash_message(),
+            Tx::CreateMintable(ref tx)  => tx.compute_hash_message(),
+            Tx::Mint(ref tx)            => tx.compute_hash_message(),
+            Tx::IssueShares(ref tx)     => tx.compute_hash_message(),
+            Tx::OpenMultiSig(ref tx)    => tx.compute_hash_message(),
+            Tx::OpenShares(ref tx)      => tx.compute_hash_message(),
+            Tx::Pay(ref tx)             => tx.compute_hash_message()
+        }
+    }
+
     pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>) -> Tx {
         unimplemented!();
     }
