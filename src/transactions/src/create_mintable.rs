@@ -556,6 +556,11 @@ impl CreateMintable {
         Ok(create_mintable)
     }
 
+    /// Returns a random valid transaction for the provided state.
+    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> CreateMintable {
+        unimplemented!();
+    }
+
     impl_hash!();
 }
 

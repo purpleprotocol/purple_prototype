@@ -74,6 +74,7 @@ use rand::Rng;
 use quickcheck::Arbitrary;
 use patricia_trie::{TrieMut, TrieDBMut};
 use persistence::{BlakeDbHasher, Codec};
+use crypto::Identity;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Tx {
@@ -124,7 +125,23 @@ impl Tx {
     }
 
     pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>) -> Tx {
-        unimplemented!();
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(2, 12);
+        let id = Identity::new();
+
+        match random {
+            2  => Tx::OpenContract(OpenContract::arbitrary_valid(trie, id.skey().clone())),
+            3  => Tx::Send(Send::arbitrary_valid(trie, id.skey().clone())),
+            4  => Tx::Burn(Burn::arbitrary_valid(trie, id.skey().clone())),
+            5  => Tx::CreateCurrency(CreateCurrency::arbitrary_valid(trie, id.skey().clone())),
+            6  => Tx::CreateMintable(CreateMintable::arbitrary_valid(trie, id.skey().clone())),
+            7  => Tx::Mint(Mint::arbitrary_valid(trie, id.skey().clone())),
+            8  => Tx::IssueShares(IssueShares::arbitrary_valid(trie, id.skey().clone())),
+            9  => Tx::OpenMultiSig(OpenMultiSig::arbitrary_valid(trie, id.skey().clone())),
+            10 => Tx::OpenShares(OpenShares::arbitrary_valid(trie, id.skey().clone())),
+            11 => Tx::Pay(Pay::arbitrary_valid(trie, id.skey().clone())),
+            _  => panic!()
+        }
     }
 }
 

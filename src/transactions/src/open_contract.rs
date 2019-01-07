@@ -621,6 +621,11 @@ impl OpenContract {
         Ok(open_contract)
     }
 
+    /// Returns a random valid transaction for the provided state.
+    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Self {
+        unimplemented!();
+    }
+
     impl_hash!();
 }
 

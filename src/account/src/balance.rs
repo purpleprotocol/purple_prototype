@@ -46,7 +46,7 @@ lazy_static! {
     static ref PREC18: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,18})?$").unwrap();
 }
 
-#[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Serialize, Deserialize, Clone, Debug)]
 pub struct Balance(Decimal);
 
 impl Balance {

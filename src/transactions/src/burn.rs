@@ -41,6 +41,92 @@ pub struct Burn {
 impl Burn {
     pub const TX_TYPE: u8 = 11;
 
+    /// Validates the transaction against the provided state.
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        let bin_burner = &self.burner.to_bytes();
+        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+
+        // Convert address to strings
+        let burner = hex::encode(bin_burner);
+
+        // Convert hashes to strings
+        let cur_hash = hex::encode(bin_cur_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        // Calculate nonce key
+        // 
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let nonce_key = format!("{}.n", burner);
+        let nonce_key = nonce_key.as_bytes();
+
+        // Calculate currency keys
+        //
+        // The key of a currency entry has the following format:
+        // `<account-address>.<currency-hash>`
+        let cur_key = format!("{}.{}", burner, cur_hash);
+        let fee_key = format!("{}.{}", burner, fee_hash);
+
+        // Retrieve serialized nonce
+        let bin_nonce = match trie.get(&nonce_key) {
+            Ok(Some(nonce)) => nonce,
+            Ok(None)        => return false,
+            Err(err)        => panic!(err)
+        };
+
+        if fee_hash == cur_hash {
+            // The transaction's fee is paid in the same currency
+            // that is being burned, so we only retrieve one balance.
+            let mut balance = match trie.get(&cur_key.as_bytes()) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err)    => panic!(err)
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err)
+            };
+
+            // Subtract fee from balance
+            balance -= self.fee.clone();
+
+            // Subtract amount transferred from balance
+            balance -= self.amount.clone();
+
+            balance >= Balance::from_bytes(b"0.0").unwrap()
+        } else {
+            // The transaction's fee is paid in a different currency
+            // than the one being transferred so we retrieve both balances.
+            let mut cur_balance = match trie.get(&cur_key.as_bytes()) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err)    => panic!(err)
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err)
+            };
+
+            let mut fee_balance = match trie.get(&fee_key.as_bytes()) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err)    => panic!(err)
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err)
+            };
+
+            // Subtract fee from burner
+            fee_balance -= self.fee.clone();
+
+            // Subtract amount transferred from burner
+            cur_balance -= self.amount.clone();
+
+            let zero = Balance::from_bytes(b"0.0").unwrap();
+
+            cur_balance >= zero && fee_balance >= zero
+        }
+    }
+
     /// Applies the burn transaction to the provided database.
     ///
     /// This function will panic if the `burner` account does not exist.
@@ -450,6 +536,11 @@ impl Burn {
         Ok(burn)
     }
 
+    /// Returns a random valid transaction for the provided state.
+    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Burn {
+        unimplemented!();
+    }
+
     impl_hash!();
 }
 
@@ -519,6 +610,172 @@ mod tests {
     use super::*;
     use account::NormalAddress;
     use crypto::Identity;
+
+    #[test]
+    fn validate() {
+        let id = Identity::new();
+        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize burner balance
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Burn {
+            burner: burner_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        assert!(tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_no_funds() {
+        let id = Identity::new();
+        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize burner balance
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Burn {
+            burner: burner_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_different_currencies() {
+        let id = Identity::new();
+        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize burner balance
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Burn {
+            burner: burner_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        assert!(tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_no_funds_different_currencies() {
+        let id = Identity::new();
+        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize burner balance
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Burn {
+            burner: burner_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_no_funds_for_fee_different_currencies() {
+        let id = Identity::new();
+        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize burner balance
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
+
+        let amount = Balance::from_bytes(b"5.0").unwrap();
+        let fee = Balance::from_bytes(b"20.0").unwrap();
+
+        let mut tx = Burn {
+            burner: burner_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
 
     #[test]
     fn apply_it_burns_coins() {
