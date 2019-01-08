@@ -26,6 +26,14 @@ use persistence::{BlakeDbHasher, Codec};
 // Currency hashes per key
 pub const CUR_GROUP_CAPACITY: usize = 50;
 
+#[cfg(not(test))]
+// Mininum amount of transactions required for 
+// being able to create a currency.
+pub const MIN_CREATOR_NONCE: u64 = 50;
+
+#[cfg(test)]
+pub const MIN_CREATOR_NONCE: u64 = 0;
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateCurrency {
     creator: NormalAddress,
@@ -43,6 +51,99 @@ pub struct CreateCurrency {
 
 impl CreateCurrency {
     pub const TX_TYPE: u8 = 8;
+
+    /// Validates the transaction against the provided state.
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        // The created currency cannot be the same
+        // as the one the fee is being paid in.
+        if &self.currency_hash == &self.fee_hash {
+            return false;
+        }
+
+        // The precision must be a number between 0 and 18 excluding 1.
+        if self.precision > 18 || self.precision == 1 {
+            return false;
+        }
+        
+        // The coin supply cannot be lower than 1
+        if self.coin_supply < 1 {
+            return false;
+        }
+
+        // Verify signature
+        if !self.verify_sig() {
+            return false;
+        }
+ 
+        let bin_creator = &self.creator.to_bytes();
+        let bin_receiver = &self.receiver.to_bytes();
+        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+        let coin_supply = &self.coin_supply;
+
+        // Convert addresses to strings
+        let creator = hex::encode(bin_creator);
+        let receiver = hex::encode(bin_receiver);
+
+        // Convert hashes to strings
+        let cur_hash = hex::encode(bin_cur_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        // Calculate precision key
+        //
+        // The key of a currency's precision has the following format:
+        // `<currency-hash>.p`
+        let cur_hash_prec_key = format!("{}.p", cur_hash);
+        let cur_hash_prec_key = cur_hash_prec_key.as_bytes();
+
+        // Calculate nonce key
+        // 
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let creator_nonce_key = format!("{}.n", creator);
+        let creator_nonce_key = creator_nonce_key.as_bytes();
+        
+        // Calculate fee key
+        //
+        // The key of a currency entry has the following format:
+        // `<account-address>.<currency-hash>`
+        let creator_fee_key = format!("{}.{}", creator, fee_hash);
+        let creator_fee_key = creator_fee_key.as_bytes();
+
+        // Retrieve serialized nonce
+        let bin_creator_nonce = match trie.get(&creator_nonce_key) {
+            Ok(Some(nonce)) => nonce,
+            Ok(None)        => return false,
+            Err(err)        => panic!(err)
+        };
+
+        // Retrieve serialized balance
+        let bin_creator_balance = match trie.get(&creator_fee_key) {
+            Ok(Some(nonce)) => nonce,
+            Ok(None)        => return false,
+            Err(err)        => panic!(err)
+        };
+
+        // Read the nonce of the creator
+        let nonce = decode_be_u64!(bin_creator_nonce).unwrap();
+
+        // Read the fee balance of the creator
+        let mut balance = Balance::from_bytes(&bin_creator_balance).unwrap();
+
+        balance -= self.fee.clone();
+
+        // Check nonce validity
+        if nonce < MIN_CREATOR_NONCE {
+            return false;
+        }
+
+        // Check if the currency already exists
+        if let Ok(Some(_)) = trie.get(cur_hash_prec_key) {
+            return false;
+        }
+
+        balance >= Balance::from_bytes(b"0.0").unwrap()
+    }
 
     /// Applies the CreateCurrency transaction to the provided database.
     ///
@@ -93,23 +194,14 @@ impl CreateCurrency {
         let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
         let bin_receiver_nonce = trie.get(&receiver_nonce_key);
 
-        let mut nonce_rdr = Cursor::new(bin_creator_nonce);
-
         // Read the nonce of the creator
-        let mut nonce = nonce_rdr.read_u64::<BigEndian>().unwrap();
+        let mut nonce = decode_be_u64!(bin_creator_nonce).unwrap();
 
         // Increment creator nonce
         nonce += 1;
 
-        let mut nonce_buf: Vec<u8> = Vec::with_capacity(8);
-
-        // Write new nonce to buffer
-        nonce_buf.write_u64::<BigEndian>(nonce).unwrap();
-
-        let mut coin_supply_buf: Vec<u8> = Vec::with_capacity(8);
-
-        // Write coin supply to buffer
-        coin_supply_buf.write_u64::<BigEndian>(*coin_supply).unwrap();
+        let nonce: Vec<u8> = encode_be_u64!(nonce);
+        let coin_supply: Vec<u8> = encode_be_u64!(*coin_supply);
 
         // Calculate currency keys
         //
@@ -156,7 +248,7 @@ impl CreateCurrency {
             // If the current group is maxed out, create a new entry at the next index
             if currencies.len() == CUR_GROUP_CAPACITY {
                 let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_cur_hash]);
-                let mut encoded_idx: Vec<u8> = Vec::new();
+                let mut encoded_idx: Vec<u8> = Vec::with_capacity(8);
 
                 // Increment current index
                 cur_idx += 1;
@@ -175,11 +267,11 @@ impl CreateCurrency {
             }
 
             // Update trie
-            trie.insert(cur_hash_supply_key, &coin_supply_buf).unwrap();
+            trie.insert(cur_hash_supply_key, &coin_supply).unwrap();
             trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
             trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes()).unwrap();
             trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes()).unwrap();
-            trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+            trie.insert(creator_nonce_key, &nonce).unwrap();
         } else {
             // The receiver is another account
             match bin_receiver_nonce {
@@ -205,7 +297,7 @@ impl CreateCurrency {
                     // If the current group is maxed out, create a new entry at the next index
                     if currencies.len() == CUR_GROUP_CAPACITY {
                         let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_cur_hash]);
-                        let mut encoded_idx: Vec<u8> = Vec::new();
+                        let mut encoded_idx: Vec<u8> = Vec::with_capacity(8);
 
                         // Increment current index
                         cur_idx += 1;
@@ -224,11 +316,11 @@ impl CreateCurrency {
                     }
 
                     // Update trie
-                    trie.insert(cur_hash_supply_key, &coin_supply_buf).unwrap();
+                    trie.insert(cur_hash_supply_key, &coin_supply).unwrap();
                     trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
                     trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
                     trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
-                    trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+                    trie.insert(creator_nonce_key, &nonce).unwrap();
                 },
                 // The receiver account does not exist so we create it 
                 Ok(None) => {
@@ -252,7 +344,7 @@ impl CreateCurrency {
                     // If the current group is maxed out, create a new entry at the next index
                     if currencies.len() == CUR_GROUP_CAPACITY {
                         let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_cur_hash]);
-                        let mut encoded_idx: Vec<u8> = Vec::new();
+                        let mut encoded_idx: Vec<u8> = Vec::with_capacity(8);
 
                         // Increment current index
                         cur_idx += 1;
@@ -271,11 +363,11 @@ impl CreateCurrency {
                     }
 
                     // Update trie
-                    trie.insert(cur_hash_supply_key, &coin_supply_buf).unwrap();
+                    trie.insert(cur_hash_supply_key, &coin_supply).unwrap();
                     trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
                     trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
                     trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
-                    trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+                    trie.insert(creator_nonce_key, &nonce).unwrap();
                     trie.insert(receiver_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
                 },
                 Err(err) => panic!(err)
@@ -301,7 +393,7 @@ impl CreateCurrency {
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    pub fn verify_sig(&mut self) -> bool {
+    pub fn verify_sig(&self) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
@@ -587,6 +679,218 @@ mod tests {
     
     use super::*;
     use crypto::Identity;
+
+    #[test]
+    fn validate() {
+        let id = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = CreateCurrency {
+            creator: creator_norm_address.clone(),
+            receiver: creator_addr.clone(),
+            coin_supply: 100,
+            precision: 18,
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        assert!(tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_bad_prec_1() {
+        let id = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = CreateCurrency {
+            creator: creator_norm_address.clone(),
+            receiver: creator_addr.clone(),
+            coin_supply: 100,
+            precision: 19,
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_bad_coin_supply() {
+        let id = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = CreateCurrency {
+            creator: creator_norm_address.clone(),
+            receiver: creator_addr.clone(),
+            coin_supply: 0,
+            precision: 15,
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_bad_prec_2() {
+        let id = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = CreateCurrency {
+            creator: creator_norm_address.clone(),
+            receiver: creator_addr.clone(),
+            coin_supply: 100,
+            precision: 1,
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_same_currencies() {
+        let id = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = CreateCurrency {
+            creator: creator_norm_address.clone(),
+            receiver: creator_addr.clone(),
+            coin_supply: 100,
+            precision: 18,
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: cur_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_no_creator() {
+        let id = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = CreateCurrency {
+            creator: creator_norm_address.clone(),
+            receiver: creator_addr.clone(),
+            coin_supply: 100,
+            precision: 18,
+            fee: fee.clone(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
 
     #[test]
     fn apply_it_creates_currencies_and_adds_them_to_the_creator() {

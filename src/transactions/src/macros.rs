@@ -55,3 +55,90 @@ macro_rules! impl_hash {
         }
     }
 }
+
+macro_rules! impl_validate_signature {
+    () => {
+        fn validate_signature(&mut self, creator: &Address, signature: &Option<Signature>, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+            use crypto::PublicKey as Pk;
+            use account::{NormalAddress, Shares};
+            
+            match (*creator, signature) {
+                (Address::Normal(_), &Some(Signature::Normal(_))) => {
+                    if !self.verify_sig() {
+                        return false;
+                    }
+                },
+                (Address::MultiSig(_), &Some(Signature::MultiSig(_))) => {
+                    let creator = creator.to_bytes();
+                    let creator = hex::encode(creator);
+
+                    let required_keys_key = format!("{}.r", creator);
+                    let required_keys_key = required_keys_key.as_bytes();
+                    let keys_key = format!("{}.k", creator);
+                    let keys_key = keys_key.as_bytes();
+
+                    let required_keys = match trie.get(&required_keys_key) {
+                        Ok(Some(required_keys)) => decode_u8!(required_keys).unwrap(),
+                        Ok(None)                => return false,
+                        Err(err)                => panic!(err)
+                    };
+
+                    let keys: Result<Vec<Pk>, &'static str> = match trie.get(&keys_key) {
+                        Ok(Some(keys)) => {
+                            let keys: Vec<Vec<u8>> = rlp::decode_list(&keys);
+                            
+                            keys
+                                .iter()
+                                .map(|k| NormalAddress::from_bytes(k))
+                                .map(|r| match r {
+                                    Ok(r)    => Ok(r.pkey()),
+                                    Err(err) => Err(err)
+                                })
+                                .collect()
+                        },
+                        Ok(None) => return false,
+                        Err(err) => panic!(err)
+                    }; 
+
+                    let keys = if let Ok(keys) = keys {
+                        keys
+                    } else {
+                        return false;
+                    };
+
+                    if !self.verify_multi_sig(required_keys, &keys) {
+                        return false;
+                    }
+                },
+                (Address::Shareholders(_), &Some(Signature::MultiSig(_))) => {
+                    let creator = creator.to_bytes();
+                    let creator = hex::encode(creator);
+
+                    let shares_key = format!("{}.s", creator);
+                    let share_map_key = format!("{}.sm", creator);
+                    let shares_key = shares_key.as_bytes();
+                    let share_map_key = share_map_key.as_bytes();
+
+                    let shares = match trie.get(&shares_key) {
+                        Ok(Some(result)) => Shares::from_bytes(&result).unwrap(),
+                        Ok(None)         => return false,
+                        Err(err)         => panic!(err)
+                    };
+
+                    let share_map = match trie.get(&share_map_key) {
+                        Ok(Some(result)) => ShareMap::from_bytes(&result).unwrap(),
+                        Ok(None)         => return false,
+                        Err(err)         => panic!(err)
+                    };
+
+                    if !self.verify_multi_sig_shares(shares.required_percentile, share_map) {
+                        return false;
+                    }
+                },
+                _ => return false
+            };
+
+            true
+        }
+    }
+}

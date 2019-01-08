@@ -22,9 +22,9 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Shares {
-    issued_shares: u32,
-    authorized_shares: u32,
-    required_percentile: u8,
+    pub issued_shares: u32,
+    pub authorized_shares: u32,
+    pub required_percentile: u8,
 }
 
 impl Shares {
