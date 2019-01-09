@@ -39,6 +39,51 @@ pub struct IssueShares {
 impl IssueShares {
     pub const TX_TYPE: u8 = 7;
 
+    /// Validates the transaction against the provided state.
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        let bin_issuer = &self.issuer.to_bytes();
+        let bin_receiver = &self.receiver.to_bytes();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+        let shares = &self.shares;
+        let issuer = hex::encode(bin_issuer);
+        let zero = Balance::from_bytes(b"0.0").unwrap();
+
+        if *shares < 1 {
+            return false;
+        }
+
+        // Convert fee hash to string
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        let issuer_fee_key = format!("{}.{}", issuer, fee_hash);
+        let issuer_fee_key = issuer_fee_key.as_bytes();
+
+        // Calculate shares key
+        //
+        // The keys of shares objects have the following format:
+        // `<account-address>.s`
+        let shares_key = format!("{}.s", issuer);
+        let shares_key = shares_key.as_bytes();
+
+        let mut balance = match trie.get(&issuer_fee_key) {
+            Ok(Some(balance)) => Balance::from_bytes(&balance).unwrap(),
+            Ok(None)          => return false,
+            Err(err)          => panic!(err)
+        };
+
+        balance -= self.fee.clone();
+
+        let written_shares = match trie.get(&shares_key) {
+            Ok(Some(shares)) => Shares::from_bytes(&shares).unwrap(),
+            Ok(None)         => return false,
+            Err(err)         => panic!(err)
+        };
+
+        shares + written_shares.issued_shares <= written_shares.authorized_shares
+        &&
+        balance >= zero
+    }
+
     /// Applies the open shares transaction to the provided database.
     ///
     /// This function will panic if the `issuer` account does not exist.
@@ -448,6 +493,242 @@ mod tests {
     use OpenShares;
     use account::{Address, NormalAddress};
     use crypto::{Identity, PublicKey as Pk};
+
+    #[test]
+    fn validate() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let issuer_norm_addr = NormalAddress::from_pkey(*id2.pkey());
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        let shares = Shares::new(1000, 1000000, 60);
+        let mut share_map = ShareMap::new();
+
+        share_map.add_shareholder(NormalAddress::from_pkey(*id2.pkey()), 1000);
+        
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+
+        // Create shares account
+        let mut open_shares = OpenShares {
+            creator: creator_norm_address.clone(),
+            share_map: share_map,
+            shares: shares.clone(),
+            currency_hash: fee_hash.clone(),
+            fee_hash: fee_hash.clone(),
+            amount: Balance::from_bytes(b"100.0").unwrap(),
+            fee: Balance::from_bytes(b"30.0").unwrap(),
+            nonce: 1,
+            address: None,
+            stock_hash: None,
+            signature: None,
+            hash: None,
+        };
+
+        open_shares.compute_address();
+        open_shares.compute_stock_hash();
+        open_shares.sign(id2.skey().clone());
+        open_shares.hash();
+        open_shares.apply(&mut trie);
+
+        let mut tx = IssueShares {
+            issuer: open_shares.address.unwrap(),
+            receiver: issuer_norm_addr.clone(),
+            shares: 999000,
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+
+        assert!(tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_bad_issued_shares() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let issuer_norm_addr = NormalAddress::from_pkey(*id2.pkey());
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        let shares = Shares::new(1000, 1000000, 60);
+        let mut share_map = ShareMap::new();
+
+        share_map.add_shareholder(NormalAddress::from_pkey(*id2.pkey()), 1000);
+        
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+
+        // Create shares account
+        let mut open_shares = OpenShares {
+            creator: creator_norm_address.clone(),
+            share_map: share_map,
+            shares: shares.clone(),
+            currency_hash: fee_hash.clone(),
+            fee_hash: fee_hash.clone(),
+            amount: Balance::from_bytes(b"100.0").unwrap(),
+            fee: Balance::from_bytes(b"30.0").unwrap(),
+            nonce: 1,
+            address: None,
+            stock_hash: None,
+            signature: None,
+            hash: None,
+        };
+
+        open_shares.compute_address();
+        open_shares.compute_stock_hash();
+        open_shares.sign(id2.skey().clone());
+        open_shares.hash();
+        open_shares.apply(&mut trie);
+
+        let mut tx = IssueShares {
+            issuer: open_shares.address.unwrap(),
+            receiver: issuer_norm_addr.clone(),
+            shares: 999001,
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_bad_fee() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let issuer_norm_addr = NormalAddress::from_pkey(*id2.pkey());
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        let shares = Shares::new(1000, 1000000, 60);
+        let mut share_map = ShareMap::new();
+
+        share_map.add_shareholder(NormalAddress::from_pkey(*id2.pkey()), 1000);
+        
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+
+        // Create shares account
+        let mut open_shares = OpenShares {
+            creator: creator_norm_address.clone(),
+            share_map: share_map,
+            shares: shares.clone(),
+            currency_hash: fee_hash.clone(),
+            fee_hash: fee_hash.clone(),
+            amount: Balance::from_bytes(b"100.0").unwrap(),
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            nonce: 1,
+            address: None,
+            stock_hash: None,
+            signature: None,
+            hash: None,
+        };
+
+        open_shares.compute_address();
+        open_shares.compute_stock_hash();
+        open_shares.sign(id2.skey().clone());
+        open_shares.hash();
+        open_shares.apply(&mut trie);
+
+        let mut tx = IssueShares {
+            issuer: open_shares.address.unwrap(),
+            receiver: issuer_norm_addr.clone(),
+            shares: 999900,
+            fee: Balance::from_bytes(b"100000.0").unwrap(),
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_zero() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let issuer_norm_addr = NormalAddress::from_pkey(*id2.pkey());
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        let shares = Shares::new(1000, 1000000, 60);
+        let mut share_map = ShareMap::new();
+
+        share_map.add_shareholder(NormalAddress::from_pkey(*id2.pkey()), 1000);
+        
+        // Manually initialize creator balance
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+
+        // Create shares account
+        let mut open_shares = OpenShares {
+            creator: creator_norm_address.clone(),
+            share_map: share_map,
+            shares: shares.clone(),
+            currency_hash: fee_hash.clone(),
+            fee_hash: fee_hash.clone(),
+            amount: Balance::from_bytes(b"100.0").unwrap(),
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            nonce: 1,
+            address: None,
+            stock_hash: None,
+            signature: None,
+            hash: None,
+        };
+
+        open_shares.compute_address();
+        open_shares.compute_stock_hash();
+        open_shares.sign(id2.skey().clone());
+        open_shares.hash();
+        open_shares.apply(&mut trie);
+
+        let mut tx = IssueShares {
+            issuer: open_shares.address.unwrap(),
+            receiver: issuer_norm_addr.clone(),
+            shares: 0,
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
 
     #[test]
     fn apply_it_issues_shares_and_adds_them_to_the_creator() {

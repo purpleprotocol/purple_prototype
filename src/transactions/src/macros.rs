@@ -62,13 +62,13 @@ macro_rules! impl_validate_signature {
             use crypto::PublicKey as Pk;
             use account::{NormalAddress, Shares};
             
-            match (*creator, signature) {
-                (Address::Normal(_), &Some(Signature::Normal(_))) => {
+            match (creator, signature) {
+                (&Address::Normal(_), &Some(Signature::Normal(_))) => {
                     if !self.verify_sig() {
                         return false;
                     }
                 },
-                (Address::MultiSig(_), &Some(Signature::MultiSig(_))) => {
+                (&Address::MultiSig(_), &Some(Signature::MultiSig(_))) => {
                     let creator = creator.to_bytes();
                     let creator = hex::encode(creator);
 
@@ -110,7 +110,7 @@ macro_rules! impl_validate_signature {
                         return false;
                     }
                 },
-                (Address::Shareholders(_), &Some(Signature::MultiSig(_))) => {
+                (&Address::Shareholders(_), &Some(Signature::MultiSig(_))) => {
                     let creator = creator.to_bytes();
                     let creator = hex::encode(creator);
 
