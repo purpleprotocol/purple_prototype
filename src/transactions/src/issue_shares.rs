@@ -40,15 +40,37 @@ impl IssueShares {
     pub const TX_TYPE: u8 = 7;
 
     /// Validates the transaction against the provided state.
-    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
         let bin_issuer = &self.issuer.to_bytes();
         let bin_receiver = &self.receiver.to_bytes();
         let bin_fee_hash = &self.fee_hash.to_vec();
-        let shares = &self.shares;
+        let shares = self.shares;
         let issuer = hex::encode(bin_issuer);
         let zero = Balance::from_bytes(b"0.0").unwrap();
 
-        if *shares < 1 {
+        // You cannot issue 0 shares
+        if shares < 1 {
+            return false;
+        }
+
+        let shares_key = format!("{}.s", issuer);
+        let share_map_key = format!("{}.sm", issuer);
+        let shares_key = shares_key.as_bytes();
+        let share_map_key = share_map_key.as_bytes();
+
+        let written_shares = match trie.get(&shares_key) {
+            Ok(Some(result)) => Shares::from_bytes(&result).unwrap(),
+            Ok(None)         => return false,
+            Err(err)         => panic!(err)
+        };
+
+        let share_map = match trie.get(&share_map_key) {
+            Ok(Some(result)) => ShareMap::from_bytes(&result).unwrap(),
+            Ok(None)         => return false,
+            Err(err)         => panic!(err)
+        };
+
+        if !self.verify_multi_sig_shares(written_shares.required_percentile, share_map) {
             return false;
         }
 

@@ -36,17 +36,17 @@ pub const MIN_CREATOR_NONCE: u64 = 0;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateCurrency {
-    creator: NormalAddress,
-    receiver: Address,
-    currency_hash: Hash,
-    coin_supply: u64,
-    precision: u8,
-    fee_hash: Hash,
-    fee: Balance,
+    pub creator: NormalAddress,
+    pub receiver: Address,
+    pub currency_hash: Hash,
+    pub coin_supply: u64,
+    pub precision: u8,
+    pub fee_hash: Hash,
+    pub fee: Balance,
     #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<Hash>,
+    pub hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
+    pub signature: Option<Signature>,
 }
 
 impl CreateCurrency {

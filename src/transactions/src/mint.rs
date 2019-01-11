@@ -40,6 +40,104 @@ pub struct Mint {
 impl Mint {
     pub const TX_TYPE: u8 = 10;
 
+    /// Validates the transaction against the provided state.
+    pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        let zero = Balance::from_bytes(b"0.0").unwrap();
+        let minter = &self.minter.clone();
+        let signature = &self.signature.clone();
+
+        // You cannot mint 0 tokens
+        if self.amount == zero {
+            return false;
+        }
+
+        if !self.validate_signature(minter, signature, trie) {
+            return false;
+        }
+
+        let bin_minter = &self.minter.to_bytes();
+        let bin_receiver = &self.receiver.to_bytes();
+        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+
+        // Convert addresses to strings
+        let minter = hex::encode(bin_minter);
+        let receiver = hex::encode(bin_receiver);
+
+        // Convert hashes to strings
+        let cur_hash = hex::encode(bin_cur_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        // Calculate coin supply key
+        //
+        // The key of a currency's coin supply entry has the following format:
+        // `<currency-hash>.s`
+        let coin_supply_key = format!("{}.s", cur_hash);
+        let coin_supply_key = coin_supply_key.as_bytes();
+
+        // Calculate max supply key
+        //
+        // The key of a currency's max supply entry has the following format:
+        // `<currency-hash>.s`
+        let max_supply_key = format!("{}.x", cur_hash);
+        let max_supply_key = max_supply_key.as_bytes();
+
+        let minter_addr_key = format!("{}.m", cur_hash);
+        let minter_addr_key = minter_addr_key.as_bytes();
+
+        // Check for currency existence
+        let _ = match trie.get(&minter_addr_key) {
+            Ok(Some(stored_minter)) => {
+                // Check minter validity
+                if &stored_minter.to_vec() != &bin_minter.to_vec() {
+                    return false;
+                } 
+            },
+            Ok(None) => return false,
+            Err(err) => panic!(err)
+        };
+
+        let coin_supply = trie.get(&coin_supply_key).unwrap().unwrap();
+        let coin_supply = decode_be_u64!(coin_supply).unwrap();
+        let coin_supply = format!("{}.0", coin_supply);
+        let coin_supply = coin_supply.as_bytes();
+        let mut coin_supply = Balance::from_bytes(coin_supply).unwrap();
+
+        let max_supply = trie.get(&max_supply_key).unwrap().unwrap();
+        let max_supply = decode_be_u64!(max_supply).unwrap();
+        let max_supply = format!("{}.0", max_supply);
+        let max_supply = max_supply.as_bytes();
+        let max_supply = Balance::from_bytes(max_supply).unwrap();
+
+        coin_supply += self.amount.clone();
+
+        // Validate minted amount
+        if coin_supply > max_supply {
+            return false;
+        }
+
+        let minter_fee_key = format!("{}.{}", minter, fee_hash);
+        let minter_fee_key = minter_fee_key.as_bytes();
+        let precision_key = format!("{}.p", cur_hash);
+        let precision_key = precision_key.as_bytes();
+
+        // Check for currency existence
+        let _ = match trie.get(precision_key) {
+            Ok(Some(result)) => result,
+            Ok(None)         => return false,
+            Err(err)         => panic!(err)
+        };
+
+        let mut balance = match trie.get(minter_fee_key) {
+            Ok(Some(balance)) => Balance::from_bytes(&balance).unwrap(),
+            Ok(None)          => return false,
+            Err(err)          => panic!(err)
+        };
+
+        balance -= self.fee.clone();
+        balance >= zero
+    }
+
     /// Applies the mint transaction to the provided database.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         let bin_minter = &self.minter.to_bytes();
@@ -528,6 +626,7 @@ impl Mint {
     }
 
     impl_hash!();
+    impl_validate_signature!();
 }
 
 fn assemble_hash_message(obj: &Mint) -> Vec<u8> {
@@ -599,7 +698,257 @@ mod tests {
     use super::*;
     use CreateMintable;
     use account::NormalAddress;
+    use create_currency::CreateCurrency;
     use crypto::Identity;
+
+    #[test]
+    fn validate() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        // Manually initialize creator and minter balances
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+
+        // Create mintable token
+        let mut create_mintable = CreateMintable {
+            creator: creator_norm_address,
+            receiver: creator_addr,
+            minter_address: minter_addr,
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            coin_supply: 10000,
+            max_supply: 100000000,
+            precision: 18,
+            fee: Balance::from_bytes(b"30.0").unwrap(),
+            signature: None,
+            hash: None
+        };
+
+        create_mintable.sign(id2.skey().clone());
+        create_mintable.hash();
+        create_mintable.apply(&mut trie);
+
+        let mut tx = Mint {
+            minter: minter_addr,
+            receiver: creator_addr,
+            amount: Balance::from_bytes(b"100.0").unwrap(),
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+
+        assert!(tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_exceeds_max_supply() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        // Manually initialize creator and minter balances
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+
+        // Create mintable token
+        let mut create_mintable = CreateMintable {
+            creator: creator_norm_address,
+            receiver: creator_addr,
+            minter_address: minter_addr,
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            coin_supply: 9999,
+            max_supply: 10000,
+            precision: 18,
+            fee: Balance::from_bytes(b"30.0").unwrap(),
+            signature: None,
+            hash: None
+        };
+
+        create_mintable.sign(id2.skey().clone());
+        create_mintable.hash();
+        create_mintable.apply(&mut trie);
+
+        let mut tx = Mint {
+            minter: minter_addr,
+            receiver: creator_addr,
+            amount: Balance::from_bytes(b"100.0").unwrap(),
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_it_fails_on_zero_tokens() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        // Manually initialize creator and minter balances
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+
+        // Create mintable token
+        let mut create_mintable = CreateMintable {
+            creator: creator_norm_address,
+            receiver: creator_addr,
+            minter_address: minter_addr,
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            coin_supply: 100,
+            max_supply: 10000,
+            precision: 18,
+            fee: Balance::from_bytes(b"30.0").unwrap(),
+            signature: None,
+            hash: None
+        };
+
+        create_mintable.sign(id2.skey().clone());
+        create_mintable.hash();
+        create_mintable.apply(&mut trie);
+
+        let mut tx = Mint {
+            minter: minter_addr,
+            receiver: creator_addr,
+            amount: Balance::from_bytes(b"0.0").unwrap(),
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_not_existing() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        // Manually initialize creator and minter balances
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+
+        let mut tx = Mint {
+            minter: minter_addr,
+            receiver: creator_addr,
+            amount: Balance::from_bytes(b"10.0").unwrap(),
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_it_fails_on_trying_to_a_mint_non_mintable_currency() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = Address::normal_from_pkey(*id.pkey());
+        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        // Manually initialize creator and minter balances
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+
+        // Create mintable token
+        let mut create_mintable = CreateCurrency {
+            creator: creator_norm_address,
+            receiver: creator_addr,
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            coin_supply: 100,
+            precision: 18,
+            fee: Balance::from_bytes(b"30.0").unwrap(),
+            signature: None,
+            hash: None
+        };
+
+        create_mintable.sign(id2.skey().clone());
+        create_mintable.hash();
+        create_mintable.apply(&mut trie);
+
+        let mut tx = Mint {
+            minter: minter_addr,
+            receiver: creator_addr,
+            amount: Balance::from_bytes(b"10.0").unwrap(),
+            fee: Balance::from_bytes(b"10.0").unwrap(),
+            currency_hash: cur_hash,
+            fee_hash: fee_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(id2.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
 
     #[test]
     fn apply_it_mints_tokens_and_adds_them_to_the_creator() {
