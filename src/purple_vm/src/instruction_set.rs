@@ -16,8 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#[EnumRepr(type = "u8")]
 #[derive(Debug)]
-pub enum InstructionSet {
+pub enum Instruction {
     Halt                  = 0x00,
     Nop                   = 0x01,
     Block                 = 0x02,
@@ -29,7 +30,6 @@ pub enum InstructionSet {
     BreakIf               = 0x08,
     Return                = 0x09,
     Call                  = 0x0a,
-    CallIndirect          = 0x0b,
 
     // Local variables
     GetLocal              = 0x10,
@@ -227,6 +227,8 @@ pub enum InstructionSet {
     CallerAddress         = 0xe7,
     CallCurrency          = 0xe8,
     RandomNumber          = 0xe9,
-    Suicide               = 0xff
 
+    // Vm interface
+    GcStart               = 0xf0,
+    Suicide               = 0xff
 }

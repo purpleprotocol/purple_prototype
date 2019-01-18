@@ -22,7 +22,6 @@ use std::fmt;
 pub struct Stack<T>(Vec<T>);
 
 impl<T: fmt::Debug> Stack<T> {
-
     pub fn new() -> Stack<T> {
         Stack(vec![])
     }
@@ -57,7 +56,7 @@ impl<T: fmt::Debug> Stack<T> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]

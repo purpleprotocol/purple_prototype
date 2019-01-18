@@ -5,3 +5,4 @@ authors = ["Octavian Oncescu <octavonce@gmail.com>"]
 publish = false
 
 [dependencies]
+enum-repr = "0.2.2"
