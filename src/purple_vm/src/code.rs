@@ -16,6 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use std::str;
+use std::io::Cursor;
+use byteorder::{BigEndian, ReadBytesExt};
 use instruction_set::Instruction;
 
 const VM_VERSION: u8 = 1;
@@ -37,7 +40,7 @@ impl Code {
     /// 1) The imports section 
     /// 2) The functions section
     ///
-    /// Everything is encoded using Big Endian
+    /// Everything is encoded in Big Endian.
     ///
     /// The binary structure of a contract is the following:
     /// 1) Version               - 8bits                - The version of the instruction set.
@@ -71,10 +74,163 @@ impl Code {
     /// 5) Function name         - Variable length      - The name of the function. Must be valid utf8.
     /// 6) Argument types        - Variable length      - The types of the arguments.
     /// 7) Block                 - Variable length      - The function's block of code.
-    pub fn validate(&self) -> bool {
-        unimplemented!(); 
+    pub fn validate(&mut self) -> bool {
+        // The code cannot be empty.
+        if self.0.len() == 0 {
+            return false;
+        }
+
+        let mut cursor = Cursor::new(&mut self.0);
+
+        // Check version byte
+        match cursor.read_u8() {
+            Ok(byte) => {
+                if byte != VM_VERSION {
+                    return false;
+                }
+            },
+            _ => return false
+        };
+
+        cursor.set_position(1);
+
+        let imports_len = match cursor.read_u16::<BigEndian>() {
+            Ok(result) => result,
+            _          => return false
+        };
+
+        cursor.set_position(3);
+
+        let functions_len = match cursor.read_u16::<BigEndian>() {
+            Ok(result) => result,
+            _          => return false
+        };
+
+        // A contract cannot contain empty sections
+        if imports_len == 0 || functions_len == 0 {
+            return false;
+        }
+
+        // Consume cursor
+        let mut buf = cursor.into_inner();
+        let _: Vec<u8> = buf.drain(..5).collect();
+
+        let imports_section = if buf.len() > imports_len as usize {
+            let result: Vec<u8> = buf.drain(..imports_len as usize).collect();
+            result
+        } else {
+            return false;
+        };
+
+        let functions_section = if buf.len() == functions_len as usize {
+            let result: Vec<u8> = buf.drain(..functions_len as usize).collect();
+            result
+        } else {
+            return false;
+        };
+
+        // Decode imports section
+        let mut cursor = Cursor::new(imports_section);
+
+        let addresses_len = match cursor.read_u16::<BigEndian>() {
+            Ok(result) => result,
+            _          => return false
+        };
+
+        if addresses_len % 33 != 0 {
+            return false;
+        }
+
+        cursor.set_position(2);
+
+        let imports_len = match cursor.read_u16::<BigEndian>() {
+            Ok(result) => result,
+            _          => return false
+        };
+
+        // Consume cursor
+        let mut buf = cursor.into_inner();
+        let _: Vec<u8> = buf.drain(..4).collect();
+
+        let mut encoded_addresses = if buf.len() > addresses_len as usize {
+            let result: Vec<u8> = buf.drain(..imports_len as usize).collect();
+            result
+        } else {
+            return false;
+        };
+
+        let mut encoded_imports = if buf.len() == imports_len as usize {
+            let result: Vec<u8> = buf.drain(..imports_len as usize).collect();
+            result
+        } else {
+            return false;
+        };
+
+        let mut addresses: Vec<[u8; 33]> = Vec::with_capacity((addresses_len / 33) as usize);
+        let mut imports: Vec<(u16, String)> = Vec::new();
+
+        // Decode addresses
+        loop {
+            if encoded_addresses.len() == 0 {
+                break;
+            }
+
+            let mut buf = [0; 33];
+            let result: Vec<u8> = encoded_addresses.drain(..33).collect();
+
+            // Only contract addresses are allowed
+            if result[0] != 0x04 {
+                return false;
+            }
+            
+            buf.copy_from_slice(&result);
+            addresses.push(buf);
+        };
+
+        // Decode imports
+        loop {
+            if encoded_imports.len() == 0 {
+                break;
+            }
+
+            let mut cursor = Cursor::new(&mut encoded_imports);
+
+            let function_name_len = match cursor.read_u8() {
+                Ok(result) => result,
+                _          => return false 
+            };
+
+            cursor.set_position(1);
+
+            let address_idx = match cursor.read_u16::<BigEndian>() {
+                Ok(result) => result,
+                _          => return false
+            };
+
+            let mut buf = cursor.into_inner();
+            let _: Vec<u8> = buf.drain(..3).collect();
+
+            let function_name = if buf.len() >= function_name_len as usize {
+                let result: Vec<u8> = buf.drain(..function_name_len as usize).collect();
+
+                match str::from_utf8(&result) {
+                    Ok(result) => result.to_owned(),
+                    _          => return false
+                }
+            } else {
+                return false;
+            };
+
+            imports.push((address_idx, function_name));
+        }
+
+        // // Decode functions section
+        // loop {
+
+        // };
+
+        true
     }
-        
 }
 
 fn validate_block(block: &[u8]) -> bool {
@@ -101,6 +257,34 @@ fn validate_block(block: &[u8]) -> bool {
     };
 
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_it_fails_on_empty_code() {
+        let mut code = Code::new(&[]);
+        assert!(!code.validate());
+    }
+
+    #[test]
+    fn validate_fails_on_bad_vm_version() {
+        let mut code = Code::new(&[0x03, 0x00, 0x01, 0x00, 0x01]);
+        assert!(!code.validate());
+    }
+
+    #[test]
+    fn validate_fails_on_empty_sections() {
+        let mut code1 = Code::new(&[0x01, 0x00, 0x00, 0x00, 0x01]);
+        let mut code2 = Code::new(&[0x01, 0x00, 0x01, 0x00, 0x00]);
+        let mut code3 = Code::new(&[0x01, 0x00, 0x00, 0x00, 0x00]);
+
+        assert!(!code1.validate());
+        assert!(!code2.validate());
+        assert!(!code3.validate());
+    }
 }
 
 #[cfg(test)]

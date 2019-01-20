@@ -216,8 +216,11 @@ pub enum Instruction {
     f32Reinterpreti32     = 0xcc,
     f64Reinterpreti64     = 0xcd,
 
+    // Vm interface
+    GcStart               = 0xd0,
+
     // Blockchain api
-    CallExtern            = 0xe0,
+    GetBalance            = 0xe0,
     SendCurrency          = 0xe1,
     Mint                  = 0xe2,
     Burn                  = 0xe3,
@@ -227,8 +230,6 @@ pub enum Instruction {
     CallerAddress         = 0xe7,
     CallCurrency          = 0xe8,
     RandomNumber          = 0xe9,
-
-    // Vm interface
-    GcStart               = 0xf0,
+    CurrentTime           = 0xea,
     Suicide               = 0xff
 }

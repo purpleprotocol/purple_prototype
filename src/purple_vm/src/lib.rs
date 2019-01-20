@@ -20,6 +20,7 @@
 
 #[macro_use]
 extern crate enum_repr;
+extern crate byteorder;
 
 pub use virtual_machine::*;
 pub use state::*;

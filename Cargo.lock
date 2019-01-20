@@ -1552,6 +1552,7 @@ dependencies = [
 name = "purple_vm"
 version = "0.1.0"
 dependencies = [
+ "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "enum-repr 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
