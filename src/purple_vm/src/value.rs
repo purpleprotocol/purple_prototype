@@ -16,10 +16,24 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[derive(Debug)]
+use instruction_set::Instruction;
+
+#[derive(Clone, Debug)]
 pub enum VmValue {
     I32,
     I64,
     F32,
     F64
+}
+
+impl VmValue {
+    pub fn from_op(op: u8) -> Option<VmValue> {
+        match Instruction::from_repr(op) {
+            Some(Instruction::i32Const) => Some(VmValue::I32),
+            Some(Instruction::i64Const) => Some(VmValue::I64),
+            Some(Instruction::f32Const) => Some(VmValue::F32),
+            Some(Instruction::f64Const) => Some(VmValue::F64),
+            _                           => None
+        }
+    }
 }

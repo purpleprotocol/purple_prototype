@@ -16,10 +16,16 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+pub mod function;
+pub mod import;
+
 use std::str;
 use std::io::Cursor;
 use byteorder::{BigEndian, ReadBytesExt};
 use instruction_set::Instruction;
+use value::VmValue;
+use function::Function;
+use import::Import;
 
 const VM_VERSION: u8 = 1;
 
@@ -122,7 +128,7 @@ impl Code {
             return false;
         };
 
-        let functions_section = if buf.len() == functions_len as usize {
+        let mut functions_section = if buf.len() == functions_len as usize {
             let result: Vec<u8> = buf.drain(..functions_len as usize).collect();
             result
         } else {
@@ -167,7 +173,7 @@ impl Code {
         };
 
         let mut addresses: Vec<[u8; 33]> = Vec::with_capacity((addresses_len / 33) as usize);
-        let mut imports: Vec<(u16, String)> = Vec::new();
+        let mut imports: Vec<Import> = Vec::new();
 
         // Decode addresses
         loop {
@@ -207,6 +213,11 @@ impl Code {
                 _          => return false
             };
 
+            // Invalid in case of out of bounds index
+            if address_idx as usize > addresses.len() - 1 {
+                return false;
+            }
+
             let mut buf = cursor.into_inner();
             let _: Vec<u8> = buf.drain(..3).collect();
 
@@ -221,13 +232,104 @@ impl Code {
                 return false;
             };
 
-            imports.push((address_idx, function_name));
+            let import = Import {
+                addr_idx: address_idx,
+                function_name: function_name
+            };
+
+            imports.push(import);
         }
 
-        // // Decode functions section
-        // loop {
+        // Decode functions section
+        let mut functions: Vec<Function> = Vec::new();
 
-        // };
+        loop {
+            if functions_section.len() == 0 {
+                break;
+            }
+
+            let mut cursor = Cursor::new(&mut functions_section);
+
+            let function_name_len = match cursor.read_u8() {
+                Ok(result) => result,
+                _          => return false 
+            };
+
+            cursor.set_position(1);
+
+            let arity = match cursor.read_u8() {
+                Ok(result) => result,
+                _          => return false 
+            };
+
+            cursor.set_position(2);
+
+            let return_type = match cursor.read_u8() {
+                Ok(result) => VmValue::from_op(result),
+                _          => return false 
+            };
+
+            let return_type = match return_type {
+                Some(result) => result,
+                None         => return false
+            };
+
+            cursor.set_position(3);
+
+            let block_len = match cursor.read_u16::<BigEndian>() {
+                Ok(result) => result,
+                _          => return false
+            };
+
+            let mut buf = cursor.into_inner();
+            let _: Vec<u8> = buf.drain(..5).collect();
+
+            let function_name = if buf.len() > function_name_len as usize {
+                let result: Vec<u8> = buf.drain(..function_name_len as usize).collect();
+
+                match str::from_utf8(&result) {
+                    Ok(result) => result.to_owned(),
+                    _          => return false
+                }
+            } else {
+                return false;
+            };
+
+            let arguments = if buf.len() > arity as usize {
+                let result: Option<Vec<VmValue>> = buf
+                    .drain(..function_name_len as usize)
+                    .map(|v| VmValue::from_op(v))
+                    .collect();
+
+                match result {
+                    Some(result) => result,
+                    None         => return false
+                }
+            } else {
+                return false;
+            };
+
+            let block = if buf.len() >= block_len as usize {
+                let result: Vec<u8> = buf.drain(..block_len as usize).collect();
+                result
+            } else {
+                return false;
+            };
+
+            if !validate_block(&block) {
+                return false;
+            }
+
+            let function = Function {
+                arity: arity,
+                name: function_name,
+                arguments: arguments,
+                block: block,
+                return_type: return_type
+            };
+
+            functions.push(function);
+        };
 
         true
     }
