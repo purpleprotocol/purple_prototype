@@ -18,7 +18,7 @@
 
 use instruction_set::Instruction;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum VmValue {
     I32,
     I64,

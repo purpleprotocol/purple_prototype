@@ -53,6 +53,10 @@ impl<T: fmt::Debug> Stack<T> {
     pub fn as_slice(&self) -> &[T] {
         self.0.as_slice()
     }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 #[cfg(test)]

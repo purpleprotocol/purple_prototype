@@ -18,6 +18,7 @@
 
 pub mod function;
 pub mod import;
+mod validator;
 
 use std::str;
 use std::io::Cursor;
@@ -26,6 +27,9 @@ use instruction_set::Instruction;
 use value::VmValue;
 use function::Function;
 use import::Import;
+use self::validator::Validator;
+use hashbrown::HashSet;
+use std::hash::Hash;
 
 const VM_VERSION: u8 = 1;
 
@@ -118,7 +122,7 @@ impl Code {
         }
 
         // Consume cursor
-        let mut buf = cursor.into_inner();
+        let buf = cursor.into_inner();
         let _: Vec<u8> = buf.drain(..5).collect();
 
         let imports_section = if buf.len() > imports_len as usize {
@@ -218,7 +222,7 @@ impl Code {
                 return false;
             }
 
-            let mut buf = cursor.into_inner();
+            let buf = cursor.into_inner();
             let _: Vec<u8> = buf.drain(..3).collect();
 
             let function_name = if buf.len() >= function_name_len as usize {
@@ -281,7 +285,7 @@ impl Code {
                 _          => return false
             };
 
-            let mut buf = cursor.into_inner();
+            let buf = cursor.into_inner();
             let _: Vec<u8> = buf.drain(..5).collect();
 
             let function_name = if buf.len() > function_name_len as usize {
@@ -316,7 +320,7 @@ impl Code {
                 return false;
             };
 
-            if !validate_block(&block) {
+            if !validate_block(&block, return_type, &arguments) {
                 return false;
             }
 
@@ -331,34 +335,53 @@ impl Code {
             functions.push(function);
         };
 
+        // Check for unique function names
+        let imports_names: Vec<&str> = imports
+            .iter()
+            .map(|i| i.function_name.as_str())
+            .collect();
+
+        let functions_names: Vec<&str> = functions
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect();
+
+        if !has_unique_elements(imports_names) || !has_unique_elements(functions_names) {
+            return false;
+        }
+
         true
     }
 }
 
-fn validate_block(block: &[u8]) -> bool {
-    // A block cannot be empty
-    if block.len() <= 2 {
-        return false;
+fn has_unique_elements<T>(iter: T) -> bool
+where
+    T: IntoIterator,
+    T::Item: Eq + Hash,
+{
+    let mut uniq = HashSet::new();
+    iter.into_iter().all(move |x| uniq.insert(x))
+}
+
+fn validate_block(block: &[u8], return_type: VmValue, argv: &[VmValue]) -> bool {
+    let mut validator = Validator::new();
+    
+    for byte in block {
+        match Instruction::from_repr(*byte) {
+            Some(op) => {
+                // Validate op
+                validator.switch_state(op);
+
+                // The validator cannot continue i.e. the input is invalid
+                if validator.done() {
+                    return false;
+                }
+            },
+            None => return false
+        }
     }
 
-    let first = block[0];
-    let last = block[block.len()-1];
-
-    // The first instruction must always 
-    // be a `Block` instruction.
-    let _: Result<(), ()> = match Instruction::from_repr(first) {
-        Some(Instruction::Block) => Ok(()),
-        _                        => return false
-    };
-
-    // The last instruction must always
-    // be an `End` instruction. 
-    let _: Result<(), ()> = match Instruction::from_repr(last) {
-        Some(Instruction::End) => Ok(()),
-        _                      => return false
-    };
-
-    true
+    validator.valid()
 }
 
 #[cfg(test)]
@@ -393,20 +416,20 @@ mod tests {
 #[test]
 fn validate_block_it_fails_on_invalid_first_instruction() {
     let block = vec![Instruction::Nop.repr(), Instruction::Nop.repr(), Instruction::End.repr()];
-    assert!(!validate_block(&block));
+    assert!(!validate_block(&block, VmValue::I32, &[]));
 }
 
 #[cfg(test)]
 #[test]
 fn validate_block_it_fails_on_invalid_last_instruction() {
     let block = vec![Instruction::Block.repr(), Instruction::Nop.repr(), Instruction::Nop.repr()];
-    assert!(!validate_block(&block));
+    assert!(!validate_block(&block, VmValue::I32, &[]));
 }
 
 #[cfg(test)]
 #[test]
 fn validate_block_it_fails_on_empty_block() {
     let block = vec![Instruction::Block.repr(), Instruction::End.repr()];
-    assert!(!validate_block(&block));
+    assert!(!validate_block(&block, VmValue::I32, &[]));
 }
 

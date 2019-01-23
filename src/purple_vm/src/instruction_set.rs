@@ -17,7 +17,7 @@
 */
 
 #[EnumRepr(type = "u8")]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Instruction {
     Halt                  = 0x00,
     Nop                   = 0x01,

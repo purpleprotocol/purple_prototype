@@ -7,3 +7,4 @@ publish = false
 [dependencies]
 enum-repr = "0.2.2"
 byteorder = "1.2.7"
+hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde"] }
