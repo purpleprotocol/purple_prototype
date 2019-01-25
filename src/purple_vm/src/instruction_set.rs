@@ -17,11 +17,11 @@
 */
 
 #[EnumRepr(type = "u8")]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Instruction {
     Halt                  = 0x00,
     Nop                   = 0x01,
-    Block                 = 0x02,
+    Begin                 = 0x02,
     Loop                  = 0x03,
     If                    = 0x04,
     Else                  = 0x05,
@@ -233,3 +233,237 @@ pub enum Instruction {
     CurrentTime           = 0xea,
     Suicide               = 0xff
 }
+
+impl Instruction {
+    pub fn transitions(&self) -> Vec<Instruction> {
+        match *self {
+            Instruction::Halt => {
+                unimplemented!()
+            },
+            _ => unimplemented!()
+        }
+    }
+}
+
+/// List containing all opcodes which terminate execution
+pub const HALTING_OPS: &'static [Instruction] = &[
+    Instruction::Halt,
+    Instruction::Suicide
+];
+
+/// Static array containing all opcodes
+pub const OPS_LIST: &'static [Instruction] = &[
+    Instruction::Halt                  ,
+    Instruction::Nop                   ,
+    Instruction::Begin                 ,
+    Instruction::Loop                  ,
+    Instruction::If                    ,
+    Instruction::Else                  ,
+    Instruction::End                   ,
+    Instruction::Break                 ,
+    Instruction::BreakIf               ,
+    Instruction::Return                ,
+    Instruction::Call                  ,
+
+    // Local variables
+    Instruction::GetLocal              ,
+    Instruction::SetLocal              ,
+    Instruction::TeeLocal              ,
+
+    // State
+    Instruction::GetState              ,
+    Instruction::SetState              ,
+
+    // Memory load
+    Instruction::i32Load               ,
+    Instruction::i64Load               ,
+    Instruction::f32Load               ,
+    Instruction::f64Load               ,
+    Instruction::i32Load8Signed        ,
+    Instruction::i32Load8Unsigned      ,
+    Instruction::i32Load16Signed       ,
+    Instruction::i32Load16Unsigned     ,
+    Instruction::i64Load8Signed        ,
+    Instruction::i64Load8Unsigned      ,
+    Instruction::i64Load16Signed       ,
+    Instruction::i64Load16Unsigned     ,
+    Instruction::i64Load32Signed       ,
+    Instruction::i64Load32Unsigned     ,
+
+    // Memory store 
+    Instruction::i32Store              ,
+    Instruction::i64Store              ,
+    Instruction::f32Store              ,
+    Instruction::f64Store              ,
+    Instruction::i32Store8             ,
+    Instruction::i32Store16            ,
+    Instruction::i64Store8             ,
+    Instruction::i64Store16            ,
+    Instruction::i64Store32            ,
+
+    // i32 operations
+    Instruction::i32Add                ,
+    Instruction::i32Sub                ,
+    Instruction::i32Mul                ,
+    Instruction::i32DivSigned          ,
+    Instruction::i32DivUnsigned        ,
+    Instruction::i32RemSigned          ,
+    Instruction::i32RemUnsigned        ,
+    Instruction::i32And                ,
+    Instruction::i32Or                 ,
+    Instruction::i32Xor                ,
+    Instruction::i32Shl                ,
+    Instruction::i32ShrSigned          ,
+    Instruction::i32ShrUnsigned        ,
+    Instruction::i32Rotl               ,
+    Instruction::i32Rotr               ,
+
+    // i64 operations
+    Instruction::i64Add                ,
+    Instruction::i64Sub                ,
+    Instruction::i64Mul                ,
+    Instruction::i64DivSigned          ,
+    Instruction::i64DivUnsigned        ,
+    Instruction::i64RemSigned          ,
+    Instruction::i64RemUnsigned        ,
+    Instruction::i64And                ,
+    Instruction::i64Or                 ,
+    Instruction::i64Xor                ,
+    Instruction::i64Shl                ,
+    Instruction::i64ShrSigned          ,
+    Instruction::i64SHrUnsigned        ,
+    Instruction::i64Rotl               ,
+    Instruction::i64Rotr               ,
+
+    // f32 operations
+    Instruction::f32Abs                ,
+    Instruction::f32Neg                ,
+    Instruction::f32Add                ,
+    Instruction::f32Sub                ,
+    Instruction::f32Div                ,
+    Instruction::f32Ceil               ,
+    Instruction::f32Floor              ,
+    Instruction::f32Trunc              ,
+    Instruction::f32Nearest            ,
+    Instruction::f32CopySign           ,
+    Instruction::f32Sqrt               ,
+    Instruction::f32Min                ,
+    Instruction::f32Max                ,
+
+    // f64 operations 
+    Instruction::f64Abs                ,
+    Instruction::f64Neg                ,
+    Instruction::f64Add                ,
+    Instruction::f64Sub                ,
+    Instruction::f64Div                ,
+    Instruction::f64Ceil               ,
+    Instruction::f64Floor              ,
+    Instruction::f64Trunc              ,
+    Instruction::f64Nearest            ,
+    Instruction::f64CopySign           ,
+    Instruction::f64Sqrt               ,
+    Instruction::f64Min                ,
+    Instruction::f64Max                ,
+
+    // i32 comparison operators
+    Instruction::i32Eqz                ,
+    Instruction::i32Eq                 ,
+    Instruction::i32Ne                 ,
+    Instruction::i32LtSigned           ,
+    Instruction::i32LtUnsigned         ,
+    Instruction::i32GtSigned           ,
+    Instruction::i32GtUnsigned         ,
+    Instruction::i32LeSigned           ,
+    Instruction::i32LeUnsigned         ,
+    Instruction::i32GeSigned           ,
+    Instruction::i32GeUnsigned         ,
+
+    // i64 comparison operators
+    Instruction::i64Eqz                ,
+    Instruction::i64Eq                 ,
+    Instruction::i64Ne                 ,
+    Instruction::i64LtSigned           ,
+    Instruction::i64LtUnsigned         ,
+    Instruction::i64GtSigned           ,
+    Instruction::i64GtUnsigned         ,
+    Instruction::i64LeSigned           ,
+    Instruction::i64LeUnsigned         ,
+    Instruction::i64GeSigned           ,
+    Instruction::i64GeUnsigned         ,
+
+    // f32 comparison operators
+    Instruction::f32Eqz                ,
+    Instruction::f32Eq                 ,
+    Instruction::f32Ne                 ,
+    Instruction::f32LtSigned           ,
+    Instruction::f32LtUnsigned         ,
+    Instruction::f32GtSigned           ,
+    Instruction::f32GtUnsigned         ,
+    Instruction::f32LeSigned           ,
+    Instruction::f32LeUnsigned         ,
+    Instruction::f32GeSigned           ,
+    Instruction::f32GeUnsigned         ,
+
+    // f64 comparison operators
+    Instruction::f64Eqz                ,
+    Instruction::f64Eq                 ,
+    Instruction::f64Ne                 ,
+    Instruction::f64LtSigned           ,
+    Instruction::f64LtUnsigned         ,
+    Instruction::f64GtSigned           ,
+    Instruction::f64GtUnsigned         ,
+    Instruction::f64LeSigned           ,
+    Instruction::f64LeUnsigned         ,
+    Instruction::f64GeSigned           ,
+    Instruction::f64GeUnsigned         ,
+
+    // Constants
+    Instruction::i32Const              ,
+    Instruction::i64Const              ,
+    Instruction::f32Const              ,
+    Instruction::f64Const              ,
+
+    // Datatype conversions
+    Instruction::i32Wrapi64            ,
+    Instruction::i32TruncSignedf32     ,
+    Instruction::i32TrunsUnsignedf32   ,
+    Instruction::i32TruncSignedf64     ,
+    Instruction::i32TruncUnsignedf64   ,
+    Instruction::i64ExtendSignedi32    ,
+    Instruction::i64ExtendUnsignedi32  ,
+    Instruction::i64TruncSignedf32     ,
+    Instruction::i64TruncUnsignedf32   ,
+    Instruction::i64TruncSignedf64     ,
+    Instruction::i64TruncUnsignedf64   ,
+    Instruction::f32ConvertSignedi32   ,
+    Instruction::f32ConvertUnsignedi32 ,
+    Instruction::f32ConvertSignedi64   ,
+    Instruction::f32ConvertUnsignedi64 ,
+    Instruction::f32Demotef64          ,
+    Instruction::f64ConvertSignedi32   ,
+    Instruction::f64ConvertUnsignedi32 ,
+    Instruction::f64ConvertSignedi64   ,
+    Instruction::f64ConvertUnsignedi64 ,
+    Instruction::f64Promotef32         ,
+    Instruction::i32Reinterpretf32     ,
+    Instruction::i64Reinterpretf64     ,
+    Instruction::f32Reinterpreti32     ,
+    Instruction::f64Reinterpreti64     ,
+
+    // Vm interface
+    Instruction::GcStart               ,
+
+    // Blockchain api
+    Instruction::GetBalance            ,
+    Instruction::SendCurrency          ,
+    Instruction::Mint                  ,
+    Instruction::Burn                  ,
+    Instruction::CreateContract        ,
+    Instruction::CreateCurrency        ,
+    Instruction::CreateMintable        ,
+    Instruction::CallerAddress         ,
+    Instruction::CallCurrency          ,
+    Instruction::RandomNumber          ,
+    Instruction::CurrentTime           ,
+    Instruction::Suicide               
+];

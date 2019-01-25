@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use instruction_set::Instruction;
+use instruction_set::{Instruction, OPS_LIST, HALTING_OPS};
 use stack::Stack;
 
 #[derive(Debug)]
@@ -42,39 +42,49 @@ impl Validator {
         }
     }
 
-    pub fn switch_state(&mut self, op: Instruction) {
+    pub fn push_op(&mut self, op: Instruction) {
         if let Validity::IrrefutablyInvalid = self.state {
             panic!("Cannot switch state since the state machine is DONE.");
         }
 
-        // If the stack is empty, only accept a block instruction
+        // If the stack is empty, only accept a begin instruction
         if self.stack.len() == 0 {
             match op {
-                Instruction::Block => {
+                Instruction::Begin => {
                     self.stack.push(op);
-
-                    // TODO: Push transitions
+                    
+                    // All ops are allowed after the first begin instruction
+                    self.transitions = OPS_LIST.to_vec();
                 },
                 _ => {
-                    // The first instruction can only be a block instruction
+                    // The first instruction can only be a begin instruction
                     // so there is nothing more to do at this point.
                     self.state = Validity::IrrefutablyInvalid;
                 }
             }
         } else {
-            // let valid_states: Vec<&State> = self.transitions
-            //     .iter()
-            //     .filter(|t| t.possible(op))
-            //     .map(|t| &t.next)
-            //     .collect();
+            let valid_transition = self.transitions
+                .iter()
+                .any(|t| *t == op);
 
-            // if valid_states.len() == 0 {
-            //     Err(())
-            // } else {
-            //     // Replace self with valid state
-            //     *self = *valid_states[0];
-            //     Ok(())
-            // }
+            if valid_transition {
+                let will_halt = HALTING_OPS
+                    .iter()
+                    .any(|o| *o == op);
+                
+                // Changes state to `Valid` if the opcode
+                // is a halting opcode or the stack is empty.
+                if will_halt || self.stack.len() == 0 {
+                    self.state = Validity::Valid;
+                } else {
+                    let next_ops = op.transitions();
+
+                    self.state = Validity::Invalid;
+                    self.transitions = next_ops;
+                }
+            } else {
+                self.state = Validity::IrrefutablyInvalid;
+            }
         }
     }
 
@@ -90,5 +100,27 @@ impl Validator {
             Validity::Valid   => true,
             _                 => false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn it_rejects_code_not_beginning_with_a_block_op() {
+        let mut validator = Validator::new();
+        validator.push_op(Instruction::Nop);
+
+        assert!(validator.done());
+    }
+
+    #[test]
+    #[should_panic(expected("done state machine")) ]
+    fn it_panics_on_pushing_ops_after_irrefutably_invalid() {
+        let mut validator = Validator::new();
+    
+        validator.push_op(Instruction::Nop);
+        validator.push_op(Instruction::Begin);
     }
 }

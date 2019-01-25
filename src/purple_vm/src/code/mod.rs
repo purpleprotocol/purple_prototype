@@ -369,8 +369,7 @@ fn validate_block(block: &[u8], return_type: VmValue, argv: &[VmValue]) -> bool 
     for byte in block {
         match Instruction::from_repr(*byte) {
             Some(op) => {
-                // Validate op
-                validator.switch_state(op);
+                validator.push_op(op);
 
                 // The validator cannot continue i.e. the input is invalid
                 if validator.done() {
@@ -422,14 +421,14 @@ fn validate_block_it_fails_on_invalid_first_instruction() {
 #[cfg(test)]
 #[test]
 fn validate_block_it_fails_on_invalid_last_instruction() {
-    let block = vec![Instruction::Block.repr(), Instruction::Nop.repr(), Instruction::Nop.repr()];
+    let block = vec![Instruction::Begin.repr(), Instruction::Nop.repr(), Instruction::Nop.repr()];
     assert!(!validate_block(&block, VmValue::I32, &[]));
 }
 
 #[cfg(test)]
 #[test]
 fn validate_block_it_fails_on_empty_block() {
-    let block = vec![Instruction::Block.repr(), Instruction::End.repr()];
+    let block = vec![Instruction::Begin.repr(), Instruction::End.repr()];
     assert!(!validate_block(&block, VmValue::I32, &[]));
 }
 
