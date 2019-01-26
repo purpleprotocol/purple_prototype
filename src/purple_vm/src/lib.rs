@@ -18,19 +18,22 @@
 
 #![allow(non_camel_case_types)]
 
-#[macro_use]
-extern crate enum_repr;
+#[macro_use] extern crate enum_repr;
+
+extern crate lazy_static;
 extern crate byteorder;
 extern crate hashbrown;
+extern crate crypto;
+extern crate persistence;
+extern crate patricia_trie;
 
 pub use virtual_machine::*;
-pub use state::*;
 pub use code::*;
 
+mod module;
 mod instruction_set;
 mod stack;
 mod virtual_machine;
 mod frame;
 mod value;
 mod code;
-mod state;

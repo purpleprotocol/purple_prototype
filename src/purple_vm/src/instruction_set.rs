@@ -263,6 +263,8 @@ pub enum Instruction {
     CallCurrency          = 0xfa,
     RandomNumber          = 0xfb,
     CurrentTime           = 0xfc,
+    CurrentPrice          = 0xfd,
+    PriceAt               = 0xfe,
     Suicide               = 0xff
 }
 
@@ -537,5 +539,7 @@ pub const OPS_LIST: &'static [Instruction] = &[
     Instruction::CallCurrency          ,
     Instruction::RandomNumber          ,
     Instruction::CurrentTime           ,
+    Instruction::CurrentPrice          ,
+    Instruction::PriceAt               ,
     Instruction::Suicide               
 ];

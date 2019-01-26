@@ -16,5 +16,19 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[derive(Debug)]
-pub struct State(Vec<u8>);
+use crypto::Hash;
+use code::function::Function;
+use code::import::Import;
+
+#[derive(Clone, Debug)]
+pub struct Module {
+    module_hash: Hash,
+    functions: Vec<Function>,
+    imports: Vec<Import>
+}
+
+impl PartialEq for Module {
+    fn eq(&self, other: &Module) -> bool {
+        &self.module_hash == &other.module_hash
+    }
+}

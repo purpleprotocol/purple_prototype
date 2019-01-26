@@ -30,6 +30,7 @@ use import::Import;
 use self::validator::Validator;
 use hashbrown::HashSet;
 use std::hash::Hash;
+use module::Module;
 
 const VM_VERSION: u8 = 1;
 
@@ -39,6 +40,11 @@ pub struct Code(Vec<u8>);
 impl Code {
     pub fn new(code: &[u8]) -> Code {
         Code(code.to_vec())
+    }
+
+    /// Converts the binary code to it's internal vm representation.
+    pub fn to_mod(&self) -> Module {
+        unimplemented!();
     }
 
     /// Performs validations on the provided code.

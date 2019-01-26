@@ -19,39 +19,79 @@
 use stack::Stack;
 use frame::Frame;
 use value::VmValue;
-use code::Code;
-use state::State;
+use module::Module;
+use patricia_trie::{TrieMut, TrieDBMut};
+use persistence::{BlakeDbHasher, Codec};
 
+#[derive(Debug)]
 pub struct Vm {
-    state: State,
-    code: Code,
-    gas: u64,
-    stack: Stack<Frame<VmValue>>
+    modules: Vec<Module>,
+    frame_stack: Stack<Frame<VmValue>>,
+    operand_stack: Stack<VmValue>
 }
 
-pub enum Status {
-    Halted,
-    Panicked,
-    Success
+#[derive(Clone, Debug)]
+pub enum VmError {
+    /// The module is not loaded.
+    NoModule,
+
+    /// The function with the given index is not defined.
+    NoFun,
+
+    /// The module containing the function imported at 
+    /// (module idx, import idx) is not loaded. 
+    NotLoaded(usize, usize),
+
+    /// The module is already loaded.
+    AlreadyLoaded,
+
+    /// I32 Overflow
+    I32Overflow,
+
+    /// I64 Overflow
+    I64Overflow,
+
+    /// F32 Overflow
+    F32Overflow,
+
+    /// F64 Overflow
+    F64Overflow,
+
 }
 
 impl Vm {
-    pub fn new(state: State, code: Code, gas: u64) -> Result<Vm, &'static str> {
-        // TODO: Add state and code validations
-        Ok(Vm {
-            state: state,
-            code: code,
-            gas: gas,
-            stack: Stack::<Frame<VmValue>>::new()
-        })
+    pub fn new() -> Vm {
+        Vm {
+            modules: Vec::new(),
+            frame_stack: Stack::<Frame<VmValue>>::new(),
+            operand_stack: Stack::<VmValue>::new()
+        }
+    }
+
+    /// Loads a module into the virtual machine
+    pub fn load(&mut self, module: Module) -> Result<(), VmError> {
+        if self.modules.iter().any(|m| m == &module) {
+            Err(VmError::AlreadyLoaded)
+        } else {
+            self.modules.push(module);
+            Ok(())
+        }
+    }
+
+
+    /// Unloads the module at the given index, if any.
+    pub fn unload(&mut self, idx: usize) {
+        if idx < self.modules.len() {
+            self.modules.remove(idx);
+        }
     }
 
     /// Executes the code loaded in the virtual machine
     /// on the given state.
     ///
-    /// If it succeeds, this function returns a 3 element 
-    /// tuple: (Status, New state, Gas consumed).
-    pub fn execute(&mut self) -> Result<(Status, State, u64), &'static str> {
+    /// If it succeeds, this function returns the amount
+    /// of gas that was consumed.
+    pub fn execute(&mut self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>, module_idx: usize, fun_idx: usize, gas: u64) -> Result<u64, VmError> {
         unimplemented!();
     }
 }

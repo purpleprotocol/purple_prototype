@@ -5,6 +5,10 @@ authors = ["Octavian Oncescu <octavonce@gmail.com>"]
 publish = false
 
 [dependencies]
+lazy_static = "1.2.0"
 enum-repr = "0.2.2"
 byteorder = "1.2.7"
+crypto = { path = "../crypto" }
+persistence = { path = "../persistence" }
+patricia-trie = { git = "https://github.com/paritytech/parity-common" }
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde"] }
