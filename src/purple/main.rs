@@ -50,6 +50,11 @@ use crypto::Identity;
 use elastic_array::ElasticArray128;
 use std::sync::atomic::AtomicBool;
 use futures::future::ok;
+use std::alloc::System;
+
+// Enforce usage of system allocator.
+#[global_allocator]
+static GLOBAL: System = System;
 
 const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";

@@ -16,11 +16,6 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![feature(test)]
-
-#[cfg(test)]
-extern crate test;
-
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;

@@ -3,7 +3,7 @@
 [![Discord](https://img.shields.io/discord/435827644915777536.svg)](https://discord.gg/UCYWSsd)
 [![_pdf whitepaper](https://img.shields.io/badge/_pdf-whitepaper-blue.svg)](https://purpleprotocol.org/whitepaper/)
 
-A full Rust re-write of the Purple Protocol. This is intended to be the de facto implementantion protocol and the most performant one.
+A full Rust re-write of the Purple Protocol. This is intended to be the final and the most performant implementantion of the protocol.
 
 Purple is a decentralized, programmable, multi-asset blockchain protocol that is capable of processing a large volume of transactions with ease. 
 

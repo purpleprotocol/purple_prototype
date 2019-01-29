@@ -15,7 +15,7 @@ RUN apk add 'openssl=1.0.2q-r0' 'openssl-dev=1.0.2q-r0'  --no-cache --repository
 ADD . /opt/app
 WORKDIR /opt/app
 
-RUN cargo rustc --release -- -C target-feature=+crt-static -C codegen-units=16 -Z thinlto
+RUN cargo rustc --release -- -C target-feature=+crt-static -C codegen-units=16 # -Z thinlto
 FROM alpine:edge
 
 WORKDIR /opt/app
