@@ -56,6 +56,7 @@ mod issue_shares;
 mod open_multi_sig;
 mod open_shares;
 mod pay;
+mod create_unique;
 
 pub use burn::*;
 pub use call::*;
