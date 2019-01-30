@@ -30,7 +30,7 @@ pub struct OpenContract {
     code: Vec<u8>,
     default_state: Vec<u8>,
     amount: Balance,
-    currency_hash: Hash,
+    asset_hash: Hash,
     fee: Balance,
     fee_hash: Hash,
     self_payable: bool,
@@ -53,7 +53,7 @@ impl OpenContract {
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         let bin_owner = &self.owner.to_bytes();
         let bin_address = &self.address.clone().unwrap().to_bytes();
-        let bin_currency_hash = &self.currency_hash.to_vec();
+        let bin_currency_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
         let self_payable: Vec<u8> = if self.self_payable {
             vec![1]
@@ -69,7 +69,7 @@ impl OpenContract {
         let address = hex::encode(bin_address);
 
         // Convert hashes to strings
-        let cur_hash = hex::encode(bin_currency_hash);
+        let asset_hash = hex::encode(bin_currency_hash);
         let fee_hash = hex::encode(bin_fee_hash);
 
         // Calculate nonce keys
@@ -126,11 +126,11 @@ impl OpenContract {
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let owner_cur_key = format!("{}.{}", owner, cur_hash);
+        let owner_cur_key = format!("{}.{}", owner, asset_hash);
         let owner_fee_key = format!("{}.{}", owner, fee_hash);
-        let address_cur_key = format!("{}.{}", address, cur_hash);
+        let address_cur_key = format!("{}.{}", address, asset_hash);
 
-        if fee_hash == cur_hash {
+        if fee_hash == asset_hash {
             // The transaction's fee is paid in the same currency
             // that is being transferred, so we only retrieve one
             // balance.
@@ -390,7 +390,7 @@ impl OpenContract {
 
         let self_payable: u8 = if self.self_payable { 1 } else { 0 };
         let owner = &self.owner.to_bytes();
-        let currency_hash = &&self.currency_hash.0;
+        let asset_hash = &&self.asset_hash.0;
         let fee_hash = &&self.fee_hash.0;
         let code = &self.code;
         let default_state = &self.default_state;
@@ -415,7 +415,7 @@ impl OpenContract {
 
         buffer.append(&mut owner.to_vec());
         buffer.append(&mut address.to_vec());
-        buffer.append(&mut currency_hash.to_vec());
+        buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature.to_vec());
@@ -525,7 +525,7 @@ impl OpenContract {
             return Err("Incorrect packet structure! Buffer size is smaller than the size for the owner field");
         };
 
-        let currency_hash = if buf.len() > 32 as usize {
+        let asset_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
@@ -606,7 +606,7 @@ impl OpenContract {
         let open_contract = OpenContract {
             owner: owner,
             amount: amount,
-            currency_hash: currency_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             fee: fee,
             default_state: default_state,
@@ -688,7 +688,7 @@ impl Arbitrary for OpenContract {
             default_state: Arbitrary::arbitrary(g),
             self_payable: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
-            currency_hash: Arbitrary::arbitrary(g),
+            asset_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
@@ -711,14 +711,14 @@ mod tests {
     fn apply_it_correctly_creates_a_shares_account() {
         let id = Identity::new();
         let owner_addr = NormalAddress::from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize owner balance
-        test_helpers::init_balance(&mut trie, Address::Normal(owner_addr.clone()), cur_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(owner_addr.clone()), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"30.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -730,9 +730,9 @@ mod tests {
             fee: fee.clone(),
             code: code.clone(),
             default_state: default_state.clone(),
-            fee_hash: cur_hash,
+            fee_hash: asset_hash,
             amount: amount.clone(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             self_payable: true,
             nonce: 3429,
             address: None,
@@ -765,10 +765,10 @@ mod tests {
         let bin_owner_nonce = &trie.get(&owner_nonce_key).unwrap().unwrap();
         let bin_receiver_nonce = &trie.get(&receiver_nonce_key).unwrap().unwrap();
 
-        let bin_cur_hash = cur_hash.to_vec();
-        let hex_cur_hash = hex::encode(&bin_cur_hash);
+        let bin_asset_hash = asset_hash.to_vec();
+        let hex_asset_hash = hex::encode(&bin_asset_hash);
 
-        let owner_balance_key = format!("{}.{}", hex::encode(&owner_addr.to_bytes()), hex_cur_hash);
+        let owner_balance_key = format!("{}.{}", hex::encode(&owner_addr.to_bytes()), hex_asset_hash);
         let owner_balance_key = owner_balance_key.as_bytes();
 
         let balance = Balance::from_bytes(&trie.get(&owner_balance_key).unwrap().unwrap()).unwrap();
@@ -808,7 +808,7 @@ mod tests {
             code: Vec<u8>,
             default_state: Vec<u8>,
             amount: Balance,
-            currency_hash: Hash,
+            asset_hash: Hash,
             fee: Balance,
             fee_hash: Hash,
             self_payable: bool
@@ -818,7 +818,7 @@ mod tests {
             let mut tx = OpenContract {
                 owner: Address::normal_from_pkey(*id.pkey()),
                 amount: amount,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 nonce: 54432,
                 fee: fee,
@@ -842,7 +842,7 @@ mod tests {
             amount: Balance,
             fee: Balance,
             fee_hash: Hash,
-            currency_hash: Hash
+            asset_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
                 .into_iter()
@@ -858,7 +858,7 @@ mod tests {
             let mut tx = OpenContract {
                 owner: Address::multi_sig_from_pkeys(&pkeys, *owner_id.pkey(), 4314),
                 amount: amount,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 nonce: 54432,
                 self_payable: self_payable,
@@ -884,7 +884,7 @@ mod tests {
             code: Vec<u8>,
             default_state: Vec<u8>,
             amount: Balance,
-            currency_hash: Hash,
+            asset_hash: Hash,
             fee: Balance,
             fee_hash: Hash,
             self_payable: bool
@@ -914,7 +914,7 @@ mod tests {
             let mut tx = OpenContract {
                 owner: Address::shareholders_from_pkeys(&pkeys, *owner_id.pkey(), 4314),
                 amount: amount,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 nonce: 54432,
                 fee: fee,

@@ -29,7 +29,7 @@ pub struct OpenShares {
     pub shares: Shares,
     pub share_map: ShareMap,
     pub amount: Balance,
-    pub currency_hash: Hash,
+    pub asset_hash: Hash,
     pub fee: Balance,
     pub fee_hash: Hash,
     pub nonce: u64,
@@ -53,7 +53,7 @@ impl OpenShares {
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         let bin_creator = &self.creator.to_bytes();
         let bin_address = &self.address.clone().unwrap().to_bytes();
-        let bin_currency_hash = &self.currency_hash.to_vec();
+        let bin_currency_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
         let bin_stock_hash = &self.stock_hash.unwrap().to_vec();
 
@@ -62,7 +62,7 @@ impl OpenShares {
         let address = hex::encode(bin_address);
 
         // Convert hashes to strings
-        let cur_hash = hex::encode(bin_currency_hash);
+        let asset_hash = hex::encode(bin_currency_hash);
         let fee_hash = hex::encode(bin_fee_hash);
         let stock_hash = hex::encode(bin_stock_hash);
 
@@ -94,9 +94,9 @@ impl OpenShares {
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let creator_cur_key = format!("{}.{}", creator, cur_hash);
+        let creator_cur_key = format!("{}.{}", creator, asset_hash);
         let creator_fee_key = format!("{}.{}", creator, fee_hash);
-        let address_cur_key = format!("{}.{}", address, cur_hash);
+        let address_cur_key = format!("{}.{}", address, asset_hash);
 
         // Calculate shares and share map keys
         //
@@ -126,7 +126,7 @@ impl OpenShares {
         let stock_address_key = format!("{}.adr", stock_hash);
         let stock_address_key = stock_address_key.as_bytes();
 
-        if fee_hash == cur_hash {
+        if fee_hash == asset_hash {
             // The transaction's fee is paid in the same currency
             // that is being transferred, so we only retrieve one
             // balance.
@@ -313,7 +313,7 @@ impl OpenShares {
 
         let creator = &self.creator.to_bytes();
         let fee_hash = &&self.fee_hash.0;
-        let currency_hash = &&self.currency_hash.0;
+        let asset_hash = &&self.asset_hash.0;
         let amount = &self.amount.to_bytes();
         let fee = &self.fee.to_bytes();
         let shares = &self.shares.to_bytes();
@@ -334,7 +334,7 @@ impl OpenShares {
 
         buffer.append(&mut stock_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut currency_hash.to_vec());
+        buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut creator.to_vec());
         buffer.append(&mut address.to_vec());
         buffer.append(&mut hash.to_vec());
@@ -425,7 +425,7 @@ impl OpenShares {
             return Err("Incorrect packet structure");
         };
 
-        let currency_hash = if buf.len() > 32 as usize {
+        let asset_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
@@ -528,7 +528,7 @@ impl OpenShares {
             creator: creator,
             shares: shares,
             share_map: share_map,
-            currency_hash: currency_hash,
+            asset_hash: asset_hash,
             amount: amount,
             fee_hash: fee_hash,
             fee: fee,
@@ -572,7 +572,7 @@ fn assemble_hash_message(obj: &OpenShares) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut creator = obj.creator.to_bytes();
     let fee_hash = &obj.fee_hash.0;
-    let currency_hash = &obj.currency_hash.0;
+    let asset_hash = &obj.asset_hash.0;
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
     let nonce = obj.nonce;
@@ -584,7 +584,7 @@ fn assemble_hash_message(obj: &OpenShares) -> Vec<u8> {
     // Compose data to hash
     buf.append(&mut stock_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut creator);
     buf.append(&mut address);
     buf.append(&mut amount);
@@ -612,7 +612,7 @@ fn assemble_sign_message(obj: &OpenShares) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut creator = obj.creator.to_bytes();
     let fee_hash = &obj.fee_hash.0;
-    let currency_hash = &obj.currency_hash.0;
+    let asset_hash = &obj.asset_hash.0;
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
     let nonce = obj.nonce;
@@ -624,7 +624,7 @@ fn assemble_sign_message(obj: &OpenShares) -> Vec<u8> {
     // Compose data to hash
     buf.append(&mut stock_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut creator);
     buf.append(&mut address);
     buf.append(&mut amount);
@@ -684,7 +684,7 @@ impl Arbitrary for OpenShares {
             shares: Arbitrary::arbitrary(g),
             share_map: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
-            currency_hash: Arbitrary::arbitrary(g),
+            asset_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
@@ -711,14 +711,14 @@ mod tests {
         let sh2 = Identity::new();
         let sh3 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize creator balance
-        test_helpers::init_balance(&mut trie, Address::Normal(creator_addr.clone()), cur_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(creator_addr.clone()), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"30.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -734,9 +734,9 @@ mod tests {
             fee: fee.clone(),
             shares: shares.clone(),
             share_map: share_map.clone(),
-            fee_hash: cur_hash,
+            fee_hash: asset_hash,
             amount: amount.clone(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             nonce: 3429,
             address: None,
             stock_hash: None,
@@ -768,12 +768,12 @@ mod tests {
         let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
         let bin_receiver_nonce = &trie.get(&receiver_nonce_key).unwrap().unwrap();
 
-        let bin_cur_hash = cur_hash.to_vec();
-        let hex_cur_hash = hex::encode(&bin_cur_hash);
+        let bin_asset_hash = asset_hash.to_vec();
+        let hex_asset_hash = hex::encode(&bin_asset_hash);
         let bin_stock_hash = tx.stock_hash.unwrap().to_vec();
         let hex_stock_hash = hex::encode(&bin_stock_hash);
 
-        let creator_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_cur_hash);
+        let creator_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_asset_hash);
         let creator_balance_key = creator_balance_key.as_bytes();
 
         let balance = Balance::from_bytes(&trie.get(&creator_balance_key).unwrap().unwrap()).unwrap();
@@ -829,14 +829,14 @@ mod tests {
             nonce: u64
         ) -> bool {
             let id = Identity::new();
-            let (currency_hash, fee_hash, stock_hash) = hashes;
+            let (asset_hash, fee_hash, stock_hash) = hashes;
 
             let mut tx = OpenShares {
                 creator: NormalAddress::from_pkey(*id.pkey()),
                 shares: shares,
                 share_map: share_map,
                 amount: amount,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee: fee,
                 fee_hash: fee_hash,
                 nonce: nonce,

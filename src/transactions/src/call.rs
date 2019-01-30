@@ -31,7 +31,7 @@ pub struct Call {
     fee: Balance,
     gas_price: Balance,
     gas_limit: u64,
-    currency_hash: Hash,
+    asset_hash: Hash,
     fee_hash: Hash,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
@@ -200,7 +200,7 @@ impl Call {
 
         let from = &self.from.to_bytes();
         let to = &self.to.to_bytes();
-        let currency_hash = &&self.currency_hash.0;
+        let asset_hash = &&self.asset_hash.0;
         let fee_hash = &&self.fee_hash.0;
         let amount = &self.amount.to_bytes();
         let gas_price = &self.gas_price.to_bytes();
@@ -224,7 +224,7 @@ impl Call {
 
         buffer.append(&mut from.to_vec());
         buffer.append(&mut to.to_vec());
-        buffer.append(&mut currency_hash.to_vec());
+        buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature);
@@ -322,7 +322,7 @@ impl Call {
             return Err("Incorrect packet structure");
         };
 
-        let currency_hash = if buf.len() > 32 as usize {
+        let asset_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
@@ -418,7 +418,7 @@ impl Call {
             gas_limit: gas_limit,
             inputs: inputs.to_string(),
             gas_price: gas_price,
-            currency_hash: currency_hash,
+            asset_hash: asset_hash,
             hash: Some(hash),
             signature: Some(signature),
         };
@@ -444,7 +444,7 @@ fn assemble_hash_message(obj: &Call) -> Vec<u8> {
     let mut gas_price = obj.gas_price.to_bytes();
     let inputs = obj.inputs.as_bytes();
     let gas_limit = obj.gas_limit;
-    let currency_hash = obj.currency_hash.0;
+    let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
 
     buf.write_u64::<BigEndian>(gas_limit).unwrap();
@@ -452,7 +452,7 @@ fn assemble_hash_message(obj: &Call) -> Vec<u8> {
     // Compose data to hash
     buf.append(&mut from);
     buf.append(&mut to);
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
     buf.append(&mut fee);
@@ -472,7 +472,7 @@ fn assemble_sign_message(obj: &Call) -> Vec<u8> {
     let mut gas_price = obj.gas_price.to_bytes();
     let inputs = obj.inputs.as_bytes();
     let gas_limit = obj.gas_limit;
-    let currency_hash = obj.currency_hash.0;
+    let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
 
     buf.write_u64::<BigEndian>(gas_limit).unwrap();
@@ -480,7 +480,7 @@ fn assemble_sign_message(obj: &Call) -> Vec<u8> {
     // Compose data to sign
     buf.append(&mut from);
     buf.append(&mut to);
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
     buf.append(&mut fee);
@@ -503,7 +503,7 @@ impl Arbitrary for Call {
             gas_limit: Arbitrary::arbitrary(g),
             inputs: Arbitrary::arbitrary(g),
             gas_price: Arbitrary::arbitrary(g),
-            currency_hash: Arbitrary::arbitrary(g),
+            asset_hash: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }
@@ -538,7 +538,7 @@ mod tests {
             inputs: String,
             gas_price: Balance,
             gas_limit: u64,
-            currency_hash: Hash, 
+            asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {
             let id = Identity::new();
@@ -548,7 +548,7 @@ mod tests {
                 to: to,
                 amount: amount,
                 fee: fee,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 gas_price: gas_price,
                 gas_limit: gas_limit,
@@ -568,7 +568,7 @@ mod tests {
             inputs: String,
             gas_price: Balance,
             gas_limit: u64,
-            currency_hash: Hash, 
+            asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
@@ -587,7 +587,7 @@ mod tests {
                 to: to,
                 amount: amount,
                 fee: fee,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 gas_price: gas_price,
                 gas_limit: gas_limit,
@@ -611,7 +611,7 @@ mod tests {
             inputs: String,
             gas_price: Balance,
             gas_limit: u64,
-            currency_hash: Hash, 
+            asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
@@ -641,7 +641,7 @@ mod tests {
                 to: to,
                 amount: amount,
                 fee: fee,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 inputs: inputs,
                 gas_price: gas_price,

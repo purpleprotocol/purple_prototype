@@ -62,25 +62,25 @@ pub fn qs<E: Ord>(arr: &mut [E]) {
 pub fn init_balance(
     trie: &mut TrieDBMut<BlakeDbHasher, Codec>,
     address: Address,
-    currency_hash: Hash,
+    asset_hash: Hash,
     amount: &[u8]
 ) {
     let bin_address = address.to_bytes();
-    let bin_cur_hash = currency_hash.to_vec();
+    let bin_asset_hash = asset_hash.to_vec();
 
     let hex_address = hex::encode(&bin_address);
-    let hex_cur_hash = hex::encode(&bin_cur_hash);
+    let hex_asset_hash = hex::encode(&bin_asset_hash);
 
-    let cur_key = format!("{}.{}", hex_address, hex_cur_hash);
+    let cur_key = format!("{}.{}", hex_address, hex_asset_hash);
     let nonce_key = format!("{}.n", hex_address);
-    let precision_key = format!("{}.p", hex_cur_hash);
+    let precision_key = format!("{}.p", hex_asset_hash);
 
     // Re-serialize balance to validate with regex
     let balance = Balance::from_bytes(amount).unwrap().to_bytes();
 
     if let Ok(None) = trie.get(b"ci") {
         trie.insert(b"ci", &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
-        trie.insert(b"c.0", &rlp::encode_list::<Vec<u8>, _>(&vec![bin_cur_hash])).unwrap();
+        trie.insert(b"c.0", &rlp::encode_list::<Vec<u8>, _>(&vec![bin_asset_hash])).unwrap();
     }
 
     if let Ok(None) = trie.get(&precision_key.as_bytes()) {

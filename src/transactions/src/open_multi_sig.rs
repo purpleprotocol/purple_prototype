@@ -29,7 +29,7 @@ pub struct OpenMultiSig {
     keys: Vec<NormalAddress>,
     required_keys: u8,
     amount: Balance,
-    currency_hash: Hash,
+    asset_hash: Hash,
     fee: Balance,
     fee_hash: Hash,
     nonce: u64,
@@ -51,7 +51,7 @@ impl OpenMultiSig {
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         let bin_creator = &self.creator.to_bytes();
         let bin_address = &self.address.clone().unwrap().to_bytes();
-        let bin_currency_hash = &self.currency_hash.to_vec();
+        let bin_currency_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
         let required_keys = &self.required_keys;
         let keys: Vec<Vec<u8>> = self.keys
@@ -66,7 +66,7 @@ impl OpenMultiSig {
         let address = hex::encode(bin_address);
 
         // Convert hashes to strings
-        let cur_hash = hex::encode(bin_currency_hash);
+        let asset_hash = hex::encode(bin_currency_hash);
         let fee_hash = hex::encode(bin_fee_hash);
 
         // Calculate nonce keys
@@ -116,11 +116,11 @@ impl OpenMultiSig {
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let creator_cur_key = format!("{}.{}", creator, cur_hash);
+        let creator_cur_key = format!("{}.{}", creator, asset_hash);
         let creator_fee_key = format!("{}.{}", creator, fee_hash);
-        let address_cur_key = format!("{}.{}", address, cur_hash);
+        let address_cur_key = format!("{}.{}", address, asset_hash);
 
-        if fee_hash == cur_hash {
+        if fee_hash == asset_hash {
             // The transaction's fee is paid in the same currency
             // that is being transferred, so we only retrieve one
             // balance.
@@ -278,7 +278,7 @@ impl OpenMultiSig {
 
         let creator = &self.creator.to_bytes();
         let fee_hash = &&self.fee_hash.0;
-        let currency_hash = &&self.currency_hash.0;
+        let asset_hash = &&self.asset_hash.0;
         let amount = &self.amount.to_bytes();
         let fee = &self.fee.to_bytes();
         let nonce = &self.nonce;
@@ -296,7 +296,7 @@ impl OpenMultiSig {
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
         buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut currency_hash.to_vec());
+        buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut creator.to_vec());
         buffer.append(&mut address.to_vec());
         buffer.append(&mut hash.to_vec());
@@ -375,7 +375,7 @@ impl OpenMultiSig {
             return Err("Incorrect packet structure");
         };
 
-        let currency_hash = if buf.len() > 32 as usize {
+        let asset_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
@@ -473,7 +473,7 @@ impl OpenMultiSig {
             creator: creator,
             required_keys: required_keys,
             keys: keys,
-            currency_hash: currency_hash,
+            asset_hash: asset_hash,
             amount: amount,
             fee_hash: fee_hash,
             fee: fee,
@@ -519,7 +519,7 @@ fn assemble_hash_message(obj: &OpenMultiSig) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut creator = obj.creator.to_bytes();
     let fee_hash = &obj.fee_hash.0;
-    let currency_hash = &obj.currency_hash.0;
+    let asset_hash = &obj.asset_hash.0;
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
     let nonce = obj.nonce;
@@ -530,7 +530,7 @@ fn assemble_hash_message(obj: &OpenMultiSig) -> Vec<u8> {
 
     // Compose data to hash
     buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut creator);
     buf.append(&mut address);
     buf.append(&mut amount);
@@ -560,7 +560,7 @@ fn assemble_sign_message(obj: &OpenMultiSig) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut creator = obj.creator.to_bytes();
     let fee_hash = &obj.fee_hash.0;
-    let currency_hash = &obj.currency_hash.0;
+    let asset_hash = &obj.asset_hash.0;
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
     let nonce = obj.nonce;
@@ -571,7 +571,7 @@ fn assemble_sign_message(obj: &OpenMultiSig) -> Vec<u8> {
 
     // Compose data to hash
     buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut creator);
     buf.append(&mut address);
     buf.append(&mut amount);
@@ -590,7 +590,7 @@ impl Arbitrary for OpenMultiSig {
             keys: Arbitrary::arbitrary(g),
             required_keys: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
-            currency_hash: Arbitrary::arbitrary(g),
+            asset_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
@@ -613,14 +613,14 @@ mod tests {
     fn apply_it_correctly_creates_a_shares_account() {
         let id = Identity::new();
         let creator_addr = NormalAddress::from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize creator balance
-        test_helpers::init_balance(&mut trie, Address::Normal(creator_addr.clone()), cur_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(creator_addr.clone()), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"30.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -639,9 +639,9 @@ mod tests {
             fee: fee.clone(),
             keys: keys.clone(),
             required_keys: required_keys.clone(),
-            fee_hash: cur_hash,
+            fee_hash: asset_hash,
             amount: amount.clone(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             nonce: 3429,
             address: None,
             signature: None,
@@ -671,10 +671,10 @@ mod tests {
         let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
         let bin_receiver_nonce = &trie.get(&receiver_nonce_key).unwrap().unwrap();
 
-        let bin_cur_hash = cur_hash.to_vec();
-        let hex_cur_hash = hex::encode(&bin_cur_hash);
+        let bin_asset_hash = asset_hash.to_vec();
+        let hex_asset_hash = hex::encode(&bin_asset_hash);
 
-        let creator_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_cur_hash);
+        let creator_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_asset_hash);
         let creator_balance_key = creator_balance_key.as_bytes();
 
         let balance = Balance::from_bytes(&trie.get(&creator_balance_key).unwrap().unwrap()).unwrap();
@@ -717,7 +717,7 @@ mod tests {
             keys: Vec<NormalAddress>,
             required_keys: u8,
             amount: Balance,
-            currency_hash: Hash,
+            asset_hash: Hash,
             fee: Balance,
             fee_hash: Hash,
             address: MultiSigAddress,
@@ -730,7 +730,7 @@ mod tests {
                 keys: keys,
                 required_keys: required_keys,
                 amount: amount,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee: fee,
                 fee_hash: fee_hash,
                 nonce: nonce,

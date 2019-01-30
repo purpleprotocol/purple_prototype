@@ -28,7 +28,7 @@ pub struct Mint {
     minter: Address,
     receiver: Address,
     amount: Balance,
-    currency_hash: Hash, 
+    asset_hash: Hash, 
     fee_hash: Hash,
     fee: Balance,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -57,7 +57,7 @@ impl Mint {
 
         let bin_minter = &self.minter.to_bytes();
         let bin_receiver = &self.receiver.to_bytes();
-        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
 
         // Convert addresses to strings
@@ -65,24 +65,24 @@ impl Mint {
         let receiver = hex::encode(bin_receiver);
 
         // Convert hashes to strings
-        let cur_hash = hex::encode(bin_cur_hash);
+        let asset_hash = hex::encode(bin_asset_hash);
         let fee_hash = hex::encode(bin_fee_hash);
 
         // Calculate coin supply key
         //
         // The key of a currency's coin supply entry has the following format:
         // `<currency-hash>.s`
-        let coin_supply_key = format!("{}.s", cur_hash);
+        let coin_supply_key = format!("{}.s", asset_hash);
         let coin_supply_key = coin_supply_key.as_bytes();
 
         // Calculate max supply key
         //
         // The key of a currency's max supply entry has the following format:
         // `<currency-hash>.s`
-        let max_supply_key = format!("{}.x", cur_hash);
+        let max_supply_key = format!("{}.x", asset_hash);
         let max_supply_key = max_supply_key.as_bytes();
 
-        let minter_addr_key = format!("{}.m", cur_hash);
+        let minter_addr_key = format!("{}.m", asset_hash);
         let minter_addr_key = minter_addr_key.as_bytes();
 
         // Check for currency existence
@@ -118,7 +118,7 @@ impl Mint {
 
         let minter_fee_key = format!("{}.{}", minter, fee_hash);
         let minter_fee_key = minter_fee_key.as_bytes();
-        let precision_key = format!("{}.p", cur_hash);
+        let precision_key = format!("{}.p", asset_hash);
         let precision_key = precision_key.as_bytes();
 
         // Check for currency existence
@@ -142,7 +142,7 @@ impl Mint {
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         let bin_minter = &self.minter.to_bytes();
         let bin_receiver = &self.receiver.to_bytes();
-        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
 
         // Convert addresses to strings
@@ -150,14 +150,14 @@ impl Mint {
         let receiver = hex::encode(bin_receiver);
 
         // Convert hashes to strings
-        let cur_hash = hex::encode(bin_cur_hash);
+        let asset_hash = hex::encode(bin_asset_hash);
         let fee_hash = hex::encode(bin_fee_hash);
 
-        let minter_cur_key = format!("{}.{}", minter, cur_hash);
+        let minter_cur_key = format!("{}.{}", minter, asset_hash);
         let minter_cur_key = minter_cur_key.as_bytes();
         let minter_fee_key = format!("{}.{}", minter, fee_hash);
         let minter_fee_key = minter_fee_key.as_bytes();
-        let receiver_cur_key = format!("{}.{}", receiver, cur_hash);
+        let receiver_cur_key = format!("{}.{}", receiver, asset_hash);
         let receiver_cur_key = receiver_cur_key.as_bytes();
 
         // Calculate nonce keys
@@ -194,7 +194,7 @@ impl Mint {
             // The receiver account exists
             Ok(Some(_)) => {
                 if minter == receiver {
-                    if cur_hash == fee_hash {
+                    if asset_hash == fee_hash {
                         let mut minter_balance = unwrap!(
                             Balance::from_bytes(
                                 &unwrap!(
@@ -452,7 +452,7 @@ impl Mint {
 
         let minter = &self.minter.to_bytes();
         let receiver = &self.receiver.to_bytes();
-        let currency_hash = &&self.currency_hash.0;
+        let asset_hash = &&self.asset_hash.0;
         let fee_hash = &&self.fee_hash.0;
         let amount = &self.amount.to_bytes();
         let fee = &self.fee.to_bytes();
@@ -468,7 +468,7 @@ impl Mint {
 
         buffer.append(&mut minter.to_vec());
         buffer.append(&mut receiver.to_vec());
-        buffer.append(&mut currency_hash.to_vec());
+        buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
         buffer.append(&mut amount.to_vec());
@@ -540,7 +540,7 @@ impl Mint {
             return Err("Incorrect packet structure");
         };
 
-        let currency_hash = if buf.len() > 32 as usize {
+        let asset_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
@@ -609,7 +609,7 @@ impl Mint {
         let mint = Mint {
             minter: minter,
             receiver: receiver,
-            currency_hash: currency_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             fee: fee,
             amount: amount,
@@ -639,7 +639,7 @@ fn assemble_hash_message(obj: &Mint) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut minter = obj.minter.to_bytes();
     let mut receiver = obj.receiver.to_bytes();
-    let currency_hash = &obj.currency_hash.0;
+    let asset_hash = &obj.asset_hash.0;
     let fee_hash = &obj.fee_hash.0;
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
@@ -647,7 +647,7 @@ fn assemble_hash_message(obj: &Mint) -> Vec<u8> {
     // Compose data to hash
     buf.append(&mut minter);
     buf.append(&mut receiver);
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
     buf.append(&mut fee);
@@ -660,7 +660,7 @@ fn assemble_sign_message(obj: &Mint) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut minter = obj.minter.to_bytes();
     let mut receiver = obj.receiver.to_bytes();
-    let currency_hash = &obj.currency_hash.0;
+    let asset_hash = &obj.asset_hash.0;
     let fee_hash = &obj.fee_hash.0;
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
@@ -668,7 +668,7 @@ fn assemble_sign_message(obj: &Mint) -> Vec<u8> {
     // Compose data to hash
     buf.append(&mut minter);
     buf.append(&mut receiver);
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
     buf.append(&mut fee);
@@ -684,7 +684,7 @@ impl Arbitrary for Mint {
             minter: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
-            currency_hash: Arbitrary::arbitrary(g), 
+            asset_hash: Arbitrary::arbitrary(g), 
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
@@ -708,7 +708,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -724,7 +724,7 @@ mod tests {
             creator: creator_norm_address,
             receiver: creator_addr,
             minter_address: minter_addr,
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             coin_supply: 10000,
             max_supply: 100000000,
@@ -743,7 +743,7 @@ mod tests {
             receiver: creator_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -762,7 +762,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -778,7 +778,7 @@ mod tests {
             creator: creator_norm_address,
             receiver: creator_addr,
             minter_address: minter_addr,
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             coin_supply: 9999,
             max_supply: 10000,
@@ -797,7 +797,7 @@ mod tests {
             receiver: creator_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -816,7 +816,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -832,7 +832,7 @@ mod tests {
             creator: creator_norm_address,
             receiver: creator_addr,
             minter_address: minter_addr,
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             coin_supply: 100,
             max_supply: 10000,
@@ -851,7 +851,7 @@ mod tests {
             receiver: creator_addr,
             amount: Balance::from_bytes(b"0.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -870,7 +870,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -886,7 +886,7 @@ mod tests {
             receiver: creator_addr,
             amount: Balance::from_bytes(b"10.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -905,7 +905,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -920,7 +920,7 @@ mod tests {
         let mut create_mintable = CreateCurrency {
             creator: creator_norm_address,
             receiver: creator_addr,
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             coin_supply: 100,
             precision: 18,
@@ -938,7 +938,7 @@ mod tests {
             receiver: creator_addr,
             amount: Balance::from_bytes(b"10.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -957,7 +957,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -973,7 +973,7 @@ mod tests {
             creator: creator_norm_address,
             receiver: creator_addr,
             minter_address: minter_addr,
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             coin_supply: 10000,
             max_supply: 100000000,
@@ -992,7 +992,7 @@ mod tests {
             receiver: creator_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -1005,12 +1005,12 @@ mod tests {
         // Commit changes
         trie.commit();
 
-        let cur_hash = hex::encode(cur_hash.to_vec());
+        let asset_hash = hex::encode(asset_hash.to_vec());
         let fee_hash = hex::encode(fee_hash.to_vec());
         let address = hex::encode(creator_addr.to_bytes());
         let minter = hex::encode(minter_addr.to_bytes());
 
-        let cur_key = format!("{}.{}", address, cur_hash);
+        let cur_key = format!("{}.{}", address, asset_hash);
         let cur_key = cur_key.as_bytes();
         let fee_key = format!("{}.{}", address, fee_hash);
         let fee_key = fee_key.as_bytes();
@@ -1041,7 +1041,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -1057,7 +1057,7 @@ mod tests {
             creator: creator_norm_address,
             receiver: creator_addr,
             minter_address: minter_addr,
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             coin_supply: 10000,
             max_supply: 100000000,
@@ -1076,7 +1076,7 @@ mod tests {
             receiver: minter_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -1089,12 +1089,12 @@ mod tests {
         // Commit changes
         trie.commit();
 
-        let cur_hash = hex::encode(cur_hash.to_vec());
+        let asset_hash = hex::encode(asset_hash.to_vec());
         let fee_hash = hex::encode(fee_hash.to_vec());
         let address = hex::encode(creator_addr.to_bytes());
         let minter = hex::encode(minter_addr.to_bytes());
 
-        let cur_key = format!("{}.{}", minter, cur_hash);
+        let cur_key = format!("{}.{}", minter, asset_hash);
         let cur_key = cur_key.as_bytes();
         let fee_key = format!("{}.{}", address, fee_hash);
         let fee_key = fee_key.as_bytes();
@@ -1125,7 +1125,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -1141,7 +1141,7 @@ mod tests {
             creator: creator_norm_address,
             receiver: minter_addr,
             minter_address: minter_addr,
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             coin_supply: 10000,
             max_supply: 100000000,
@@ -1160,8 +1160,8 @@ mod tests {
             receiver: minter_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
-            currency_hash: cur_hash,
-            fee_hash: cur_hash,
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
             signature: None,
             hash: None
         };
@@ -1173,12 +1173,12 @@ mod tests {
         // Commit changes
         trie.commit();
 
-        let cur_hash = hex::encode(cur_hash.to_vec());
+        let asset_hash = hex::encode(asset_hash.to_vec());
         let fee_hash = hex::encode(fee_hash.to_vec());
         let address = hex::encode(creator_addr.to_bytes());
         let minter = hex::encode(minter_addr.to_bytes());
 
-        let cur_key = format!("{}.{}", minter, cur_hash);
+        let cur_key = format!("{}.{}", minter, asset_hash);
         let cur_key = cur_key.as_bytes();
         let fee_key = format!("{}.{}", address, fee_hash);
         let fee_key = fee_key.as_bytes();
@@ -1217,7 +1217,7 @@ mod tests {
             receiver: Address,
             amount: Balance, 
             fee: Balance, 
-            currency_hash: Hash, 
+            asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {
             let id = Identity::new();
@@ -1227,7 +1227,7 @@ mod tests {
                 receiver: receiver,
                 amount: amount,
                 fee: fee,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 signature: None,
                 hash: None
@@ -1241,7 +1241,7 @@ mod tests {
             receiver: Address,
             amount: Balance, 
             fee: Balance, 
-            currency_hash: Hash, 
+            asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
@@ -1260,7 +1260,7 @@ mod tests {
                 receiver: receiver,
                 amount: amount,
                 fee: fee,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 signature: None,
                 hash: None
@@ -1278,7 +1278,7 @@ mod tests {
             receiver: Address,
             amount: Balance, 
             fee: Balance, 
-            currency_hash: Hash, 
+            asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
@@ -1308,7 +1308,7 @@ mod tests {
                 receiver: receiver,
                 amount: amount,
                 fee: fee,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 signature: None,
                 hash: None

@@ -38,13 +38,13 @@ pub struct Genesis {
     treasury_shares: Shares,
     treasury_share_map: ShareMap,
     treasury_stock_hash: Hash,
-    currency_hash: Hash,
+    asset_hash: Hash,
     coin_supply: u64,
 }
 
 impl Default for Genesis {
     fn default() -> Genesis {
-        let main_cur_hash = crypto::hash_slice(MAIN_CUR_NAME);
+        let main_asset_hash = crypto::hash_slice(MAIN_CUR_NAME);
         let treasury_address = crypto::hash_slice(TREASURY_ADDRESS_PRIMITIVE);
         let treasury_stock_hash = crypto::hash_slice(TREASURY_STOCK_PRIMITIVE);
         let shareholder_address = NormalAddress::from_base58(TREASURY_SHAREHOLDER).unwrap();
@@ -59,7 +59,7 @@ impl Default for Genesis {
             treasury_shares: Shares::new(TREASURY_ISSUED_SHARES, TREASURY_AUTHORIZED_SHARES, 80),
             treasury_share_map: treasury_share_map,
             treasury_stock_hash: treasury_stock_hash,
-            currency_hash: main_cur_hash
+            asset_hash: main_asset_hash
         }
     }
 }
@@ -78,9 +78,9 @@ impl Genesis {
                 let bin_shares = &self.treasury_shares.to_bytes();
                 let bin_share_map = &self.treasury_share_map.to_bytes();
                 let bin_stock_hash = &self.treasury_stock_hash.to_vec();
-                let bin_cur_hash = &self.currency_hash.to_vec();
+                let bin_asset_hash = &self.asset_hash.to_vec();
                 let hex_addr = hex::encode(bin_addr);
-                let hex_cur_hash = hex::encode(bin_cur_hash);
+                let hex_asset_hash = hex::encode(bin_asset_hash);
                 let nonce_key = format!("{}.n", hex_addr);
                 let nonce_key = nonce_key.as_bytes();
                 let shares_key = format!("{}.s", hex_addr);
@@ -89,11 +89,11 @@ impl Genesis {
                 let share_map_key = share_map_key.as_bytes();
                 let stock_hash_key = format!("{}.sh", hex_addr);
                 let stock_hash_key = stock_hash_key.as_bytes();
-                let treasury_cur_key = format!("{}.{}", hex_addr, hex_cur_hash);
+                let treasury_cur_key = format!("{}.{}", hex_addr, hex_asset_hash);
                 let treasury_cur_key = treasury_cur_key.as_bytes();
                 let coin_supply = format!("{}.0", &self.coin_supply);
                 let coin_supply = coin_supply.as_bytes();
-                let currencies = rlp::encode_list::<Vec<u8>, _>(&vec![bin_cur_hash]);
+                let currencies = rlp::encode_list::<Vec<u8>, _>(&vec![bin_asset_hash]);
 
                 // Insert treasury data
                 trie.insert(b"treasury", &bin_addr).unwrap();
@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn apply_it_initializes_the_treasury() {
-        let main_cur_hash = crypto::hash_slice(MAIN_CUR_NAME);
+        let main_asset_hash = crypto::hash_slice(MAIN_CUR_NAME);
         let treasury_address = crypto::hash_slice(TREASURY_ADDRESS_PRIMITIVE);
         let treasury_address = ShareholdersAddress::new(treasury_address.0);
         let treasury_stock_hash = crypto::hash_slice(TREASURY_STOCK_PRIMITIVE);
@@ -139,9 +139,9 @@ mod tests {
         let bin_shares = treasury_shares.to_bytes();
         let bin_share_map = treasury_share_map.to_bytes();
         let bin_stock_hash = treasury_stock_hash.to_vec();
-        let bin_cur_hash = main_cur_hash.to_vec();
+        let bin_asset_hash = main_asset_hash.to_vec();
         let hex_addr = hex::encode(bin_addr);
-        let hex_cur_hash = hex::encode(bin_cur_hash.clone());
+        let hex_asset_hash = hex::encode(bin_asset_hash.clone());
         let nonce_key = format!("{}.n", hex_addr);
         let nonce_key = nonce_key.as_bytes();
         let shares_key = format!("{}.s", hex_addr);
@@ -150,11 +150,11 @@ mod tests {
         let share_map_key = share_map_key.as_bytes();
         let stock_hash_key = format!("{}.sh", hex_addr);
         let stock_hash_key = stock_hash_key.as_bytes();
-        let treasury_cur_key = format!("{}.{}", hex_addr, hex_cur_hash);
+        let treasury_cur_key = format!("{}.{}", hex_addr, hex_asset_hash);
         let treasury_cur_key = treasury_cur_key.as_bytes();
         let coin_supply = format!("{}.0", COIN_SUPPLY);
         let coin_supply = coin_supply.as_bytes();
-        let currencies = rlp::encode_list::<Vec<u8>, _>(&vec![bin_cur_hash]);
+        let currencies = rlp::encode_list::<Vec<u8>, _>(&vec![bin_asset_hash]);
 
         // Apply genesis to state
         tx.apply(&mut trie);

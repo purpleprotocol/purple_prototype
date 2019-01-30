@@ -29,7 +29,7 @@ pub struct CreateMintable {
     pub creator: NormalAddress,
     pub receiver: Address,
     pub minter_address: Address,
-    pub currency_hash: Hash,
+    pub asset_hash: Hash,
     pub coin_supply: u64,
     pub max_supply: u64,
     pub precision: u8,
@@ -48,7 +48,7 @@ impl CreateMintable {
     pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
         // The created currency cannot be the same
         // as the one the fee is being paid in.
-        if &self.currency_hash == &self.fee_hash {
+        if &self.asset_hash == &self.fee_hash {
             return false;
         }
 
@@ -74,7 +74,7 @@ impl CreateMintable {
  
         let bin_creator = &self.creator.to_bytes();
         let bin_receiver = &self.receiver.to_bytes();
-        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
         let coin_supply = &self.coin_supply;
 
@@ -83,15 +83,15 @@ impl CreateMintable {
         let receiver = hex::encode(bin_receiver);
 
         // Convert hashes to strings
-        let cur_hash = hex::encode(bin_cur_hash);
+        let asset_hash = hex::encode(bin_asset_hash);
         let fee_hash = hex::encode(bin_fee_hash);
 
         // Calculate precision key
         //
         // The key of a currency's precision has the following format:
         // `<currency-hash>.p`
-        let cur_hash_prec_key = format!("{}.p", cur_hash);
-        let cur_hash_prec_key = cur_hash_prec_key.as_bytes();
+        let asset_hash_prec_key = format!("{}.p", asset_hash);
+        let asset_hash_prec_key = asset_hash_prec_key.as_bytes();
 
         // Calculate nonce key
         // 
@@ -135,7 +135,7 @@ impl CreateMintable {
         }
 
         // Check if the currency already exists
-        if let Ok(Some(_)) = trie.get(cur_hash_prec_key) {
+        if let Ok(Some(_)) = trie.get(asset_hash_prec_key) {
             return false;
         }
 
@@ -149,7 +149,7 @@ impl CreateMintable {
         let bin_creator = &self.creator.to_bytes();
         let bin_receiver = &self.receiver.to_bytes();
         let bin_minter_addr = &self.minter_address.to_bytes();
-        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
         let coin_supply = &self.coin_supply;
         let max_supply = &self.max_supply;
@@ -159,10 +159,10 @@ impl CreateMintable {
         let receiver = hex::encode(bin_receiver);
 
         // Convert hashes to strings
-        let cur_hash = hex::encode(bin_cur_hash);
+        let asset_hash = hex::encode(bin_asset_hash);
         let fee_hash = hex::encode(bin_fee_hash);
 
-        if cur_hash == fee_hash {
+        if asset_hash == fee_hash {
             panic!("The created currency hash cannot be the same as the fee hash!");
         }
 
@@ -170,29 +170,29 @@ impl CreateMintable {
         //
         // The key of a currency's precision has the following format:
         // `<currency-hash>.p`
-        let cur_hash_prec_key = format!("{}.p", cur_hash);
-        let cur_hash_prec_key = cur_hash_prec_key.as_bytes();
+        let asset_hash_prec_key = format!("{}.p", asset_hash);
+        let asset_hash_prec_key = asset_hash_prec_key.as_bytes();
 
         // Calculate coin supply key
         //
         // The key of a currency's coin supply entry has the following format:
         // `<currency-hash>.s`
-        let cur_hash_supply_key = format!("{}.s", cur_hash);
-        let cur_hash_supply_key = cur_hash_supply_key.as_bytes();
+        let asset_hash_supply_key = format!("{}.s", asset_hash);
+        let asset_hash_supply_key = asset_hash_supply_key.as_bytes();
 
         // Calculate max supply key
         //
         // The key of a currency's max supply entry has the following format:
         // `<currency-hash>.s`
-        let cur_hash_max_supply_key = format!("{}.x", cur_hash);
-        let cur_hash_max_supply_key = cur_hash_max_supply_key.as_bytes();
+        let asset_hash_max_supply_key = format!("{}.x", asset_hash);
+        let asset_hash_max_supply_key = asset_hash_max_supply_key.as_bytes();
 
         // Calculate minter address key
         //
         // The key of a currency's minter address has the following format:
         // `<currency-hash>.m`
-        let cur_hash_minter_key = format!("{}.m", cur_hash);
-        let cur_hash_minter_key = cur_hash_minter_key.as_bytes();
+        let asset_hash_minter_key = format!("{}.m", asset_hash);
+        let asset_hash_minter_key = asset_hash_minter_key.as_bytes();
 
         // Calculate nonce keys
         // 
@@ -234,9 +234,9 @@ impl CreateMintable {
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let creator_cur_key = format!("{}.{}", creator, cur_hash);
+        let creator_cur_key = format!("{}.{}", creator, asset_hash);
         let creator_fee_key = format!("{}.{}", creator, fee_hash);
-        let receiver_cur_key = format!("{}.{}", receiver, cur_hash);
+        let receiver_cur_key = format!("{}.{}", receiver, asset_hash);
 
         // Retrieve current index
         let bin_cur_idx = trie.get(b"ci").unwrap().unwrap();
@@ -275,7 +275,7 @@ impl CreateMintable {
 
             // If the current group is maxed out, create a new entry at the next index
             if currencies.len() == CUR_GROUP_CAPACITY {
-                let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_cur_hash]);
+                let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_asset_hash]);
                 let mut encoded_idx: Vec<u8> = Vec::new();
 
                 // Increment current index
@@ -288,17 +288,17 @@ impl CreateMintable {
                 trie.insert(next_curs_key, &encoded).unwrap();
             } else {
                 // Push new currency
-                currencies.push(bin_cur_hash.to_vec());
+                currencies.push(bin_asset_hash.to_vec());
 
                 let encoded = rlp::encode_list::<Vec<u8>, _>(&currencies);
                 trie.insert(current_curs_key, &encoded).unwrap();
             }
 
             // Update trie
-            trie.insert(cur_hash_supply_key, &coin_supply_buf).unwrap();
-            trie.insert(cur_hash_minter_key, &bin_minter_addr).unwrap();
-            trie.insert(cur_hash_max_supply_key, &max_supply_buf).unwrap();
-            trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
+            trie.insert(asset_hash_supply_key, &coin_supply_buf).unwrap();
+            trie.insert(asset_hash_minter_key, &bin_minter_addr).unwrap();
+            trie.insert(asset_hash_max_supply_key, &max_supply_buf).unwrap();
+            trie.insert(asset_hash_prec_key, &[self.precision]).unwrap();
             trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes()).unwrap();
             trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes()).unwrap();
             trie.insert(creator_nonce_key, &nonce_buf).unwrap();
@@ -326,7 +326,7 @@ impl CreateMintable {
 
                     // If the current group is maxed out, create a new entry at the next index
                     if currencies.len() == CUR_GROUP_CAPACITY {
-                        let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_cur_hash]);
+                        let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_asset_hash]);
                         let mut encoded_idx: Vec<u8> = Vec::new();
 
                         // Increment current index
@@ -339,17 +339,17 @@ impl CreateMintable {
                         trie.insert(next_curs_key, &encoded).unwrap();
                     } else {
                         // Push new currency
-                        currencies.push(bin_cur_hash.to_vec());
+                        currencies.push(bin_asset_hash.to_vec());
 
                         let encoded = rlp::encode_list::<Vec<u8>, _>(&currencies);
                         trie.insert(current_curs_key, &encoded).unwrap();
                     }
 
                     // Update trie
-                    trie.insert(cur_hash_supply_key, &coin_supply_buf).unwrap();
-                    trie.insert(cur_hash_minter_key, &bin_minter_addr).unwrap();
-                    trie.insert(cur_hash_max_supply_key, &max_supply_buf).unwrap();
-                    trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
+                    trie.insert(asset_hash_supply_key, &coin_supply_buf).unwrap();
+                    trie.insert(asset_hash_minter_key, &bin_minter_addr).unwrap();
+                    trie.insert(asset_hash_max_supply_key, &max_supply_buf).unwrap();
+                    trie.insert(asset_hash_prec_key, &[self.precision]).unwrap();
                     trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
                     trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
                     trie.insert(creator_nonce_key, &nonce_buf).unwrap();
@@ -375,7 +375,7 @@ impl CreateMintable {
 
                     // If the current group is maxed out, create a new entry at the next index
                     if currencies.len() == CUR_GROUP_CAPACITY {
-                        let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_cur_hash]);
+                        let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_asset_hash]);
                         let mut encoded_idx: Vec<u8> = Vec::new();
 
                         // Increment current index
@@ -388,17 +388,17 @@ impl CreateMintable {
                         trie.insert(next_curs_key, &encoded).unwrap();
                     } else {
                         // Push new currency
-                        currencies.push(bin_cur_hash.to_vec());
+                        currencies.push(bin_asset_hash.to_vec());
 
                         let encoded = rlp::encode_list::<Vec<u8>, _>(&currencies);
                         trie.insert(current_curs_key, &encoded).unwrap();
                     }
 
                     // Update trie
-                    trie.insert(cur_hash_supply_key, &coin_supply_buf).unwrap();
-                    trie.insert(cur_hash_minter_key, &bin_minter_addr).unwrap();
-                    trie.insert(cur_hash_max_supply_key, &max_supply_buf).unwrap();
-                    trie.insert(cur_hash_prec_key, &[self.precision]).unwrap();
+                    trie.insert(asset_hash_supply_key, &coin_supply_buf).unwrap();
+                    trie.insert(asset_hash_minter_key, &bin_minter_addr).unwrap();
+                    trie.insert(asset_hash_max_supply_key, &max_supply_buf).unwrap();
+                    trie.insert(asset_hash_prec_key, &[self.precision]).unwrap();
                     trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
                     trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
                     trie.insert(creator_nonce_key, &nonce_buf).unwrap();
@@ -474,7 +474,7 @@ impl CreateMintable {
         let creator = &self.creator.to_bytes();
         let receiver = &self.receiver.to_bytes();
         let minter_address = &self.minter_address.to_bytes();
-        let currency_hash = &&self.currency_hash.0;
+        let asset_hash = &&self.asset_hash.0;
         let fee_hash = &&self.fee_hash.0;
         let coin_supply = &self.coin_supply;
         let max_supply = &self.max_supply;
@@ -492,7 +492,7 @@ impl CreateMintable {
         buffer.append(&mut creator.to_vec());
         buffer.append(&mut receiver.to_vec());
         buffer.append(&mut minter_address.to_vec());
-        buffer.append(&mut currency_hash.to_vec());
+        buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature);
@@ -582,7 +582,7 @@ impl CreateMintable {
             return Err("Incorrect packet structure");
         };
 
-        let currency_hash = if buf.len() > 32 as usize {
+        let asset_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
@@ -646,7 +646,7 @@ impl CreateMintable {
             max_supply: max_supply,
             fee: fee,
             precision: precision,
-            currency_hash: currency_hash,
+            asset_hash: asset_hash,
             hash: Some(hash),
             signature: Some(signature),
         };
@@ -677,7 +677,7 @@ fn assemble_hash_message(obj: &CreateMintable) -> Vec<u8> {
     let coin_supply = obj.coin_supply;
     let max_supply = obj.max_supply;
     let precision = obj.precision;
-    let currency_hash = obj.currency_hash.0;
+    let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
 
     buf.write_u8(precision).unwrap();
@@ -688,7 +688,7 @@ fn assemble_hash_message(obj: &CreateMintable) -> Vec<u8> {
     buf.append(&mut creator);
     buf.append(&mut receiver);
     buf.append(&mut minter_address);
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut fee);
     buf.append(&mut signature);
@@ -705,7 +705,7 @@ fn assemble_sign_message(obj: &CreateMintable) -> Vec<u8> {
     let coin_supply = obj.coin_supply;
     let max_supply = obj.max_supply;
     let precision = obj.precision;
-    let currency_hash = obj.currency_hash.0;
+    let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
 
     buf.write_u8(precision).unwrap();
@@ -716,7 +716,7 @@ fn assemble_sign_message(obj: &CreateMintable) -> Vec<u8> {
     buf.append(&mut creator);
     buf.append(&mut receiver);
     buf.append(&mut minter_address);
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut fee);
 
@@ -732,7 +732,7 @@ impl Arbitrary for CreateMintable {
             creator: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
             minter_address: Arbitrary::arbitrary(g),
-            currency_hash: Arbitrary::arbitrary(g),
+            asset_hash: Arbitrary::arbitrary(g),
             coin_supply: Arbitrary::arbitrary(g),
             max_supply: Arbitrary::arbitrary(g),
             precision: Arbitrary::arbitrary(g),
@@ -754,7 +754,7 @@ mod tests {
         let id = Identity::new();
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -775,7 +775,7 @@ mod tests {
             max_supply: 200,
             precision: 18,
             fee: fee.clone(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -792,7 +792,7 @@ mod tests {
         let id = Identity::new();
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -813,7 +813,7 @@ mod tests {
             max_supply: 200,
             precision: 19,
             fee: fee.clone(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -830,7 +830,7 @@ mod tests {
         let id = Identity::new();
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -851,7 +851,7 @@ mod tests {
             max_supply: 10,
             precision: 15,
             fee: fee.clone(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -868,7 +868,7 @@ mod tests {
         let id = Identity::new();
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -889,7 +889,7 @@ mod tests {
             max_supply: 200,
             precision: 1,
             fee: fee.clone(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -906,7 +906,7 @@ mod tests {
         let id = Identity::new();
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -927,8 +927,8 @@ mod tests {
             max_supply: 200,
             precision: 18,
             fee: fee.clone(),
-            currency_hash: cur_hash,
-            fee_hash: cur_hash,
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
             signature: None,
             hash: None
         };
@@ -944,7 +944,7 @@ mod tests {
         let id = Identity::new();
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -961,7 +961,7 @@ mod tests {
             max_supply: 200,
             precision: 18,
             fee: fee.clone(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -978,7 +978,7 @@ mod tests {
         let id = Identity::new();
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -999,7 +999,7 @@ mod tests {
             max_supply: 200,
             precision: 18,
             fee: fee.clone(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -1018,7 +1018,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -1039,7 +1039,7 @@ mod tests {
             max_supply: 200,
             precision: 18,
             fee: fee.clone(),
-            currency_hash: cur_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
             hash: None
@@ -1059,24 +1059,24 @@ mod tests {
 
         let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
 
-        let bin_cur_hash = cur_hash.to_vec();
+        let bin_asset_hash = asset_hash.to_vec();
         let bin_fee_hash = fee_hash.to_vec();
-        let hex_cur_hash = hex::encode(&bin_cur_hash);
+        let hex_asset_hash = hex::encode(&bin_asset_hash);
         let hex_fee_hash = hex::encode(&bin_fee_hash);
-        let cur_hash_prec_key = format!("{}.p", hex_cur_hash);
-        let cur_hash_prec_key = cur_hash_prec_key.as_bytes();
+        let asset_hash_prec_key = format!("{}.p", hex_asset_hash);
+        let asset_hash_prec_key = asset_hash_prec_key.as_bytes();
         let fee_hash_prec_key = format!("{}.p", hex_fee_hash);
         let fee_hash_prec_key = fee_hash_prec_key.as_bytes(); 
-        let cur_hash_supply_key = format!("{}.s", hex_cur_hash);
-        let cur_hash_supply_key = cur_hash_supply_key.as_bytes();
-        let cur_hash_max_supply_key = format!("{}.x", hex_cur_hash);
-        let cur_hash_max_supply_key = cur_hash_max_supply_key.as_bytes();
-        let cur_hash_minter_key = format!("{}.m", hex_cur_hash);
-        let cur_hash_minter_key = cur_hash_minter_key.as_bytes();
+        let asset_hash_supply_key = format!("{}.s", hex_asset_hash);
+        let asset_hash_supply_key = asset_hash_supply_key.as_bytes();
+        let asset_hash_max_supply_key = format!("{}.x", hex_asset_hash);
+        let asset_hash_max_supply_key = asset_hash_max_supply_key.as_bytes();
+        let asset_hash_minter_key = format!("{}.m", hex_asset_hash);
+        let asset_hash_minter_key = asset_hash_minter_key.as_bytes();
         let current_index_key = b"ci".to_vec();
         let currencies_idx_key = b"c.0".to_vec(); // Currency group 0
 
-        let creator_cur_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_cur_hash);
+        let creator_cur_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_asset_hash);
         let creator_cur_balance_key = creator_cur_balance_key.as_bytes();
         let creator_fee_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_fee_hash);
         let creator_fee_balance_key = creator_fee_balance_key.as_bytes();
@@ -1090,7 +1090,7 @@ mod tests {
 
         let cur_listing = &trie.get(&currencies_idx_key).unwrap().unwrap();
         let mut cur_listing: Vec<Vec<u8>> = rlp::decode_list(&cur_listing);
-        let mut oracle_listing = [bin_cur_hash, bin_fee_hash].to_vec();
+        let mut oracle_listing = [bin_asset_hash, bin_fee_hash].to_vec();
 
         test_helpers::qs(&mut cur_listing);
         test_helpers::qs(&mut oracle_listing);
@@ -1109,15 +1109,15 @@ mod tests {
         assert_eq!(cur_listing, oracle_listing);
 
         // Check currencies precisions
-        assert_eq!(&trie.get(&cur_hash_prec_key).unwrap().unwrap(), &vec![18]);
+        assert_eq!(&trie.get(&asset_hash_prec_key).unwrap().unwrap(), &vec![18]);
         assert_eq!(&trie.get(&fee_hash_prec_key).unwrap().unwrap(), &vec![18]);
 
         // Check currency supply
-        assert_eq!(&trie.get(&cur_hash_supply_key).unwrap().unwrap(), &vec![0, 0, 0, 0, 0, 0, 0, 100]);
-        assert_eq!(&trie.get(&cur_hash_max_supply_key).unwrap().unwrap(), &vec![0, 0, 0, 0, 0, 0, 0, 200]);
+        assert_eq!(&trie.get(&asset_hash_supply_key).unwrap().unwrap(), &vec![0, 0, 0, 0, 0, 0, 0, 100]);
+        assert_eq!(&trie.get(&asset_hash_max_supply_key).unwrap().unwrap(), &vec![0, 0, 0, 0, 0, 0, 0, 200]);
 
         // Check minter address
-        assert_eq!(&trie.get(&cur_hash_minter_key).unwrap().unwrap(), &minter_addr.to_bytes());
+        assert_eq!(&trie.get(&asset_hash_minter_key).unwrap().unwrap(), &minter_addr.to_bytes());
     }
 
     quickcheck! {
@@ -1142,7 +1142,7 @@ mod tests {
             coin_supply: u64,
             max_supply: u64,
             precision: u8,
-            currency_hash: Hash, 
+            asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {
             let id = Identity::new();
@@ -1155,7 +1155,7 @@ mod tests {
                 max_supply: max_supply,
                 precision: precision,
                 fee: fee,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 signature: None,
                 hash: None

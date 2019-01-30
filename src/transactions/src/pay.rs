@@ -28,7 +28,7 @@ use std::str::FromStr;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Pay {
     payer: ShareholdersAddress,
-    currency_hash: Hash,
+    asset_hash: Hash,
     fee_hash: Hash,
     amount: Balance,
     fee: Balance,
@@ -46,17 +46,17 @@ impl Pay {
     /// This function will panic if the `payer` account does not exist.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         let bin_payer = &self.payer.to_bytes();
-        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
 
         // Convert address to string
         let payer = hex::encode(bin_payer);
 
         // Convert hashes to strings
-        let cur_hash = hex::encode(bin_cur_hash);
+        let asset_hash = hex::encode(bin_asset_hash);
         let fee_hash = hex::encode(bin_fee_hash);
 
-        let payer_cur_key = format!("{}.{}", payer, cur_hash);
+        let payer_cur_key = format!("{}.{}", payer, asset_hash);
         let payer_cur_key = payer_cur_key.as_bytes();
         let payer_fee_key = format!("{}.{}", payer, fee_hash);
         let payer_fee_key = payer_fee_key.as_bytes();
@@ -85,7 +85,7 @@ impl Pay {
 
         let nonce: Vec<u8> = encode_be_u64!(nonce);
 
-        if cur_hash == fee_hash {
+        if asset_hash == fee_hash {
             let mut payer_balance = unwrap!(
                 Balance::from_bytes(
                     &unwrap!(
@@ -116,7 +116,7 @@ impl Pay {
 
             // Add dividend to each shareholder
             for (k, v) in share_map {
-                pay_dividend(trie, &self.amount, &self.currency_hash, k, v, issued_shares);
+                pay_dividend(trie, &self.amount, &self.asset_hash, k, v, issued_shares);
             }
 
             // Update trie
@@ -163,7 +163,7 @@ impl Pay {
 
             // Add dividend to each shareholder
             for (k, v) in share_map {
-                pay_dividend(trie, &self.amount, &self.currency_hash, k, v, issued_shares);
+                pay_dividend(trie, &self.amount, &self.asset_hash, k, v, issued_shares);
             }
 
             // Update trie
@@ -243,7 +243,7 @@ impl Pay {
         };
 
         let payer = &self.payer.to_bytes();
-        let currency_hash = &&self.currency_hash.0;
+        let asset_hash = &&self.asset_hash.0;
         let fee_hash = &&self.fee_hash.0;
         let amount = &self.amount.to_bytes();
         let fee = &self.fee.to_bytes();
@@ -258,7 +258,7 @@ impl Pay {
         buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
 
         buffer.append(&mut payer.to_vec());
-        buffer.append(&mut currency_hash.to_vec());
+        buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
         buffer.append(&mut amount.to_vec());
@@ -319,7 +319,7 @@ impl Pay {
             return Err("Incorrect packet structure");
         };
 
-        let currency_hash = if buf.len() > 32 as usize {
+        let asset_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
@@ -387,7 +387,7 @@ impl Pay {
 
         let pay = Pay {
             payer: payer,
-            currency_hash: currency_hash,
+            asset_hash: asset_hash,
             fee_hash: fee_hash,
             amount: amount,
             fee: fee,
@@ -409,16 +409,16 @@ impl Pay {
 fn pay_dividend(
     trie: &mut TrieDBMut<BlakeDbHasher, Codec>, 
     amount: &Balance,
-    cur_hash: &Hash,
+    asset_hash: &Hash,
     address: NormalAddress, 
     address_shares: u32, 
     issued_shares: u32
 ) {
     let address = hex::encode(&address.to_bytes());
-    let cur_hash = hex::encode(cur_hash.to_vec());
+    let asset_hash = hex::encode(asset_hash.to_vec());
 
     // Calculate balance key
-    let balance_key = format!("{}.{}", address, cur_hash);
+    let balance_key = format!("{}.{}", address, asset_hash);
     let balance_key = balance_key.as_bytes();
 
     // Convert shares to decimals
@@ -451,14 +451,14 @@ fn assemble_hash_message(obj: &Pay) -> Vec<u8> {
 
     let mut buf: Vec<u8> = Vec::new();
     let mut payer = obj.payer.to_bytes();
-    let cur_hash = &obj.currency_hash.0;
+    let asset_hash = &obj.asset_hash.0;
     let fee_hash = &obj.fee_hash.0;
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
 
     // Compose data to hash
     buf.append(&mut payer);
-    buf.append(&mut cur_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
     buf.append(&mut fee);
@@ -470,14 +470,14 @@ fn assemble_hash_message(obj: &Pay) -> Vec<u8> {
 fn assemble_sign_message(obj: &Pay) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut payer = obj.payer.to_bytes();
-    let cur_hash = &obj.currency_hash.0;
+    let asset_hash = &obj.asset_hash.0;
     let fee_hash = &obj.fee_hash.0;
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
 
     // Compose data to sign
     buf.append(&mut payer);
-    buf.append(&mut cur_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
     buf.append(&mut fee);
@@ -492,7 +492,7 @@ impl Arbitrary for Pay {
         Pay {
             payer: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
-            currency_hash: Arbitrary::arbitrary(g),
+            asset_hash: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
@@ -529,7 +529,7 @@ mod tests {
         let sh4_addr = NormalAddress::from_pkey(*id5.pkey());
         let sh4_skey = id5.skey().clone();
 
-        let cur_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -544,15 +544,15 @@ mod tests {
         share_map.add_shareholder(sh4_addr, 1000);
         
         // Manually initialize creator balance
-        test_helpers::init_balance(&mut trie, creator_addr, cur_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, creator_addr, asset_hash, b"10000.0");
 
         // Create shares account
         let mut open_shares = OpenShares {
             creator: creator_norm_address,
             share_map: share_map,
             shares: shares,
-            currency_hash: cur_hash,
-            fee_hash: cur_hash,
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
             amount: Balance::from_bytes(b"1000.0").unwrap(),
             fee: Balance::from_bytes(b"30.0").unwrap(),
             nonce: 1,
@@ -572,8 +572,8 @@ mod tests {
             payer: open_shares.address.unwrap(),
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
-            currency_hash: cur_hash,
-            fee_hash: cur_hash,
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
             signature: None,
             hash: None
         };
@@ -588,19 +588,19 @@ mod tests {
         // Commit changes
         trie.commit();
 
-        let cur_hash = hex::encode(&cur_hash.to_vec());
+        let asset_hash = hex::encode(&asset_hash.to_vec());
         let sh1_addr = hex::encode(&sh1_addr.to_bytes());
         let sh2_addr = hex::encode(&sh2_addr.to_bytes());
         let sh3_addr = hex::encode(&sh3_addr.to_bytes());
         let sh4_addr = hex::encode(&sh4_addr.to_bytes());
 
-        let sh1_balance_key = format!("{}.{}", sh1_addr, cur_hash);
+        let sh1_balance_key = format!("{}.{}", sh1_addr, asset_hash);
         let sh1_balance_key = sh1_balance_key.as_bytes();
-        let sh2_balance_key = format!("{}.{}", sh2_addr, cur_hash);
+        let sh2_balance_key = format!("{}.{}", sh2_addr, asset_hash);
         let sh2_balance_key = sh2_balance_key.as_bytes();
-        let sh3_balance_key = format!("{}.{}", sh3_addr, cur_hash);
+        let sh3_balance_key = format!("{}.{}", sh3_addr, asset_hash);
         let sh3_balance_key = sh3_balance_key.as_bytes();
-        let sh4_balance_key = format!("{}.{}", sh4_addr, cur_hash);
+        let sh4_balance_key = format!("{}.{}", sh4_addr, asset_hash);
         let sh4_balance_key = sh4_balance_key.as_bytes();
 
         let sh1_balance = trie.get(sh1_balance_key).unwrap().unwrap();
@@ -632,7 +632,7 @@ mod tests {
         fn verify_multi_signature_shares(
             amount: Balance,
             fee: Balance, 
-            currency_hash: Hash,
+            asset_hash: Hash,
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
@@ -661,7 +661,7 @@ mod tests {
                 payer: ShareholdersAddress::compute(&addresses, NormalAddress::from_pkey(*creator_id.pkey()), 4314),
                 amount: amount,
                 fee: fee,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 signature: None,
                 hash: None

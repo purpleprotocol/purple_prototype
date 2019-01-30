@@ -30,7 +30,7 @@ pub struct Burn {
     burner: Address,
     amount: Balance,
     fee: Balance,
-    currency_hash: Hash,
+    asset_hash: Hash,
     fee_hash: Hash,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
@@ -57,14 +57,14 @@ impl Burn {
         }
 
         let bin_burner = &self.burner.to_bytes();
-        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
 
         // Convert address to strings
         let burner = hex::encode(bin_burner);
 
         // Convert hashes to strings
-        let cur_hash = hex::encode(bin_cur_hash);
+        let asset_hash = hex::encode(bin_asset_hash);
         let fee_hash = hex::encode(bin_fee_hash);
 
         // Calculate nonce key
@@ -78,7 +78,7 @@ impl Burn {
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let cur_key = format!("{}.{}", burner, cur_hash);
+        let cur_key = format!("{}.{}", burner, asset_hash);
         let fee_key = format!("{}.{}", burner, fee_hash);
 
         // Retrieve serialized nonce
@@ -88,7 +88,7 @@ impl Burn {
             Err(err)        => panic!(err)
         };
 
-        if fee_hash == cur_hash {
+        if fee_hash == asset_hash {
             // The transaction's fee is paid in the same currency
             // that is being burned, so we only retrieve one balance.
             let mut balance = match trie.get(&cur_key.as_bytes()) {
@@ -143,14 +143,14 @@ impl Burn {
     /// This function will panic if the `burner` account does not exist.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         let bin_burner = &self.burner.to_bytes();
-        let bin_cur_hash = &self.currency_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
 
         // Convert address to strings
         let burner = hex::encode(bin_burner);
 
         // Convert hashes to strings
-        let cur_hash = hex::encode(bin_cur_hash);
+        let asset_hash = hex::encode(bin_asset_hash);
         let fee_hash = hex::encode(bin_fee_hash);
 
         // Calculate nonce key
@@ -180,10 +180,10 @@ impl Burn {
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let cur_key = format!("{}.{}", burner, cur_hash);
+        let cur_key = format!("{}.{}", burner, asset_hash);
         let fee_key = format!("{}.{}", burner, fee_hash);
 
-        if fee_hash == cur_hash {
+        if fee_hash == asset_hash {
             // The transaction's fee is paid in the same currency
             // that is being burned, so we only retrieve one balance.
             let mut balance = unwrap!(
@@ -392,7 +392,7 @@ impl Burn {
         };
 
         let burner = &self.burner.to_bytes();
-        let currency_hash = &&self.currency_hash.0;
+        let asset_hash = &&self.asset_hash.0;
         let fee_hash = &&self.fee_hash.0;
         let amount = &self.amount.to_bytes();
         let fee = &self.fee.to_bytes();
@@ -407,7 +407,7 @@ impl Burn {
         buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
 
         buffer.append(&mut burner.to_vec());
-        buffer.append(&mut currency_hash.to_vec());
+        buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
         buffer.append(&mut amount.to_vec());
@@ -468,7 +468,7 @@ impl Burn {
             return Err("Incorrect packet structure");
         };
 
-        let currency_hash = if buf.len() > 32 as usize {
+        let asset_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
@@ -539,7 +539,7 @@ impl Burn {
             fee_hash: fee_hash,
             fee: fee,
             amount: amount,
-            currency_hash: currency_hash,
+            asset_hash: asset_hash,
             hash: Some(hash),
             signature: Some(signature),
         };
@@ -567,12 +567,12 @@ fn assemble_hash_message(obj: &Burn) -> Vec<u8> {
     let mut burner = obj.burner.to_bytes();
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
-    let currency_hash = obj.currency_hash.0;
+    let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
 
     // Compose data to hash
     buf.append(&mut burner);
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
     buf.append(&mut fee);
@@ -586,12 +586,12 @@ fn assemble_sign_message(obj: &Burn) -> Vec<u8> {
     let mut burner = obj.burner.to_bytes();
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
-    let currency_hash = obj.currency_hash.0;
+    let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
 
     // Compose data to sign
     buf.append(&mut burner);
-    buf.append(&mut currency_hash.to_vec());
+    buf.append(&mut asset_hash.to_vec());
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
     buf.append(&mut fee);
@@ -608,7 +608,7 @@ impl Arbitrary for Burn {
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
-            currency_hash: Arbitrary::arbitrary(g),
+            asset_hash: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }
@@ -627,14 +627,14 @@ mod tests {
     fn validate() {
         let id = Identity::new();
         let burner_addr = Address::normal_from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -643,8 +643,8 @@ mod tests {
             burner: burner_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
-            currency_hash: cur_hash,
-            fee_hash: cur_hash,
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
             signature: None,
             hash: None
         };
@@ -659,14 +659,14 @@ mod tests {
     fn validate_no_funds() {
         let id = Identity::new();
         let burner_addr = Address::normal_from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -675,8 +675,8 @@ mod tests {
             burner: burner_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
-            currency_hash: cur_hash,
-            fee_hash: cur_hash,
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
             signature: None,
             hash: None
         };
@@ -691,7 +691,7 @@ mod tests {
     fn validate_different_currencies() {
         let id = Identity::new();
         let burner_addr = Address::normal_from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -699,7 +699,7 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
         test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
@@ -709,8 +709,8 @@ mod tests {
             burner: burner_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
-            currency_hash: cur_hash,
-            fee_hash: cur_hash,
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
             signature: None,
             hash: None
         };
@@ -725,7 +725,7 @@ mod tests {
     fn validate_no_funds_different_currencies() {
         let id = Identity::new();
         let burner_addr = Address::normal_from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -733,7 +733,7 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10.0");
         test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
@@ -743,8 +743,8 @@ mod tests {
             burner: burner_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
-            currency_hash: cur_hash,
-            fee_hash: cur_hash,
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
             signature: None,
             hash: None
         };
@@ -759,7 +759,7 @@ mod tests {
     fn validate_no_funds_for_fee_different_currencies() {
         let id = Identity::new();
         let burner_addr = Address::normal_from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency 1");
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
         let mut db = test_helpers::init_tempdb();
@@ -767,7 +767,7 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10.0");
         test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"5.0").unwrap();
@@ -777,8 +777,8 @@ mod tests {
             burner: burner_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
-            currency_hash: cur_hash,
-            fee_hash: cur_hash,
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
             signature: None,
             hash: None
         };
@@ -793,14 +793,14 @@ mod tests {
     fn validate_zero() {
         let id = Identity::new();
         let burner_addr = Address::normal_from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"0.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -809,8 +809,8 @@ mod tests {
             burner: burner_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
-            currency_hash: cur_hash,
-            fee_hash: cur_hash,
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
             signature: None,
             hash: None
         };
@@ -825,14 +825,14 @@ mod tests {
     fn apply_it_burns_coins() {
         let id = Identity::new();
         let burner_addr = Address::normal_from_pkey(*id.pkey());
-        let cur_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), cur_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -841,8 +841,8 @@ mod tests {
             burner: burner_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
-            currency_hash: cur_hash,
-            fee_hash: cur_hash,
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
             signature: None,
             hash: None
         };
@@ -861,10 +861,10 @@ mod tests {
 
         let bin_burner_nonce = &trie.get(&burner_nonce_key).unwrap().unwrap();
 
-        let bin_cur_hash = cur_hash.to_vec();
-        let hex_cur_hash = hex::encode(&bin_cur_hash);
+        let bin_asset_hash = asset_hash.to_vec();
+        let hex_asset_hash = hex::encode(&bin_asset_hash);
 
-        let burner_balance_key = format!("{}.{}", hex::encode(&burner_addr.to_bytes()), hex_cur_hash);
+        let burner_balance_key = format!("{}.{}", hex::encode(&burner_addr.to_bytes()), hex_asset_hash);
         let burner_balance_key = burner_balance_key.as_bytes();
 
         let balance = Balance::from_bytes(&trie.get(&burner_balance_key).unwrap().unwrap()).unwrap();
@@ -891,12 +891,12 @@ mod tests {
             tx.verify_hash()
         }
 
-        fn verify_signature(id: Identity, amount: Balance, fee: Balance, currency_hash: Hash, fee_hash: Hash) -> bool {
+        fn verify_signature(id: Identity, amount: Balance, fee: Balance, asset_hash: Hash, fee_hash: Hash) -> bool {
             let mut tx = Burn {
                 burner: Address::normal_from_pkey(*id.pkey()),
                 amount: amount,
                 fee: fee,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 signature: None,
                 hash: None
@@ -909,7 +909,7 @@ mod tests {
         fn verify_multi_signature(
             amount: Balance, 
             fee: Balance, 
-            currency_hash: Hash, 
+            asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
@@ -927,7 +927,7 @@ mod tests {
                 burner: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
                 amount: amount,
                 fee: fee,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 signature: None,
                 hash: None
@@ -944,7 +944,7 @@ mod tests {
         fn verify_multi_signature_shares(
             amount: Balance, 
             fee: Balance, 
-            currency_hash: Hash, 
+            asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
@@ -973,7 +973,7 @@ mod tests {
                 burner: Address::shareholders_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
                 amount: amount,
                 fee: fee,
-                currency_hash: currency_hash,
+                asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 signature: None,
                 hash: None
