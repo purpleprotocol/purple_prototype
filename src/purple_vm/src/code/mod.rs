@@ -431,10 +431,10 @@ fn validate_block_it_fails_on_invalid_last_instruction() {
     assert!(!validate_block(&block, VmValue::I32, &[]));
 }
 
-// #[cfg(test)]
-// #[test]
-// fn validate_block_it_fails_on_empty_block() {
-//     let block = vec![Instruction::Begin.repr(), Instruction::End.repr()];
-//     assert!(!validate_block(&block, VmValue::I32, &[]));
-// }
+#[cfg(test)]
+#[test]
+fn validate_block_it_fails_on_empty_block() {
+    let block = vec![Instruction::Begin.repr(), Instruction::End.repr()];
+    assert!(!validate_block(&block, VmValue::I32, &[]));
+}
 

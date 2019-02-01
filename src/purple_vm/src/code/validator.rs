@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use instruction_set::{Instruction, OPS_LIST, HALTING_OPS};
+use instruction_set::{Instruction, OPS_LIST, CT_FLOW_OPS};
 use stack::Stack;
 
 #[derive(Debug)]
@@ -30,7 +30,8 @@ enum Validity {
 pub struct Validator {
     state: Validity,
     transitions: Vec<Instruction>,
-    stack: Stack<Instruction>
+    stack: Stack<Instruction>,
+    valid_return: bool
 }
 
 impl Validator {
@@ -38,6 +39,7 @@ impl Validator {
         Validator {
             state: Validity::Invalid,
             transitions: Vec::new(),
+            valid_return: false,
             stack: Stack::new()
         }
     }
@@ -68,16 +70,47 @@ impl Validator {
                 .any(|t| *t == op);
 
             if valid_transition {
-                let will_halt = HALTING_OPS
+                let is_ct_flow_op = CT_FLOW_OPS
                     .iter()
                     .any(|o| *o == op);
+
+                // If op is a control flow op, push it to the stack.
+                if is_ct_flow_op {
+                    self.stack.push(op);
+                }
+
+                // If op is `End`, pop item from stack.
+                if let Instruction::End = op {
+                    // The stack is popped twice in the case 
+                    // of terminating an `Else` block.
+                    if let &Instruction::Else = self.stack.peek() {
+                        self.stack.pop();
+                    }
+
+                    self.stack.pop();
+                }
                 
-                // Changes state to `Valid` if the opcode
-                // is a halting opcode or the stack is empty.
-                if will_halt || self.stack.len() == 0 {
+                // Changes state to `Valid` if the stack is empty.
+                if self.stack.len() == 0 {
                     self.state = Validity::Valid;
                 } else {
-                    let next_ops = op.transitions();
+                    let mut next_ops = op.transitions();
+                    let has_loop = self.stack.as_slice()
+                        .iter()
+                        .any(|o| *o == Instruction::Loop);
+
+                    // If there is any loop operator in the stack,
+                    // allow `Break` and `BreakIf` instructions.
+                    if has_loop {
+                        next_ops.push(Instruction::Break);
+                        next_ops.push(Instruction::BreakIf);
+                    }
+
+                    // Allow `Else` op in case the topmost item
+                    // in the stack is an `If` instruction.
+                    if let &Instruction::If = self.stack.peek() {
+                        next_ops.push(Instruction::Else);
+                    }
 
                     self.state = Validity::Invalid;
                     self.transitions = next_ops;
@@ -97,7 +130,7 @@ impl Validator {
     
     pub fn valid(&self) -> bool {
         match self.state {
-            Validity::Valid   => true,
+            Validity::Valid   => self.valid_return,
             _                 => false
         }
     }

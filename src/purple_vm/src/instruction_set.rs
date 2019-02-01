@@ -17,7 +17,7 @@
 */
 
 #[EnumRepr(type = "u8")]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Instruction {
     Halt                  = 0x00,
     Nop                   = 0x01,
@@ -271,39 +271,107 @@ pub enum Instruction {
 impl Instruction {
     pub fn transitions(&self) -> Vec<Instruction> {
         match *self {
+            // TODO: Add transitions for all ops
             Instruction::Halt => {
                 // Nothing comes really, after halt
-                vec![]
+                vec![Instruction::End]
+            },
+            Instruction::Begin => {
+                OPS_LIST.to_vec()
             },
             Instruction::Nop => {
                 OPS_LIST.to_vec()
             },
+            Instruction::If => {
+                COMP_OPS.to_vec()
+            },
+            Instruction::BreakIf => {
+                COMP_OPS.to_vec()
+            },
+            Instruction::Else => {
+                OPS_LIST.to_vec()
+            },  
+            Instruction::Loop => {
+                OPS_LIST.to_vec()
+            },
+            Instruction::End => {
+                OPS_LIST.to_vec()
+            },
             Instruction::Suicide => {
                 // Not after suicide either, stay safe kids
-                vec![]
+                vec![Instruction::End]
             },
             _ => unimplemented!()
         }
     }
 }
 
-/// List containing all opcodes which terminate execution
-pub const HALTING_OPS: &'static [Instruction] = &[
-    Instruction::Halt,
-    Instruction::Suicide
+/// List containing opcodes which handle control flow or begin blocks.
+pub const CT_FLOW_OPS: &'static [Instruction] = &[
+    Instruction::Begin,
+    Instruction::Loop,
+    Instruction::If,
+    Instruction::Else
 ];
 
-/// Static array containing all opcodes
+/// List containing all comparison operators.
+pub const COMP_OPS: &'static [Instruction] = &[
+    Instruction::i32Eqz            ,
+    Instruction::i32Eq             ,
+    Instruction::i32Ne             ,
+    Instruction::i32LtSigned       ,
+    Instruction::i32LtUnsigned     ,
+    Instruction::i32GtSigned       ,
+    Instruction::i32GtUnsigned     ,
+    Instruction::i32LeSigned       ,
+    Instruction::i32LeUnsigned     ,
+    Instruction::i32GeSigned       ,
+    Instruction::i32GeUnsigned     ,
+    Instruction::i64Eqz            ,
+    Instruction::i64Eq             ,
+    Instruction::i64Ne             ,
+    Instruction::i64LtSigned       ,
+    Instruction::i64LtUnsigned     ,
+    Instruction::i64GtSigned       ,
+    Instruction::i64GtUnsigned     ,
+    Instruction::i64LeSigned       ,
+    Instruction::i64LeUnsigned     ,
+    Instruction::i64GeSigned       ,
+    Instruction::i64GeUnsigned     ,
+    Instruction::f32Eqz            ,
+    Instruction::f32Eq             ,
+    Instruction::f32Ne             ,
+    Instruction::f32LtSigned       ,
+    Instruction::f32LtUnsigned     ,
+    Instruction::f32GtSigned       ,
+    Instruction::f32GtUnsigned     ,
+    Instruction::f32LeSigned       ,
+    Instruction::f32LeUnsigned     ,
+    Instruction::f32GeSigned       ,
+    Instruction::f32GeUnsigned     ,
+    Instruction::f64Eqz            ,
+    Instruction::f64Eq             ,
+    Instruction::f64Ne             ,
+    Instruction::f64LtSigned       ,
+    Instruction::f64LtUnsigned     ,
+    Instruction::f64GtSigned       ,
+    Instruction::f64GtUnsigned     ,
+    Instruction::f64LeSigned       ,
+    Instruction::f64LeUnsigned     ,
+    Instruction::f64GeSigned       ,
+    Instruction::f64GeUnsigned     ,
+];
+
+/// Static array containing all default opcodes. 
+/// These do not contain block specific operators,
+/// such as `Else`, `Break` or `Break if`.
 pub const OPS_LIST: &'static [Instruction] = &[
     Instruction::Halt                  ,
     Instruction::Nop                   ,
     Instruction::Begin                 ,
     Instruction::Loop                  ,
     Instruction::If                    ,
-    Instruction::Else                  ,
     Instruction::End                   ,
-    Instruction::Break                 ,
-    Instruction::BreakIf               ,
     Instruction::Return                ,
     Instruction::Call                  ,
 
