@@ -16,19 +16,37 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::Hash;
-use code::function::Function;
-use code::import::Import;
-
 #[derive(Clone, Debug)]
-pub struct Module {
-    module_hash: Hash,
-    pub functions: Vec<Function>,
-    pub imports: Vec<Import>
-}
+pub enum VmError {
+    /// The module is not loaded.
+    NoModule,
 
-impl PartialEq for Module {
-    fn eq(&self, other: &Module) -> bool {
-        &self.module_hash == &other.module_hash
-    }
+    /// The function with the given index is not defined.
+    NoFun,
+
+    /// The called module is not loaded.
+    NotLoaded,
+
+    /// The called function is not defined.
+    NotDefined,
+
+    /// The module containing the function imported at 
+    /// (module idx, import idx) is not loaded. 
+    ImportNotLoaded(usize, usize),
+
+    /// The module is already loaded.
+    AlreadyLoaded,
+
+    /// I32 Overflow
+    I32Overflow,
+
+    /// I64 Overflow
+    I64Overflow,
+
+    /// F32 Overflow
+    F32Overflow,
+
+    /// F64 Overflow
+    F64Overflow,
+
 }

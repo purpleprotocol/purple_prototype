@@ -22,48 +22,22 @@ use value::VmValue;
 use module::Module;
 use patricia_trie::{TrieMut, TrieDBMut};
 use persistence::{BlakeDbHasher, Codec};
+use error::VmError;
 
 #[derive(Debug)]
 pub struct Vm {
+    ip: usize,
     modules: Vec<Module>,
-    frame_stack: Stack<Frame<VmValue>>,
+    call_stack: Stack<Frame<VmValue>>,
     operand_stack: Stack<VmValue>
-}
-
-#[derive(Clone, Debug)]
-pub enum VmError {
-    /// The module is not loaded.
-    NoModule,
-
-    /// The function with the given index is not defined.
-    NoFun,
-
-    /// The module containing the function imported at 
-    /// (module idx, import idx) is not loaded. 
-    NotLoaded(usize, usize),
-
-    /// The module is already loaded.
-    AlreadyLoaded,
-
-    /// I32 Overflow
-    I32Overflow,
-
-    /// I64 Overflow
-    I64Overflow,
-
-    /// F32 Overflow
-    F32Overflow,
-
-    /// F64 Overflow
-    F64Overflow,
-
 }
 
 impl Vm {
     pub fn new() -> Vm {
         Vm {
             modules: Vec::new(),
-            frame_stack: Stack::<Frame<VmValue>>::new(),
+            ip: 0,
+            call_stack: Stack::<Frame<VmValue>>::new(),
             operand_stack: Stack::<VmValue>::new()
         }
     }
@@ -92,6 +66,18 @@ impl Vm {
     /// If it succeeds, this function returns the amount
     /// of gas that was consumed.
     pub fn execute(&mut self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>, module_idx: usize, fun_idx: usize, gas: u64) -> Result<u64, VmError> {
+        // Check module definition
+        if module_idx >= self.modules.len() {
+            return Err(VmError::NotLoaded);
+        }
+
+        let module = &self.modules[module_idx];
+
+        // Check function definition
+        if fun_idx >= module.functions.len() {
+            return Err(VmError::NotDefined);
+        }
+
         unimplemented!();
     }
 }

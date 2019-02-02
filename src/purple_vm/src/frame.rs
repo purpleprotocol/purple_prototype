@@ -16,7 +16,19 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use return_address::ReturnAddress;
+
 #[derive(Debug)]
 pub struct Frame<T> {
-    locals: Vec<T>
+    locals: Vec<T>,
+    return_address: ReturnAddress
+}
+
+impl<T> Frame<T> {
+    pub fn new(return_address: ReturnAddress) -> Frame<T> {
+        Frame {
+            locals: Vec::new(),
+            return_address: return_address
+        }
+    }
 }

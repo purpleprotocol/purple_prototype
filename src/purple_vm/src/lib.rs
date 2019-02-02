@@ -29,7 +29,10 @@ extern crate patricia_trie;
 
 pub use virtual_machine::*;
 pub use code::*;
+pub use error::*;
 
+mod return_address;
+mod error;
 mod module;
 mod instruction_set;
 mod stack;

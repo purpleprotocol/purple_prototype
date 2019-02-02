@@ -16,19 +16,19 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::Hash;
-use code::function::Function;
-use code::import::Import;
-
-#[derive(Clone, Debug)]
-pub struct Module {
-    module_hash: Hash,
-    pub functions: Vec<Function>,
-    pub imports: Vec<Import>
+#[derive(Debug)]
+pub struct ReturnAddress {
+    pub ip: usize,
+    pub fun_idx: usize,
+    pub module_idx: usize
 }
 
-impl PartialEq for Module {
-    fn eq(&self, other: &Module) -> bool {
-        &self.module_hash == &other.module_hash
+impl ReturnAddress {
+    pub fn new(ip: usize, fun_idx: usize, module_idx: usize) -> ReturnAddress {
+        ReturnAddress {
+            ip: ip,
+            fun_idx: fun_idx,
+            module_idx: module_idx
+        }
     }
 }
