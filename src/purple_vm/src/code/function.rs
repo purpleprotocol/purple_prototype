@@ -17,6 +17,7 @@
 */
 
 use value::VmValue;
+use instruction_set::Instruction;
 
 #[derive(Clone, Debug)]
 pub struct Function {
@@ -34,4 +35,14 @@ pub struct Function {
 
     // The return type of the function.
     pub return_type: VmValue
+}
+
+impl Function {
+    pub fn fetch(&self, idx: usize) -> u8 {
+        if idx >= self.block.len() {
+            panic!("Invalid index!");
+        } else {
+            self.block[idx]
+        }
+    }
 }

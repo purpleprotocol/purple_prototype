@@ -17,18 +17,23 @@
 */
 
 #[derive(Debug, Clone)]
-pub struct ReturnAddress {
+pub struct Address {
     pub ip: usize,
     pub fun_idx: usize,
     pub module_idx: usize
 }
 
-impl ReturnAddress {
-    pub fn new(ip: usize, fun_idx: usize, module_idx: usize) -> ReturnAddress {
-        ReturnAddress {
+impl Address {
+    pub fn new(ip: usize, fun_idx: usize, module_idx: usize) -> Address {
+        Address {
             ip: ip,
             fun_idx: fun_idx,
             module_idx: module_idx
         }
+    }
+
+    /// Increments the instruction pointer.
+    pub fn increment(&mut self) {
+        self.ip += 1;
     }
 }

@@ -16,18 +16,18 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use return_address::ReturnAddress;
+use address::Address;
 use stack::Stack;
 use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct Frame<T: Clone> {
-    locals: Stack<T>,
-    return_address: ReturnAddress
+    pub locals: Stack<T>,
+    return_address: Option<Address>
 }
 
 impl<T: fmt::Debug + Clone> Frame<T> {
-    pub fn new(return_address: ReturnAddress) -> Frame<T> {
+    pub fn new(return_address: Option<Address>) -> Frame<T> {
         Frame {
             locals: Stack::new(),
             return_address: return_address

@@ -19,14 +19,16 @@
 use stack::Stack;
 use frame::Frame;
 use value::VmValue;
+use address::Address;
 use module::Module;
+use instruction_set::Instruction;
 use patricia_trie::{TrieMut, TrieDBMut};
 use persistence::{BlakeDbHasher, Codec};
 use error::VmError;
 
 #[derive(Debug)]
 pub struct Vm {
-    ip: usize,
+    ip: Option<Address>,
     modules: Vec<Module>,
     call_stack: Stack<Frame<VmValue>>,
     operand_stack: Stack<VmValue>
@@ -36,7 +38,7 @@ impl Vm {
     pub fn new() -> Vm {
         Vm {
             modules: Vec::new(),
-            ip: 0,
+            ip: None,
             call_stack: Stack::<Frame<VmValue>>::new(),
             operand_stack: Stack::<VmValue>::new()
         }
@@ -65,6 +67,8 @@ impl Vm {
     ///
     /// If it succeeds, this function returns the amount
     /// of gas that was consumed.
+    ///
+    /// TODO: Allow passing arguments
     pub fn execute(&mut self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>, module_idx: usize, fun_idx: usize, gas: u64) -> Result<u64, VmError> {
         // Check module definition
         if module_idx >= self.modules.len() {
@@ -78,6 +82,31 @@ impl Vm {
             return Err(VmError::NotDefined);
         }
 
-        unimplemented!();
+        // Create instruction pointer
+        let ip = Address::new(0, fun_idx, module_idx);
+
+        // Set instruction pointer
+        self.ip = Some(ip);
+
+        // Push initial frame
+        self.call_stack.push(Frame::new(None));
+
+        // Execute code
+        loop {
+            if let Some(ref mut ip) = self.ip {
+                let module = &self.modules[ip.module_idx];
+                let fun = &module.functions[ip.fun_idx];
+                let op = fun.fetch(ip.ip);
+
+                match Instruction::from_repr(op) {
+                    Some(Instruction::Begin) => {
+                        unimplemented!();
+                    },
+                    _ => unimplemented!()
+                }
+            } else {
+                panic!("Instruction pointer is not set!");
+            }
+        }
     }
 }
