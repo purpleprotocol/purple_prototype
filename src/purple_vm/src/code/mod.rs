@@ -24,7 +24,7 @@ use std::str;
 use std::io::Cursor;
 use byteorder::{BigEndian, ReadBytesExt};
 use instruction_set::Instruction;
-use value::VmValue;
+use primitives::r#type::VmType;
 use function::Function;
 use import::Import;
 use self::validator::Validator;
@@ -275,7 +275,7 @@ impl Code {
             cursor.set_position(2);
 
             let return_type = match cursor.read_u8() {
-                Ok(result) => VmValue::from_op(result),
+                Ok(result) => VmType::from_op(result),
                 _          => return false 
             };
 
@@ -306,9 +306,9 @@ impl Code {
             };
 
             let arguments = if buf.len() > arity as usize {
-                let result: Option<Vec<VmValue>> = buf
+                let result: Option<Vec<VmType>> = buf
                     .drain(..function_name_len as usize)
-                    .map(|v| VmValue::from_op(v))
+                    .map(|v| VmType::from_op(v))
                     .collect();
 
                 match result {
@@ -369,7 +369,7 @@ where
     iter.into_iter().all(move |x| uniq.insert(x))
 }
 
-fn validate_block(block: &[u8], return_type: VmValue, argv: &[VmValue]) -> bool {
+fn validate_block(block: &[u8], return_type: VmType, argv: &[VmType]) -> bool {
     let mut validator = Validator::new();
     
     for byte in block {
@@ -421,20 +421,20 @@ mod tests {
 #[test]
 fn validate_block_it_fails_on_invalid_first_instruction() {
     let block = vec![Instruction::Nop.repr(), Instruction::Nop.repr(), Instruction::End.repr()];
-    assert!(!validate_block(&block, VmValue::I32, &[]));
+    assert!(!validate_block(&block, VmType::I32, &[]));
 }
 
 #[cfg(test)]
 #[test]
 fn validate_block_it_fails_on_invalid_last_instruction() {
     let block = vec![Instruction::Begin.repr(), Instruction::Nop.repr(), Instruction::Nop.repr()];
-    assert!(!validate_block(&block, VmValue::I32, &[]));
+    assert!(!validate_block(&block, VmType::I32, &[]));
 }
 
 #[cfg(test)]
 #[test]
 fn validate_block_it_fails_on_empty_block() {
     let block = vec![Instruction::Begin.repr(), Instruction::End.repr()];
-    assert!(!validate_block(&block, VmValue::I32, &[]));
+    assert!(!validate_block(&block, VmType::I32, &[]));
 }
 

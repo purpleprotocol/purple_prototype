@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use value::VmValue;
+use primitives::r#type::VmType;
 use instruction_set::Instruction;
 
 #[derive(Clone, Debug)]
@@ -31,10 +31,10 @@ pub struct Function {
     pub name: String,
     
     /// The types of the arguments.
-    pub arguments: Vec<VmValue>,
+    pub arguments: Vec<VmType>,
 
     // The return type of the function.
-    pub return_type: VmValue
+    pub return_type: VmType
 }
 
 impl Function {

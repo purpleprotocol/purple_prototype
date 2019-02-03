@@ -16,27 +16,5 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(non_camel_case_types)]
-
-#[macro_use] extern crate enum_repr;
-
-extern crate lazy_static;
-extern crate byteorder;
-extern crate hashbrown;
-extern crate crypto;
-extern crate persistence;
-extern crate patricia_trie;
-
-pub use virtual_machine::*;
-pub use code::*;
-pub use error::*;
-
-mod primitives;
-mod address;
-mod error;
-mod module;
-mod instruction_set;
-mod stack;
-mod virtual_machine;
-mod frame;
-mod code;
+pub mod r#type;
+pub mod value;

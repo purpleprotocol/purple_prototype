@@ -18,7 +18,7 @@
 
 use stack::Stack;
 use frame::Frame;
-use value::VmValue;
+use primitives::value::VmValue;
 use address::Address;
 use module::Module;
 use instruction_set::Instruction;
