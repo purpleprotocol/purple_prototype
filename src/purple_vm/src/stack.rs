@@ -18,10 +18,10 @@
 
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Stack<T>(Vec<T>);
 
-impl<T: fmt::Debug> Stack<T> {
+impl<T: fmt::Debug + Clone> Stack<T> {
     pub fn new() -> Stack<T> {
         Stack(vec![])
     }
@@ -32,6 +32,15 @@ impl<T: fmt::Debug> Stack<T> {
 
     pub fn push(&mut self, value: T) {
         self.0.push(value);
+    }
+
+    pub fn pick(&mut self, idx: usize) {
+        let len = self.0.len();
+        if idx >= len { panic!("There is no item at the given index!") }
+        
+        let item = self.0[idx].clone();
+        
+        self.0.push(item);
     }
 
     pub fn pop(&mut self) -> T {
@@ -77,6 +86,20 @@ mod tests {
     }
 
     #[test]
+    fn pick() {
+        let mut stack: Stack<usize> = Stack::new();
+        stack.push(1);
+        stack.push(2);
+        stack.push(3);
+
+        assert_eq!(*stack.peek(), 3);
+
+        stack.pick(0);
+
+        assert_eq!(*stack.peek(), 1);
+    }
+
+    #[test]
     fn pop() {
         let mut stack: Stack<usize> = Stack::new();
         stack.push(13);
@@ -103,5 +126,12 @@ mod tests {
     fn empty_peek() {
         let stack: Stack<usize> = Stack::new();
         stack.peek();
+    }
+
+    #[test]
+    #[should_panic(expected = "no item at the given index")]
+    fn empty_pick() {
+        let mut stack: Stack<usize> = Stack::new();
+        stack.pick(0);
     }
 }

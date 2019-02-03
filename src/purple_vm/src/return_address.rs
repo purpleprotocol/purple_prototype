@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReturnAddress {
     pub ip: usize,
     pub fun_idx: usize,

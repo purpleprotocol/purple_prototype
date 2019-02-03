@@ -31,10 +31,16 @@ pub enum Instruction {
     Return                = 0x09,
     Call                  = 0x0a,
 
-    // Local variables
-    GetLocal              = 0x10,
-    SetLocal              = 0x11,
-    TeeLocal              = 0x12,
+    // Local stack
+    PushLocal             = 0x0b,
+    PopLocal              = 0x0c,
+    PickLocal             = 0x0d,
+    PeekLocal             = 0x0e,
+
+    // Operand stack 
+    PushOperand           = 0x10,
+    PopOperand            = 0x11,
+    PeekOperand           = 0x12,
 
     // State
     GetState              = 0x13,
@@ -375,10 +381,16 @@ pub const OPS_LIST: &'static [Instruction] = &[
     Instruction::Return                ,
     Instruction::Call                  ,
 
-    // Local variables
-    Instruction::GetLocal              ,
-    Instruction::SetLocal              ,
-    Instruction::TeeLocal              ,
+    // Local stack
+    Instruction::PushLocal             ,
+    Instruction::PopLocal              ,
+    Instruction::PickLocal             ,
+    Instruction::PeekLocal             ,
+
+    // Operand stack 
+    Instruction::PushOperand           ,
+    Instruction::PopOperand            ,
+    Instruction::PeekOperand           ,
 
     // State
     Instruction::GetState              ,

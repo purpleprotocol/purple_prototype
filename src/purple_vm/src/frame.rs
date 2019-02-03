@@ -17,17 +17,19 @@
 */
 
 use return_address::ReturnAddress;
+use stack::Stack;
+use std::fmt;
 
-#[derive(Debug)]
-pub struct Frame<T> {
-    locals: Vec<T>,
+#[derive(Debug, Clone)]
+pub struct Frame<T: Clone> {
+    locals: Stack<T>,
     return_address: ReturnAddress
 }
 
-impl<T> Frame<T> {
+impl<T: fmt::Debug + Clone> Frame<T> {
     pub fn new(return_address: ReturnAddress) -> Frame<T> {
         Frame {
-            locals: Vec::new(),
+            locals: Stack::new(),
             return_address: return_address
         }
     }

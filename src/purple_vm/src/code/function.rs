@@ -29,7 +29,7 @@ pub struct Function {
     /// The name of the function.
     pub name: String,
     
-    /// The tyoes of the arguments.
+    /// The types of the arguments.
     pub arguments: Vec<VmValue>,
 
     // The return type of the function.
