@@ -106,6 +106,11 @@ impl Vm {
                 let op = fun.fetch(ip.ip);
 
                 match Instruction::from_repr(op) {
+                    Some(Instruction::Halt) => {
+                        self.ip = None;
+                        self.call_stack = vec![];
+                        self.operand_stack = vec![];
+                    },
                     Some(Instruction::Begin) => {
                         let initial_ip = ip.clone();
 
@@ -119,337 +124,8 @@ impl Vm {
                             panic!("Arity cannot be greater than 10!");
                         }
 
-                        let mut argv_types: Vec<VmType> = Vec::with_capacity(arity as usize);  
-                        let mut argv: Vec<VmValue> = Vec::with_capacity(arity as usize);
-
-                        // Fetch argument types
-                        for _ in 0..arity {
-                            ip.increment();
-                            
-                            let op = fun.fetch(ip.ip);
-                            let arg = match VmType::from_op(op) {
-                                Some(result) => result,
-                                _            => panic!(format!("Invalid argument type in begin block! Received: {}", op))
-                            };
-
-                            argv_types.push(arg);
-                        }
-
-                        // Fetch arguments. Only arrays up to
-                        // size of 8 are allowed as arguments.
-                        for t in argv_types {
-                            ip.increment();
-
-                            match t {
-                                VmType::I32 => {
-                                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                                    let mut cursor = Cursor::new(&bytes);
-                                    let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
-
-                                    argv.push(VmValue::I32(val));
-                                },
-                                VmType::I64 => {
-                                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                                    let mut cursor = Cursor::new(&bytes);
-                                    let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
-
-                                    argv.push(VmValue::I64(val));
-                                },
-                                VmType::F32 => {
-                                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                                    let mut cursor = Cursor::new(&bytes);
-                                    let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
-
-                                    argv.push(VmValue::F32(val));
-                                },
-                                VmType::F64 => {
-                                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                                    let mut cursor = Cursor::new(&bytes);
-                                    let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
-
-                                    argv.push(VmValue::F64(val));
-                                },
-                                VmType::I32Array2 => {
-                                    let mut result: [i32; 2] = [0; 2];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
-                                    let mut buffer2: Vec<i32> = Vec::with_capacity(2);
-
-                                    // Get binaries
-                                    for _ in 0..2 {
-                                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::I32Array2(result));
-                                },
-                                VmType::I32Array4 => {
-                                    let mut result: [i32; 4] = [0; 4];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
-                                    let mut buffer2: Vec<i32> = Vec::with_capacity(4);
-
-                                    // Get binaries
-                                    for _ in 0..4 {
-                                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::I32Array4(result));
-                                },
-                                VmType::I32Array8 => {
-                                    let mut result: [i32; 8] = [0; 8];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
-                                    let mut buffer2: Vec<i32> = Vec::with_capacity(8);
-
-                                    // Get binaries
-                                    for _ in 0..8 {
-                                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::I32Array8(result));
-                                },
-                                VmType::I64Array2 => {
-                                    let mut result: [i64; 2] = [0; 2];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
-                                    let mut buffer2: Vec<i64> = Vec::with_capacity(2);
-
-                                    // Get binaries
-                                    for _ in 0..2 {
-                                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::I64Array2(result));
-                                },
-                                VmType::I64Array4 => {
-                                    let mut result: [i64; 4] = [0; 4];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
-                                    let mut buffer2: Vec<i64> = Vec::with_capacity(4);
-
-                                    // Get binaries
-                                    for _ in 0..4 {
-                                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::I64Array4(result));
-                                },
-                                VmType::I64Array8 => {
-                                    let mut result: [i64; 8] = [0; 8];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
-                                    let mut buffer2: Vec<i64> = Vec::with_capacity(8);
-
-                                    // Get binaries
-                                    for _ in 0..8 {
-                                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::I64Array8(result));
-                                },
-                                VmType::F32Array2 => {
-                                    let mut result: [f32; 2] = [0.0; 2];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
-                                    let mut buffer2: Vec<f32> = Vec::with_capacity(2);
-
-                                    // Get binaries
-                                    for _ in 0..2 {
-                                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::F32Array2(result));
-                                },
-                                VmType::F32Array4 => {
-                                    let mut result: [f32; 4] = [0.0; 4];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
-                                    let mut buffer2: Vec<f32> = Vec::with_capacity(4);
-
-                                    // Get binaries
-                                    for _ in 0..4 {
-                                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::F32Array4(result));
-                                },
-                                VmType::F32Array8 => {
-                                    let mut result: [f32; 8] = [0.0; 8];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
-                                    let mut buffer2: Vec<f32> = Vec::with_capacity(8);
-
-                                    // Get binaries
-                                    for _ in 0..8 {
-                                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::F32Array8(result));
-                                },
-                                VmType::F64Array2 => {
-                                    let mut result: [f64; 2] = [0.0; 2];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
-                                    let mut buffer2: Vec<f64> = Vec::with_capacity(2);
-
-                                    // Get binaries
-                                    for _ in 0..2 {
-                                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::F64Array2(result));
-                                },
-                                VmType::F64Array4 => {
-                                    let mut result: [f64; 4] = [0.0; 4];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
-                                    let mut buffer2: Vec<f64> = Vec::with_capacity(4);
-
-                                    // Get binaries
-                                    for _ in 0..4 {
-                                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::F64Array4(result));
-                                },
-                                VmType::F64Array8 => {
-                                    let mut result: [f64; 8] = [0.0; 8];
-                                    let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
-                                    let mut buffer2: Vec<f64> = Vec::with_capacity(8);
-
-                                    // Get binaries
-                                    for _ in 0..8 {
-                                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                                        buffer1.push(bytes);
-                                    }
-
-                                    // Decode bytes
-                                    for b in buffer1 {
-                                        let mut cursor = Cursor::new(&b);
-                                        let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
-
-                                        buffer2.push(val);
-                                    }
-
-                                    // Push argument
-                                    result.copy_from_slice(&buffer2);
-                                    argv.push(VmValue::F64Array8(result));
-                                },
-                                op => {
-                                    panic!(format!("Invalid argument type in begin block! Received: {:?}", op));
-                                }
-                            }
-                        }
+                        // Fetch block arguments
+                        let (argv_types, argv) = fetch_argv(ip, fun, arity as usize);
 
                         match (arity, self.call_stack.len()) {
                             // The first begin instruction. With arity 0.
@@ -512,4 +188,340 @@ fn fetch_bytes(amount: usize, ip: &mut Address, fun: &Function) -> Vec<u8> {
     }
 
     b
+}
+
+fn fetch_argv(ip: &mut Address, fun: &Function, arity: usize) -> (Vec<VmType>, Vec<VmValue>) {
+    let mut argv_types: Vec<VmType> = Vec::with_capacity(arity);  
+    let mut argv: Vec<VmValue> = Vec::with_capacity(arity);
+
+    // Fetch argument types
+    for _ in 0..arity {
+        ip.increment();
+        
+        let op = fun.fetch(ip.ip);
+        let arg = match VmType::from_op(op) {
+            Some(result) => result,
+            _            => panic!(format!("Invalid argument type in begin block! Received: {}", op))
+        };
+
+        argv_types.push(arg);
+    }
+
+    // Fetch arguments. Only arrays up to
+    // size of 8 are allowed as arguments.
+    for t in argv_types.iter() {
+        ip.increment();
+
+        match t {
+            VmType::I32 => {
+                let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                let mut cursor = Cursor::new(&bytes);
+                let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                argv.push(VmValue::I32(val));
+            },
+            VmType::I64 => {
+                let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                let mut cursor = Cursor::new(&bytes);
+                let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                argv.push(VmValue::I64(val));
+            },
+            VmType::F32 => {
+                let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                let mut cursor = Cursor::new(&bytes);
+                let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                argv.push(VmValue::F32(val));
+            },
+            VmType::F64 => {
+                let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                let mut cursor = Cursor::new(&bytes);
+                let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                argv.push(VmValue::F64(val));
+            },
+            VmType::I32Array2 => {
+                let mut result: [i32; 2] = [0; 2];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
+                let mut buffer2: Vec<i32> = Vec::with_capacity(2);
+
+                // Get binaries
+                for _ in 0..2 {
+                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::I32Array2(result));
+            },
+            VmType::I32Array4 => {
+                let mut result: [i32; 4] = [0; 4];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
+                let mut buffer2: Vec<i32> = Vec::with_capacity(4);
+
+                // Get binaries
+                for _ in 0..4 {
+                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::I32Array4(result));
+            },
+            VmType::I32Array8 => {
+                let mut result: [i32; 8] = [0; 8];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
+                let mut buffer2: Vec<i32> = Vec::with_capacity(8);
+
+                // Get binaries
+                for _ in 0..8 {
+                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::I32Array8(result));
+            },
+            VmType::I64Array2 => {
+                let mut result: [i64; 2] = [0; 2];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
+                let mut buffer2: Vec<i64> = Vec::with_capacity(2);
+
+                // Get binaries
+                for _ in 0..2 {
+                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::I64Array2(result));
+            },
+            VmType::I64Array4 => {
+                let mut result: [i64; 4] = [0; 4];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
+                let mut buffer2: Vec<i64> = Vec::with_capacity(4);
+
+                // Get binaries
+                for _ in 0..4 {
+                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::I64Array4(result));
+            },
+            VmType::I64Array8 => {
+                let mut result: [i64; 8] = [0; 8];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
+                let mut buffer2: Vec<i64> = Vec::with_capacity(8);
+
+                // Get binaries
+                for _ in 0..8 {
+                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::I64Array8(result));
+            },
+            VmType::F32Array2 => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
+                let mut buffer2: Vec<f32> = Vec::with_capacity(2);
+
+                // Get binaries
+                for _ in 0..2 {
+                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::F32Array2(result));
+            },
+            VmType::F32Array4 => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
+                let mut buffer2: Vec<f32> = Vec::with_capacity(4);
+
+                // Get binaries
+                for _ in 0..4 {
+                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::F32Array4(result));
+            },
+            VmType::F32Array8 => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
+                let mut buffer2: Vec<f32> = Vec::with_capacity(8);
+
+                // Get binaries
+                for _ in 0..8 {
+                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::F32Array8(result));
+            },
+            VmType::F64Array2 => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
+                let mut buffer2: Vec<f64> = Vec::with_capacity(2);
+
+                // Get binaries
+                for _ in 0..2 {
+                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::F64Array2(result));
+            },
+            VmType::F64Array4 => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
+                let mut buffer2: Vec<f64> = Vec::with_capacity(4);
+
+                // Get binaries
+                for _ in 0..4 {
+                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::F64Array4(result));
+            },
+            VmType::F64Array8 => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
+                let mut buffer2: Vec<f64> = Vec::with_capacity(8);
+
+                // Get binaries
+                for _ in 0..8 {
+                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                    buffer1.push(bytes);
+                }
+
+                // Decode bytes
+                for b in buffer1 {
+                    let mut cursor = Cursor::new(&b);
+                    let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                    buffer2.push(val);
+                }
+
+                // Push argument
+                result.copy_from_slice(&buffer2);
+                argv.push(VmValue::F64Array8(result));
+            },
+            op => {
+                panic!(format!("Invalid argument type in begin block! Received: {:?}", op));
+            }
+        }
+    }
+
+    (argv_types, argv)
 }
