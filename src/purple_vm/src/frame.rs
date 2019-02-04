@@ -19,17 +19,20 @@
 use address::Address;
 use stack::Stack;
 use std::fmt;
+use primitives::control_flow::CfOperator;
 
 #[derive(Debug, Clone)]
 pub struct Frame<T: Clone> {
     pub locals: Stack<T>,
+    pub scope_type: CfOperator,
     return_address: Option<Address>
 }
 
 impl<T: fmt::Debug + Clone> Frame<T> {
-    pub fn new(return_address: Option<Address>) -> Frame<T> {
+    pub fn new(scope_type: CfOperator, return_address: Option<Address>) -> Frame<T> {
         Frame {
             locals: Stack::new(),
+            scope_type: scope_type,
             return_address: return_address
         }
     }
