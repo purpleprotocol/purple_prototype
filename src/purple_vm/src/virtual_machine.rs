@@ -468,7 +468,7 @@ impl Vm {
                             // Nested begin instruction. With arity 0.
                             (0, _) => {
                                 // Push frame
-                                self.call_stack.push(Frame::new(CfOperator::Begin, Some(ip.clone())));
+                                self.call_stack.push(Frame::new(CfOperator::Begin, Some(initial_ip)));
                             },
                             
                             // The first begin instruction. With arity other than 0.
@@ -479,7 +479,7 @@ impl Vm {
                             // Nested begin instruction. With arity other than 0.
                             (_, _) => {
                                 // Push frame
-                                self.call_stack.push(Frame::new(CfOperator::Begin, Some(ip.clone())));
+                                self.call_stack.push(Frame::new(CfOperator::Begin, Some(initial_ip)));
 
                                 let frame = self.call_stack.peek_mut();
 
