@@ -77,7 +77,7 @@ impl Vm {
         trie: &mut TrieDBMut<BlakeDbHasher, Codec>, 
         module_idx: usize, 
         fun_idx: usize,
-        init_argv: &[VmValue], 
+        argv: &[VmValue], 
         gas: u64
     ) -> Result<u64, VmError> {
         // Check module definition
@@ -107,66 +107,17 @@ impl Vm {
 
                 match Instruction::from_repr(op) {
                     Some(Instruction::Halt) => {
-                        self.ip = None;
-                        self.call_stack = vec![];
-                        self.operand_stack = vec![];
+                        break;
+                    },
+                    Some(Instruction::Nop) => {
+                        // This does nothing. Just increment the instruction pointer.
+                        ip.increment();
                     },
                     Some(Instruction::Begin) => {
-                        let initial_ip = ip.clone();
-
-                        ip.increment();
-
-                        // The next byte after a begin instruction is the arity of the block.
-                        let arity = fun.fetch(ip.ip);
-
-                        // This is fine since arrays can be passed as arguments.
-                        if arity > 10 {
-                            panic!("Arity cannot be greater than 10!");
-                        }
-
-                        // Fetch block arguments
-                        let (argv_types, argv) = fetch_argv(ip, fun, arity as usize);
-
-                        match (arity, self.call_stack.len()) {
-                            // The first begin instruction. With arity 0.
-                            (0, 0) => {
-                                // Push initial frame
-                                self.call_stack.push(Frame::new(CfOperator::Begin, None));
-
-                                let frame = self.call_stack.peek_mut();
-
-                                // Push args to frame
-                                for arg in init_argv {
-                                    frame.locals.push(*arg);
-                                }
-                            },
-
-                            // Nested begin instruction. With arity 0.
-                            (0, _) => {
-                                // Push frame
-                                self.call_stack.push(Frame::new(CfOperator::Begin, Some(initial_ip)));
-                            },
-                            
-                            // The first begin instruction. With arity other than 0.
-                            (arity, 0) => {
-                                panic!(format!("The first begin instruction cannot have an arity other than 0! Received: {}", arity));
-                            },
-                            
-                            // Nested begin instruction. With arity other than 0.
-                            (_, _) => {
-                                // Push frame
-                                self.call_stack.push(Frame::new(CfOperator::Begin, Some(initial_ip)));
-
-                                let frame = self.call_stack.peek_mut();
-
-                                // Push args to frame
-                                for arg in argv {
-                                    frame.locals.push(arg);
-                                }
-                            }
-                        }
-
-                        ip.increment();
+                        handle_begin_block(CfOperator::Begin, ip, &mut self.call_stack, &fun, &argv);
+                    },
+                    Some(Instruction::Loop) => {
+                        handle_begin_block(CfOperator::Begin, ip, &mut self.call_stack, &fun, &argv);
                     },
                     _ => unimplemented!()
                 }
@@ -174,7 +125,84 @@ impl Vm {
                 unreachable!();
             }
         }
+
+        // Reset VM state
+        self.ip = None;
+        self.call_stack = Stack::<Frame<VmValue>>::new();
+        self.operand_stack = Stack::<VmValue>::new();
+        Ok(0)
     }
+}
+
+/// Execution logic for instructions
+/// that begin a block.
+fn handle_begin_block(
+    block_type: CfOperator,
+    ip: &mut Address, 
+    call_stack: &mut Stack<Frame<VmValue>>, 
+    fun: &Function, 
+    init_argv: &[VmValue]
+) {
+    let initial_ip = ip.clone();
+
+    ip.increment();
+
+    // The next byte after a begin instruction is the arity of the block.
+    let arity = fun.fetch(ip.ip);
+
+    // This is fine since arrays can be passed as arguments.
+    if arity > 10 {
+        panic!("Arity cannot be greater than 10!");
+    }
+
+    // Fetch block arguments
+    let (argv_types, argv) = fetch_argv(ip, fun, arity as usize);
+
+    match (&block_type, arity, call_stack.len()) {
+        // The first begin instruction. With arity 0.
+        (&CfOperator::Begin, 0, 0) => {
+            // Push initial frame
+            call_stack.push(Frame::new(CfOperator::Begin, None));
+
+            let frame = call_stack.peek_mut();
+
+            // Push args to frame
+            for arg in init_argv {
+                frame.locals.push(*arg);
+            }
+        },
+        
+        // The first begin instruction. With arity other than 0.
+        (&CfOperator::Begin, arity, 0) => {
+            panic!(format!("The first begin instruction cannot have an arity other than 0! Received: {}", arity));
+        },
+
+        // Loop as first instruction.
+        (&CfOperator::Loop, _, 0) => {
+            panic!(format!("The first instruction cannot be a loop instruction!"));
+        },
+
+        // Nested begin instruction. With arity 0.
+        (_, 0, _) => {
+            // Push frame
+            call_stack.push(Frame::new(block_type, Some(initial_ip)));
+        },
+        
+        // Nested begin/loop instruction. With arity other than 0.
+        (_, _, _) => {
+            // Push frame
+            call_stack.push(Frame::new(block_type, Some(initial_ip)));
+
+            let frame = call_stack.peek_mut();
+
+            // Push args to frame
+            for arg in argv {
+                frame.locals.push(arg);
+            }
+        }
+    }
+
+    ip.increment();
 }
 
 fn fetch_bytes(amount: usize, ip: &mut Address, fun: &Function) -> Vec<u8> {
