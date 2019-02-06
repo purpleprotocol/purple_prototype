@@ -553,3 +553,166 @@ fn fetch_argv(ip: &mut Address, fun: &Function, arity: usize) -> (Vec<VmType>, V
 
     (argv_types, argv)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crypto::Hash;
+
+    #[test]
+    #[should_panic(expected = "first instruction cannot be a loop instruction")]
+    fn it_fails_with_first_loop_instruction() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Loop.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: VmType::I32,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn it_fails_with_first_begin_arity_other_than_zero() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Loop.repr(),
+            0x01,                        // Arity 1
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: VmType::I32,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Arity cannot be greater than 10!")]
+    fn it_fails_with_begin_arity_greater_than_ten() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x03,                             // 3 Arity
+            Instruction::i32Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::f32Const.repr(),
+            0x00,                             // i32 value
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // i64 value
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01b,
+            0x00,                             // f32 value
+            0x00,
+            0x00,
+            0x5f,
+            Instruction::PickLocal.repr(),    // Dupe elems on stack 11 times (usize is 16bits)
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x03,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x03,
+            Instruction::Begin.repr(),
+            0x01b,                            // 11 arity. The latest 11 items on the caller stack will be pushed to the new frame
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: VmType::I32,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], 0);
+    }
+}

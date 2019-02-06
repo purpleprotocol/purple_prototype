@@ -22,7 +22,7 @@ use code::import::Import;
 
 #[derive(Clone, Debug)]
 pub struct Module {
-    module_hash: Hash,
+    pub module_hash: Hash,
     pub functions: Vec<Function>,
     pub imports: Vec<Import>
 }

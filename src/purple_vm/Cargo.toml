@@ -12,3 +12,6 @@ crypto = { path = "../crypto" }
 persistence = { path = "../persistence" }
 patricia-trie = { git = "https://github.com/paritytech/parity-common" }
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde"] }
+
+[dev-dependencies]
+test-helpers = { path = "../util/test-helpers" }

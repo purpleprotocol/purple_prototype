@@ -1415,6 +1415,7 @@ dependencies = [
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.3.0 (git+https://github.com/paritytech/parity-common)",
  "persistence 0.1.0",
+ "test-helpers 0.1.0",
 ]
 
 [[package]]

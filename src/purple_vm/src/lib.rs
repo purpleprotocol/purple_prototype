@@ -18,6 +18,9 @@
 
 #![allow(non_camel_case_types)]
 
+#[cfg(test)]
+extern crate test_helpers;
+
 #[macro_use] extern crate enum_repr;
 
 extern crate lazy_static;
