@@ -31,6 +31,9 @@ use byteorder::{BigEndian, ReadBytesExt};
 use error::VmError;
 use std::io::Cursor;
 
+// TODO: Determine a better value for this
+const MAX_OP_ARITY: u8 = 50;
+
 #[derive(Debug)]
 pub struct Vm {
     ip: Option<Address>,
@@ -117,7 +120,31 @@ impl Vm {
                         handle_begin_block(CfOperator::Begin, ip, &mut self.call_stack, &fun, &argv);
                     },
                     Some(Instruction::Loop) => {
-                        handle_begin_block(CfOperator::Begin, ip, &mut self.call_stack, &fun, &argv);
+                        handle_begin_block(CfOperator::Loop, ip, &mut self.call_stack, &fun, &argv);
+                    },
+                    Some(Instruction::PushLocal) => {
+                        ip.increment();
+
+                        // The next byte after a `PushLocal` instruction
+                        // is always the arity of the instruction.
+                        let arity = fun.fetch(ip.ip);
+
+                        if arity > MAX_OP_ARITY {
+                            panic!(format!("Arity cannot be greater than {}!", MAX_OP_ARITY));
+                        }
+
+                        if arity == 0 {
+                            panic!("The arity of a PushLocal instruction cannot be 0");
+                        }
+
+                        // Fetch arguments
+                        let (_, argv) = fetch_argv(ip, fun, arity as usize);
+                        let frame = self.call_stack.peek_mut();
+
+                        // Push arguments to locals stack
+                        for arg in argv {
+                            frame.locals.push(arg);
+                        }
                     },
                     _ => unimplemented!()
                 }
@@ -208,11 +235,14 @@ fn handle_begin_block(
 fn fetch_bytes(amount: usize, ip: &mut Address, fun: &Function) -> Vec<u8> {
     let mut b: Vec<u8> = Vec::with_capacity(amount);
 
-    for _ in 0..amount {
+    for i in 0..amount {
         let byte = fun.fetch(ip.ip);
     
         b.push(byte);
-        ip.increment();
+        
+        if i != amount-1 {
+            ip.increment();
+        }
     }
 
     b
@@ -653,7 +683,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            0x01b,
+            0x1b,
             0x00,                             // f32 value
             0x00,
             0x00,
