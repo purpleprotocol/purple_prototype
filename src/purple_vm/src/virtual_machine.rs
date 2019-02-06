@@ -145,6 +145,24 @@ impl Vm {
                         for arg in argv {
                             frame.locals.push(arg);
                         }
+
+                        ip.increment();
+                    },
+                    Some(Instruction::PickLocal) => {
+                        ip.increment(); 
+
+                        // The next two bytes after a `PickLocal`
+                        // instruction are the given index.
+                        let bytes: Vec<u8> = fetch_bytes(2, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let idx: u16 = cursor.read_u16::<BigEndian>().unwrap();
+
+                        let frame = self.call_stack.peek_mut();
+
+                        // Pick item on locals stack
+                        frame.locals.pick(idx as usize);
+
+                        ip.increment();
                     },
                     _ => unimplemented!()
                 }
@@ -182,21 +200,11 @@ fn handle_begin_block(
         panic!("Arity cannot be greater than 10!");
     }
 
-    // Fetch block arguments
-    let (argv_types, argv) = fetch_argv(ip, fun, arity as usize);
-
     match (&block_type, arity, call_stack.len()) {
         // The first begin instruction. With arity 0.
         (&CfOperator::Begin, 0, 0) => {
             // Push initial frame
             call_stack.push(Frame::new(CfOperator::Begin, None));
-
-            let frame = call_stack.peek_mut();
-
-            // Push args to frame
-            for arg in init_argv {
-                frame.locals.push(*arg);
-            }
         },
         
         // The first begin instruction. With arity other than 0.
@@ -208,24 +216,11 @@ fn handle_begin_block(
         (&CfOperator::Loop, _, 0) => {
             panic!(format!("The first instruction cannot be a loop instruction!"));
         },
-
-        // Nested begin instruction. With arity 0.
-        (_, 0, _) => {
-            // Push frame
-            call_stack.push(Frame::new(block_type, Some(initial_ip)));
-        },
         
         // Nested begin/loop instruction. With arity other than 0.
         (_, _, _) => {
             // Push frame
             call_stack.push(Frame::new(block_type, Some(initial_ip)));
-
-            let frame = call_stack.peek_mut();
-
-            // Push args to frame
-            for arg in argv {
-                frame.locals.push(arg);
-            }
         }
     }
 
@@ -711,7 +706,7 @@ mod tests {
             0x02,
             Instruction::PickLocal.repr(),
             0x00,
-            0x03,
+            0x02,
             Instruction::PickLocal.repr(),
             0x00,
             0x02,
@@ -720,7 +715,7 @@ mod tests {
             0x01,
             Instruction::PickLocal.repr(),
             0x00,
-            0x03,
+            0x02,
             Instruction::Begin.repr(),
             0x01b,                            // 11 arity. The latest 11 items on the caller stack will be pushed to the new frame
             Instruction::Nop.repr(),
@@ -744,5 +739,97 @@ mod tests {
 
         vm.load(module).unwrap();
         vm.execute(&mut trie, 0, 0, &[], 0);
+    }
+
+    #[test]
+    fn it_executes_correctly() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x03,                             // 3 Arity
+            Instruction::i32Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::f32Const.repr(),
+            0x00,                             // i32 value
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // i64 value
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x1b,
+            0x00,                             // f32 value
+            0x00,
+            0x00,
+            0x5f,
+            Instruction::PickLocal.repr(),    // Dupe elems on stack 11 times (usize is 16bits)
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::Begin.repr(),
+            0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: VmType::I32,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], 0);
+
+        assert!(true);
     }
 }
