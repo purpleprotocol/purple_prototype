@@ -25,7 +25,7 @@ use primitives::control_flow::CfOperator;
 pub struct Frame<T: Clone> {
     pub locals: Stack<T>,
     pub scope_type: CfOperator,
-    return_address: Option<Address>
+    pub return_address: Option<Address>
 }
 
 impl<T: fmt::Debug + Clone> Frame<T> {

@@ -164,6 +164,25 @@ impl Vm {
 
                         ip.increment();
                     },
+                    Some(Instruction::End) => {
+                        let frame = self.call_stack.pop();
+                        
+                        if let Some(return_address) = frame.return_address {
+                            let block_len = fun.fetch_block_len(return_address.ip);
+
+                            // Set ip to the current frame's result address 
+                            *ip = return_address;
+
+                            let current_ip = ip.ip;
+
+                            // Set instruction pointer to the next 
+                            // instruction after the block.
+                            ip.set_ip(current_ip + block_len);
+                        } else {
+                            // Return address is non-existent. Stop execution in this case.
+                            break;
+                        }
+                    },
                     _ => unimplemented!()
                 }
             } else {
@@ -810,6 +829,7 @@ mod tests {
             0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
             Instruction::Nop.repr(),
             Instruction::End.repr(),
+            Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
 

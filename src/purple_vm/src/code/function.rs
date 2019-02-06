@@ -45,4 +45,33 @@ impl Function {
             self.block[idx]
         }
     }
+
+    pub fn fetch_block_len(&self, idx: usize) -> usize {
+        let op = self.block[idx];
+
+        match Instruction::from_repr(op) {
+            Some(Instruction::Begin) => self.find_block_len(idx),
+            Some(Instruction::Loop)  => self.find_block_len(idx),
+            Some(Instruction::If)    => self.find_block_len(idx),
+            Some(Instruction::Else)  => self.find_block_len(idx),
+            _                  => panic!("The length of a block can only be queried for a control flow instruction!")
+        }
+    }
+
+    fn find_block_len(&self, idx: usize) -> usize {
+        let mut result_len: usize = 0;
+        let len = self.block.len();
+        
+        for i in idx..len {
+            result_len += 1;
+
+            let op = Instruction::from_repr(self.block[i]).unwrap();
+
+            if let Instruction::End = op {
+                break;
+            }
+        }
+
+        result_len
+    }
 }

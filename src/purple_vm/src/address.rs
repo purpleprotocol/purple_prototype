@@ -16,6 +16,8 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use std::ops::{Add, AddAssign};
+
 #[derive(Debug, Clone)]
 pub struct Address {
     pub ip: usize,
@@ -35,5 +37,9 @@ impl Address {
     /// Increments the instruction pointer.
     pub fn increment(&mut self) {
         self.ip += 1;
+    }
+
+    pub fn set_ip(&mut self, new_ip: usize) {
+        self.ip = new_ip;
     }
 }
