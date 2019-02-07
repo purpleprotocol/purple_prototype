@@ -108,6 +108,12 @@ impl Vm {
                 let fun = &module.functions[ip.fun_idx];
                 let op = fun.fetch(ip.ip);
 
+                if let Some(op) = Instruction::from_repr(op) {
+                    println!("DEBUG OP: {:?}", op);
+                }
+
+                println!("DEBUG IP: {}", ip.ip);
+
                 match Instruction::from_repr(op) {
                     Some(Instruction::Halt) => {
                         break;
@@ -148,6 +154,14 @@ impl Vm {
 
                         ip.increment();
                     },
+                    Some(Instruction::PopLocal) => {
+                        let frame = self.call_stack.peek_mut();
+                        
+                        // Pop item from locals
+                        frame.locals.pop();
+
+                        ip.increment();
+                    },
                     Some(Instruction::PickLocal) => {
                         ip.increment(); 
 
@@ -166,18 +180,27 @@ impl Vm {
                     },
                     Some(Instruction::End) => {
                         let frame = self.call_stack.pop();
+                        let scope_type = frame.scope_type;
                         
                         if let Some(return_address) = frame.return_address {
                             let block_len = fun.fetch_block_len(return_address.ip);
 
-                            // Set ip to the current frame's result address 
+                            // Set ip to the current frame's return address 
                             *ip = return_address;
 
                             let current_ip = ip.ip;
 
-                            // Set instruction pointer to the next 
-                            // instruction after the block.
-                            ip.set_ip(current_ip + block_len);
+                            match scope_type {
+                                CfOperator::Loop => {
+                                    // Set instruction pointer to the beginning
+                                    ip.set_ip(current_ip);
+                                },
+                                _ => {
+                                    // Set instruction pointer to the next 
+                                    // instruction after the block.
+                                    ip.set_ip(current_ip + block_len);
+                                }
+                            }
                         } else {
                             // Return address is non-existent. Stop execution in this case.
                             break;
@@ -223,7 +246,7 @@ fn handle_begin_block(
         // The first begin instruction. With arity 0.
         (&CfOperator::Begin, 0, 0) => {
             // Push initial frame
-            call_stack.push(Frame::new(CfOperator::Begin, None));
+            call_stack.push(Frame::new(CfOperator::Begin, None, None));
         },
         
         // The first begin instruction. With arity other than 0.
@@ -238,8 +261,21 @@ fn handle_begin_block(
         
         // Nested begin/loop instruction. With arity other than 0.
         (_, _, _) => {
+            let mut buf: Vec<VmValue> = Vec::with_capacity(arity as usize);
+
+            {
+                let frame = call_stack.peek_mut();
+
+                // Push items from local stack to the buffer
+                // which will then be placed on the new stack.
+                for _ in 0..arity {
+                    let item = frame.locals.pop();
+                    buf.push(item);
+                }
+            }
+
             // Push frame
-            call_stack.push(Frame::new(block_type, Some(initial_ip)));
+            call_stack.push(Frame::new(block_type, Some(initial_ip), Some(buf)));
         }
     }
 
@@ -736,7 +772,7 @@ mod tests {
             0x00,
             0x02,
             Instruction::Begin.repr(),
-            0x01b,                            // 11 arity. The latest 11 items on the caller stack will be pushed to the new frame
+            0x1b,                             // 11 arity. The latest 11 items on the caller stack will be pushed to the new frame
             Instruction::Nop.repr(),
             Instruction::End.repr(),
             Instruction::End.repr()
@@ -827,7 +863,121 @@ mod tests {
             0x02,
             Instruction::Begin.repr(),
             0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
+            Instruction::PopLocal.repr(),
             Instruction::Nop.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: VmType::I32,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], 0);
+
+        assert!(true);
+    }
+
+    #[test]
+    fn it_executes_correctly_with_loops() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x03,                             // 3 Arity
+            Instruction::i32Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::f32Const.repr(),
+            0x00,                             // i32 value
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // i64 value
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x1b,
+            0x00,                             // f32 value
+            0x00,
+            0x00,
+            0x5f,
+            Instruction::PickLocal.repr(),    // Dupe elems on stack 11 times (usize is 16bits)
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PushLocal.repr(),   // Push loop counter to locals stack
+            0x01,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
+            Instruction::PickLocal.repr(),   // Dupe counter
+            0x00,
+            0x04,
+            Instruction::PushOperand.repr(), // Push counter to operand stack
+            Instruction::PopLocal.repr(),
+            Instruction::PushOperand.repr(), // Loop 5 times
+            0x01,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x04,
+            Instruction::BreakIf.repr(),      // Break if items on the operand stack are equal  
+            Instruction::i32Eq.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()

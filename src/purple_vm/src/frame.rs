@@ -29,9 +29,18 @@ pub struct Frame<T: Clone> {
 }
 
 impl<T: fmt::Debug + Clone> Frame<T> {
-    pub fn new(scope_type: CfOperator, return_address: Option<Address>) -> Frame<T> {
+    pub fn new(scope_type: CfOperator, return_address: Option<Address>, argv: Option<Vec<T>>) -> Frame<T> {
+        let mut locals = Stack::new();
+        
+        if let Some(argv) = argv {
+            // Push args to locals stack
+            for arg in argv {
+                locals.push(arg);
+            }
+        } 
+
         Frame {
-            locals: Stack::new(),
+            locals: locals,
             scope_type: scope_type,
             return_address: return_address
         }
