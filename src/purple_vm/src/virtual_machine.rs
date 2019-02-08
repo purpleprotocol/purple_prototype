@@ -128,6 +128,32 @@ impl Vm {
                     Some(Instruction::Loop) => {
                         handle_begin_block(CfOperator::Loop, ip, &mut self.call_stack, &fun, &argv);
                     },
+                    Some(Instruction::PushOperand) => {
+                        ip.increment();
+
+                        // The next byte after a `PushOperand` instruction
+                        // is always the arity of the instruction.
+                        let arity = fun.fetch(ip.ip);
+
+                        if arity > MAX_OP_ARITY {
+                            panic!(format!("Arity cannot be greater than {}!", MAX_OP_ARITY));
+                        }
+
+                        if arity == 0 {
+                            panic!("The arity of a PushOperand instruction cannot be 0");
+                        }
+
+                        // Fetch arguments
+                        let frame = self.call_stack.peek_mut();
+                        let (_, argv) = fetch_argv(frame, &mut self.operand_stack, ip, fun, arity as usize);
+
+                        // Push arguments to operand stack
+                        for arg in argv {
+                            self.operand_stack.push(arg);
+                        }
+
+                        ip.increment();
+                    },
                     Some(Instruction::PushLocal) => {
                         ip.increment();
 
@@ -144,7 +170,7 @@ impl Vm {
                         }
 
                         // Fetch arguments
-                        let (_, argv) = fetch_argv(ip, fun, arity as usize);
+                        let (_, argv) = fetch_argv(self.call_stack.peek_mut(), &mut self.operand_stack, ip, fun, arity as usize);
                         let frame = self.call_stack.peek_mut();
 
                         // Push arguments to locals stack
@@ -152,6 +178,10 @@ impl Vm {
                             frame.locals.push(arg);
                         }
 
+                        ip.increment();
+                    },
+                    Some(Instruction::PopOperand) => {
+                        self.operand_stack.pop();
                         ip.increment();
                     },
                     Some(Instruction::PopLocal) => {
@@ -272,6 +302,8 @@ fn handle_begin_block(
                     let item = frame.locals.pop();
                     buf.push(item);
                 }
+
+                buf.reverse();
             }
 
             // Push frame
@@ -298,7 +330,13 @@ fn fetch_bytes(amount: usize, ip: &mut Address, fun: &Function) -> Vec<u8> {
     b
 }
 
-fn fetch_argv(ip: &mut Address, fun: &Function, arity: usize) -> (Vec<VmType>, Vec<VmValue>) {
+fn fetch_argv(
+    frame: &mut Frame<VmValue>, 
+    operand_stack: &mut Stack<VmValue>, 
+    ip: &mut Address, 
+    fun: &Function, 
+    arity: usize
+) -> (Vec<VmType>, Vec<VmValue>) {
     let mut argv_types: Vec<VmType> = Vec::with_capacity(arity);  
     let mut argv: Vec<VmValue> = Vec::with_capacity(arity);
 
@@ -322,308 +360,620 @@ fn fetch_argv(ip: &mut Address, fun: &Function, arity: usize) -> (Vec<VmType>, V
 
         match t {
             VmType::I32 => {
-                let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                let mut cursor = Cursor::new(&bytes);
-                let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+                let byte = fun.fetch(ip.ip);
 
-                argv.push(VmValue::I32(val));
+                match Instruction::from_repr(byte) {
+                    Some(Instruction::PopLocal) => {
+                        let value = frame.locals.pop();
+
+                        if let VmValue::I32(_) = value {
+                            argv.push(value);
+                        } else {
+                            panic!(format!("Popped value that is not i32! Got: {:?}", value));
+                        }
+                    },
+                    Some(Instruction::PopOperand) => {
+                        let value = operand_stack.pop();
+
+                        if let VmValue::I32(_) = value {
+                            argv.push(value);
+                        } else {
+                            panic!("Popped value that is not i32!");
+                        }
+                    },
+                    _ => {
+                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::I32(val));
+                    }
+                }
             },
             VmType::I64 => {
-                let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                let mut cursor = Cursor::new(&bytes);
-                let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+                let byte = fun.fetch(ip.ip);
 
-                argv.push(VmValue::I64(val));
+                match Instruction::from_repr(byte) {
+                    Some(Instruction::PopLocal) => {
+                        let value = frame.locals.pop();
+
+                        if let VmValue::I64(_) = value {
+                            argv.push(value);
+                        } else {
+                            panic!(format!("Popped value that is not i64! Got: {:?}", value));
+                        }
+                    },
+                    Some(Instruction::PopOperand) => {
+                        let value = operand_stack.pop();
+
+                        if let VmValue::I64(_) = value {
+                            argv.push(value);
+                        } else {
+                            panic!("Popped value that is not i64!");
+                        }
+                    },
+                    _ => {
+                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::I64(val));
+                    }
+                }
             },
             VmType::F32 => {
-                let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                let mut cursor = Cursor::new(&bytes);
-                let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+                let byte = fun.fetch(ip.ip);
 
-                argv.push(VmValue::F32(val));
+                match Instruction::from_repr(byte) {
+                    Some(Instruction::PopLocal) => {
+                        let value = frame.locals.pop();
+
+                        if let VmValue::F32(_) = value {
+                            argv.push(value);
+                        } else {
+                            panic!(format!("Popped value that is not f32! Got: {:?}", value));
+                        }
+                    },
+                    Some(Instruction::PopOperand) => {
+                        let value = operand_stack.pop();
+
+                        if let VmValue::F32(_) = value {
+                            argv.push(value);
+                        } else {
+                            panic!("Popped value that is not f32!");
+                        }
+                    },
+                    _ => {
+                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::F32(val));
+                    }
+                }
             },
             VmType::F64 => {
-                let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                let mut cursor = Cursor::new(&bytes);
-                let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+                let byte = fun.fetch(ip.ip);
 
-                argv.push(VmValue::F64(val));
+                match Instruction::from_repr(byte) {
+                    Some(Instruction::PopLocal) => {
+                        let value = frame.locals.pop();
+
+                        if let VmValue::F64(_) = value {
+                            argv.push(value);
+                        } else {
+                            panic!(format!("Popped value that is not f64! Got: {:?}", value));
+                        }
+                    },
+                    Some(Instruction::PopOperand) => {
+                        let value = operand_stack.pop();
+
+                        if let VmValue::F64(_) = value {
+                            argv.push(value);
+                        } else {
+                            panic!("Popped value that is not f64!");
+                        }
+                    },
+                    _ => {
+                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::F64(val));
+                    }
+                }
             },
-            VmType::I32Array2 => {
+            VmType::i32Array2 => {
                 let mut result: [i32; 2] = [0; 2];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
-                let mut buffer2: Vec<i32> = Vec::with_capacity(2);
+                let mut buffer: Vec<i32> = Vec::with_capacity(2);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..2 {
-                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::I32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not i32! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::I32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not i32!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::I32Array2(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::i32Array2(result));
             },
-            VmType::I32Array4 => {
+            VmType::i32Array4 => {
                 let mut result: [i32; 4] = [0; 4];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
-                let mut buffer2: Vec<i32> = Vec::with_capacity(4);
+                let mut buffer: Vec<i32> = Vec::with_capacity(4);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..4 {
-                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::I32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not i32! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::I32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not i32!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::I32Array4(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::i32Array4(result));
             },
-            VmType::I32Array8 => {
+            VmType::i32Array8 => {
                 let mut result: [i32; 8] = [0; 8];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
-                let mut buffer2: Vec<i32> = Vec::with_capacity(8);
+                let mut buffer: Vec<i32> = Vec::with_capacity(8);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..8 {
-                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::I32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not i32! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::I32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not i32!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::I32Array8(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::i32Array8(result));
             },
-            VmType::I64Array2 => {
+            VmType::i64Array2 => {
                 let mut result: [i64; 2] = [0; 2];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
-                let mut buffer2: Vec<i64> = Vec::with_capacity(2);
+                let mut buffer: Vec<i64> = Vec::with_capacity(2);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..2 {
-                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::I64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not i64! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::I64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not i64!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::I64Array2(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::i64Array2(result));
             },
-            VmType::I64Array4 => {
+            VmType::i64Array4 => {
                 let mut result: [i64; 4] = [0; 4];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
-                let mut buffer2: Vec<i64> = Vec::with_capacity(4);
+                let mut buffer: Vec<i64> = Vec::with_capacity(4);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..4 {
-                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::I64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not i64! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::I64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not i64!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::I64Array4(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::i64Array4(result));
             },
-            VmType::I64Array8 => {
+            VmType::i64Array8 => {
                 let mut result: [i64; 8] = [0; 8];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
-                let mut buffer2: Vec<i64> = Vec::with_capacity(8);
+                let mut buffer: Vec<i64> = Vec::with_capacity(8);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..8 {
-                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::I64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not i64! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::I64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not i64!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::I64Array8(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::i64Array8(result));
             },
-            VmType::F32Array2 => {
+            VmType::f32Array2 => {
                 let mut result: [f32; 2] = [0.0; 2];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
-                let mut buffer2: Vec<f32> = Vec::with_capacity(2);
+                let mut buffer: Vec<f32> = Vec::with_capacity(2);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..2 {
-                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::F32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not f32! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::F32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not f32!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::F32Array2(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::f32Array2(result));
             },
-            VmType::F32Array4 => {
+            VmType::f32Array4 => {
                 let mut result: [f32; 4] = [0.0; 4];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
-                let mut buffer2: Vec<f32> = Vec::with_capacity(4);
+                let mut buffer: Vec<f32> = Vec::with_capacity(4);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..4 {
-                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::F32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not f32! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::F32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not f32!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::F32Array4(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::f32Array4(result));
             },
-            VmType::F32Array8 => {
+            VmType::f32Array8 => {
                 let mut result: [f32; 8] = [0.0; 8];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
-                let mut buffer2: Vec<f32> = Vec::with_capacity(8);
+                let mut buffer: Vec<f32> = Vec::with_capacity(8);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..8 {
-                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::F32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not f32! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::F32(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not f32!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::F32Array8(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::f32Array8(result));
             },
-            VmType::F64Array2 => {
+            VmType::f64Array2 => {
                 let mut result: [f64; 2] = [0.0; 2];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(2);
-                let mut buffer2: Vec<f64> = Vec::with_capacity(2);
+                let mut buffer: Vec<f64> = Vec::with_capacity(2);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..2 {
-                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::F64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not f64! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::F64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not f64!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::F64Array2(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::f64Array2(result));
             },
-            VmType::F64Array4 => {
+            VmType::f64Array4 => {
                 let mut result: [f64; 4] = [0.0; 4];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(4);
-                let mut buffer2: Vec<f64> = Vec::with_capacity(4);
+                let mut buffer: Vec<f64> = Vec::with_capacity(4);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..4 {
-                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::F64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not f64! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::F64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not f64!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::F64Array4(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::f64Array4(result));
             },
-            VmType::F64Array8 => {
+            VmType::f64Array8 => {
                 let mut result: [f64; 8] = [0.0; 8];
-                let mut buffer1: Vec<Vec<u8>> = Vec::with_capacity(8);
-                let mut buffer2: Vec<f64> = Vec::with_capacity(8);
+                let mut buffer: Vec<f64> = Vec::with_capacity(8);
 
-                // Get binaries
+                // Fetch array elems
                 for _ in 0..8 {
-                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                    buffer1.push(bytes);
-                }
+                    let byte = fun.fetch(ip.ip);
 
-                // Decode bytes
-                for b in buffer1 {
-                    let mut cursor = Cursor::new(&b);
-                    let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                    buffer2.push(val);
+                            if let VmValue::F64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!(format!("Popped value that is not f64! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
+
+                            if let VmValue::F64(result) = value {
+                                buffer.push(result);
+                            } else {
+                                panic!("Popped value that is not f64!");
+                            }
+                        },
+                        _ => {
+                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                            let mut cursor = Cursor::new(&bytes);
+                            let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                            buffer.push(val);
+                        }
+                    }
                 }
 
                 // Push argument
-                result.copy_from_slice(&buffer2);
-                argv.push(VmValue::F64Array8(result));
+                result.copy_from_slice(&buffer);
+                argv.push(VmValue::f64Array8(result));
             },
             op => {
                 panic!(format!("Invalid argument type in begin block! Received: {:?}", op));
@@ -967,16 +1317,16 @@ mod tests {
             Instruction::PickLocal.repr(),   // Dupe counter
             0x00,
             0x04,
-            Instruction::PushOperand.repr(), // Push counter to operand stack
-            Instruction::PopLocal.repr(),
-            Instruction::PushOperand.repr(), // Loop 5 times
-            0x01,
+            Instruction::PushOperand.repr(), 
+            0x02,
             Instruction::i32Const.repr(),
-            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),    // Push counter to operand stack
+            0x00,                            // Loop 5 times
             0x00,
             0x00,
             0x04,
-            Instruction::BreakIf.repr(),      // Break if items on the operand stack are equal  
+            Instruction::BreakIf.repr(),     // Break if items on the operand stack are equal  
             Instruction::i32Eq.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
