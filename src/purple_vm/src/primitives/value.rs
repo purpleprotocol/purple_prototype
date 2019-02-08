@@ -59,6 +59,30 @@ pub enum VmValue {
     f64Array256([f64; 256]),
 }
 
+impl PartialEq for VmValue {
+    fn eq(&self, other: &VmValue) -> bool {
+        match (*self, *other) {
+            (VmValue::I32(val1), VmValue::I32(val2))             => val1 == val2,
+            (VmValue::I64(val1), VmValue::I64(val2))             => val1 == val2,
+            (VmValue::F32(val1), VmValue::F32(val2))             => val1 == val2,
+            (VmValue::F64(val1), VmValue::F64(val2))             => val1 == val2,
+            (VmValue::i32Array2(val1), VmValue::i32Array2(val2)) => val1 == val2,
+            (VmValue::i32Array4(val1), VmValue::i32Array4(val2)) => val1 == val2,
+            (VmValue::i32Array8(val1), VmValue::i32Array8(val2)) => val1 == val2,
+            (VmValue::i64Array2(val1), VmValue::i64Array2(val2)) => val1 == val2,
+            (VmValue::i64Array4(val1), VmValue::i64Array4(val2)) => val1 == val2,
+            (VmValue::i64Array8(val1), VmValue::i64Array8(val2)) => val1 == val2,
+            (VmValue::f32Array2(val1), VmValue::f32Array2(val2)) => val1 == val2,
+            (VmValue::f32Array4(val1), VmValue::f32Array4(val2)) => val1 == val2,
+            (VmValue::f32Array8(val1), VmValue::f32Array8(val2)) => val1 == val2,
+            (VmValue::f64Array2(val1), VmValue::f64Array2(val2)) => val1 == val2,
+            (VmValue::f64Array4(val1), VmValue::f64Array4(val2)) => val1 == val2,
+            (VmValue::f64Array8(val1), VmValue::f64Array8(val2)) => val1 == val2,
+            (_, _)                                               => panic!("Cannot perform equality between different variants!")
+        }
+    }
+}
+
 impl fmt::Debug for VmValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {

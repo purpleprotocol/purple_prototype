@@ -24,7 +24,7 @@ use primitives::control_flow::CfOperator;
 use code::function::Function;
 use address::Address;
 use module::Module;
-use instruction_set::Instruction;
+use instruction_set::{Instruction, COMP_OPS};
 use patricia_trie::{TrieMut, TrieDBMut};
 use persistence::{BlakeDbHasher, Codec};
 use byteorder::{BigEndian, ReadBytesExt};
@@ -129,6 +129,8 @@ impl Vm {
                         handle_begin_block(CfOperator::Loop, ip, &mut self.call_stack, &fun, &argv);
                     },
                     Some(Instruction::PushOperand) => {
+                        // TODO: Dissalow pushing operands of multiple types
+
                         ip.increment();
 
                         // The next byte after a `PushOperand` instruction
@@ -234,6 +236,52 @@ impl Vm {
                         } else {
                             // Return address is non-existent. Stop execution in this case.
                             break;
+                        }
+                    },
+                    Some(Instruction::BreakIf) => {
+                        ip.increment();
+
+                        let op = fun.fetch(ip.ip);
+
+                        if let Some(instruction) = Instruction::from_repr(op) {
+                            let is_comp_operator = COMP_OPS
+                                .iter()
+                                .any(|o| *o == instruction);
+
+                            if is_comp_operator {
+                                let mut operands: Vec<VmValue> = Vec::with_capacity(self.operand_stack.len());
+
+                                for _ in 0..self.operand_stack.len() {
+                                    let value = self.operand_stack.pop();
+                                    operands.push(value);
+                                }
+
+                                let result = perform_comparison(instruction, operands);
+
+                                // Return to stored caller address if comparison is successful
+                                if result {
+                                    let frame = self.call_stack.pop();
+                                    
+                                    if let Some(return_address) = frame.return_address {
+                                        let block_len = fun.fetch_block_len(return_address.ip);
+
+                                        // Set ip to the current frame's return address 
+                                        *ip = return_address;
+
+                                        let current_ip = ip.ip;
+
+                                        // Set instruction pointer to the next 
+                                        // instruction after the block.
+                                        ip.set_ip(current_ip + block_len);
+                                    } else {
+                                        unreachable!();
+                                    }
+                                }
+                            } else {
+                                panic!(format!("Can only receive a comparison operator after `BreakIf`. Got: {:?}", instruction))
+                            }
+                        } else {
+                            panic!("Invalid instruction after `BreakIf`. Expected a comparison operator!");
                         }
                     },
                     _ => unimplemented!()
@@ -984,6 +1032,18 @@ fn fetch_argv(
     (argv_types, argv)
 }
 
+fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> bool {
+    match op {
+        Instruction::i32Eq
+        | Instruction::i64Eq
+        | Instruction::f32Eq
+        | Instruction::f64Eq => {
+            unimplemented!();
+        },
+        _ => unimplemented!()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1019,7 +1079,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0);
+        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
     }
 
     #[test]
@@ -1052,7 +1112,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0);
+        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
     }
 
     #[test]
@@ -1143,7 +1203,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0);
+        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
     }
 
     #[test]
@@ -1235,7 +1295,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0);
+        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
 
         assert!(true);
     }
@@ -1348,7 +1408,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0);
+        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
 
         assert!(true);
     }
