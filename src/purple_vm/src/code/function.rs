@@ -54,7 +54,7 @@ impl Function {
             Some(Instruction::Loop)  => self.find_block_len(idx),
             Some(Instruction::If)    => self.find_block_len(idx),
             Some(Instruction::Else)  => self.find_block_len(idx),
-            _                  => panic!("The length of a block can only be queried for a control flow instruction!")
+            _                        => panic!("The length of a block can only be queried for a control flow instruction!")
         }
     }
 

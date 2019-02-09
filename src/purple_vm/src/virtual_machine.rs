@@ -212,9 +212,9 @@ impl Vm {
                     },
                     Some(Instruction::End) => {
                         let frame = self.call_stack.pop();
-                        let scope_type = frame.scope_type;
+                        let scope_type = frame.scope_type.clone();
                         
-                        if let Some(return_address) = frame.return_address {
+                        if let Some(return_address) = frame.return_address.clone() {
                             let block_len = fun.fetch_block_len(return_address.ip);
 
                             // Set ip to the current frame's return address 
@@ -224,8 +224,11 @@ impl Vm {
 
                             match scope_type {
                                 CfOperator::Loop => {
+                                    // Push frame back to the call stack
+                                    self.call_stack.push(frame);
+
                                     // Set instruction pointer to the beginning
-                                    ip.set_ip(current_ip);
+                                    ip.set_ip(current_ip + 2);
                                 },
                                 _ => {
                                     // Set instruction pointer to the next 
@@ -250,9 +253,10 @@ impl Vm {
 
                             if is_comp_operator {
                                 let mut operands: Vec<VmValue> = Vec::with_capacity(self.operand_stack.len());
+                                let mut operand_stack = self.operand_stack.clone();
 
-                                for _ in 0..self.operand_stack.len() {
-                                    let value = self.operand_stack.pop();
+                                for _ in 0..operand_stack.len() {
+                                    let value = operand_stack.pop();
                                     operands.push(value);
                                 }
 
@@ -276,6 +280,8 @@ impl Vm {
                                     } else {
                                         unreachable!();
                                     }
+                                } else {
+                                    ip.increment();
                                 }
                             } else {
                                 panic!(format!("Can only receive a comparison operator after `BreakIf`. Got: {:?}", instruction))
@@ -283,6 +289,10 @@ impl Vm {
                         } else {
                             panic!("Invalid instruction after `BreakIf`. Expected a comparison operator!");
                         }
+                    },
+                    Some(Instruction::i32Add) => {
+                        perform_addition(Instruction::i32Add, &mut self.operand_stack);
+                        ip.increment();
                     },
                     _ => unimplemented!()
                 }
@@ -1033,15 +1043,75 @@ fn fetch_argv(
 }
 
 fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> bool {
+    if operands.len() < 2 {
+        panic!(format!("Cannot perform comparison on less than 2 operands! Got: {}", operands.len()));
+    }
+
     match op {
         Instruction::i32Eq
         | Instruction::i64Eq
         | Instruction::f32Eq
         | Instruction::f64Eq => {
-            unimplemented!();
+            let (result, _) = operands
+                .iter()
+                .fold((true, None), |(result, last), op| {
+                    if let Some(last) = last {
+                        if result {
+                            (op == last, Some(op))
+                        } else {
+                            (result, Some(op))
+                        }
+                    } else {
+                        (result, Some(op))
+                    }
+                });
+
+            result
         },
         _ => unimplemented!()
     }
+}
+
+// TODO: Handle overflow
+fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) {
+    let len = operand_stack.len();
+
+    if len < 2 {
+        panic!(format!("Cannot perform addition on less than 2 operands! Got: {}", len));
+    }
+
+    match op {
+        Instruction::i32Add
+        | Instruction::i64Add
+        | Instruction::f32Add
+        | Instruction::f64Add => {
+            let mut buf: Vec<VmValue> = Vec::with_capacity(len);
+
+            // Move items from operand stack to buffer
+            for _ in 0..len {
+                buf.push(operand_stack.pop());
+            }
+
+            // Perform addition
+            let result = buf
+                .iter()
+                .fold(None, |acc: Option<VmValue>, x| {
+                    if let Some(acc) = acc {
+                        Some(acc + *x)
+                    } else {
+                        Some(*x)
+                    }
+                });
+
+            // Push result back to operand stack
+            if let Some(result) = result {
+                operand_stack.push(result);
+            } else {
+                unreachable!();
+            }
+        },
+        _ => panic!(format!("Must receive an addition instruction! Got: {:?}", op))
+    };
 }
 
 #[cfg(test)]
@@ -1374,9 +1444,6 @@ mod tests {
             0x00,
             Instruction::Loop.repr(),
             0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
-            Instruction::PickLocal.repr(),   // Dupe counter
-            0x00,
-            0x04,
             Instruction::PushOperand.repr(), 
             0x02,
             Instruction::i32Const.repr(),
@@ -1388,6 +1455,19 @@ mod tests {
             0x04,
             Instruction::BreakIf.repr(),     // Break if items on the operand stack are equal  
             Instruction::i32Eq.repr(),
+            Instruction::PopOperand.repr(),
+            Instruction::PushOperand.repr(), // Increment counter
+            0x01,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::i32Add.repr(),
+            Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
+            0x01,
+            Instruction::i32Const.repr(),
+            Instruction::PopOperand.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()

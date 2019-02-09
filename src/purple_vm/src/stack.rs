@@ -102,6 +102,7 @@ mod tests {
     #[test]
     fn pop() {
         let mut stack: Stack<usize> = Stack::new();
+        stack.push(12);
         stack.push(13);
         let value = stack.pop();
         assert_eq!(value, 13);
