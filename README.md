@@ -1,5 +1,5 @@
 # purple-rs
-[![Build Status](https://travis-ci.org/purpleprotocol/purple-rs.svg?branch=master)](https://travis-ci.org/purpleprotocol/purple-rs)
+[![Build Status](https://travis-ci.org/purpleprotocol/purple.svg?branch=master)](https://travis-ci.org/purpleprotocol/purple-rs)
 [![Discord](https://img.shields.io/discord/435827644915777536.svg)](https://discord.gg/UCYWSsd)
 [![_pdf whitepaper](https://img.shields.io/badge/_pdf-whitepaper-blue.svg)](https://purpleprotocol.org/whitepaper/)
 

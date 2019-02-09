@@ -213,6 +213,9 @@ impl Vm {
                     Some(Instruction::End) => {
                         let frame = self.call_stack.pop();
                         let scope_type = frame.scope_type.clone();
+
+                        // Replace operand stack with an empty one
+                        self.operand_stack = Stack::new();
                         
                         if let Some(return_address) = frame.return_address.clone() {
                             let block_len = fun.fetch_block_len(return_address.ip);
@@ -265,6 +268,9 @@ impl Vm {
                                 // Return to stored caller address if comparison is successful
                                 if result {
                                     let frame = self.call_stack.pop();
+                                    
+                                    // Replace operand stack with an empty one
+                                    self.operand_stack = Stack::new();
                                     
                                     if let Some(return_address) = frame.return_address {
                                         let block_len = fun.fetch_block_len(return_address.ip);
