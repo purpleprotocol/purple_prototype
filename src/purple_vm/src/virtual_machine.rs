@@ -296,8 +296,8 @@ impl Vm {
                             panic!("Invalid instruction after `BreakIf`. Expected a comparison operator!");
                         }
                     },
-                    Some(Instruction::i32Add) => {
-                        perform_addition(Instruction::i32Add, &mut self.operand_stack);
+                    Some(Instruction::Add) => {
+                        perform_addition(Instruction::Add, &mut self.operand_stack);
                         ip.increment();
                     },
                     _ => unimplemented!()
@@ -1054,10 +1054,7 @@ fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> bool {
     }
 
     match op {
-        Instruction::i32Eq
-        | Instruction::i64Eq
-        | Instruction::f32Eq
-        | Instruction::f64Eq => {
+        Instruction::Eq => {
             let (result, _) = operands
                 .iter()
                 .fold((true, None), |(result, last), op| {
@@ -1087,10 +1084,7 @@ fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) {
     }
 
     match op {
-        Instruction::i32Add
-        | Instruction::i64Add
-        | Instruction::f32Add
-        | Instruction::f64Add => {
+        Instruction::Add => {
             let mut buf: Vec<VmValue> = Vec::with_capacity(len);
 
             // Move items from operand stack to buffer
@@ -1460,7 +1454,7 @@ mod tests {
             0x00,
             0x04,
             Instruction::BreakIf.repr(),     // Break if items on the operand stack are equal  
-            Instruction::i32Eq.repr(),
+            Instruction::Eq.repr(),
             Instruction::PopOperand.repr(),
             Instruction::PushOperand.repr(), // Increment counter
             0x01,
@@ -1469,7 +1463,7 @@ mod tests {
             0x00,
             0x00,
             0x01,
-            Instruction::i32Add.repr(),
+            Instruction::Add.repr(),
             Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
             0x01,
             Instruction::i32Const.repr(),
