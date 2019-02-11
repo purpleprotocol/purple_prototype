@@ -123,10 +123,13 @@ impl Vm {
                         ip.increment();
                     },
                     Some(Instruction::Begin) => {
-                        handle_begin_block(CfOperator::Begin, ip, &mut self.call_stack, &fun, &argv);
+                        handle_begin_block(CfOperator::Begin, ip, &mut self.call_stack, &mut self.operand_stack, &fun, &argv);
                     },
                     Some(Instruction::Loop) => {
-                        handle_begin_block(CfOperator::Loop, ip, &mut self.call_stack, &fun, &argv);
+                        handle_begin_block(CfOperator::Loop, ip, &mut self.call_stack, &mut self.operand_stack, &fun, &argv);
+                    },
+                    Some(Instruction::If) => {
+                        handle_begin_block(CfOperator::If, ip, &mut self.call_stack, &mut self.operand_stack, &fun, &argv);
                     },
                     Some(Instruction::PushOperand) => {
                         // TODO: Dissalow pushing operands of multiple types
@@ -321,6 +324,7 @@ fn handle_begin_block(
     block_type: CfOperator,
     ip: &mut Address, 
     call_stack: &mut Stack<Frame<VmValue>>, 
+    operand_stack: &mut Stack<VmValue>,
     fun: &Function, 
     init_argv: &[VmValue]
 ) {
@@ -340,7 +344,7 @@ fn handle_begin_block(
         // The first begin instruction. With arity 0.
         (&CfOperator::Begin, 0, 0) => {
             // Push initial frame
-            call_stack.push(Frame::new(CfOperator::Begin, None, None));
+            call_stack.push(Frame::new(CfOperator::Begin, None, Some(init_argv.to_vec())));
         },
         
         // The first begin instruction. With arity other than 0.
@@ -350,11 +354,121 @@ fn handle_begin_block(
 
         // Loop as first instruction.
         (&CfOperator::Loop, _, 0) => {
-            panic!(format!("The first instruction cannot be a loop instruction!"));
+            panic!("The first instruction cannot be a Loop instruction!");
+        },
+
+        // If as first instruction.
+        (&CfOperator::If, _, 0) => {
+            panic!("The first instruction cannot be an If instruction!");
+        },
+
+        // Nested if instruction. With arity 0.
+        (&CfOperator::If, 0, _) => {
+            ip.increment();
+            let op = fun.fetch(ip.ip);
+
+            if let Some(instruction) = Instruction::from_repr(op) {
+                let is_comp_operator = COMP_OPS
+                    .iter()
+                    .any(|o| *o == instruction);
+                
+                if is_comp_operator {
+                    let mut operands: Vec<VmValue> = Vec::with_capacity(operand_stack.len());
+                    let mut os = operand_stack.clone();
+
+                    for _ in 0..os.len() {
+                        let value = os.pop();
+                        operands.push(value);
+                    }
+
+                    if perform_comparison(instruction, operands) {
+                        // Push frame
+                        call_stack.push(Frame::new(CfOperator::If, Some(initial_ip), None));
+                    } else {
+                        let block_len = fun.fetch_block_len(initial_ip.ip);
+                        let op = fun.fetch(initial_ip.ip + block_len);
+
+                        // Determine if the `If` block has a 
+                        // corresponding `Else` block to which
+                        // we can jump to.
+                        if let Some(Instruction::Else) = Instruction::from_repr(op) {
+                            ip.set_ip(initial_ip.ip + block_len);
+                            handle_begin_block(CfOperator::Else, ip, call_stack, operand_stack, fun, init_argv);
+                        }
+                    }
+                } else {
+                    panic!(format!("Can only receive a comparison operator after `If`. Got: {:?}", instruction))
+                }
+            } else {
+                unreachable!();
+            }
+        },
+
+        // Nested if instruction. With arity other than 0.
+        (&CfOperator::If, arity, _) => {
+            ip.increment();
+            let op = fun.fetch(ip.ip);
+
+            if let Some(instruction) = Instruction::from_repr(op) {
+                let is_comp_operator = COMP_OPS
+                    .iter()
+                    .any(|o| *o == instruction);
+                
+                if is_comp_operator {
+                    let mut operands: Vec<VmValue> = Vec::with_capacity(operand_stack.len());
+                    let mut os = operand_stack.clone();
+
+                    for _ in 0..os.len() {
+                        let value = os.pop();
+                        operands.push(value);
+                    }
+
+                    if perform_comparison(instruction, operands) {
+                        let mut buf: Vec<VmValue> = Vec::with_capacity(arity as usize);
+
+                        {
+                            let frame = call_stack.peek_mut();
+
+                            // Push items from local stack to the buffer
+                            // which will then be placed on the new stack.
+                            for _ in 0..arity {
+                                let item = frame.locals.pop();
+                                buf.push(item);
+                            }
+
+                            buf.reverse();
+                        }
+
+                        // Push frame
+                        call_stack.push(Frame::new(CfOperator::If, Some(initial_ip), Some(buf)));
+                    } else {
+                        let block_len = fun.fetch_block_len(initial_ip.ip);
+                        let op = fun.fetch(initial_ip.ip + block_len);
+
+                        // Determine if the `If` block has a 
+                        // corresponding `Else` block to which
+                        // we can jump to.
+                        if let Some(Instruction::Else) = Instruction::from_repr(op) {
+                            ip.set_ip(initial_ip.ip + block_len);
+                            handle_begin_block(CfOperator::Else, ip, call_stack, operand_stack, fun, init_argv);
+                        }
+                    }
+                } else {
+                    panic!(format!("Can only receive a comparison operator after `If`. Got: {:?}", instruction))
+                }
+            } else {
+                unreachable!();
+            }
+        },
+
+        // Nested begin/loop instruction. With arity 0.
+        (block_type, 0, _) => {
+            // Push frame
+            call_stack.push(Frame::new(block_type.clone(), Some(initial_ip), None));
         },
         
         // Nested begin/loop instruction. With arity other than 0.
-        (_, _, _) => {
+        (block_type, _, _) => {
             let mut buf: Vec<VmValue> = Vec::with_capacity(arity as usize);
 
             {
@@ -371,11 +485,15 @@ fn handle_begin_block(
             }
 
             // Push frame
-            call_stack.push(Frame::new(block_type, Some(initial_ip), Some(buf)));
+            call_stack.push(Frame::new(block_type.clone(), Some(initial_ip), Some(buf)));
         }
     }
 
-    ip.increment();
+    if let CfOperator::Else = block_type { 
+        // Do nothing
+    } else {
+        ip.increment();
+    }
 }
 
 fn fetch_bytes(amount: usize, ip: &mut Address, fun: &Function) -> Vec<u8> {
@@ -1120,7 +1238,7 @@ mod tests {
     use crypto::Hash;
 
     #[test]
-    #[should_panic(expected = "first instruction cannot be a loop instruction")]
+    #[should_panic(expected = "first instruction cannot be a Loop instruction")]
     fn it_fails_with_first_loop_instruction() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
@@ -1459,6 +1577,267 @@ mod tests {
             Instruction::PushOperand.repr(), // Increment counter
             0x01,
             Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
+            0x01,
+            Instruction::i32Const.repr(),
+            Instruction::PopOperand.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: VmType::I32,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+
+        assert!(true);
+    }
+
+    #[test]
+    fn it_breaks_loops_from_nested_scopes() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x03,                             // 3 Arity
+            Instruction::i32Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::f32Const.repr(),
+            0x00,                             // i32 value
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // i64 value
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x1b,
+            0x00,                             // f32 value
+            0x00,
+            0x00,
+            0x5f,
+            Instruction::PickLocal.repr(),    // Dupe elems on stack 11 times (usize is 16bits)
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PushLocal.repr(),   // Push loop counter to locals stack
+            0x01,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
+            Instruction::PickLocal.repr(),   // Dupe counter
+            0x00,
+            0x04,
+            Instruction::PushOperand.repr(), 
+            0x02,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),    // Push counter to operand stack
+            0x00,                            // Loop 5 times
+            0x00,
+            0x00,
+            0x04,
+            Instruction::If.repr(),          // Break if items on the operand stack are equal  
+            0x00,                            // Arity 0
+            Instruction::Eq.repr(),
+            Instruction::Break.repr(),       // Break loop
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+            Instruction::PushOperand.repr(), // Increment counter
+            0x02,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
+            0x01,
+            Instruction::i32Const.repr(),
+            Instruction::PopOperand.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: VmType::I32,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+
+        assert!(true);
+    }
+
+    #[test]
+    fn it_works_with_if_else_arguments() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x03,                             // 3 Arity
+            Instruction::i32Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::f32Const.repr(),
+            0x00,                             // i32 value
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // i64 value
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x1b,
+            0x00,                             // f32 value
+            0x00,
+            0x00,
+            0x5f,
+            Instruction::PickLocal.repr(),    // Dupe elems on stack 11 times (usize is 16bits)
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PushLocal.repr(),   // Push loop counter to locals stack
+            0x01,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
+            Instruction::PickLocal.repr(),   // Dupe counter
+            0x00,
+            0x04,
+            Instruction::PushOperand.repr(), 
+            0x02,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),    // Push counter to operand stack
+            0x00,                            // Loop 5 times
+            0x00,
+            0x00,
+            0x04,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::If.repr(),          // Break if items on the operand stack are equal  
+            0x02,                            // Arity 0
+            Instruction::Eq.repr(),
+            Instruction::Break.repr(),       // Break loop
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x02,
+            Instruction::Nop.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+            Instruction::PushOperand.repr(), // Increment counter
+            0x02,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
             0x00,
             0x00,
             0x00,

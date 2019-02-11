@@ -73,6 +73,9 @@ pub enum Instruction {
     i64Store16            = 0x2a,
     i64Store32            = 0x2b,
 
+    // Array operations 
+    Fetch                 = 0x2c,
+
     // Common operations
     Add                   = 0x30,
     Sub                   = 0x31,
@@ -318,6 +321,9 @@ pub const OPS_LIST: &'static [Instruction] = &[
     Instruction::i64Store8             ,
     Instruction::i64Store16            ,
     Instruction::i64Store32            ,
+
+    // Array operations
+    Instruction::Fetch                 ,
 
     // Common operations
     Instruction::Add                   ,
