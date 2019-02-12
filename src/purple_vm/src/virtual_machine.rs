@@ -132,8 +132,6 @@ impl Vm {
                         handle_begin_block(CfOperator::If, ip, &mut self.call_stack, &mut self.operand_stack, &fun, &argv);
                     },
                     Some(Instruction::PushOperand) => {
-                        // TODO: Dissalow pushing operands of multiple types
-
                         ip.increment();
 
                         // The next byte after a `PushOperand` instruction
@@ -245,6 +243,34 @@ impl Vm {
                         } else {
                             // Return address is non-existent. Stop execution in this case.
                             break;
+                        }
+                    },
+                    Some(Instruction::Break) => {
+                        // Pop frames until one has a `Loop` scope type
+                        loop {
+                            let frame = self.call_stack.pop();
+
+                            if let CfOperator::Loop = frame.scope_type {
+                                // Replace operand stack with an empty one
+                                self.operand_stack = Stack::new();
+                                
+                                if let Some(return_address) = frame.return_address {
+                                    let block_len = fun.fetch_block_len(return_address.ip);
+
+                                    // Set ip to the current frame's return address 
+                                    *ip = return_address;
+
+                                    let current_ip = ip.ip;
+
+                                    // Set instruction pointer to the next 
+                                    // instruction after the block.
+                                    ip.set_ip(current_ip + block_len);
+                                } else {
+                                    unreachable!();
+                                }
+                                
+                                break;
+                            }
                         }
                     },
                     Some(Instruction::BreakIf) => {
@@ -512,6 +538,12 @@ fn fetch_bytes(amount: usize, ip: &mut Address, fun: &Function) -> Vec<u8> {
     b
 }
 
+#[derive(Clone, Debug)]
+enum ArgLocation {
+    Inline,
+    FromMemory
+}
+
 fn fetch_argv(
     frame: &mut Frame<VmValue>, 
     operand_stack: &mut Stack<VmValue>, 
@@ -519,7 +551,7 @@ fn fetch_argv(
     fun: &Function, 
     arity: usize
 ) -> (Vec<VmType>, Vec<VmValue>) {
-    let mut argv_types: Vec<VmType> = Vec::with_capacity(arity);  
+    let mut argv_types: Vec<(VmType, ArgLocation)> = Vec::with_capacity(arity);  
     let mut argv: Vec<VmValue> = Vec::with_capacity(arity);
 
     // Fetch argument types
@@ -532,137 +564,163 @@ fn fetch_argv(
             _            => panic!(format!("Invalid argument type in begin block! Received: {}", op))
         };
 
-        argv_types.push(arg);
+        // Fetch arg type
+        ip.increment();
+        let op = fun.fetch(ip.ip);
+
+        let arg_type = match op {
+            0x00 => ArgLocation::Inline,
+            0x01 => ArgLocation::FromMemory,
+            _    => panic!()
+        };
+
+        argv_types.push((arg, arg_type));
     }
 
     // Fetch arguments. Only arrays up to
     // size of 8 are allowed as arguments.
-    for t in argv_types.iter() {
+    for (t, al) in argv_types.iter() {
         ip.increment();
 
         match t {
             VmType::I32 => {
                 let byte = fun.fetch(ip.ip);
 
-                match Instruction::from_repr(byte) {
-                    Some(Instruction::PopLocal) => {
-                        let value = frame.locals.pop();
+                // Fetch value from memory
+                if let ArgLocation::FromMemory = al {
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                        if let VmValue::I32(_) = value {
-                            argv.push(value);
-                        } else {
-                            panic!(format!("Popped value that is not i32! Got: {:?}", value));
-                        }
-                    },
-                    Some(Instruction::PopOperand) => {
-                        let value = operand_stack.pop();
+                            if let VmValue::I32(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!(format!("Popped value that is not i32! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
 
-                        if let VmValue::I32(_) = value {
-                            argv.push(value);
-                        } else {
-                            panic!("Popped value that is not i32!");
-                        }
-                    },
-                    _ => {
-                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                        let mut cursor = Cursor::new(&bytes);
-                        let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
-
-                        argv.push(VmValue::I32(val));
+                            if let VmValue::I32(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i32!");
+                            }
+                        },
+                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                        _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
+                } else {
+                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                    let mut cursor = Cursor::new(&bytes);
+                    let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                    argv.push(VmValue::I32(val));
                 }
             },
             VmType::I64 => {
                 let byte = fun.fetch(ip.ip);
 
-                match Instruction::from_repr(byte) {
-                    Some(Instruction::PopLocal) => {
-                        let value = frame.locals.pop();
+                // Fetch value from memory
+                if let ArgLocation::FromMemory = al {
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                        if let VmValue::I64(_) = value {
-                            argv.push(value);
-                        } else {
-                            panic!(format!("Popped value that is not i64! Got: {:?}", value));
-                        }
-                    },
-                    Some(Instruction::PopOperand) => {
-                        let value = operand_stack.pop();
+                            if let VmValue::I64(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!(format!("Popped value that is not i64! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
 
-                        if let VmValue::I64(_) = value {
-                            argv.push(value);
-                        } else {
-                            panic!("Popped value that is not i64!");
-                        }
-                    },
-                    _ => {
-                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                        let mut cursor = Cursor::new(&bytes);
-                        let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
-
-                        argv.push(VmValue::I64(val));
+                            if let VmValue::I64(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i64!");
+                            }
+                        },
+                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                        _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
+                } else {
+                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                    let mut cursor = Cursor::new(&bytes);
+                    let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                    argv.push(VmValue::I64(val));
                 }
             },
             VmType::F32 => {
                 let byte = fun.fetch(ip.ip);
 
-                match Instruction::from_repr(byte) {
-                    Some(Instruction::PopLocal) => {
-                        let value = frame.locals.pop();
+                // Fetch value from memory
+                if let ArgLocation::FromMemory = al {
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                        if let VmValue::F32(_) = value {
-                            argv.push(value);
-                        } else {
-                            panic!(format!("Popped value that is not f32! Got: {:?}", value));
-                        }
-                    },
-                    Some(Instruction::PopOperand) => {
-                        let value = operand_stack.pop();
+                            if let VmValue::F32(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!(format!("Popped value that is not f32! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
 
-                        if let VmValue::F32(_) = value {
-                            argv.push(value);
-                        } else {
-                            panic!("Popped value that is not f32!");
-                        }
-                    },
-                    _ => {
-                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                        let mut cursor = Cursor::new(&bytes);
-                        let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
-
-                        argv.push(VmValue::F32(val));
+                            if let VmValue::F32(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not f32!");
+                            }
+                        },
+                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                        _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
+                } else {
+                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                    let mut cursor = Cursor::new(&bytes);
+                    let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                    argv.push(VmValue::F32(val));
                 }
             },
             VmType::F64 => {
                 let byte = fun.fetch(ip.ip);
 
-                match Instruction::from_repr(byte) {
-                    Some(Instruction::PopLocal) => {
-                        let value = frame.locals.pop();
+                // Fetch value from memory
+                if let ArgLocation::FromMemory = al {
+                    match Instruction::from_repr(byte) {
+                        Some(Instruction::PopLocal) => {
+                            let value = frame.locals.pop();
 
-                        if let VmValue::F64(_) = value {
-                            argv.push(value);
-                        } else {
-                            panic!(format!("Popped value that is not f64! Got: {:?}", value));
-                        }
-                    },
-                    Some(Instruction::PopOperand) => {
-                        let value = operand_stack.pop();
+                            if let VmValue::F64(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!(format!("Popped value that is not f64! Got: {:?}", value));
+                            }
+                        },
+                        Some(Instruction::PopOperand) => {
+                            let value = operand_stack.pop();
 
-                        if let VmValue::F64(_) = value {
-                            argv.push(value);
-                        } else {
-                            panic!("Popped value that is not f64!");
-                        }
-                    },
-                    _ => {
-                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                        let mut cursor = Cursor::new(&bytes);
-                        let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
-
-                        argv.push(VmValue::F64(val));
+                            if let VmValue::F64(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not f64!");
+                            }
+                        },
+                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                        _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
+                } else {
+                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                    let mut cursor = Cursor::new(&bytes);
+                    let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                    argv.push(VmValue::F64(val));
                 }
             },
             VmType::i32Array2 => {
@@ -673,32 +731,36 @@ fn fetch_argv(
                 for _ in 0..2 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::I32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not i32! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::I32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not i32! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::I32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not i32!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::I32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::I32(val));
                     }
                 }
 
@@ -714,32 +776,36 @@ fn fetch_argv(
                 for _ in 0..4 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::I32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not i32! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::I32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not i32! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::I32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not i32!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::I32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::I32(val));
                     }
                 }
 
@@ -755,32 +821,36 @@ fn fetch_argv(
                 for _ in 0..8 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::I32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not i32! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::I32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not i32! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::I32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not i32!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::I32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::I32(val));
                     }
                 }
 
@@ -796,32 +866,36 @@ fn fetch_argv(
                 for _ in 0..2 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::I64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not i64! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::I64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not i64! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::I64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not i64!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::I64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::I64(val));
                     }
                 }
 
@@ -837,32 +911,36 @@ fn fetch_argv(
                 for _ in 0..4 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::I64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not i64! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::I64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not i64! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::I64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not i64!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::I64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::I64(val));
                     }
                 }
 
@@ -878,32 +956,36 @@ fn fetch_argv(
                 for _ in 0..8 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::I64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not i64! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::I64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not i64! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::I64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not i64!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::I64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::I64(val));
                     }
                 }
 
@@ -919,32 +1001,36 @@ fn fetch_argv(
                 for _ in 0..2 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::F32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not f32! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::F32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not f32! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::F32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not f32!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::F32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f32!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::F32(val));
                     }
                 }
 
@@ -960,32 +1046,36 @@ fn fetch_argv(
                 for _ in 0..4 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::F32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not f32! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::F32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not f32! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::F32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not f32!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::F32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f32!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::F32(val));
                     }
                 }
 
@@ -1001,32 +1091,36 @@ fn fetch_argv(
                 for _ in 0..8 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::F32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not f32! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::F32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not f32! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::F32(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not f32!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::F32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f32!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::F32(val));
                     }
                 }
 
@@ -1042,32 +1136,36 @@ fn fetch_argv(
                 for _ in 0..2 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::F64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not f64! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::F64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not f64! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::F64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not f64!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::F64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f64!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::F64(val));
                     }
                 }
 
@@ -1083,32 +1181,36 @@ fn fetch_argv(
                 for _ in 0..4 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::F64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not f64! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::F64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not f64! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::F64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not f64!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::F64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f64!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::F64(val));
                     }
                 }
 
@@ -1124,32 +1226,36 @@ fn fetch_argv(
                 for _ in 0..8 {
                     let byte = fun.fetch(ip.ip);
 
-                    match Instruction::from_repr(byte) {
-                        Some(Instruction::PopLocal) => {
-                            let value = frame.locals.pop();
+                    // Fetch value from memory
+                    if let ArgLocation::FromMemory = al {
+                        match Instruction::from_repr(byte) {
+                            Some(Instruction::PopLocal) => {
+                                let value = frame.locals.pop();
 
-                            if let VmValue::F64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!(format!("Popped value that is not f64! Got: {:?}", value));
-                            }
-                        },
-                        Some(Instruction::PopOperand) => {
-                            let value = operand_stack.pop();
+                                if let VmValue::F64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!(format!("Popped value that is not f64! Got: {:?}", value));
+                                }
+                            },
+                            Some(Instruction::PopOperand) => {
+                                let value = operand_stack.pop();
 
-                            if let VmValue::F64(result) = value {
-                                buffer.push(result);
-                            } else {
-                                panic!("Popped value that is not f64!");
-                            }
-                        },
-                        _ => {
-                            let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
-                            let mut cursor = Cursor::new(&bytes);
-                            let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
-
-                            buffer.push(val);
+                                if let VmValue::F64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f64!");
+                                }
+                            },
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
+                    } else {
+                        let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
+
+                        argv.push(VmValue::F64(val));
                     }
                 }
 
@@ -1162,6 +1268,10 @@ fn fetch_argv(
             }
         }
     }
+
+    let argv_types = argv_types
+        .iter()
+        .map(|t| t.0).collect();
 
     (argv_types, argv)
 }
@@ -1318,8 +1428,11 @@ mod tests {
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
             Instruction::i32Const.repr(),
+            0x00,
             Instruction::i64Const.repr(),
+            0x00,
             Instruction::f32Const.repr(),
+            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -1408,8 +1521,11 @@ mod tests {
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
             Instruction::i32Const.repr(),
+            0x00,
             Instruction::i64Const.repr(),
+            0x00,
             Instruction::f32Const.repr(),
+            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -1502,8 +1618,11 @@ mod tests {
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
             Instruction::i32Const.repr(),
+            0x00,
             Instruction::i64Const.repr(),
+            0x00,
             Instruction::f32Const.repr(),
+            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -1560,12 +1679,15 @@ mod tests {
             0x00,
             0x00,
             0x00,
+            0x00,
             Instruction::Loop.repr(),
             0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
             Instruction::PushOperand.repr(), 
             0x02,
             Instruction::i32Const.repr(),
+            0x01,                            // Reference byte for popped arg 
             Instruction::i32Const.repr(),
+            0x00,
             Instruction::PopLocal.repr(),    // Push counter to operand stack
             0x00,                            // Loop 5 times
             0x00,
@@ -1580,11 +1702,13 @@ mod tests {
             0x00,
             0x00,
             0x00,
+            0x00,
             0x01,
             Instruction::Add.repr(),
             Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
             0x01,
             Instruction::i32Const.repr(),
+            0x01,
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
@@ -1625,8 +1749,11 @@ mod tests {
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
             Instruction::i32Const.repr(),
+            0x00,
             Instruction::i64Const.repr(),
+            0x00,
             Instruction::f32Const.repr(),
+            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -1683,6 +1810,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
+            0x00,
             Instruction::Loop.repr(),
             0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
             Instruction::PickLocal.repr(),   // Dupe counter
@@ -1691,7 +1819,9 @@ mod tests {
             Instruction::PushOperand.repr(), 
             0x02,
             Instruction::i32Const.repr(),
+            0x01,
             Instruction::i32Const.repr(),
+            0x00,
             Instruction::PopLocal.repr(),    // Push counter to operand stack
             0x00,                            // Loop 5 times
             0x00,
@@ -1710,7 +1840,9 @@ mod tests {
             Instruction::PushOperand.repr(), // Increment counter
             0x02,
             Instruction::i32Const.repr(),
+            0x01,
             Instruction::i32Const.repr(),
+            0x00,
             Instruction::PopLocal.repr(),
             0x00,
             0x00,
@@ -1720,6 +1852,7 @@ mod tests {
             Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
             0x01,
             Instruction::i32Const.repr(),
+            0x01,
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
@@ -1760,8 +1893,11 @@ mod tests {
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
             Instruction::i32Const.repr(),
+            0x00,
             Instruction::i64Const.repr(),
+            0x00,
             Instruction::f32Const.repr(),
+            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -1803,6 +1939,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
+            0x00,
             Instruction::Loop.repr(),
             0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
             Instruction::PickLocal.repr(),   // Dupe counter
@@ -1811,7 +1948,9 @@ mod tests {
             Instruction::PushOperand.repr(), 
             0x02,
             Instruction::i32Const.repr(),
+            0x01,
             Instruction::i32Const.repr(),
+            0x00,
             Instruction::PopLocal.repr(),    // Push counter to operand stack
             0x00,                            // Loop 5 times
             0x00,
@@ -1836,7 +1975,9 @@ mod tests {
             Instruction::PushOperand.repr(), // Increment counter
             0x02,
             Instruction::i32Const.repr(),
+            0x01,
             Instruction::i32Const.repr(),
+            0x00,
             Instruction::PopLocal.repr(),
             0x00,
             0x00,
@@ -1846,6 +1987,7 @@ mod tests {
             Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
             0x01,
             Instruction::i32Const.repr(),
+            0x01,
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),

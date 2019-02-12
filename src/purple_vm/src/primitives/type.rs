@@ -100,4 +100,27 @@ impl VmType {
             _                               => None
         }
     }
+
+    /// Returns the byte size of the type.
+    pub fn byte_size(&self) -> usize {
+        match *self {
+            VmType::I32       => 4,
+            VmType::I64       => 8,
+            VmType::F32       => 4,
+            VmType::F64       => 8,
+            VmType::i32Array2 => 8,
+            VmType::i32Array4 => 16,
+            VmType::i32Array8 => 32,
+            VmType::i64Array2 => 16,
+            VmType::i64Array4 => 32,
+            VmType::i64Array8 => 64,
+            VmType::f32Array2 => 8,
+            VmType::f32Array4 => 16,
+            VmType::f32Array8 => 32,
+            VmType::f64Array2 => 16,
+            VmType::f64Array4 => 32,
+            VmType::f64Array8 => 64,
+            _                 => panic!()
+        }
+    }
 }

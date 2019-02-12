@@ -60,6 +60,31 @@ pub enum VmValue {
     f64Array256([f64; 256]),
 }
 
+impl VmValue {
+    /// Returns the byte size of the inner value.
+    pub fn byte_size(&self) -> usize {
+        match *self {
+            VmValue::I32(val1)       => 4,
+            VmValue::I64(val1)       => 8,
+            VmValue::F32(val1)       => 4,
+            VmValue::F64(val1)       => 8,
+            VmValue::i32Array2(val1) => 8,
+            VmValue::i32Array4(val1) => 16,
+            VmValue::i32Array8(val1) => 32,
+            VmValue::i64Array2(val1) => 16,
+            VmValue::i64Array4(val1) => 32,
+            VmValue::i64Array8(val1) => 64,
+            VmValue::f32Array2(val1) => 8,
+            VmValue::f32Array4(val1) => 16,
+            VmValue::f32Array8(val1) => 32,
+            VmValue::f64Array2(val1) => 8,
+            VmValue::f64Array4(val1) => 16,
+            VmValue::f64Array8(val1) => 32,
+            _                        => panic!()
+        }
+    }
+}
+
 impl PartialEq for VmValue {
     fn eq(&self, other: &VmValue) -> bool {
         match (*self, *other) {
