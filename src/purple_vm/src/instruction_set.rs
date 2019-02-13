@@ -75,6 +75,9 @@ pub enum Instruction {
 
     // Array operations 
     Fetch                 = 0x2c,
+    Grow                  = 0x2d,
+    ArrayPush             = 0x2e,
+    ArrayPop              = 0x2f,
 
     // Common operations
     Add                   = 0x30,

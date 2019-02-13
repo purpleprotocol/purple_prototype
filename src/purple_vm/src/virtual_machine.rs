@@ -30,9 +30,9 @@ use persistence::{BlakeDbHasher, Codec};
 use byteorder::{BigEndian, ReadBytesExt};
 use error::VmError;
 use std::io::Cursor;
+use bitvec::Bits;
 
-// TODO: Determine a better value for this
-const MAX_OP_ARITY: u8 = 50;
+const MAX_OP_ARITY: u8 = 8;
 
 #[derive(Debug)]
 pub struct Vm {
@@ -121,6 +121,12 @@ impl Vm {
                     Some(Instruction::Nop) => {
                         // This does nothing. Just increment the instruction pointer.
                         ip.increment();
+                    },
+                    Some(Instruction::Call) => {
+                        unimplemented!();
+                    },
+                    Some(Instruction::Return) => {
+                        unimplemented!();
                     },
                     Some(Instruction::Begin) => {
                         handle_begin_block(CfOperator::Begin, ip, &mut self.call_stack, &mut self.operand_stack, &fun, &argv);
@@ -541,7 +547,7 @@ fn fetch_bytes(amount: usize, ip: &mut Address, fun: &Function) -> Vec<u8> {
 #[derive(Clone, Debug)]
 enum ArgLocation {
     Inline,
-    FromMemory
+    Memory
 }
 
 fn fetch_argv(
@@ -554,8 +560,13 @@ fn fetch_argv(
     let mut argv_types: Vec<(VmType, ArgLocation)> = Vec::with_capacity(arity);  
     let mut argv: Vec<VmValue> = Vec::with_capacity(arity);
 
+    ip.increment();
+
+    // The next byte contains the arg locations
+    let args_bitmask = fun.fetch(ip.ip);
+
     // Fetch argument types
-    for _ in 0..arity {
+    for i in 0..arity {
         ip.increment();
         
         let op = fun.fetch(ip.ip);
@@ -564,14 +575,10 @@ fn fetch_argv(
             _            => panic!(format!("Invalid argument type in begin block! Received: {}", op))
         };
 
-        // Fetch arg type
-        ip.increment();
-        let op = fun.fetch(ip.ip);
-
-        let arg_type = match op {
-            0x00 => ArgLocation::Inline,
-            0x01 => ArgLocation::FromMemory,
-            _    => panic!()
+        let arg_type = if args_bitmask.get(i as u8) {
+            ArgLocation::Memory
+        } else {
+            ArgLocation::Inline
         };
 
         argv_types.push((arg, arg_type));
@@ -587,7 +594,7 @@ fn fetch_argv(
                 let byte = fun.fetch(ip.ip);
 
                 // Fetch value from memory
-                if let ArgLocation::FromMemory = al {
+                if let ArgLocation::Memory = al {
                     match Instruction::from_repr(byte) {
                         Some(Instruction::PopLocal) => {
                             let value = frame.locals.pop();
@@ -622,7 +629,7 @@ fn fetch_argv(
                 let byte = fun.fetch(ip.ip);
 
                 // Fetch value from memory
-                if let ArgLocation::FromMemory = al {
+                if let ArgLocation::Memory = al {
                     match Instruction::from_repr(byte) {
                         Some(Instruction::PopLocal) => {
                             let value = frame.locals.pop();
@@ -657,7 +664,7 @@ fn fetch_argv(
                 let byte = fun.fetch(ip.ip);
 
                 // Fetch value from memory
-                if let ArgLocation::FromMemory = al {
+                if let ArgLocation::Memory = al {
                     match Instruction::from_repr(byte) {
                         Some(Instruction::PopLocal) => {
                             let value = frame.locals.pop();
@@ -692,7 +699,7 @@ fn fetch_argv(
                 let byte = fun.fetch(ip.ip);
 
                 // Fetch value from memory
-                if let ArgLocation::FromMemory = al {
+                if let ArgLocation::Memory = al {
                     match Instruction::from_repr(byte) {
                         Some(Instruction::PopLocal) => {
                             let value = frame.locals.pop();
@@ -732,7 +739,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -777,7 +784,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -822,7 +829,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -867,7 +874,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -912,7 +919,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -957,7 +964,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -1002,7 +1009,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -1047,7 +1054,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -1092,7 +1099,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -1137,7 +1144,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -1182,7 +1189,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -1227,7 +1234,7 @@ fn fetch_argv(
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
-                    if let ArgLocation::FromMemory = al {
+                    if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
                             Some(Instruction::PopLocal) => {
                                 let value = frame.locals.pop();
@@ -1427,12 +1434,10 @@ mod tests {
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
+            0x00,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::i64Const.repr(),
-            0x00,
             Instruction::f32Const.repr(),
-            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -1520,12 +1525,10 @@ mod tests {
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
+            0x00,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::i64Const.repr(),
-            0x00,
             Instruction::f32Const.repr(),
-            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -1610,6 +1613,9 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut bitmask: u8 = 0;
+
+        bitmask.set(0, true);
 
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
@@ -1617,12 +1623,10 @@ mod tests {
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
+            0x00,                             // Reference bits
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::i64Const.repr(),
-            0x00,
             Instruction::f32Const.repr(),
-            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -1674,8 +1678,8 @@ mod tests {
             0x02,
             Instruction::PushLocal.repr(),   // Push loop counter to locals stack
             0x01,
-            Instruction::i32Const.repr(),
             0x00,
+            Instruction::i32Const.repr(),
             0x00,
             0x00,
             0x00,
@@ -1684,10 +1688,9 @@ mod tests {
             0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
             Instruction::PushOperand.repr(), 
             0x02,
+            bitmask,                         // Reference bits
+            Instruction::i32Const.repr(),   
             Instruction::i32Const.repr(),
-            0x01,                            // Reference byte for popped arg 
-            Instruction::i32Const.repr(),
-            0x00,
             Instruction::PopLocal.repr(),    // Push counter to operand stack
             0x00,                            // Loop 5 times
             0x00,
@@ -1698,8 +1701,8 @@ mod tests {
             Instruction::PopOperand.repr(),
             Instruction::PushOperand.repr(), // Increment counter
             0x01,
-            Instruction::i32Const.repr(),
             0x00,
+            Instruction::i32Const.repr(),
             0x00,
             0x00,
             0x00,
@@ -1707,8 +1710,8 @@ mod tests {
             Instruction::Add.repr(),
             Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
             0x01,
+            bitmask,                         // Reference bits
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
@@ -1741,6 +1744,9 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut bitmask: u8 = 0;
+        
+        bitmask.set(0, true);
 
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
@@ -1748,12 +1754,10 @@ mod tests {
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
+            0x00,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::i64Const.repr(),
-            0x00,
             Instruction::f32Const.repr(),
-            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -1805,8 +1809,8 @@ mod tests {
             0x02,
             Instruction::PushLocal.repr(),   // Push loop counter to locals stack
             0x01,
-            Instruction::i32Const.repr(),
             0x00,
+            Instruction::i32Const.repr(),
             0x00,
             0x00,
             0x00,
@@ -1818,10 +1822,9 @@ mod tests {
             0x04,
             Instruction::PushOperand.repr(), 
             0x02,
+            bitmask,
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::PopLocal.repr(),    // Push counter to operand stack
             0x00,                            // Loop 5 times
             0x00,
@@ -1839,10 +1842,9 @@ mod tests {
             Instruction::End.repr(),
             Instruction::PushOperand.repr(), // Increment counter
             0x02,
+            bitmask,                         // Reference bits
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::PopLocal.repr(),
             0x00,
             0x00,
@@ -1851,8 +1853,8 @@ mod tests {
             Instruction::Add.repr(),
             Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
             0x01,
+            bitmask,                         // Reference bits
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
@@ -1885,6 +1887,9 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut bitmask: u8 = 0;
+        
+        bitmask.set(0, true);
 
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
@@ -1892,12 +1897,10 @@ mod tests {
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
+            0x00,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::i64Const.repr(),
-            0x00,
             Instruction::f32Const.repr(),
-            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -1934,8 +1937,8 @@ mod tests {
             0x02,
             Instruction::PushLocal.repr(),   // Push loop counter to locals stack
             0x01,
-            Instruction::i32Const.repr(),
             0x00,
+            Instruction::i32Const.repr(),
             0x00,
             0x00,
             0x00,
@@ -1947,10 +1950,9 @@ mod tests {
             0x04,
             Instruction::PushOperand.repr(), 
             0x02,
+            bitmask,
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::PopLocal.repr(),    // Push counter to operand stack
             0x00,                            // Loop 5 times
             0x00,
@@ -1974,10 +1976,9 @@ mod tests {
             Instruction::End.repr(),
             Instruction::PushOperand.repr(), // Increment counter
             0x02,
+            bitmask,                         // Reference bits
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::PopLocal.repr(),
             0x00,
             0x00,
@@ -1986,8 +1987,8 @@ mod tests {
             Instruction::Add.repr(),
             Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
             0x01,
+            bitmask,                         // Reference bits
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),

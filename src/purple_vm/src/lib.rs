@@ -23,6 +23,7 @@ extern crate test_helpers;
 
 #[macro_use] extern crate enum_repr;
 
+extern crate bitvec;
 extern crate lazy_static;
 extern crate byteorder;
 extern crate hashbrown;

@@ -19,6 +19,7 @@
 use primitives::r#type::VmType;
 use stack::Stack;
 use instruction_set::{Instruction, CT_FLOW_OPS};
+use bitvec::Bits;
 
 #[derive(Clone, Debug)]
 pub struct Function {
@@ -109,21 +110,21 @@ impl Function {
                             result_len += 1;
 
                             let arity = self.block[i+offset];
+                            
+                            offset += 1;
+                            result_len += 1;
 
-                            for _ in 0..arity {
+                            let bitmask = self.block[i+offset];
+
+                            for j in 0..arity {
                                 offset += 1;
                                 result_len += 1;
 
                                 let arg_primitive_type = self.block[i+offset];
 
-                                offset += 1;
-                                result_len += 1;
-
-                                let arg_declaration_type = self.block[i+offset];
-
                                 match VmType::from_op(arg_primitive_type) {
-                                    Some(op) => match arg_declaration_type {
-                                        0x00 => {
+                                    Some(op) => match bitmask.get(j) {
+                                        false => {
                                             let byte_size = op.byte_size();
 
                                             // Increment both len and offset with
@@ -131,12 +132,11 @@ impl Function {
                                             result_len += byte_size;
                                             acc += byte_size;
                                         },
-                                        0x01 => {
+                                        true => {
                                             // Pop operand, so we increment only by 1
                                             result_len += 1;
                                             acc += 1;
-                                        },
-                                        _ => panic!("Invalid declaration type!")
+                                        }
                                     },
                                     None => panic!("Invalid type!")
                                 };
@@ -152,20 +152,20 @@ impl Function {
 
                             let arity = self.block[i+offset];
 
-                            for _ in 0..arity {
+                            offset += 1;
+                            result_len += 1;
+
+                            let bitmask = self.block[i+offset];
+
+                            for j in 0..arity {
                                 offset += 1;
                                 result_len += 1;
 
                                 let arg_primitive_type = self.block[i+offset];
 
-                                offset += 1;
-                                result_len += 1;
-
-                                let arg_declaration_type = self.block[i+offset];
-
                                 match VmType::from_op(arg_primitive_type) {
-                                    Some(op) => match arg_declaration_type {
-                                        0x00 => {
+                                    Some(op) => match bitmask.get(j) {
+                                        false => {
                                             let byte_size = op.byte_size();
 
                                             // Increment both len and offset with
@@ -173,12 +173,11 @@ impl Function {
                                             result_len += byte_size;
                                             acc += byte_size;
                                         },
-                                        0x01 => {
+                                        true => {
                                             // Pop operand, so we increment only by 1
                                             result_len += 1;
                                             acc += 1;
-                                        },
-                                        _ => panic!("Invalid declaration type!")
+                                        }
                                     },
                                     None => panic!("Invalid type!")
                                 };
@@ -204,18 +203,20 @@ mod tests {
 
     #[test]
     fn find_block_len() {
+        let mut bitmask: u8 = 0;
+
+        bitmask.set(0, true);
+
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
+            0x00,                             // Reference bits
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::i64Const.repr(),
-            0x00,
             Instruction::f32Const.repr(),
-            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -252,8 +253,8 @@ mod tests {
             0x02,
             Instruction::PushLocal.repr(),   // Push loop counter to locals stack
             0x01,
+            0x00,                            // Reference bits
             Instruction::i32Const.repr(),
-            0x00,
             0x00,
             0x00,
             0x00,
@@ -265,10 +266,9 @@ mod tests {
             0x04,
             Instruction::PushOperand.repr(), 
             0x02,
+            bitmask,
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::PopLocal.repr(),    // Push counter to operand stack
             0x00,                            // Loop 5 times
             0x00,
@@ -292,10 +292,9 @@ mod tests {
             Instruction::End.repr(),
             Instruction::PushOperand.repr(), // Increment counter
             0x02,
+            bitmask,                         // Reference bits
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::PopLocal.repr(),
             0x00,
             0x00,
@@ -304,6 +303,7 @@ mod tests {
             Instruction::Add.repr(),
             Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
             0x01,
+            bitmask,                         // Reference bits
             Instruction::i32Const.repr(),
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
@@ -318,24 +318,26 @@ mod tests {
             return_type: VmType::I32,
             arguments: vec![]
         }; 
-
-        assert_eq!(function.find_block_len(75), 5);
+        
+        assert_eq!(function.find_block_len(72), 5);
     }
 
     #[test]
     fn find_block_len_with_nested1() {
+        let mut bitmask: u8 = 0;
+
+        bitmask.set(0, true);
+        
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
+            0x00,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::i64Const.repr(),
-            0x00,
             Instruction::f32Const.repr(),
-            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -372,8 +374,8 @@ mod tests {
             0x02,
             Instruction::PushLocal.repr(),   // Push loop counter to locals stack
             0x01,
+            0x00,                            // Reference bits
             Instruction::i32Const.repr(),
-            0x00,
             0x00,
             0x00,
             0x00,
@@ -385,10 +387,9 @@ mod tests {
             0x04,
             Instruction::PushOperand.repr(), 
             0x02,
+            bitmask,                         // Reference bits
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::PopLocal.repr(),    // Push counter to operand stack
             0x00,                            // Loop 5 times
             0x00,
@@ -412,10 +413,9 @@ mod tests {
             Instruction::End.repr(),
             Instruction::PushOperand.repr(), // Increment counter
             0x02,
+            bitmask,                         // Reference bits
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::PopLocal.repr(),
             0x00,
             0x00,
@@ -424,8 +424,8 @@ mod tests {
             Instruction::Add.repr(),
             Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
             0x01,
+            bitmask,                         // Reference bits
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
@@ -445,18 +445,20 @@ mod tests {
 
     #[test]
     fn find_block_len_with_nested2() {
+        let mut bitmask: u8 = 0;
+
+        bitmask.set(0, true);
+
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x03,                             // 3 Arity
+            0x00,                             // Reference bits
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::i64Const.repr(),
-            0x00,
             Instruction::f32Const.repr(),
-            0x00,
             0x00,                             // i32 value
             0x00,
             0x00,
@@ -493,8 +495,8 @@ mod tests {
             0x02,
             Instruction::PushLocal.repr(),   // Push loop counter to locals stack
             0x01,
-            Instruction::i32Const.repr(),
             0x00,
+            Instruction::i32Const.repr(),
             0x00,
             0x00,
             0x00,
@@ -506,10 +508,9 @@ mod tests {
             0x04,
             Instruction::PushOperand.repr(), 
             0x02,
+            bitmask,
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::PopLocal.repr(),    // Push counter to operand stack
             0x00,                            // Loop 5 times
             0x00,
@@ -533,10 +534,9 @@ mod tests {
             Instruction::End.repr(),
             Instruction::PushOperand.repr(), // Increment counter
             0x02,
+            bitmask,
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::i32Const.repr(),
-            0x00,
             Instruction::PopLocal.repr(),
             0x00,
             0x00,
@@ -545,8 +545,8 @@ mod tests {
             Instruction::Add.repr(),
             Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
             0x01,
+            bitmask,
             Instruction::i32Const.repr(),
-            0x01,
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
@@ -561,6 +561,6 @@ mod tests {
             arguments: vec![]
         }; 
 
-        assert_eq!(function.find_block_len(53), 50);
+        assert_eq!(function.find_block_len(51), 48);
     }
 }

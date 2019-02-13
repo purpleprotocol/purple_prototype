@@ -8,6 +8,7 @@ publish = false
 lazy_static = "1.2.0"
 enum-repr = "0.2.2"
 byteorder = "1.2.7"
+bitvec = "0.9.0"
 crypto = { path = "../crypto" }
 persistence = { path = "../persistence" }
 patricia-trie = { git = "https://github.com/paritytech/parity-common" }
