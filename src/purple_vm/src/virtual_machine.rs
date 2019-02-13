@@ -157,7 +157,60 @@ impl Vm {
                         ip.fun_idx = idx;
                     },
                     Some(Instruction::Return) => {
-                        unimplemented!();
+                        ip.increment();
+
+                        // Fetch the number of returned values
+                        let return_arity = fun.fetch(ip.ip);
+                        let mut frame = self.call_stack.pop();
+                        let return_address = frame.return_address.clone();
+                        let mut return_values: Vec<VmValue> = Vec::with_capacity(return_arity as usize); 
+
+                        // Move return values to buffer
+                        for _ in 0..return_arity {
+                            let value = frame.locals.pop();
+                            return_values.push(value);
+                        }
+
+                        return_values.reverse();
+
+                        if frame.scope_type.is_none() {
+                            let frame = self.call_stack.peek_mut();
+
+                            // Push return values to returned frame
+                            for val in return_values.iter() {
+                                frame.locals.push(*val);
+                            }
+
+                            // Replace operand stack with an empty one
+                            self.operand_stack = Stack::new();
+                            
+                            if let Some(return_address) = return_address.clone() {
+                                // Set ip to the current frame's return address 
+                                *ip = return_address;
+                            }
+                        } else {
+                            // Pop frames until we reach one without a scope type
+                            loop {
+                                let frame = self.call_stack.pop();
+
+                                if frame.scope_type.is_none() {
+                                    let frame = self.call_stack.peek_mut();
+
+                                    // Push return values to returned frame
+                                    for val in return_values.iter() {
+                                        frame.locals.push(*val);
+                                    }
+
+                                    // Replace operand stack with an empty one
+                                    self.operand_stack = Stack::new();
+                                    
+                                    if let Some(return_address) = return_address.clone() {
+                                        // Set ip to the current frame's return address 
+                                        *ip = return_address;
+                                    }
+                                }
+                            }
+                        }
                     },
                     Some(Instruction::Begin) => {
                         handle_begin_block(CfOperator::Begin, ip, &mut self.call_stack, &mut self.operand_stack, &fun, &argv);
