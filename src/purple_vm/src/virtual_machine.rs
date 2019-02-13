@@ -389,24 +389,31 @@ impl Vm {
 
                                 // Return to stored caller address if comparison is successful
                                 if result {
-                                    let frame = self.call_stack.pop();
-                                    
-                                    // Replace operand stack with an empty one
-                                    self.operand_stack = Stack::new();
-                                    
-                                    if let Some(return_address) = frame.return_address {
-                                        let block_len = fun.fetch_block_len(return_address.ip);
+                                    // Pop frames until we find one with a `Loop` scope type
+                                    loop {
+                                        let frame = self.call_stack.pop();
+                                        
+                                        if let Some(CfOperator::Loop) = frame.scope_type {
+                                            // Replace operand stack with an empty one
+                                            self.operand_stack = Stack::new();
+                                            
+                                            if let Some(return_address) = frame.return_address {
+                                                let block_len = fun.fetch_block_len(return_address.ip);
 
-                                        // Set ip to the current frame's return address 
-                                        *ip = return_address;
+                                                // Set ip to the current frame's return address 
+                                                *ip = return_address;
 
-                                        let current_ip = ip.ip;
+                                                let current_ip = ip.ip;
 
-                                        // Set instruction pointer to the next 
-                                        // instruction after the block.
-                                        ip.set_ip(current_ip + block_len);
-                                    } else {
-                                        unreachable!();
+                                                // Set instruction pointer to the next 
+                                                // instruction after the block.
+                                                ip.set_ip(current_ip + block_len);
+                                            } else {
+                                                unreachable!();
+                                            }
+
+                                            break;
+                                        }
                                     }
                                 } else {
                                     ip.increment();
@@ -1729,7 +1736,7 @@ mod tests {
     }
 
     #[test]
-    fn it_breaks_loops_from_nested_scopes() {
+    fn it_breaks_loops_from_nested_scopes1() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -1833,6 +1840,144 @@ mod tests {
             Instruction::PushOperand.repr(), // Increment counter
             0x02,
             bitmask,                         // Reference bits
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
+            0x01,
+            bitmask,                         // Reference bits
+            Instruction::i32Const.repr(),
+            Instruction::PopOperand.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: None,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+
+        assert!(true);
+    }
+
+    #[test]
+    fn it_breaks_loops_from_nested_scopes2() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut bitmask: u8 = 0;
+
+        bitmask.set(0, true);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x03,                             // 3 Arity
+            0x00,                             // Reference bits
+            Instruction::i32Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::f32Const.repr(),
+            0x00,                             // i32 value
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // i64 value
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x1b,
+            0x00,                             // f32 value
+            0x00,
+            0x00,
+            0x5f,
+            Instruction::PickLocal.repr(),    // Dupe elems on stack 11 times (usize is 16bits)
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PushLocal.repr(),   // Push loop counter to locals stack
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x04,
+            Instruction::Begin.repr(),
+            0x01,
+            Instruction::PushOperand.repr(), 
+            0x02,
+            bitmask,                         // Reference bits
+            Instruction::i32Const.repr(),   
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),    // Push counter to operand stack
+            0x00,                            // Loop 5 times
+            0x00,
+            0x00,
+            0x04,
+            Instruction::BreakIf.repr(),     // Break if items on the operand stack are equal  
+            Instruction::Eq.repr(),
+            Instruction::End.repr(),
+            Instruction::PushOperand.repr(), // Increment counter
+            0x02,
+            bitmask,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
             Instruction::PopLocal.repr(),
