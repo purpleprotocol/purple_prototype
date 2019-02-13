@@ -192,6 +192,7 @@ impl Vm {
                             // Pop frames until we reach one without a scope type
                             loop {
                                 let frame = self.call_stack.pop();
+                                let return_address = frame.return_address.clone();
 
                                 if frame.scope_type.is_none() {
                                     let frame = self.call_stack.peek_mut();
@@ -204,10 +205,12 @@ impl Vm {
                                     // Replace operand stack with an empty one
                                     self.operand_stack = Stack::new();
                                     
-                                    if let Some(return_address) = return_address.clone() {
+                                    if let Some(return_address) = return_address {
                                         // Set ip to the current frame's return address 
                                         *ip = return_address;
                                     }
+
+                                    break;
                                 }
                             }
                         }
@@ -2070,6 +2073,109 @@ mod tests {
             Instruction::PopOperand.repr(),
             Instruction::Return.repr(),
             0x01,
+            Instruction::End.repr()
+        ];
+
+        let f1 = Function {
+            arity: 0,
+            name: "debug_test1".to_owned(),
+            block: main_block,
+            return_type: None,
+            arguments: vec![]
+        };
+
+        let f2 = Function {
+            arity: 1,
+            name: "debug_test2".to_owned(),
+            block: increment_block,
+            return_type: Some(VmType::I32),
+            arguments: vec![VmType::I32]
+        };
+
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![f1, f2],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+
+        assert!(true);
+    }
+
+    #[test]
+    fn it_executes_correctly_with_return_from_nested_block() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut bitmask: u8 = 0;
+        
+        bitmask.set(0, true);
+
+        let main_block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x01,
+            Instruction::Call.repr(),
+            0x00,                             // Fun idx (16 bits)
+            0x01,          
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,           
+            Instruction::PushOperand.repr(),
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,                             // Loop 4 times
+            0x00,
+            0x00,
+            0x04,
+            Instruction::BreakIf.repr(),
+            Instruction::Eq.repr(),
+            Instruction::End.repr(),
+            Instruction::End.repr()
+        ];
+
+        let increment_block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),  // Increment given arg by 1
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushLocal.repr(),
+            0x01,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::PopOperand.repr(),
+            Instruction::Begin.repr(),
+            0x01,
+            Instruction::Return.repr(),
+            0x01,
+            Instruction::End.repr(),
             Instruction::End.repr()
         ];
 
