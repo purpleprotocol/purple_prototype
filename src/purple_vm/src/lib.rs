@@ -22,6 +22,7 @@
 extern crate test_helpers;
 
 #[macro_use] extern crate enum_repr;
+#[macro_use] extern crate bin_tools;
 
 extern crate bitvec;
 extern crate lazy_static;

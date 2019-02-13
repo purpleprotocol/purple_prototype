@@ -112,7 +112,7 @@ impl Vm {
                     println!("DEBUG OP: {:?}", op);
                 }
 
-                println!("DEBUG IP: {}", ip.ip);
+                println!("DEBUG IP: {}, FUN IDX: {}", ip.ip, ip.fun_idx);
 
                 match Instruction::from_repr(op) {
                     Some(Instruction::Halt) => {
@@ -123,7 +123,38 @@ impl Vm {
                         ip.increment();
                     },
                     Some(Instruction::Call) => {
-                        unimplemented!();
+                        let mut buf: Vec<u8> = Vec::with_capacity(2);
+
+                        // Fetch fun idx
+                        for _ in 0..2 {
+                            ip.increment();
+                            let byte = fun.fetch(ip.ip);
+                            buf.push(byte);
+                        }
+
+                        ip.increment();
+
+                        let return_ip = ip.clone();
+                        let idx: usize = decode_be_u16!(&buf).unwrap() as usize;
+                        let fun = &module.functions[idx];
+                        let mut argv: Vec<VmValue> = Vec::with_capacity(fun.arity as usize);
+
+                        // Fetch call args
+                        for _ in 0..fun.arity {
+                            let frame = self.call_stack.peek_mut();
+                            let val = frame.locals.pop();
+
+                            argv.push(val);
+                        }
+
+                        argv.reverse();
+
+                        // Push new frame to call stack
+                        self.call_stack.push(Frame::new(None, Some(return_ip), Some(argv)));
+                    
+                        // Set new ip
+                        ip.ip = 2;
+                        ip.fun_idx = idx;
                     },
                     Some(Instruction::Return) => {
                         unimplemented!();
@@ -233,7 +264,7 @@ impl Vm {
                             let current_ip = ip.ip;
 
                             match scope_type {
-                                CfOperator::Loop => {
+                                Some(CfOperator::Loop) => {
                                     // Push frame back to the call stack
                                     self.call_stack.push(frame);
 
@@ -256,7 +287,7 @@ impl Vm {
                         loop {
                             let frame = self.call_stack.pop();
 
-                            if let CfOperator::Loop = frame.scope_type {
+                            if let Some(CfOperator::Loop) = frame.scope_type {
                                 // Replace operand stack with an empty one
                                 self.operand_stack = Stack::new();
                                 
@@ -367,16 +398,11 @@ fn handle_begin_block(
     // The next byte after a begin instruction is the arity of the block.
     let arity = fun.fetch(ip.ip);
 
-    // This is fine since arrays can be passed as arguments.
-    if arity > 10 {
-        panic!("Arity cannot be greater than 10!");
-    }
-
     match (&block_type, arity, call_stack.len()) {
         // The first begin instruction. With arity 0.
         (&CfOperator::Begin, 0, 0) => {
             // Push initial frame
-            call_stack.push(Frame::new(CfOperator::Begin, None, Some(init_argv.to_vec())));
+            call_stack.push(Frame::new(Some(CfOperator::Begin), None, Some(init_argv.to_vec())));
         },
         
         // The first begin instruction. With arity other than 0.
@@ -415,7 +441,7 @@ fn handle_begin_block(
 
                     if perform_comparison(instruction, operands) {
                         // Push frame
-                        call_stack.push(Frame::new(CfOperator::If, Some(initial_ip), None));
+                        call_stack.push(Frame::new(Some(CfOperator::If), Some(initial_ip), None));
                     } else {
                         let block_len = fun.fetch_block_len(initial_ip.ip);
                         let op = fun.fetch(initial_ip.ip + block_len);
@@ -472,7 +498,7 @@ fn handle_begin_block(
                         }
 
                         // Push frame
-                        call_stack.push(Frame::new(CfOperator::If, Some(initial_ip), Some(buf)));
+                        call_stack.push(Frame::new(Some(CfOperator::If), Some(initial_ip), Some(buf)));
                     } else {
                         let block_len = fun.fetch_block_len(initial_ip.ip);
                         let op = fun.fetch(initial_ip.ip + block_len);
@@ -496,7 +522,7 @@ fn handle_begin_block(
         // Nested begin/loop instruction. With arity 0.
         (block_type, 0, _) => {
             // Push frame
-            call_stack.push(Frame::new(block_type.clone(), Some(initial_ip), None));
+            call_stack.push(Frame::new(Some(block_type.clone()), Some(initial_ip), None));
         },
         
         // Nested begin/loop instruction. With arity other than 0.
@@ -517,9 +543,9 @@ fn handle_begin_block(
             }
 
             // Push frame
-            call_stack.push(Frame::new(block_type.clone(), Some(initial_ip), Some(buf)));
+            call_stack.push(Frame::new(Some(block_type.clone()), Some(initial_ip), Some(buf)));
         }
-    }
+    }   
 
     if let CfOperator::Else = block_type { 
         // Do nothing
@@ -572,7 +598,7 @@ fn fetch_argv(
         let op = fun.fetch(ip.ip);
         let arg = match VmType::from_op(op) {
             Some(result) => result,
-            _            => panic!(format!("Invalid argument type in begin block! Received: {}", op))
+            _            => panic!(format!("Invalid argument type! Received: {}", op))
         };
 
         let arg_type = if args_bitmask.get(i as u8) {
@@ -1373,7 +1399,7 @@ mod tests {
             arity: 0,
             name: "debug_test".to_owned(),
             block: block,
-            return_type: VmType::I32,
+            return_type: None,
             arguments: vec![]
         };
 
@@ -1406,99 +1432,7 @@ mod tests {
             arity: 0,
             name: "debug_test".to_owned(),
             block: block,
-            return_type: VmType::I32,
-            arguments: vec![]
-        };
-
-        let module = Module {
-            module_hash: Hash::NULL_RLP,
-            functions: vec![function],
-            imports: vec![]
-        };
-
-        vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
-    }
-
-    #[test]
-    #[should_panic(expected = "Arity cannot be greater than 10!")]
-    fn it_fails_with_begin_arity_greater_than_ten() {
-        let mut vm = Vm::new();
-        let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-
-        let block: Vec<u8> = vec![
-            Instruction::Begin.repr(),
-            0x00,                             // 0 Arity
-            Instruction::Nop.repr(),
-            Instruction::PushLocal.repr(),
-            0x03,                             // 3 Arity
-            0x00,
-            Instruction::i32Const.repr(),
-            Instruction::i64Const.repr(),
-            Instruction::f32Const.repr(),
-            0x00,                             // i32 value
-            0x00,
-            0x00,
-            0x05,
-            0x00,                             // i64 value
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x1b,
-            0x00,                             // f32 value
-            0x00,
-            0x00,
-            0x5f,
-            Instruction::PickLocal.repr(),    // Dupe elems on stack 11 times (usize is 16bits)
-            0x00,
-            0x00,
-            Instruction::PickLocal.repr(),
-            0x00,
-            0x01,
-            Instruction::PickLocal.repr(),
-            0x00,
-            0x02,
-            Instruction::PickLocal.repr(),
-            0x00,
-            0x00,
-            Instruction::PickLocal.repr(),
-            0x00,
-            0x02,
-            Instruction::PickLocal.repr(),
-            0x00,
-            0x01,
-            Instruction::PickLocal.repr(),
-            0x00,
-            0x02,
-            Instruction::PickLocal.repr(),
-            0x00,
-            0x02,
-            Instruction::PickLocal.repr(),
-            0x00,
-            0x02,
-            Instruction::PickLocal.repr(),
-            0x00,
-            0x01,
-            Instruction::PickLocal.repr(),
-            0x00,
-            0x02,
-            Instruction::Begin.repr(),
-            0x1b,                             // 11 arity. The latest 11 items on the caller stack will be pushed to the new frame
-            Instruction::Nop.repr(),
-            Instruction::End.repr(),
-            Instruction::End.repr()
-        ];
-
-        let function = Function {
-            arity: 0,
-            name: "debug_test".to_owned(),
-            block: block,
-            return_type: VmType::I32,
+            return_type: None,
             arguments: vec![]
         };
 
@@ -1591,7 +1525,7 @@ mod tests {
             arity: 0,
             name: "debug_test".to_owned(),
             block: block,
-            return_type: VmType::I32,
+            return_type: None,
             arguments: vec![]
         };
 
@@ -1722,7 +1656,7 @@ mod tests {
             arity: 0,
             name: "debug_test".to_owned(),
             block: block,
-            return_type: VmType::I32,
+            return_type: None,
             arguments: vec![]
         };
 
@@ -1865,7 +1799,7 @@ mod tests {
             arity: 0,
             name: "debug_test".to_owned(),
             block: block,
-            return_type: VmType::I32,
+            return_type: None,
             arguments: vec![]
         };
 
@@ -1999,13 +1933,113 @@ mod tests {
             arity: 0,
             name: "debug_test".to_owned(),
             block: block,
-            return_type: VmType::I32,
+            return_type: None,
             arguments: vec![]
         };
 
         let module = Module {
             module_hash: Hash::NULL_RLP,
             functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+
+        assert!(true);
+    }
+
+    #[test]
+    fn it_executes_correctly_with_calls_and_returns() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut bitmask: u8 = 0;
+        
+        bitmask.set(0, true);
+
+        let main_block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x01,
+            Instruction::Call.repr(),
+            0x00,                             // Fun idx (16 bits)
+            0x01,          
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,           
+            Instruction::PushOperand.repr(),
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,                             // Loop 4 times
+            0x00,
+            0x00,
+            0x04,
+            Instruction::BreakIf.repr(),
+            Instruction::Eq.repr(),
+            Instruction::End.repr(),
+            Instruction::End.repr()
+        ];
+
+        let increment_block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),  // Increment given arg by 1
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushLocal.repr(),
+            0x01,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::PopOperand.repr(),
+            Instruction::Return.repr(),
+            0x01,
+            Instruction::End.repr()
+        ];
+
+        let f1 = Function {
+            arity: 0,
+            name: "debug_test1".to_owned(),
+            block: main_block,
+            return_type: None,
+            arguments: vec![]
+        };
+
+        let f2 = Function {
+            arity: 1,
+            name: "debug_test2".to_owned(),
+            block: increment_block,
+            return_type: Some(VmType::I32),
+            arguments: vec![VmType::I32]
+        };
+
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![f1, f2],
             imports: vec![]
         };
 

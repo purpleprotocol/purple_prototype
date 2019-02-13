@@ -335,7 +335,7 @@ impl Code {
                 name: function_name,
                 arguments: arguments,
                 block: block,
-                return_type: return_type
+                return_type: Some(return_type)
             };
 
             functions.push(function);

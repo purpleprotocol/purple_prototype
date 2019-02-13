@@ -36,7 +36,7 @@ pub struct Function {
     pub arguments: Vec<VmType>,
 
     // The return type of the function.
-    pub return_type: VmType
+    pub return_type: Option<VmType>
 }
 
 impl Function {
@@ -315,7 +315,7 @@ mod tests {
             arity: 0,
             name: "debug_test".to_owned(),
             block: block,
-            return_type: VmType::I32,
+            return_type: Some(VmType::I32),
             arguments: vec![]
         }; 
         
@@ -436,7 +436,7 @@ mod tests {
             arity: 0,
             name: "debug_test".to_owned(),
             block: block,
-            return_type: VmType::I32,
+            return_type: Some(VmType::I32),
             arguments: vec![]
         }; 
 
@@ -557,7 +557,7 @@ mod tests {
             arity: 0,
             name: "debug_test".to_owned(),
             block: block,
-            return_type: VmType::I32,
+            return_type: Some(VmType::I32),
             arguments: vec![]
         }; 
 
