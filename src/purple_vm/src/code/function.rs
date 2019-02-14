@@ -103,6 +103,14 @@ impl Function {
                             offset += 2;
                             result_len += 2;
                         },
+                        Instruction::Call => {
+                            offset += 2;
+                            result_len += 2;
+                        },
+                        Instruction::Return => {
+                            offset += 1;
+                            result_len += 1;
+                        },
                         Instruction::PushLocal => {
                             let mut acc = 0;
 
@@ -562,5 +570,58 @@ mod tests {
         }; 
 
         assert_eq!(function.find_block_len(51), 48);
+    }
+
+    #[test]
+    fn find_block_len_with_call_and_return() {
+        let mut bitmask: u8 = 0;
+
+        bitmask.set(0, true);
+
+        let main_block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x01,
+            Instruction::Call.repr(),
+            0x00,                             // Fun idx (16 bits)
+            0x04,          
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,           
+            Instruction::PushOperand.repr(),
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,                             // Loop 4 times
+            0x00,
+            0x00,
+            0x04,
+            Instruction::BreakIf.repr(),
+            Instruction::Eq.repr(),
+            Instruction::End.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test1".to_owned(),
+            block: main_block,
+            return_type: None,
+            arguments: vec![]
+        };
+
+        assert_eq!(function.find_block_len(11), 21);
     }
 }
