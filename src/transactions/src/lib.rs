@@ -40,6 +40,7 @@ extern crate network;
 extern crate serde;
 extern crate byteorder;
 extern crate rand;
+extern crate purple_vm;
 
 #[macro_use]
 mod macros;

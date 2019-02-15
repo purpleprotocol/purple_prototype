@@ -1422,6 +1422,12 @@ dependencies = [
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.3.0 (git+https://github.com/paritytech/parity-common)",
  "persistence 0.1.0",
+ "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rust_decimal 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
  "test-helpers 0.1.0",
 ]
 
@@ -2187,6 +2193,7 @@ dependencies = [
  "network 0.1.0",
  "patricia-trie 0.3.0 (git+https://github.com/paritytech/parity-common)",
  "persistence 0.1.0",
+ "purple_vm 0.1.0",
  "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",

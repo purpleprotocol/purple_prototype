@@ -5,10 +5,16 @@ authors = ["Octavian Oncescu <octavonce@gmail.com>"]
 publish = false
 
 [dependencies]
+serde = "1.0.59"
+serde_derive = "1.0.59"
 lazy_static = "1.2.0"
+regex = "1"
 enum-repr = "0.2.2"
 byteorder = "1.2.7"
 bitvec = "0.9.0"
+rust_decimal = "0.9.0"
+rand = "0.6.0"
+quickcheck = "0.7.2"
 crypto = { path = "../crypto" }
 bin-tools = { path = "../util/bin-tools/" }
 persistence = { path = "../persistence" }

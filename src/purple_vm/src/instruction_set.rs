@@ -16,6 +16,8 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use gas::Gas;
+
 #[EnumRepr(type = "u8")]
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Instruction {
@@ -190,7 +192,8 @@ pub enum Instruction {
     f64Reinterpreti64     = 0xa0,
 
     // Vm interface
-    GcStart               = 0xf1,
+    GcStart               = 0xb1,
+    MemoryGrow            = 0xb2,
 
     // Blockchain api
     GetBalance            = 0xf2,
@@ -244,6 +247,10 @@ impl Instruction {
             },
             _ => unimplemented!()
         }
+    }
+
+    pub fn gas_price(&self) -> Gas {
+        unimplemented!();
     }
 }
 
@@ -440,6 +447,7 @@ pub const OPS_LIST: &'static [Instruction] = &[
 
     // Vm interface
     Instruction::GcStart               ,
+    Instruction::MemoryGrow            ,
 
     // Blockchain api
     Instruction::GetBalance            ,

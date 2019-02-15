@@ -21,6 +21,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, SecretKey as Sk, PublicKey as Pk};
 use std::io::Cursor;
 use std::str;
+use purple_vm::Gas;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Call {
@@ -30,7 +31,7 @@ pub struct Call {
     amount: Balance,
     fee: Balance,
     gas_price: Balance,
-    gas_limit: u64,
+    gas_limit: Gas,
     asset_hash: Hash,
     fee_hash: Hash,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -166,12 +167,12 @@ impl Call {
     ///
     /// Fields:
     /// 1) Transaction type(1)  - 8bits
-    /// 2) Gas price length     - 8bits
-    /// 3) Amount length        - 8bits
-    /// 4) Fee length           - 8bits
-    /// 5) Signature length     - 16bits
-    /// 6) Inputs length        - 16bits
-    /// 7) Gas limit            - 64bits
+    /// 2) Gas limit length     - 8bits
+    /// 3) Gas price length     - 8bits
+    /// 4) Amount length        - 8bits
+    /// 5) Fee length           - 8bits
+    /// 6) Signature length     - 16bits
+    /// 7) Inputs length        - 16bits
     /// 8) From                 - 33byte binary
     /// 9) To                   - 33byte binary
     /// 10) Currency hash       - 32byte binary
@@ -204,10 +205,11 @@ impl Call {
         let fee_hash = &&self.fee_hash.0;
         let amount = &self.amount.to_bytes();
         let gas_price = &self.gas_price.to_bytes();
-        let gas_limit = &self.gas_limit;
+        let gas_limit = &self.gas_limit.to_bytes();
         let fee = &self.fee.to_bytes();
         let inputs = &self.inputs.as_bytes();
 
+        let gas_limit_len = gas_limit.len();
         let gas_price_len = gas_price.len();
         let amount_len = amount.len();
         let fee_len = fee.len();
@@ -215,12 +217,12 @@ impl Call {
         let inputs_len = inputs.len();
 
         buffer.write_u8(tx_type).unwrap();
+        buffer.write_u8(gas_limit_len as u8).unwrap();
         buffer.write_u8(gas_price_len as u8).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
         buffer.write_u16::<BigEndian>(inputs_len as u16).unwrap();
-        buffer.write_u64::<BigEndian>(*gas_limit).unwrap();
 
         buffer.append(&mut from.to_vec());
         buffer.append(&mut to.to_vec());
@@ -228,6 +230,7 @@ impl Call {
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature);
+        buffer.append(&mut gas_limit.to_vec());
         buffer.append(&mut gas_price.to_vec());
         buffer.append(&mut amount.to_vec());
         buffer.append(&mut fee.to_vec());
@@ -250,13 +253,21 @@ impl Call {
 
         rdr.set_position(1);
 
+        let gas_limit_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad gas limit len");
+        };
+
+        rdr.set_position(2);
+
         let gas_price_len = if let Ok(result) = rdr.read_u8() {
             result
         } else {
             return Err("Bad gas price len");
         };
 
-        rdr.set_position(2);
+        rdr.set_position(3);
 
         let amount_len = if let Ok(result) = rdr.read_u8() {
             result
@@ -264,7 +275,7 @@ impl Call {
             return Err("Bad amount len");
         };
 
-        rdr.set_position(3);
+        rdr.set_position(4);
 
         let fee_len = if let Ok(result) = rdr.read_u8() {
             result
@@ -272,7 +283,7 @@ impl Call {
             return Err("Bad fee len");
         };
 
-        rdr.set_position(4);
+        rdr.set_position(5);
 
         let signature_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
@@ -280,7 +291,7 @@ impl Call {
             return Err("Bad signature len");
         };
 
-        rdr.set_position(6);
+        rdr.set_position(7);
 
         let inputs_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
@@ -288,17 +299,9 @@ impl Call {
             return Err("Bad inputs len");
         };
 
-        rdr.set_position(8);
-
-        let gas_limit = if let Ok(result) = rdr.read_u64::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad gas limit");
-        };
-
         // Consume cursor
         let mut buf = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..16).collect();
+        let _: Vec<u8> = buf.drain(..9).collect();
 
         let from = if buf.len() > 33 as usize {
             let from_vec: Vec<u8> = buf.drain(..33).collect();
@@ -364,6 +367,17 @@ impl Call {
             }
         } else {
             return Err("Incorrect packet structure");
+        };
+
+        let gas_limit = if buf.len() > gas_limit_len as usize {
+            let gas_limit_vec: Vec<u8> = buf.drain(..gas_limit_len as usize).collect();
+            
+            match Gas::from_bytes(&gas_limit_vec) {
+                Ok(result) => result,
+                Err(_)     => return Err("Bad gas limit")
+            }
+        } else {
+            return Err("Incorrect packet structure")
         };
 
         let gas_price = if buf.len() > gas_price_len as usize {
@@ -441,13 +455,11 @@ fn assemble_hash_message(obj: &Call) -> Vec<u8> {
     let mut to = obj.to.to_bytes();
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
+    let mut gas_limit = obj.gas_limit.to_bytes();
     let mut gas_price = obj.gas_price.to_bytes();
     let inputs = obj.inputs.as_bytes();
-    let gas_limit = obj.gas_limit;
     let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
-
-    buf.write_u64::<BigEndian>(gas_limit).unwrap();
 
     // Compose data to hash
     buf.append(&mut from);
@@ -456,6 +468,7 @@ fn assemble_hash_message(obj: &Call) -> Vec<u8> {
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
     buf.append(&mut fee);
+    buf.append(&mut gas_limit);
     buf.append(&mut gas_price);
     buf.append(&mut inputs.to_vec());
     buf.append(&mut signature);
@@ -469,13 +482,11 @@ fn assemble_sign_message(obj: &Call) -> Vec<u8> {
     let mut to = obj.to.to_bytes();
     let mut amount = obj.amount.to_bytes();
     let mut fee = obj.fee.to_bytes();
+    let mut gas_limit = obj.gas_limit.to_bytes();
     let mut gas_price = obj.gas_price.to_bytes();
     let inputs = obj.inputs.as_bytes();
-    let gas_limit = obj.gas_limit;
     let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
-
-    buf.write_u64::<BigEndian>(gas_limit).unwrap();
 
     // Compose data to sign
     buf.append(&mut from);
@@ -484,6 +495,7 @@ fn assemble_sign_message(obj: &Call) -> Vec<u8> {
     buf.append(&mut fee_hash.to_vec());
     buf.append(&mut amount);
     buf.append(&mut fee);
+    buf.append(&mut gas_limit);
     buf.append(&mut gas_price);
     buf.append(&mut inputs.to_vec());
 
@@ -537,7 +549,7 @@ mod tests {
             fee: Balance, 
             inputs: String,
             gas_price: Balance,
-            gas_limit: u64,
+            gas_limit: Gas,
             asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {
@@ -567,7 +579,7 @@ mod tests {
             fee: Balance, 
             inputs: String,
             gas_price: Balance,
-            gas_limit: u64,
+            gas_limit: Gas,
             asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {
@@ -610,7 +622,7 @@ mod tests {
             fee: Balance, 
             inputs: String,
             gas_price: Balance,
-            gas_limit: u64,
+            gas_limit: Gas,
             asset_hash: Hash, 
             fee_hash: Hash
         ) -> bool {

@@ -21,21 +21,28 @@
 #[cfg(test)]
 extern crate test_helpers;
 
+#[macro_use] extern crate quickcheck;
 #[macro_use] extern crate enum_repr;
 #[macro_use] extern crate bin_tools;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate lazy_static;
 
+extern crate regex;
+extern crate rust_decimal;
 extern crate bitvec;
-extern crate lazy_static;
 extern crate byteorder;
 extern crate hashbrown;
 extern crate crypto;
 extern crate persistence;
 extern crate patricia_trie;
+extern crate rand;
 
+pub use gas::*;
 pub use virtual_machine::*;
 pub use code::*;
 pub use error::*;
 
+mod gas;
 mod primitives;
 mod address;
 mod error;

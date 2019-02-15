@@ -31,6 +31,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use error::VmError;
 use std::io::Cursor;
 use bitvec::Bits;
+use gas::Gas;
 
 const MAX_OP_ARITY: u8 = 8;
 
@@ -81,8 +82,8 @@ impl Vm {
         module_idx: usize, 
         fun_idx: usize,
         argv: &[VmValue], 
-        gas: u64
-    ) -> Result<u64, VmError> {
+        gas: Gas
+    ) -> Result<Gas, VmError> {
         // Check module definition
         if module_idx >= self.modules.len() {
             return Err(VmError::NotLoaded);
@@ -440,7 +441,8 @@ impl Vm {
         self.ip = None;
         self.call_stack = Stack::<Frame<VmValue>>::new();
         self.operand_stack = Stack::<VmValue>::new();
-        Ok(0)
+        
+        Ok(Gas::from_bytes(b"0.0").unwrap())
     }
 }
 
@@ -1373,12 +1375,19 @@ fn fetch_argv(
 }
 
 fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> bool {
-    if operands.len() < 2 {
-        panic!(format!("Cannot perform comparison on less than 2 operands! Got: {}", operands.len()));
-    }
-
     match op {
+        Instruction::Eqz => {
+            if operands.len() != 1 {
+                panic!(format!("Can only perform equality on 1 operand! Got: {}", operands.len()));
+            }
+
+            unimplemented!();
+        },
         Instruction::Eq => {
+            if operands.len() < 2 {
+                panic!(format!("Cannot perform equality on less than 2 operands! Got: {}", operands.len()));
+            }
+
             let (result, _) = operands
                 .iter()
                 .fold((true, None), |(result, last), op| {
@@ -1473,7 +1482,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
     }
 
     #[test]
@@ -1506,7 +1515,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
     }
 
     #[test]
@@ -1599,7 +1608,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
 
         assert!(true);
     }
@@ -1730,7 +1739,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
 
         assert!(true);
     }
@@ -1873,7 +1882,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
 
         assert!(true);
     }
@@ -2011,7 +2020,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
 
         assert!(true);
     }
@@ -2145,7 +2154,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
 
         assert!(true);
     }
@@ -2245,7 +2254,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
 
         assert!(true);
     }
@@ -2348,7 +2357,7 @@ mod tests {
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], 0).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
 
         assert!(true);
     }
