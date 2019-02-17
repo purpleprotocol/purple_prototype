@@ -18,6 +18,7 @@
 
 pub mod function;
 pub mod import;
+pub mod transition;
 mod validator;
 
 use std::str;
@@ -373,16 +374,11 @@ fn validate_block(block: &[u8], return_type: VmType, argv: &[VmType]) -> bool {
     let mut validator = Validator::new();
     
     for byte in block {
-        match Instruction::from_repr(*byte) {
-            Some(op) => {
-                validator.push_op(op);
+        validator.push_op(*byte);
 
-                // The validator cannot continue i.e. the input is invalid
-                if validator.done() {
-                    return false;
-                }
-            },
-            None => return false
+        // The validator cannot continue i.e. the input is invalid
+        if validator.done() {
+            return false;
         }
     }
 

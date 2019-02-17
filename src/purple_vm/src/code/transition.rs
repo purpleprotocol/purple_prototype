@@ -16,10 +16,24 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum CfOperator {
-    Begin,
-    Loop,
-    If, 
-    Else
+use instruction_set::Instruction;
+
+#[derive(Debug)]
+pub enum Transition {
+    Op(Instruction),
+    Byte(u8),
+    AnyByte
+}
+
+impl Transition {
+    pub fn accepts_byte(&self, byte: u8) -> bool {
+        match *self {
+            Transition::Op(op) => match Instruction::from_repr(byte) {
+                Some(o) => o == op,
+                None    => false
+            },
+            Transition::Byte(b) => b == byte,
+            Transition::AnyByte => true
+        }
+    }
 }

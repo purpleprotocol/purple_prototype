@@ -17,6 +17,7 @@
 */
 
 use gas::Gas;
+use code::transition::Transition;
 
 #[EnumRepr(type = "u8")]
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -213,37 +214,37 @@ pub enum Instruction {
 }
 
 impl Instruction {
-    pub fn transitions(&self) -> Vec<Instruction> {
+    pub fn transitions(&self) -> Vec<Transition> {
         match *self {
             // TODO: Add transitions for all ops
             Instruction::Halt => {
                 // Nothing comes really, after halt
-                vec![Instruction::End]
+                vec![Transition::Op(Instruction::End)]
             },
-            Instruction::Begin => {
-                OPS_LIST.to_vec()
-            },
-            Instruction::Nop => {
-                OPS_LIST.to_vec()
-            },
-            Instruction::If => {
-                COMP_OPS.to_vec()
-            },
-            Instruction::BreakIf => {
-                COMP_OPS.to_vec()
-            },
-            Instruction::Else => {
-                OPS_LIST.to_vec()
-            },  
-            Instruction::Loop => {
-                OPS_LIST.to_vec()
-            },
-            Instruction::End => {
-                OPS_LIST.to_vec()
-            },
+            // Instruction::Begin => {
+            //     OPS_LIST.to_vec()
+            // },
+            // Instruction::Nop => {
+            //     OPS_LIST.to_vec()
+            // },
+            // Instruction::If => {
+            //     COMP_OPS.to_vec()
+            // },
+            // Instruction::BreakIf => {
+            //     COMP_OPS.to_vec()
+            // },
+            // Instruction::Else => {
+            //     OPS_LIST.to_vec()
+            // },  
+            // Instruction::Loop => {
+            //     OPS_LIST.to_vec()
+            // },
+            // Instruction::End => {
+            //     OPS_LIST.to_vec()
+            // },
             Instruction::Suicide => {
                 // Not after suicide either, stay safe kids
-                vec![Instruction::End]
+                vec![Transition::Op(Instruction::End)]
             },
             _ => unimplemented!()
         }
