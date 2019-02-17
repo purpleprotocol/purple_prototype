@@ -18,7 +18,7 @@
 
 use instruction_set::Instruction;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Transition {
     Op(Instruction),
     Byte(u8),

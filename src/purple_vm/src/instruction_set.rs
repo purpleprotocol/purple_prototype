@@ -221,38 +221,165 @@ impl Instruction {
                 // Nothing comes really, after halt
                 vec![Transition::Op(Instruction::End)]
             },
-            // Instruction::Begin => {
-            //     OPS_LIST.to_vec()
-            // },
-            // Instruction::Nop => {
-            //     OPS_LIST.to_vec()
-            // },
-            // Instruction::If => {
-            //     COMP_OPS.to_vec()
-            // },
-            // Instruction::BreakIf => {
-            //     COMP_OPS.to_vec()
-            // },
-            // Instruction::Else => {
-            //     OPS_LIST.to_vec()
-            // },  
-            // Instruction::Loop => {
-            //     OPS_LIST.to_vec()
-            // },
-            // Instruction::End => {
-            //     OPS_LIST.to_vec()
-            // },
+            Instruction::Return => {
+                vec![Transition::Op(Instruction::End)]
+            },
+            Instruction::Begin                  => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Nop                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::If                     => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::BreakIf                => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Else                   => DEFAULT_TRANSITIONS.to_vec(),  
+            Instruction::Loop                   => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::End                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::PushOperand            => DEFAULT_TRANSITIONS.to_vec(),  
+            Instruction::PopOperand             => DEFAULT_TRANSITIONS.to_vec(),  
+            Instruction::PushLocal              => DEFAULT_TRANSITIONS.to_vec(),  
+            Instruction::PopLocal               => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::PickLocal              => DEFAULT_TRANSITIONS.to_vec(),  
+            Instruction::Call                   => DEFAULT_TRANSITIONS.to_vec(), 
+
+            // State
+            Instruction::GetState               => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::SetState               => DEFAULT_TRANSITIONS.to_vec(),
+
+            // Memory load
+            Instruction::i32Load                => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Load                => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f32Load                => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f64Load                => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32Load8Signed         => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32Load8Unsigned       => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32Load16Signed        => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32Load16Unsigned      => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Load8Signed         => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Load8Unsigned       => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Load16Signed        => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Load16Unsigned      => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Load32Signed        => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Load32Unsigned      => DEFAULT_TRANSITIONS.to_vec(),
+
+            // Memory store 
+            Instruction::i32Store               => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Store               => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f32Store               => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f64Store               => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32Store8              => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32Store16             => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Store8              => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Store16             => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Store32             => DEFAULT_TRANSITIONS.to_vec(),
+
+            // Array operations
+            Instruction::Fetch                  => DEFAULT_TRANSITIONS.to_vec(),
+
+            // Common operations
+            Instruction::Add                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Sub                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Mul                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::DivSigned              => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::DivUnsigned            => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::RemSigned              => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::RemUnsigned            => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Min                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Max                    => DEFAULT_TRANSITIONS.to_vec(),
+
+            // Integer only common operations
+            Instruction::And                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Or                     => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Xor                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Shl                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::ShrSigned              => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::ShrUnsigned            => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Rotl                   => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Rotr                   => DEFAULT_TRANSITIONS.to_vec(),
+
+            // Float only common operations
+            Instruction::Abs                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Neg                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Div                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Ceil                   => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Floor                  => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Trunc                  => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Nearest                => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::CopySign               => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Sqrt                   => DEFAULT_TRANSITIONS.to_vec(),
+
+            // Comparison operators
+            Instruction::Eqz                    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Eq                     => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Ne                     => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::LtSigned               => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::LtUnsigned             => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::GtSigned               => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::GtUnsigned             => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::LeSigned               => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::LeUnsigned             => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::GeSigned               => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::GeUnsigned             => DEFAULT_TRANSITIONS.to_vec(),
+
+            // Datatype conversions
+            Instruction::i32Wrapi64             => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32TruncSignedf32      => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32TrunsUnsignedf32    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32TruncSignedf64      => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32TruncUnsignedf64    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64ExtendSignedi32     => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64ExtendUnsignedi32   => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64TruncSignedf32      => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64TruncUnsignedf32    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64TruncSignedf64      => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64TruncUnsignedf64    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f32ConvertSignedi32    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f32ConvertUnsignedi32  => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f32ConvertSignedi64    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f32ConvertUnsignedi64  => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f32Demotef64           => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f64ConvertSignedi32    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f64ConvertUnsignedi32  => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f64ConvertSignedi64    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f64ConvertUnsignedi64  => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f64Promotef32          => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32Reinterpretf32      => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i64Reinterpretf64      => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f32Reinterpreti32      => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::f64Reinterpreti64      => DEFAULT_TRANSITIONS.to_vec(),
+
+            // Vm interface
+            Instruction::GcStart                => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::MemoryGrow             => DEFAULT_TRANSITIONS.to_vec(),
+
+            // Blockchain api
+            Instruction::GetBalance             => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::SendCurrency           => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Mint                   => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::Burn                   => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::CreateContract         => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::CreateCurrency         => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::CreateMintable         => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::CallerAddress          => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::CallCurrency           => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::RandomNumber           => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::CurrentTime            => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::CurrentPrice           => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::PriceAt                => DEFAULT_TRANSITIONS.to_vec(),   
             Instruction::Suicide => {
                 // Not after suicide either, stay safe kids
                 vec![Transition::Op(Instruction::End)]
             },
-            _ => unimplemented!()
+            op => panic!(format!("Op {:?} has no transitions!", op))
         }
     }
 
     pub fn gas_price(&self) -> Gas {
         unimplemented!();
     }
+}
+
+lazy_static! {
+    static ref DEFAULT_TRANSITIONS: Vec<Transition> = OPS_LIST
+        .iter()
+        .map(|op| Transition::Op(*op))
+        .collect();
 }
 
 /// List containing opcodes which handle control flow or begin blocks.
@@ -295,12 +422,10 @@ pub const OPS_LIST: &'static [Instruction] = &[
     Instruction::PushLocal             ,
     Instruction::PopLocal              ,
     Instruction::PickLocal             ,
-    Instruction::PeekLocal             ,
 
     // Operand stack 
     Instruction::PushOperand           ,
     Instruction::PopOperand            ,
-    Instruction::PeekOperand           ,
 
     // State
     Instruction::GetState              ,
@@ -380,44 +505,6 @@ pub const OPS_LIST: &'static [Instruction] = &[
     Instruction::LeUnsigned            ,
     Instruction::GeSigned              ,
     Instruction::GeUnsigned            ,
-
-    // Constants
-    Instruction::i32Const              ,
-    Instruction::i64Const              ,
-    Instruction::f32Const              ,
-    Instruction::f64Const              ,
-    Instruction::i32Array2             ,
-    Instruction::i32Array4             ,
-    Instruction::i32Array8             ,
-    Instruction::i32Array16            ,
-    Instruction::i32Array32            ,
-    Instruction::i32Array64            ,
-    Instruction::i32Array128           ,
-    Instruction::i32Array256           ,
-    Instruction::i64Array2             ,
-    Instruction::i64Array4             ,
-    Instruction::i64Array8             ,
-    Instruction::i64Array16            ,
-    Instruction::i64Array32            ,
-    Instruction::i64Array64            ,
-    Instruction::i64Array128           ,
-    Instruction::i64Array256           ,
-    Instruction::f32Array2             ,
-    Instruction::f32Array4             ,
-    Instruction::f32Array8             ,
-    Instruction::f32Array16            ,
-    Instruction::f32Array32            ,
-    Instruction::f32Array64            ,
-    Instruction::f32Array128           ,
-    Instruction::f32Array256           ,
-    Instruction::f64Array2             ,
-    Instruction::f64Array4             ,
-    Instruction::f64Array8             ,
-    Instruction::f64Array16            ,
-    Instruction::f64Array32            ,
-    Instruction::f64Array64            ,
-    Instruction::f64Array128           ,
-    Instruction::f64Array256           ,
 
     // Datatype conversions
     Instruction::i32Wrapi64            ,

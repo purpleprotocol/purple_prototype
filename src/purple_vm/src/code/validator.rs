@@ -30,10 +30,17 @@ enum Validity {
 
 #[derive(Debug)]
 pub struct Validator {
+    /// The state of the validator
     state: Validity,
+
+    /// Valid transitions 
     transitions: Vec<Transition>,
-    cf_stack: Stack<CfOperator>,
-    valid_return: bool
+
+    /// Stack used for validating operand arguments
+    validation_stack: Stack<u8>,
+
+    /// Stack that holds the control flow structure
+    cf_stack: Stack<CfOperator>
 }
 
 impl Validator {
@@ -41,8 +48,8 @@ impl Validator {
         Validator {
             state: Validity::Invalid,
             transitions: Vec::new(),
-            valid_return: false,
-            cf_stack: Stack::new()
+            cf_stack: Stack::new(),
+            validation_stack: Stack::new()
         }
     }
 
@@ -56,10 +63,15 @@ impl Validator {
         if self.cf_stack.len() == 0 {
             match Instruction::from_repr(op) {
                 Some(Instruction::Begin) => {
+                    // Push `Begin` operator to control flow stack.
                     self.cf_stack.push(CfOperator::Begin);
+
+                    // The first element in the validation stack 
+                    // is the operand that is being validated.
+                    self.validation_stack.push(Instruction::Begin.repr());
                     
                     // The next byte after the first begin instruction
-                    // is always 0x00, representing a block with 0 arity.
+                    // is always 0x00, representing 0 arity.
                     self.transitions = vec![Transition::Byte(0x00)];
                 },
                 _ => {
@@ -82,7 +94,7 @@ impl Validator {
                             .iter()
                             .find(|o| *o == op);
 
-                        // If op is a control flow op, push it to the stack.
+                        // If op is a control flow op, push it to the cf stack.
                         match is_ct_flow_op {
                             Some(Instruction::Begin) => self.cf_stack.push(CfOperator::Begin),
                             Some(Instruction::Loop)  => self.cf_stack.push(CfOperator::Loop),
@@ -106,29 +118,124 @@ impl Validator {
                         if self.cf_stack.len() == 0 {
                             self.state = Validity::Valid;
                         } else {
-                            let mut next_transitions = op.transitions();
-                            let has_loop = self.cf_stack.as_slice()
+                            let mut next = match op {
+                                // TODO: Return transitions for all ops with non-default transitions
+                                Instruction::PushLocal => {
+                                    // Mark op for argument validation
+                                    self.validation_stack.push(Instruction::PushLocal.repr());
+                                    
+                                    ARITY_TRANSITIONS.to_vec()
+                                },
+                                Instruction::PushOperand => {
+                                    // Mark op for argument validation
+                                    self.validation_stack.push(Instruction::PushOperand.repr());
+                                    
+                                    ARITY_TRANSITIONS.to_vec()
+                                },
+                                _ => op.transitions()
+                            };
+
+                            let has_loop = self.cf_stack
+                                .as_slice()
                                 .iter()
                                 .any(|o| *o == CfOperator::Loop);
 
                             // If there is any loop operator in the stack,
                             // allow `Break` and `BreakIf` instructions.
                             if has_loop {
-                                next_transitions.push(Transition::Op(Instruction::Break));
-                                next_transitions.push(Transition::Op(Instruction::BreakIf));
+                                next.push(Transition::Op(Instruction::Break));
+                                next.push(Transition::Op(Instruction::BreakIf));
                             }
 
                             // Allow `Else` op in case the topmost item
                             // in the stack is an `If` instruction.
                             if let &CfOperator::Else = self.cf_stack.peek() {
-                                next_transitions.push(Transition::Op(Instruction::Else));
+                                next.push(Transition::Op(Instruction::Else));
                             }
 
                             self.state = Validity::Invalid;
-                            next_transitions = Some(next_transitions);
+                            next_transitions = Some(next);
                         }
                     },
                     Some(Transition::Byte(byte)) => {
+                        let operand = self.validation_stack.as_slice()[0];
+
+                        match Instruction::from_repr(operand) {
+                            Some(Instruction::Begin) => {
+                                if self.validation_stack.len() != 1 {
+                                    panic!(format!("The validation stack can only have 1 element at this point! Got: {}", self.validation_stack.len()));
+                                }
+
+                                self.validation_stack.pop();
+
+                                // Only allow 0 arity for first begin block
+                                if self.cf_stack.len() == 1 && *byte == 0x00 {
+                                    self.state = Validity::Invalid;
+                                    next_transitions = Some(Instruction::Begin.transitions());
+                                } else if self.cf_stack.len() == 1 {
+                                    // The arity is not 0 so anything further 
+                                    // is invalid as well.
+                                    self.state = Validity::IrrefutablyInvalid;
+                                } else {
+                                    let valid = ARITY_TRANSITIONS
+                                        .iter()
+                                        .any(|t| t.accepts_byte(op));
+
+                                    if valid {
+                                        self.state = Validity::Invalid;
+                                        next_transitions = Some(Instruction::Begin.transitions());
+                                    } else {
+                                        self.state = Validity::IrrefutablyInvalid;
+                                    }
+                                }
+                            },
+                            Some(Instruction::PushOperand) => {
+                                // Based on the length of the validation stack,
+                                // we perform different validations.
+                                match self.validation_stack.len() {
+                                    // Validate arity
+                                    1 => { 
+                                        let valid = ARITY_TRANSITIONS
+                                            .iter()
+                                            .any(|t| t.accepts_byte(op));
+
+                                        if valid {
+                                            self.state = Validity::Invalid;
+
+                                            // Next byte will be the bitmask so we allow any
+                                            next_transitions = Some(vec![Transition::AnyByte]);
+                                        } else {
+                                            self.state = Validity::IrrefutablyInvalid;
+                                        }
+                                    },
+
+                                    // Validate bitmask
+                                    2 => {
+                                        self.state = Validity::Invalid;
+
+                                        // Next byte will be the bitmask so we allow any
+                                        next_transitions = Some(ARG_DELCARATIONS.to_vec());
+                                    },
+
+                                    // Validate argument types
+                                    3 => {
+                                        unimplemented!();
+                                    },
+                                    
+                                    // Validate arguments
+                                    4...8 => {
+                                        unimplemented!();
+                                    },
+
+                                    n => panic!(format!("The validation stack cannot have {} operands!", n))
+                                }
+                            },
+                            Some(Instruction::PushLocal) => {
+                                unimplemented!();
+                            }
+                            _ => unimplemented!()
+                        }
+
                         self.state = Validity::Invalid;
                     },
                     Some(Transition::AnyByte) => {
@@ -156,10 +263,24 @@ impl Validator {
     
     pub fn valid(&self) -> bool {
         match self.state {
-            Validity::Valid   => self.valid_return,
+            Validity::Valid   => true,
             _                 => false
         }
     }
+}
+
+lazy_static! {
+    static ref ARITY_TRANSITIONS: Vec<Transition> = (0..9)
+        .into_iter()
+        .map(|x| Transition::Byte(x))
+        .collect();
+
+    static ref ARG_DELCARATIONS: Vec<Transition> = vec![
+        Transition::Op(Instruction::i32Const),
+        Transition::Op(Instruction::i64Const),
+        Transition::Op(Instruction::f32Const),
+        Transition::Op(Instruction::f64Const)
+    ];
 }
 
 #[cfg(test)]
@@ -178,12 +299,48 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected("done state machine")) ]
+    #[should_panic(expected("done state machine"))]
     fn it_panics_on_pushing_ops_after_irrefutably_invalid() {
         let mut validator = Validator::new();
     
         validator.push_op(Instruction::Nop.repr());
         validator.push_op(Instruction::Begin.repr());
+    }
+
+    #[test]
+    #[should_panic(expected("done state machine"))]
+    fn it_fails_with_invalid_first_begin_arity() {
+        let mut validator = Validator::new();
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x01,                             
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        for byte in block {
+            validator.push_op(byte);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected("done state machine"))]
+    fn it_fails_with_invalid_nested_begin_arity() {
+        let mut validator = Validator::new();
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             
+            Instruction::Nop.repr(),
+            Instruction::Begin.repr(),
+            0x09,
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+            Instruction::End.repr()
+        ];
+
+        for byte in block {
+            validator.push_op(byte);
+        }
     }
 
     #[test]
@@ -298,6 +455,7 @@ mod tests {
         ];
 
         for byte in block {
+            println!("DEBUG {:x?}", byte);
             validator.push_op(byte);
         }
 
