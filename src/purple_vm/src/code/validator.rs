@@ -19,7 +19,9 @@
 use stack::Stack;
 use instruction_set::{Instruction, CT_FLOW_OPS};
 use primitives::control_flow::CfOperator;
+use primitives::r#type::VmType;
 use code::transition::Transition;
+use bitvec::Bits;
 
 #[derive(Debug)]
 enum Validity {
@@ -82,168 +84,140 @@ impl Validator {
             }
         } else {
             let mut next_transitions = None;
+            let mut t = None;
             
             {
                 let transition = self.transitions
                     .iter()
                     .find(|t| t.accepts_byte(op));
 
-                match transition {
-                    Some(Transition::Op(op)) => {
-                        let is_ct_flow_op = CT_FLOW_OPS
-                            .iter()
-                            .find(|o| *o == op);
+                if let Some(transition) = transition {
+                    t = Some(transition.clone());
+                } 
+            }
 
-                        // If op is a control flow op, push it to the cf stack.
-                        match is_ct_flow_op {
-                            Some(Instruction::Begin) => self.cf_stack.push(CfOperator::Begin),
-                            Some(Instruction::Loop)  => self.cf_stack.push(CfOperator::Loop),
-                            Some(Instruction::If)    => self.cf_stack.push(CfOperator::If),
-                            Some(Instruction::Else)  => self.cf_stack.push(CfOperator::Else),
-                            _                        => { } // Do nothing 
-                        }
+            let transition = t;
 
-                        // If op is `End`, pop item from stack.
-                        if let Instruction::End = op {
-                            // The stack is popped twice in the case 
-                            // of terminating an `Else` block.
-                            if let &CfOperator::Else = self.cf_stack.peek() {
-                                self.cf_stack.pop();
-                            }
+            match transition {
+                Some(Transition::Op(op)) => {
+                    let is_ct_flow_op = CT_FLOW_OPS
+                        .iter()
+                        .find(|o| *o == &op);
 
+                    // If op is a control flow op, push it to the cf stack.
+                    match is_ct_flow_op {
+                        Some(Instruction::Begin) => self.cf_stack.push(CfOperator::Begin),
+                        Some(Instruction::Loop)  => self.cf_stack.push(CfOperator::Loop),
+                        Some(Instruction::If)    => self.cf_stack.push(CfOperator::If),
+                        Some(Instruction::Else)  => self.cf_stack.push(CfOperator::Else),
+                        _                        => { } // Do nothing 
+                    }
+
+                    // If op is `End`, pop item from stack.
+                    if let Instruction::End = op {
+                        // The stack is popped twice in the case 
+                        // of terminating an `Else` block.
+                        if let &CfOperator::Else = self.cf_stack.peek() {
                             self.cf_stack.pop();
                         }
-                        
-                        // Changes state to `Valid` if the stack is empty.
-                        if self.cf_stack.len() == 0 {
-                            self.state = Validity::Valid;
-                        } else {
-                            let mut next = match op {
-                                // TODO: Return transitions for all ops with non-default transitions
-                                Instruction::PushLocal => {
-                                    // Mark op for argument validation
-                                    self.validation_stack.push(Instruction::PushLocal.repr());
-                                    
-                                    ARITY_TRANSITIONS.to_vec()
-                                },
-                                Instruction::PushOperand => {
-                                    // Mark op for argument validation
-                                    self.validation_stack.push(Instruction::PushOperand.repr());
-                                    
-                                    ARITY_TRANSITIONS.to_vec()
-                                },
-                                _ => op.transitions()
+
+                        self.cf_stack.pop();
+                    }
+                    
+                    // Changes state to `Valid` if the stack is empty.
+                    if self.cf_stack.len() == 0 {
+                        self.state = Validity::Valid;
+                    } else {
+                        let mut next = match op {
+                            // TODO: Return transitions for all ops with non-default transitions
+                            Instruction::PushLocal => {
+                                // Mark op for argument validation
+                                self.validation_stack.push(Instruction::PushLocal.repr());
+                                
+                                ARITY_TRANSITIONS.to_vec()
+                            },
+                            Instruction::PushOperand => {
+                                // Mark op for argument validation
+                                self.validation_stack.push(Instruction::PushOperand.repr());
+                                
+                                ARITY_TRANSITIONS.to_vec()
+                            },
+                            _ => op.transitions()
+                        };
+
+                        let has_loop = self.cf_stack
+                            .as_slice()
+                            .iter()
+                            .any(|o| *o == CfOperator::Loop);
+
+                        // If there is any loop operator in the stack,
+                        // allow `Break` and `BreakIf` instructions.
+                        if has_loop {
+                            next.push(Transition::Op(Instruction::Break));
+                            next.push(Transition::Op(Instruction::BreakIf));
+                        }
+
+                        // Allow `Else` op in case the topmost item
+                        // in the stack is an `If` instruction.
+                        if let &CfOperator::Else = self.cf_stack.peek() {
+                            next.push(Transition::Op(Instruction::Else));
+                        }
+
+                        self.state = Validity::Invalid;
+                        next_transitions = Some(next);
+                    }
+                },
+                Some(Transition::Byte(_)) | Some(Transition::AnyByte) => {
+                    let operand = self.validation_stack.as_slice()[0];
+
+                    match Instruction::from_repr(operand) {
+                        Some(Instruction::Begin) => {
+                            if self.validation_stack.len() != 1 {
+                                panic!(format!("The validation stack can only have 1 element at this point! Got: {}", self.validation_stack.len()));
+                            }
+
+                            let byte = if let Some(Transition::Byte(byte)) = transition {
+                                byte
+                            } else {
+                                panic!("Invalid transition! Expected a byte transition!");
                             };
 
-                            let has_loop = self.cf_stack
-                                .as_slice()
-                                .iter()
-                                .any(|o| *o == CfOperator::Loop);
+                            self.validation_stack.pop();
 
-                            // If there is any loop operator in the stack,
-                            // allow `Break` and `BreakIf` instructions.
-                            if has_loop {
-                                next.push(Transition::Op(Instruction::Break));
-                                next.push(Transition::Op(Instruction::BreakIf));
-                            }
+                            // Only allow 0 arity for first begin block
+                            if self.cf_stack.len() == 1 && byte == 0x00 {
+                                self.state = Validity::Invalid;
+                                next_transitions = Some(Instruction::Begin.transitions());
+                            } else if self.cf_stack.len() == 1 {
+                                // The arity is not 0 so anything further 
+                                // is invalid as well.
+                                self.state = Validity::IrrefutablyInvalid;
+                            } else {
+                                let valid = ARITY_TRANSITIONS
+                                    .iter()
+                                    .any(|t| t.accepts_byte(op));
 
-                            // Allow `Else` op in case the topmost item
-                            // in the stack is an `If` instruction.
-                            if let &CfOperator::Else = self.cf_stack.peek() {
-                                next.push(Transition::Op(Instruction::Else));
-                            }
-
-                            self.state = Validity::Invalid;
-                            next_transitions = Some(next);
-                        }
-                    },
-                    Some(Transition::Byte(byte)) => {
-                        let operand = self.validation_stack.as_slice()[0];
-
-                        match Instruction::from_repr(operand) {
-                            Some(Instruction::Begin) => {
-                                if self.validation_stack.len() != 1 {
-                                    panic!(format!("The validation stack can only have 1 element at this point! Got: {}", self.validation_stack.len()));
-                                }
-
-                                self.validation_stack.pop();
-
-                                // Only allow 0 arity for first begin block
-                                if self.cf_stack.len() == 1 && *byte == 0x00 {
+                                if valid {
                                     self.state = Validity::Invalid;
                                     next_transitions = Some(Instruction::Begin.transitions());
-                                } else if self.cf_stack.len() == 1 {
-                                    // The arity is not 0 so anything further 
-                                    // is invalid as well.
-                                    self.state = Validity::IrrefutablyInvalid;
                                 } else {
-                                    let valid = ARITY_TRANSITIONS
-                                        .iter()
-                                        .any(|t| t.accepts_byte(op));
-
-                                    if valid {
-                                        self.state = Validity::Invalid;
-                                        next_transitions = Some(Instruction::Begin.transitions());
-                                    } else {
-                                        self.state = Validity::IrrefutablyInvalid;
-                                    }
+                                    self.state = Validity::IrrefutablyInvalid;
                                 }
-                            },
-                            Some(Instruction::PushOperand) => {
-                                // Based on the length of the validation stack,
-                                // we perform different validations.
-                                match self.validation_stack.len() {
-                                    // Validate arity
-                                    1 => { 
-                                        let valid = ARITY_TRANSITIONS
-                                            .iter()
-                                            .any(|t| t.accepts_byte(op));
-
-                                        if valid {
-                                            self.state = Validity::Invalid;
-
-                                            // Next byte will be the bitmask so we allow any
-                                            next_transitions = Some(vec![Transition::AnyByte]);
-                                        } else {
-                                            self.state = Validity::IrrefutablyInvalid;
-                                        }
-                                    },
-
-                                    // Validate bitmask
-                                    2 => {
-                                        self.state = Validity::Invalid;
-
-                                        // Next byte will be the bitmask so we allow any
-                                        next_transitions = Some(ARG_DELCARATIONS.to_vec());
-                                    },
-
-                                    // Validate argument types
-                                    3 => {
-                                        unimplemented!();
-                                    },
-                                    
-                                    // Validate arguments
-                                    4...8 => {
-                                        unimplemented!();
-                                    },
-
-                                    n => panic!(format!("The validation stack cannot have {} operands!", n))
-                                }
-                            },
-                            Some(Instruction::PushLocal) => {
-                                unimplemented!();
                             }
-                            _ => unimplemented!()
+                        },
+                        Some(Instruction::PushOperand) => {
+                            self.validate_push(op, &transition, &mut next_transitions);
+                        },
+                        Some(Instruction::PushLocal) => {
+                            self.validate_push(op, &transition, &mut next_transitions);
                         }
-
-                        self.state = Validity::Invalid;
-                    },
-                    Some(Transition::AnyByte) => {
-                        self.state = Validity::Invalid;
-                    },
-                    None => {
-                        self.state = Validity::IrrefutablyInvalid;
+                        _ => unimplemented!()
                     }
+
+                    self.state = Validity::Invalid;
+                },
+                None => {
+                    self.state = Validity::IrrefutablyInvalid;
                 }
             }
 
@@ -267,6 +241,110 @@ impl Validator {
             _                 => false
         }
     }
+
+    fn validate_push(&mut self, op: u8, transition: &Option<Transition>, next_transitions: &mut Option<Vec<Transition>>) {
+        // Based on the length of the validation stack,
+        // we perform different validations.
+        match self.validation_stack.len() {
+            // Validate arity
+            1 => { 
+                let arity = if let Some(Transition::Byte(byte)) = transition {
+                    byte
+                } else {
+                    panic!("Invalid transition! Expected a byte transition!");
+                };
+
+                // Push arity to validation stack
+                self.validation_stack.push(*arity);
+
+                // Continue validating
+                self.state = Validity::Invalid;
+
+                // Next byte will be the bitmask so we allow any
+                *next_transitions = Some(vec![Transition::AnyByte]);
+            },
+
+            // Validate bitmask
+            2 => {
+                let bitmask = op;
+
+                // Push bitmask to validation stack
+                self.validation_stack.push(bitmask);
+
+                // Continue validating
+                self.state = Validity::Invalid;
+
+                // The next transitions are the argument types
+                *next_transitions = Some(ARG_DECLARATIONS.to_vec());
+            },
+
+            len => {
+                let arity = self.validation_stack.as_slice()[1];
+
+                // Set offsets for argument validation
+                let offset1 = (arity + 2) as usize;
+                let offset2 = (arity + 3) as usize;
+                let offset3 = if self.validation_stack.len() > offset1 {
+                    let val_stack = self.validation_stack.as_slice();
+                    let bitmask = val_stack[3];
+                    let mut acc = 0;
+
+                    // Traverse argument declarations
+                    for i in 4..=offset1 {
+                        let arg = val_stack[i];
+
+                        // Subtract initial offset to get 
+                        // the arg's index in the bitmask.
+                        let i = i - 4;
+
+                        match VmType::from_op(arg) {
+                            Some(vm_type) => {
+                                let is_popped = bitmask.get(i as u8);
+
+                                if is_popped {
+                                    acc += 1;
+                                } else {
+                                    acc += vm_type.byte_size();
+                                }
+                            },
+                            None => {
+                                // Stop validation completely
+                                self.state = Validity::IrrefutablyInvalid;
+                                return;
+                            }
+                        }
+                    }
+
+                    acc
+                } else {
+                    0
+                };
+
+                println!("DEBUG LEN: {}, OFFSET1: {}, OFFSET2: {}, OFFSET3: {}", len, offset1, offset2, offset3);
+                
+                if len >= 3 && len <= offset1 {                  // Validate argument types
+                    // Continue validating
+                    self.state = Validity::Invalid;
+
+                    self.validation_stack.push(op);
+
+                    if len == offset1 {
+                        // All arg types are pushed to the validation stack
+                        // so we now allow any byte for validating the values
+                        // themselves.
+                        *next_transitions = Some(vec![Transition::AnyByte]);
+                    } else {
+                        // The next transitions are still the argument types
+                        *next_transitions = Some(ARG_DECLARATIONS.to_vec());
+                    }
+                } else if len >= offset2 && len <= offset3 {     // Validate arguments
+                    unimplemented!();
+                } else {
+                    panic!(format!("The validation stack cannot have {} operands!", len));
+                }
+            }
+        }
+    }
 }
 
 lazy_static! {
@@ -275,16 +353,13 @@ lazy_static! {
         .map(|x| Transition::Byte(x))
         .collect();
 
-    static ref ARG_DELCARATIONS: Vec<Transition> = vec![
-        Transition::Op(Instruction::i32Const),
-        Transition::Op(Instruction::i64Const),
-        Transition::Op(Instruction::f32Const),
-        Transition::Op(Instruction::f64Const)
+    static ref ARG_DECLARATIONS: Vec<Transition> = vec![
+        Transition::Byte(Instruction::i32Const.repr()),
+        Transition::Byte(Instruction::i64Const.repr()),
+        Transition::Byte(Instruction::f32Const.repr()),
+        Transition::Byte(Instruction::f64Const.repr())
     ];
 }
-
-#[cfg(test)]
-use bitvec::Bits;
 
 #[cfg(test)]
 mod tests {
@@ -460,5 +535,249 @@ mod tests {
         }
 
         assert!(validator.valid());
+    }
+
+    #[test]
+    fn it_fails_with_invalid_bitmask1() {
+        let mut validator = Validator::new();
+        let mut bitmask: u8 = 0;
+        
+        bitmask.set(1, true);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x03,                             // 3 Arity
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::f32Const.repr(),
+            0x00,                             // i32 value
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // i64 value
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x1b,
+            0x00,                             // f32 value
+            0x00,
+            0x00,
+            0x5f,
+            Instruction::PickLocal.repr(),    // Dupe elems on stack 11 times (usize is 16bits)
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PushLocal.repr(),   // Push loop counter to locals stack
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
+            Instruction::PickLocal.repr(),   // Dupe counter
+            0x00,
+            0x04,
+            Instruction::PushOperand.repr(), 
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),    // Push counter to operand stack
+            0x00,                            // Loop 5 times
+            0x00,
+            0x00,
+            0x04,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::If.repr(),          // Break if items on the operand stack are equal  
+            0x02,                            // Arity 0
+            Instruction::Eq.repr(),
+            Instruction::Break.repr(),       // Break loop
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x02,
+            Instruction::Nop.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+            Instruction::PushOperand.repr(), // Increment counter
+            0x02,
+            bitmask,                         // Reference bits
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
+            0x01,
+            bitmask,                         // Reference bits
+            Instruction::i32Const.repr(),
+            Instruction::PopOperand.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        for byte in block {
+            validator.push_op(byte);
+
+            if validator.done() {
+                break;
+            }
+        }
+
+        assert!(!validator.valid());
+    }
+
+    #[test]
+    fn it_fails_with_invalid_bitmask2() {
+        let mut validator = Validator::new();
+        let mut bitmask: u8 = 0;
+        
+        bitmask.set(1, true);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x03,                             // 3 Arity
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::f32Const.repr(),
+            0x00,                             // i32 value
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // i64 value
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x1b,
+            0x00,                             // f32 value
+            0x00,
+            0x00,
+            0x5f,
+            Instruction::PickLocal.repr(),    // Dupe elems on stack 11 times (usize is 16bits)
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PushLocal.repr(),   // Push loop counter to locals stack
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
+            Instruction::PickLocal.repr(),   // Dupe counter
+            0x00,
+            0x04,
+            Instruction::PushOperand.repr(), 
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),    // Push counter to operand stack
+            0x00,                            // Loop 5 times
+            0x00,
+            0x00,
+            0x04,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::If.repr(),          // Break if items on the operand stack are equal  
+            0x02,                            // Arity 0
+            Instruction::Eq.repr(),
+            Instruction::Break.repr(),       // Break loop
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x02,
+            Instruction::Nop.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+            Instruction::PushOperand.repr(), // Increment counter
+            0x02,
+            bitmask,                         // Reference bits
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
+            0x01,
+            bitmask,                         // Reference bits
+            Instruction::i32Const.repr(),
+            Instruction::PopOperand.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        for byte in block {
+            validator.push_op(byte);
+
+            if validator.done() {
+                break;
+            }
+        }
+
+        assert!(!validator.valid());
     }
 }
