@@ -39,7 +39,10 @@ pub struct Validator {
     transitions: Vec<Transition>,
 
     /// Stack used for validating operand arguments
-    validation_stack: Stack<u8>,
+    validation_stack: Stack<(u8, bool)>,
+    
+    /// Buffer used to store pre-validated values
+    validation_buffer: Vec<u8>,
 
     /// Stack that holds the control flow structure
     cf_stack: Stack<CfOperator>
@@ -51,7 +54,8 @@ impl Validator {
             state: Validity::Invalid,
             transitions: Vec::new(),
             cf_stack: Stack::new(),
-            validation_stack: Stack::new()
+            validation_stack: Stack::new(),
+            validation_buffer: Vec::new()
         }
     }
 
@@ -70,7 +74,7 @@ impl Validator {
 
                     // The first element in the validation stack 
                     // is the operand that is being validated.
-                    self.validation_stack.push(Instruction::Begin.repr());
+                    self.validation_stack.push((Instruction::Begin.repr(), true));
                     
                     // The next byte after the first begin instruction
                     // is always 0x00, representing 0 arity.
@@ -132,15 +136,21 @@ impl Validator {
                             // TODO: Return transitions for all ops with non-default transitions
                             Instruction::PushLocal => {
                                 // Mark op for argument validation
-                                self.validation_stack.push(Instruction::PushLocal.repr());
+                                self.validation_stack.push((Instruction::PushLocal.repr(), true));
                                 
                                 ARITY_TRANSITIONS.to_vec()
                             },
                             Instruction::PushOperand => {
                                 // Mark op for argument validation
-                                self.validation_stack.push(Instruction::PushOperand.repr());
+                                self.validation_stack.push((Instruction::PushOperand.repr(), true));
                                 
                                 ARITY_TRANSITIONS.to_vec()
+                            },
+                            Instruction::PickLocal => {
+                                // Mark op for argument validation
+                                self.validation_stack.push((Instruction::PickLocal.repr(), true));
+
+                                vec![Transition::AnyByte]
                             },
                             _ => op.transitions()
                         };
@@ -168,7 +178,7 @@ impl Validator {
                     }
                 },
                 Some(Transition::Byte(_)) | Some(Transition::AnyByte) => {
-                    let operand = self.validation_stack.as_slice()[0];
+                    let (operand, _) = self.validation_stack.as_slice()[0];
 
                     match Instruction::from_repr(operand) {
                         Some(Instruction::Begin) => {
@@ -255,7 +265,7 @@ impl Validator {
                 };
 
                 // Push arity to validation stack
-                self.validation_stack.push(*arity);
+                self.validation_stack.push((*arity, true));
 
                 // Continue validating
                 self.state = Validity::Invalid;
@@ -269,7 +279,7 @@ impl Validator {
                 let bitmask = op;
 
                 // Push bitmask to validation stack
-                self.validation_stack.push(bitmask);
+                self.validation_stack.push((bitmask, true));
 
                 // Continue validating
                 self.state = Validity::Invalid;
@@ -279,56 +289,15 @@ impl Validator {
             },
 
             len => {
-                let arity = self.validation_stack.as_slice()[1];
+                let (arity, _) = self.validation_stack.as_slice()[1];
 
-                // Set offsets for argument validation
-                let offset1 = (arity + 2) as usize;
-                let offset2 = (arity + 3) as usize;
-                let offset3 = if self.validation_stack.len() > offset1 {
-                    let val_stack = self.validation_stack.as_slice();
-                    let bitmask = val_stack[3];
-                    let mut acc = 0;
-
-                    // Traverse argument declarations
-                    for i in 4..=offset1 {
-                        let arg = val_stack[i];
-
-                        // Subtract initial offset to get 
-                        // the arg's index in the bitmask.
-                        let i = i - 4;
-
-                        match VmType::from_op(arg) {
-                            Some(vm_type) => {
-                                let is_popped = bitmask.get(i as u8);
-
-                                if is_popped {
-                                    acc += 1;
-                                } else {
-                                    acc += vm_type.byte_size();
-                                }
-                            },
-                            None => {
-                                // Stop validation completely
-                                self.state = Validity::IrrefutablyInvalid;
-                                return;
-                            }
-                        }
-                    }
-
-                    acc
-                } else {
-                    0
-                };
-
-                println!("DEBUG LEN: {}, OFFSET1: {}, OFFSET2: {}, OFFSET3: {}", len, offset1, offset2, offset3);
+                // This is the intended length of the validation stack
+                let offset = (arity + 2) as usize;
                 
-                if len >= 3 && len <= offset1 {                  // Validate argument types
-                    // Continue validating
-                    self.state = Validity::Invalid;
+                if len >= 3 && len <= offset {                  // Validate argument types
+                    self.validation_stack.push((op, false));
 
-                    self.validation_stack.push(op);
-
-                    if len == offset1 {
+                    if len == offset {
                         // All arg types are pushed to the validation stack
                         // so we now allow any byte for validating the values
                         // themselves.
@@ -337,14 +306,73 @@ impl Validator {
                         // The next transitions are still the argument types
                         *next_transitions = Some(ARG_DECLARATIONS.to_vec());
                     }
-                } else if len >= offset2 && len <= offset3 {     // Validate arguments
-                    unimplemented!();
+
+                    // Continue validating
+                    self.state = Validity::Invalid;
+                } else if len > offset {      // Validate arguments
+                    let (arg_type, elem_idx) = get_next_elem(&self.validation_stack);
+
+                    // Individual bytes that compose the validated
+                    // value are pushed into the validation buffer.
+                    //
+                    // Once the validation buffer matches the length
+                    // of the validated type, we actually perform 
+                    // the validation.
+                    if self.validation_buffer.len() == arg_type.byte_size() {
+                        if arg_type.validate_structure(&self.validation_buffer) {
+                            if elem_idx == offset {
+                                // Cleanup in case this is the last validated argument
+                                self.validation_stack = Stack::new();
+                                *next_transitions = Some(Instruction::Begin.transitions());
+                            } else {
+                                let val_stack = self.validation_stack.as_mut_slice();
+                                let (arg, _) = val_stack[elem_idx];
+
+                                // Mark as done
+                                val_stack[elem_idx] = (arg, true);
+                            }
+
+                            // Cleanup
+                            self.validation_buffer = vec![];
+                            
+                            // Continue validating
+                            self.state = Validity::Invalid;
+                        } else {
+                            // Stop validating
+                            self.state = Validity::IrrefutablyInvalid;
+
+                            // Cleanup
+                            self.validation_buffer = vec![];
+                            self.validation_stack = Stack::new();
+                        };
+                    } else {
+                        self.validation_buffer.push(op);
+                    }
                 } else {
                     panic!(format!("The validation stack cannot have {} operands!", len));
                 }
             }
         }
     }
+}
+
+fn get_next_elem(val_stack: &Stack<(u8, bool)>) -> (VmType, usize) {
+    let val_stack = val_stack.as_slice();
+    let mut vm_type = None;
+    let mut idx = 0;
+
+    for (byte, validated) in val_stack.iter() {
+        if !validated {
+            let ret_type = VmType::from_op(*byte).unwrap();
+
+            vm_type = Some(ret_type);
+            break;
+        }
+
+        idx += 1;
+    }
+
+    (vm_type.unwrap(), idx)
 }
 
 lazy_static! {

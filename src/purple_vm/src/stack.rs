@@ -63,6 +63,10 @@ impl<T: fmt::Debug + Clone> Stack<T> {
         self.0.as_slice()
     }
 
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        self.0.as_mut_slice()
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }

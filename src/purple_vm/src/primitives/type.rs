@@ -101,6 +101,78 @@ impl VmType {
         }
     }
 
+    pub fn validate_structure(&self, buf: &[u8]) -> bool {
+        if buf.len() != self.byte_size() {
+            return false;
+        }
+
+        match *self {
+            VmType::I32 => {
+                match decode_be_i32!(buf) {
+                    Ok(_) => true,
+                    _     => false
+                }
+            },
+            VmType::I64 => {
+                match decode_be_i64!(buf) {
+                    Ok(_) => true,
+                    _     => false
+                }
+            },
+            VmType::F32 => {
+                match decode_be_f32!(buf) {
+                    Ok(_) => true,
+                    _     => false
+                }
+            },
+            VmType::F64 => {
+                match decode_be_f64!(buf) {
+                    Ok(_) => true,
+                    _     => false
+                }
+            },
+
+            // TODO: Validate structure for arrays
+            VmType::i32Array2 => {
+                unimplemented!();
+            },
+            VmType::i32Array4 => {
+                unimplemented!();
+            },
+            VmType::i32Array8 => {
+                unimplemented!();
+            },
+            VmType::i64Array2 => {
+                unimplemented!();
+            },
+            VmType::i64Array4 => {
+                unimplemented!();
+            },
+            VmType::i64Array8 => {
+                unimplemented!();
+            },
+            VmType::f32Array2 => {
+                unimplemented!();
+            },
+            VmType::f32Array4 => {
+                unimplemented!();
+            },
+            VmType::f32Array8 => {
+                unimplemented!();
+            },
+            VmType::f64Array2 => {
+                unimplemented!();
+            },
+            VmType::f64Array4 => {
+                unimplemented!();
+            },
+            VmType::f64Array8 => {
+                unimplemented!();
+            },
+            _ => panic!()
+        }
+    }
+
     /// Returns the byte size of the type.
     pub fn byte_size(&self) -> usize {
         match *self {
