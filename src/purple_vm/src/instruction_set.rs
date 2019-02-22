@@ -224,6 +224,9 @@ impl Instruction {
             Instruction::Return => {
                 vec![Transition::Op(Instruction::End)]
             },
+            Instruction::Break => {
+                vec![Transition::Op(Instruction::End)]
+            },
             Instruction::Begin                  => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::Nop                    => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::If                     => DEFAULT_TRANSITIONS.to_vec(),

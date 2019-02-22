@@ -152,6 +152,12 @@ impl Validator {
 
                                 vec![Transition::AnyByte]
                             },
+                            Instruction::Loop => {
+                                // Mark op for argument validation
+                                self.validation_stack.push((Instruction::Loop.repr(), true));
+                                
+                                ARITY_TRANSITIONS.to_vec()
+                            },
                             _ => op.transitions()
                         };
 
@@ -215,16 +221,51 @@ impl Validator {
                                 }
                             }
                         },
+                        Some(Instruction::Loop) => {
+                            if self.validation_stack.len() != 1 {
+                                panic!(format!("The validation stack can only have 1 element at this point! Got: {}", self.validation_stack.len()));
+                            }
+
+                            self.validation_stack.pop();
+
+                            let valid = ARITY_TRANSITIONS
+                                .iter()
+                                .any(|t| t.accepts_byte(op));
+
+                            if valid {
+                                self.state = Validity::Invalid;
+                                next_transitions = Some(Instruction::Loop.transitions());
+                            } else {
+                                self.state = Validity::IrrefutablyInvalid;
+                            }
+                        },
                         Some(Instruction::PushOperand) => {
                             self.validate_push(op, &transition, &mut next_transitions);
                         },
                         Some(Instruction::PushLocal) => {
                             self.validate_push(op, &transition, &mut next_transitions);
-                        }
+                        },
+                        Some(Instruction::PickLocal) => {
+                            self.validation_buffer.push(op);
+
+                            if self.validation_buffer.len() == 2 {
+                                match decode_be_u16!(&self.validation_buffer) {
+                                    Ok(_) => {
+                                        // Cleanup
+                                        self.validation_buffer = vec![];
+                                        self.validation_stack = Stack::new();
+
+                                        next_transitions = Some(Instruction::Begin.transitions());
+                                        self.state = Validity::Invalid;
+                                    },
+                                    Err(_) => {
+                                        self.state = Validity::IrrefutablyInvalid;
+                                    }
+                                }
+                            } 
+                        },
                         _ => unimplemented!()
                     }
-
-                    self.state = Validity::Invalid;
                 },
                 None => {
                     self.state = Validity::IrrefutablyInvalid;
@@ -311,6 +352,9 @@ impl Validator {
                     self.state = Validity::Invalid;
                 } else if len > offset {      // Validate arguments
                     let (arg_type, elem_idx) = get_next_elem(&self.validation_stack);
+                    
+                    // Push op to validation buffer
+                    self.validation_buffer.push(op);
 
                     // Individual bytes that compose the validated
                     // value are pushed into the validation buffer.
@@ -345,8 +389,6 @@ impl Validator {
                             self.validation_buffer = vec![];
                             self.validation_stack = Stack::new();
                         };
-                    } else {
-                        self.validation_buffer.push(op);
                     }
                 } else {
                     panic!(format!("The validation stack cannot have {} operands!", len));
@@ -558,7 +600,7 @@ mod tests {
         ];
 
         for byte in block {
-            println!("DEBUG {:x?}", byte);
+            println!("DEBUG {:x?}, {:?}", byte, Instruction::from_repr(byte));
             validator.push_op(byte);
         }
 
