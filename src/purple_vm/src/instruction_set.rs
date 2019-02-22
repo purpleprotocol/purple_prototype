@@ -229,8 +229,8 @@ impl Instruction {
             },
             Instruction::Begin                  => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::Nop                    => DEFAULT_TRANSITIONS.to_vec(),
-            Instruction::If                     => DEFAULT_TRANSITIONS.to_vec(),
-            Instruction::BreakIf                => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::If                     => COMP_TRANSITIONS.to_vec(),
+            Instruction::BreakIf                => COMP_TRANSITIONS.to_vec(),
             Instruction::Else                   => DEFAULT_TRANSITIONS.to_vec(),  
             Instruction::Loop                   => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::End                    => DEFAULT_TRANSITIONS.to_vec(),
@@ -380,6 +380,11 @@ impl Instruction {
 
 lazy_static! {
     static ref DEFAULT_TRANSITIONS: Vec<Transition> = OPS_LIST
+        .iter()
+        .map(|op| Transition::Op(*op))
+        .collect();
+    
+    static ref COMP_TRANSITIONS: Vec<Transition> = COMP_OPS
         .iter()
         .map(|op| Transition::Op(*op))
         .collect();

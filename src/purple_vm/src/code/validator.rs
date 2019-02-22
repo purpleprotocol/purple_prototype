@@ -117,12 +117,12 @@ impl Validator {
                         _                        => { } // Do nothing 
                     }
 
+                    let mut allow_else = false;
+
                     // If op is `End`, pop item from stack.
                     if let Instruction::End = op {
-                        // The stack is popped twice in the case 
-                        // of terminating an `Else` block.
-                        if let &CfOperator::Else = self.cf_stack.peek() {
-                            self.cf_stack.pop();
+                        if let &CfOperator::If = self.cf_stack.peek() {
+                            allow_else = true;
                         }
 
                         self.cf_stack.pop();
@@ -158,6 +158,18 @@ impl Validator {
                                 
                                 ARITY_TRANSITIONS.to_vec()
                             },
+                            Instruction::If => {
+                                // Mark op for argument validation
+                                self.validation_stack.push((Instruction::If.repr(), true));
+                                
+                                ARITY_TRANSITIONS.to_vec()
+                            },
+                            Instruction::Else => {
+                                // Mark op for argument validation
+                                self.validation_stack.push((Instruction::Else.repr(), true));
+                                
+                                ARITY_TRANSITIONS.to_vec()
+                            },
                             _ => op.transitions()
                         };
 
@@ -174,8 +186,8 @@ impl Validator {
                         }
 
                         // Allow `Else` op in case the topmost item
-                        // in the stack is an `If` instruction.
-                        if let &CfOperator::Else = self.cf_stack.peek() {
+                        // in the stack was an `If` instruction.
+                        if allow_else {
                             next.push(Transition::Op(Instruction::Else));
                         }
 
@@ -263,6 +275,42 @@ impl Validator {
                                     }
                                 }
                             } 
+                        },
+                        Some(Instruction::If) => {
+                            if self.validation_stack.len() != 1 {
+                                panic!(format!("The validation stack can only have 1 element at this point! Got: {}", self.validation_stack.len()));
+                            }
+
+                            self.validation_stack.pop();
+
+                            let valid = ARITY_TRANSITIONS
+                                .iter()
+                                .any(|t| t.accepts_byte(op));
+
+                            if valid {
+                                self.state = Validity::Invalid;
+                                next_transitions = Some(Instruction::If.transitions());
+                            } else {
+                                self.state = Validity::IrrefutablyInvalid;
+                            }
+                        },
+                        Some(Instruction::Else) => {
+                            if self.validation_stack.len() != 1 {
+                                panic!(format!("The validation stack can only have 1 element at this point! Got: {}", self.validation_stack.len()));
+                            }
+
+                            self.validation_stack.pop();
+
+                            let valid = ARITY_TRANSITIONS
+                                .iter()
+                                .any(|t| t.accepts_byte(op));
+
+                            if valid {
+                                self.state = Validity::Invalid;
+                                next_transitions = Some(Instruction::Else.transitions());
+                            } else {
+                                self.state = Validity::IrrefutablyInvalid;
+                            }
                         },
                         _ => unimplemented!()
                     }
