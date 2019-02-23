@@ -387,10 +387,21 @@ impl Validator {
                     self.validation_stack.push((op, false));
 
                     if len == offset {
-                        // All arg types are pushed to the validation stack
-                        // so we now allow any byte for validating the values
-                        // themselves.
-                        *next_transitions = Some(vec![Transition::AnyByte]);
+                        let (bitmask, _) = self.validation_stack.as_slice()[2];
+
+                        if bitmask.get(0) {
+                            // The first argument is popped from a stack
+                            // so we only allow pop operations.
+                            *next_transitions = Some(vec![
+                                Transition::Byte(Instruction::PopLocal.repr()), 
+                                Transition::Byte(Instruction::PopOperand.repr())
+                            ]);
+                        } else {
+                            // All arg types are pushed to the validation stack
+                            // so we now allow any byte for validating the values
+                            // themselves.
+                            *next_transitions = Some(vec![Transition::AnyByte]);
+                        }
                     } else {
                         // The next transitions are still the argument types
                         *next_transitions = Some(ARG_DECLARATIONS.to_vec());
@@ -400,43 +411,99 @@ impl Validator {
                     self.state = Validity::Invalid;
                 } else if len > offset {      // Validate arguments
                     let (arg_type, elem_idx) = get_next_elem(&self.validation_stack);
-                    
-                    // Push op to validation buffer
-                    self.validation_buffer.push(op);
+                    let (bitmask, _) = self.validation_stack.as_slice()[2];
+                    let is_popped = bitmask.get((elem_idx-3) as u8);
+                    let next_idx = elem_idx + 1;
+                    let next_is_popped = if next_idx == self.validation_stack.len() {
+                        false
+                    } else {
+                        bitmask.get(next_idx as u8)
+                    };
 
-                    // Individual bytes that compose the validated
-                    // value are pushed into the validation buffer.
-                    //
-                    // Once the validation buffer matches the length
-                    // of the validated type, we actually perform 
-                    // the validation.
-                    if self.validation_buffer.len() == arg_type.byte_size() {
-                        if arg_type.validate_structure(&self.validation_buffer) {
-                            if elem_idx == offset {
-                                // Cleanup in case this is the last validated argument
-                                self.validation_stack = Stack::new();
-                                *next_transitions = Some(Instruction::Begin.transitions());
-                            } else {
-                                let val_stack = self.validation_stack.as_mut_slice();
-                                let (arg, _) = val_stack[elem_idx];
+                    if is_popped {
+                        // Check if the op is a pop instruction
+                        match Instruction::from_repr(op) {
+                            Some(Instruction::PopLocal)
+                          | Some(Instruction::PopOperand) => {
+                                {
+                                    let val_stack = self.validation_stack.as_mut_slice();
+                                    let (arg, _) = val_stack[elem_idx];
 
-                                // Mark as done
-                                val_stack[elem_idx] = (arg, true);
-                            }
+                                    // Mark as done
+                                    val_stack[elem_idx] = (arg, true);
+                                }  
 
-                            // Cleanup
-                            self.validation_buffer = vec![];
+                                // Cleanup
+                                self.validation_buffer = vec![];
+
+                                // Allow any byte in case next is not `Pop`
+                                if !next_is_popped && next_idx != self.validation_stack.len() {
+                                    *next_transitions = Some(vec![Transition::AnyByte]);
+                                } 
+                                
+                                // Val stack cleanup in case this is the last validated argument
+                                if next_idx == self.validation_stack.len() {
+                                    self.validation_stack = Stack::new();
+                                    *next_transitions = Some(Instruction::Begin.transitions());
+                                }
+                                
+                                // Continue validating
+                                self.state = Validity::Invalid;
+                            },
+                            _ => {
+                                // Only a `Pop` operation is allowed. Stop validating.
+                                self.state = Validity::IrrefutablyInvalid;
                             
-                            // Continue validating
-                            self.state = Validity::Invalid;
-                        } else {
-                            // Stop validating
-                            self.state = Validity::IrrefutablyInvalid;
+                                // Cleanup
+                                self.validation_buffer = vec![];
+                                self.validation_stack = Stack::new();
+                            }
+                        }
+                    } else {
+                        // Push op to validation buffer
+                        self.validation_buffer.push(op);
 
-                            // Cleanup
-                            self.validation_buffer = vec![];
-                            self.validation_stack = Stack::new();
-                        };
+                        // Individual bytes that compose the validated
+                        // value are pushed into the validation buffer.
+                        //
+                        // Once the validation buffer matches the length
+                        // of the validated type, we actually perform 
+                        // the validation.
+                        if self.validation_buffer.len() == arg_type.byte_size() {
+                            if arg_type.validate_structure(&self.validation_buffer) {
+                                if elem_idx == offset {
+                                    // Cleanup in case this is the last validated argument
+                                    self.validation_stack = Stack::new();
+                                    *next_transitions = Some(Instruction::Begin.transitions());
+                                } else {
+                                    let val_stack = self.validation_stack.as_mut_slice();
+                                    let (arg, _) = val_stack[elem_idx];
+
+                                    // Mark as done
+                                    val_stack[elem_idx] = (arg, true);
+                                }
+
+                                // Cleanup
+                                self.validation_buffer = vec![];
+                                
+                                // Continue validating
+                                self.state = Validity::Invalid;
+                            } else {
+                                // Stop validating
+                                self.state = Validity::IrrefutablyInvalid;
+
+                                // Cleanup
+                                self.validation_buffer = vec![];
+                                self.validation_stack = Stack::new();
+                            };
+                        }
+                    }
+
+                    if next_is_popped {
+                        *next_transitions = Some(vec![
+                            Transition::Byte(Instruction::PopLocal.repr()), 
+                            Transition::Byte(Instruction::PopOperand.repr())
+                        ]);
                     }
                 } else {
                     panic!(format!("The validation stack cannot have {} operands!", len));
@@ -648,7 +715,6 @@ mod tests {
         ];
 
         for byte in block {
-            println!("DEBUG {:x?}, {:?}", byte, Instruction::from_repr(byte));
             validator.push_op(byte);
         }
 
