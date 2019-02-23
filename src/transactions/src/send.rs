@@ -44,6 +44,102 @@ impl Send {
     /// Applies the send transaction to the provided database.
     ///
     /// This function will panic if the `from` account does not exist.
+    /// Validates the transaction against the provided state.
+    pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        let zero = Balance::from_bytes(b"0.0").unwrap();
+        let from = &self.from.clone();
+        let to = &self.to.clone();
+        let signature = &self.signature.clone();
+
+        // You cannot burn 0 coins
+        if (self.amount == zero){
+            return false;
+        }
+
+        // validate senders and receiver address
+        if (!self.validate_signature(from, signature, trie)){
+            return false;
+        }
+
+        let bin_from = &self.from.to_bytes();
+        let bin_asset_hash = &self.asset_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+
+        // Convert addres to strings
+        let from = hex::encode(bin_from);
+        
+                // Convert hashes to strings
+        let asset_hash = hex::encode(bin_asset_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+                // Calculate nonce keys
+        // 
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let from_nonce_key = format!("{}.n", from);
+        let from_nonce_key = from_nonce_key.as_bytes();
+
+        let cur_key = format!("{}.{}", from, asset_hash);
+        let fee_key = format!("{}.{}", from, fee_hash);
+
+        // Retrieve serialized nonce
+        let bin_nonce = match trie.get(&from_nonce_key) {
+            Ok(Some(nonce)) => nonce,
+            Ok(None)        => return false,
+            Err(err)        => panic!(err)
+        };
+        
+        if fee_hash == asset_hash {
+                        // The transaction's fee is paid in the same currency
+            // that is being burned, so we only retrieve one balance.
+
+            // We retrieve the sender balance
+            let mut from_balance = match trie.get(&cur_key.as_bytes()) {
+                Ok(Some(from_balance)) => match Balance::from_bytes(&from_balance) {
+                    Ok(from_balance) => from_balance,
+                    Err(err)    => panic!(err)
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err)
+            }; 
+
+            // Subtract fee from balance
+            from_balance -= self.fee.clone();
+            // Subtract amount transferred from balance
+            from_balance -= self.amount.clone();
+
+            from_balance >= zero
+        } else {
+                        // The transaction's fee is paid in a different currency
+            // than the one being transferred so we retrieve both balances.
+            let mut from_cur_balance = match trie.get(&cur_key.as_bytes()) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err)    => panic!(err)
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err)
+            };
+
+            let mut from_fee_balance = match trie.get(&fee_key.as_bytes()) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err)    => panic!(err)
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err)
+            };
+
+            // Subtract fee from burner
+            from_fee_balance -= self.fee.clone();
+
+            // Subtract amount transferred from burner
+            from_cur_balance -= self.amount.clone();
+
+            from_cur_balance >= zero && from_fee_balance >= zero
+        }
+    }
+
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         let bin_from = &self.from.to_bytes();
         let bin_to = &self.to.to_bytes();
@@ -728,6 +824,7 @@ impl Send {
     }
 
     impl_hash!();
+    impl_validate_signature!();
 }
 
 fn assemble_hash_message(obj: &Send) -> Vec<u8> {
@@ -803,6 +900,222 @@ mod tests {
     use account::{NormalAddress, Shares};
     use crypto::Identity;
 
+        #[test]
+        fn validate() {
+        let from_id = Identity::new();
+        let to_id = Identity::new();
+        let from_addr = Address::normal_from_pkey(*from_id.pkey());
+        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize burner balance
+        test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
+        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Send {
+            from: from_addr.clone(),
+            to: to_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(from_id.skey().clone());
+        tx.hash();
+
+        assert!(tx.validate(&trie));
+    }
+
+        #[test]
+    fn validate_no_funds() {
+        let from_id = Identity::new();
+        let to_id = Identity::new();
+        let from_addr = Address::normal_from_pkey(*from_id.pkey());
+        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize sender balance
+        test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Send {
+            from: from_addr.clone(),
+            to: to_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(from_id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+        #[test]
+    fn validate_different_currencies() {
+        let from_id = Identity::new();
+        let to_id = Identity::new();
+        let from_addr = Address::normal_from_pkey(*from_id.pkey());
+        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize sender balance
+        test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, from_addr.clone(), fee_hash, b"10.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Send {
+            from: from_addr.clone(),
+            to: to_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(from_id.skey().clone());
+        tx.hash();
+
+        assert!(tx.validate(&trie));
+    }
+
+
+        #[test]
+    fn validate_no_funds_different_currencies(){
+        let from_id = Identity::new();
+        let to_id = Identity::new();
+        let from_addr = Address::normal_from_pkey(*from_id.pkey());
+        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency1");
+        let fee_hash = crypto::hash_slice(b"Test currency2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+               // Manually initialize from balance
+        test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, from_addr.clone(), fee_hash, b"10.0");
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Send {
+            from: from_addr.clone(),
+            to: to_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(from_id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+   
+        #[test]
+    fn validate_no_funds_for_fee_different_currencies() {
+        let from_id = Identity::new();
+        let to_id = Identity::new();
+        let from_addr = Address::normal_from_pkey(*from_id.pkey());
+        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        // Manually initialize burner balance
+        test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, from_addr.clone(), fee_hash, b"10.0");
+
+        let amount = Balance::from_bytes(b"5.0").unwrap();
+        let fee = Balance::from_bytes(b"20.0").unwrap();
+
+        let mut tx = Send {
+            from: from_addr.clone(),
+            to: to_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(from_id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
+    fn validate_zero(){
+        let from_id = Identity::new();
+        let to_id = Identity::new();
+        let from_addr = Address::normal_from_pkey(*from_id.pkey());
+        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+                test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
+
+        let amount = Balance::from_bytes(b"0.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Send {
+            from: from_addr.clone(),
+            to: to_addr.clone(),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
+            signature: None,
+            hash: None
+        };
+
+        tx.sign(from_id.skey().clone());
+        tx.hash();
+
+        assert!(!tx.validate(&trie));
+    }
+
     #[test]
     fn apply_it_creates_a_new_account() {
         let id = Identity::new();
@@ -871,7 +1184,6 @@ mod tests {
         assert_eq!(receiver_balance, amount);
     }
 
-    #[test]
     fn apply_it_sends_to_an_existing_account() {
         let id = Identity::new();
         let to_id = Identity::new();
