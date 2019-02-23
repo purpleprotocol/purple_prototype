@@ -964,4 +964,122 @@ mod tests {
 
         assert!(!validator.valid());
     }
+
+    #[test]
+    fn it_fails_with_invalid_popped_type() {
+        let mut validator = Validator::new();
+        let mut bitmask: u8 = 0;
+        
+        bitmask.set(0, true);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x03,                             // 3 Arity
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::f32Const.repr(),
+            0x00,                             // i32 value
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // i64 value
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x1b,
+            0x00,                             // f32 value
+            0x00,
+            0x00,
+            0x5f,
+            Instruction::PickLocal.repr(),    // Dupe elems on stack 11 times (usize is 16bits)
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x02,
+            Instruction::PushLocal.repr(),   // Push loop counter to locals stack
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
+            Instruction::PickLocal.repr(),   // Dupe counter
+            0x00,
+            0x04,
+            Instruction::PushOperand.repr(), 
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),    // Push counter to operand stack
+            0x00,                            // Loop 5 times
+            0x00,
+            0x00,
+            0x04,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x01,
+            Instruction::If.repr(),          // Break if items on the operand stack are equal  
+            0x02,                            // Arity 0
+            Instruction::Eq.repr(),
+            Instruction::Break.repr(),       // Break loop
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x02,
+            Instruction::Nop.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+            Instruction::PushOperand.repr(), // Increment counter
+            0x02,
+            bitmask,                         // Reference bits
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
+            0x01,
+            bitmask,                         // Reference bits
+            Instruction::i64Const.repr(),
+            Instruction::PopOperand.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        for byte in block {
+            validator.push_op(byte);
+        }
+
+        assert!(!validator.valid());
+    }
 }
