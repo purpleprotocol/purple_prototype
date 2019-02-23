@@ -16,12 +16,12 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{ShareholdersAddress, NormalAddress, Balance, MultiSig, ShareMap, Shares};
+use account::{Balance, MultiSig, NormalAddress, ShareMap, ShareholdersAddress, Shares};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, SecretKey as Sk};
-use std::io::Cursor;
-use patricia_trie::{TrieMut, TrieDBMut};
+use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
+use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct IssueShares {
@@ -60,14 +60,14 @@ impl IssueShares {
 
         let written_shares = match trie.get(&shares_key) {
             Ok(Some(result)) => Shares::from_bytes(&result).unwrap(),
-            Ok(None)         => return false,
-            Err(err)         => panic!(err)
+            Ok(None) => return false,
+            Err(err) => panic!(err),
         };
 
         let share_map = match trie.get(&share_map_key) {
             Ok(Some(result)) => ShareMap::from_bytes(&result).unwrap(),
-            Ok(None)         => return false,
-            Err(err)         => panic!(err)
+            Ok(None) => return false,
+            Err(err) => panic!(err),
         };
 
         if !self.verify_multi_sig_shares(written_shares.required_percentile, share_map) {
@@ -89,21 +89,19 @@ impl IssueShares {
 
         let mut balance = match trie.get(&issuer_fee_key) {
             Ok(Some(balance)) => Balance::from_bytes(&balance).unwrap(),
-            Ok(None)          => return false,
-            Err(err)          => panic!(err)
+            Ok(None) => return false,
+            Err(err) => panic!(err),
         };
 
         balance -= self.fee.clone();
 
         let written_shares = match trie.get(&shares_key) {
             Ok(Some(shares)) => Shares::from_bytes(&shares).unwrap(),
-            Ok(None)         => return false,
-            Err(err)         => panic!(err)
+            Ok(None) => return false,
+            Err(err) => panic!(err),
         };
 
-        shares + written_shares.issued_shares <= written_shares.authorized_shares
-        &&
-        balance >= zero
+        shares + written_shares.issued_shares <= written_shares.authorized_shares && balance >= zero
     }
 
     /// Applies the open shares transaction to the provided database.
@@ -126,7 +124,7 @@ impl IssueShares {
         let issuer_fee_key = issuer_fee_key.as_bytes();
 
         // Calculate nonce key
-        // 
+        //
         // The key of a nonce has the following format:
         // `<account-address>.n`
         let issuer_nonce_key = format!("{}.n", issuer);
@@ -171,47 +169,39 @@ impl IssueShares {
         let nonce: Vec<u8> = encode_be_u64!(nonce);
 
         let mut issuer_balance = unwrap!(
-            Balance::from_bytes(
-                &unwrap!(
-                    trie.get(&issuer_fee_key).unwrap(),
-                    "The issuer does not have an entry for the given currency"
-                )
-            ),
+            Balance::from_bytes(&unwrap!(
+                trie.get(&issuer_fee_key).unwrap(),
+                "The issuer does not have an entry for the given currency"
+            )),
             "Invalid stored balance format"
         );
 
         let mut share_map = unwrap!(
-            ShareMap::from_bytes(
-                &unwrap!(
-                    trie.get(&share_map_key).unwrap(),
-                    "The issuer does not have a stored share map"
-                )
-            ),
+            ShareMap::from_bytes(&unwrap!(
+                trie.get(&share_map_key).unwrap(),
+                "The issuer does not have a stored share map"
+            )),
             "Invalid stored share map"
         );
 
         let mut shares_obj = unwrap!(
-            Shares::from_bytes(
-                &unwrap!(
-                    trie.get(&shares_key).unwrap(),
-                    "The issuer does not have a stored shares object"
-                )
-            ),
+            Shares::from_bytes(&unwrap!(
+                trie.get(&shares_key).unwrap(),
+                "The issuer does not have a stored shares object"
+            )),
             "Invalid stored shares"
-        );  
+        );
 
         let receiver_balance: Vec<u8> = match trie.get(&receiver_shares_key) {
             // The receiver is already a shareholder
             Ok(Some(balance)) => {
                 let balance = decode_be_u32!(balance).unwrap();
                 let result = balance + shares;
-                
+
                 encode_be_u32!(result)
-            },
-            Ok(None) => {
-                encode_be_u32!(*shares)
-            },
-            Err(err) => panic!(err)
+            }
+            Ok(None) => encode_be_u32!(*shares),
+            Err(err) => panic!(err),
         };
 
         // Subtract fee from issuer balance
@@ -223,7 +213,8 @@ impl IssueShares {
 
         // Update trie
         trie.insert(issuer_nonce_key, &nonce).unwrap();
-        trie.insert(issuer_fee_key, &issuer_balance.to_bytes()).unwrap();
+        trie.insert(issuer_fee_key, &issuer_balance.to_bytes())
+            .unwrap();
         trie.insert(receiver_shares_key, &receiver_balance).unwrap();
         trie.insert(share_map_key, &share_map.to_bytes()).unwrap();
         trie.insert(shares_key, &shares_obj.to_bytes()).unwrap();
@@ -240,8 +231,8 @@ impl IssueShares {
         match self.signature {
             Some(ref mut sig) => {
                 // Append signature to the multi sig struct
-                sig.append_sig(signature);        
-            },
+                sig.append_sig(signature);
+            }
             None => {
                 // Create a multi signature
                 let result = MultiSig::from_sig(signature);
@@ -255,16 +246,16 @@ impl IssueShares {
     /// Verifies the multi signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(&mut self, required_percentile: u8, share_map: ShareMap) -> bool {
+    pub fn verify_multi_sig_shares(
+        &mut self,
+        required_percentile: u8,
+        share_map: ShareMap,
+    ) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => {
-                sig.verify_shares(&message, required_percentile, share_map)
-            },
-            None => {
-                false
-            }
+            Some(ref sig) => sig.verify_shares(&message, required_percentile, share_map),
+            None => false,
         }
     }
 
@@ -363,10 +354,10 @@ impl IssueShares {
 
         let issuer = if buf.len() > 33 as usize {
             let issuer_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match ShareholdersAddress::from_bytes(&issuer_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -374,10 +365,10 @@ impl IssueShares {
 
         let receiver = if buf.len() > 33 as usize {
             let receiver_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match NormalAddress::from_bytes(&receiver_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -410,18 +401,18 @@ impl IssueShares {
 
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad fee")
+                Err(_) => return Err("Bad fee"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let signature = if buf.len() == signature_len as usize {
             let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
 
             match MultiSig::from_bytes(&sig_vec) {
-                Ok(sig)   => sig,
-                Err(err)  => return Err(err)
+                Ok(sig) => sig,
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -496,7 +487,7 @@ fn assemble_sign_message(obj: &IssueShares) -> Vec<u8> {
 use quickcheck::Arbitrary;
 
 impl Arbitrary for IssueShares {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> IssueShares {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> IssueShares {
         IssueShares {
             issuer: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
@@ -512,9 +503,9 @@ impl Arbitrary for IssueShares {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use OpenShares;
     use account::{Address, NormalAddress};
     use crypto::{Identity, PublicKey as Pk};
+    use OpenShares;
 
     #[test]
     fn validate() {
@@ -528,12 +519,12 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         let shares = Shares::new(1000, 1000000, 60);
         let mut share_map = ShareMap::new();
 
         share_map.add_shareholder(NormalAddress::from_pkey(*id2.pkey()), 1000);
-        
+
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
@@ -566,7 +557,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -587,12 +578,12 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         let shares = Shares::new(1000, 1000000, 60);
         let mut share_map = ShareMap::new();
 
         share_map.add_shareholder(NormalAddress::from_pkey(*id2.pkey()), 1000);
-        
+
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
@@ -625,7 +616,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -646,12 +637,12 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         let shares = Shares::new(1000, 1000000, 60);
         let mut share_map = ShareMap::new();
 
         share_map.add_shareholder(NormalAddress::from_pkey(*id2.pkey()), 1000);
-        
+
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
@@ -684,7 +675,7 @@ mod tests {
             fee: Balance::from_bytes(b"100000.0").unwrap(),
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -705,12 +696,12 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         let shares = Shares::new(1000, 1000000, 60);
         let mut share_map = ShareMap::new();
 
         share_map.add_shareholder(NormalAddress::from_pkey(*id2.pkey()), 1000);
-        
+
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
@@ -743,7 +734,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -764,12 +755,12 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         let mut shares = Shares::new(1000, 1000000, 60);
         let mut share_map = ShareMap::new();
 
         share_map.add_shareholder(NormalAddress::from_pkey(*id2.pkey()), 1000);
-        
+
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
@@ -802,7 +793,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -853,8 +844,8 @@ mod tests {
         }
 
         fn verify_multi_signature_shares(
-            receiver: NormalAddress, 
-            fee: Balance, 
+            receiver: NormalAddress,
+            fee: Balance,
             shares: u32,
             fee_hash: Hash
         ) -> bool {
@@ -873,8 +864,8 @@ mod tests {
                 .iter()
                 .map(|pk| NormalAddress::from_pkey(*pk))
                 .collect();
-            
-            let mut share_map = ShareMap::new(); 
+
+            let mut share_map = ShareMap::new();
 
             for addr in addresses.clone() {
                 share_map.add_shareholder(addr, 100);
@@ -894,7 +885,7 @@ mod tests {
             for id in ids {
                 tx.sign(id.skey().clone());
             }
-            
+
             tx.verify_multi_sig_shares(10, share_map)
         }
     }

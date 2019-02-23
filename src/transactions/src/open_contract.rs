@@ -16,13 +16,13 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, ContractAddress, Balance, Signature, ShareMap, MultiSig};
+use account::{Address, Balance, ContractAddress, MultiSig, ShareMap, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, SecretKey as Sk, PublicKey as Pk};
-use std::str;
-use std::io::Cursor;
-use patricia_trie::{TrieMut, TrieDBMut};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
+use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
+use std::io::Cursor;
+use std::str;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenContract {
@@ -55,11 +55,7 @@ impl OpenContract {
         let bin_address = &self.address.clone().unwrap().to_bytes();
         let bin_currency_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
-        let self_payable: Vec<u8> = if self.self_payable {
-            vec![1]
-        } else {
-            vec![0]
-        };
+        let self_payable: Vec<u8> = if self.self_payable { vec![1] } else { vec![0] };
 
         let code = &self.code;
         let default_state = &self.default_state;
@@ -73,7 +69,7 @@ impl OpenContract {
         let fee_hash = hex::encode(bin_fee_hash);
 
         // Calculate nonce keys
-        // 
+        //
         // The key of a nonce has the following format:
         // `<account-address>.n`
         let owner_nonce_key = format!("{}.n", owner);
@@ -135,12 +131,10 @@ impl OpenContract {
             // that is being transferred, so we only retrieve one
             // balance.
             let mut owner_balance = unwrap!(
-                Balance::from_bytes(
-                    &unwrap!(
-                        trie.get(&owner_cur_key.as_bytes()).unwrap(),
-                        "The owner does not have an entry for the given currency"
-                    )
-                ),
+                Balance::from_bytes(&unwrap!(
+                    trie.get(&owner_cur_key.as_bytes()).unwrap(),
+                    "The owner does not have an entry for the given currency"
+                )),
                 "Invalid stored balance format"
             );
 
@@ -156,30 +150,29 @@ impl OpenContract {
             trie.insert(self_payable_key, &self_payable).unwrap();
             trie.insert(state_key, default_state).unwrap();
             trie.insert(code_key, code).unwrap();
-            trie.insert(owner_cur_key.as_bytes(), &owner_balance.to_bytes()).unwrap();
-            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+            trie.insert(owner_cur_key.as_bytes(), &owner_balance.to_bytes())
+                .unwrap();
+            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                .unwrap();
             trie.insert(owner_nonce_key, &nonce_buf).unwrap();
-            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
+                .unwrap();
         } else {
             // The transaction's fee is paid in a different currency
             // than the one being transferred so we retrieve both balances.
             let mut owner_cur_balance = unwrap!(
-                Balance::from_bytes(
-                    &unwrap!(
-                        trie.get(&owner_cur_key.as_bytes()).unwrap(),
-                        "The owner does not have an entry for the given currency"
-                    )
-                ),
+                Balance::from_bytes(&unwrap!(
+                    trie.get(&owner_cur_key.as_bytes()).unwrap(),
+                    "The owner does not have an entry for the given currency"
+                )),
                 "Invalid stored balance format"
             );
 
             let mut owner_fee_balance = unwrap!(
-                Balance::from_bytes(
-                    &unwrap!(
-                        trie.get(&owner_fee_key.as_bytes()).unwrap(),
-                        "The owner does not have an entry for the given currency"
-                    )
-                ),
+                Balance::from_bytes(&unwrap!(
+                    trie.get(&owner_fee_key.as_bytes()).unwrap(),
+                    "The owner does not have an entry for the given currency"
+                )),
                 "Invalid stored balance format"
             );
 
@@ -195,11 +188,15 @@ impl OpenContract {
             trie.insert(self_payable_key, &self_payable).unwrap();
             trie.insert(state_key, default_state).unwrap();
             trie.insert(code_key, code).unwrap();
-            trie.insert(owner_cur_key.as_bytes(), &owner_cur_balance.to_bytes()).unwrap();
-            trie.insert(owner_fee_key.as_bytes(), &owner_fee_balance.to_bytes()).unwrap();
-            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+            trie.insert(owner_cur_key.as_bytes(), &owner_cur_balance.to_bytes())
+                .unwrap();
+            trie.insert(owner_fee_key.as_bytes(), &owner_fee_balance.to_bytes())
+                .unwrap();
+            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                .unwrap();
             trie.insert(owner_nonce_key, &nonce_buf).unwrap();
-            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
+                .unwrap();
         }
     }
 
@@ -210,7 +207,7 @@ impl OpenContract {
     /// the owner's nonce. The address is the hash of the result.
     pub fn compute_address(&mut self) {
         let mut buf: Vec<u8> = Vec::new();
-        
+
         let owner = &self.owner.to_bytes();
         let code = &self.code;
         let state = &self.default_state;
@@ -238,27 +235,27 @@ impl OpenContract {
         let signature = crypto::sign(&message, skey);
 
         match self.signature {
-            Some(Signature::Normal(_)) => { 
+            Some(Signature::Normal(_)) => {
                 if let Address::Normal(_) = self.owner {
                     let result = Signature::Normal(signature);
                     self.signature = Some(result);
                 } else {
                     panic!("Invalid address type");
                 }
-            },
+            }
             Some(Signature::MultiSig(ref mut sig)) => {
                 if let Address::Normal(_) = self.owner {
                     panic!("Invalid address type");
                 } else {
                     // Append signature to the multi sig struct
                     sig.append_sig(signature);
-                }           
-            },
+                }
+            }
             None => {
                 if let Address::Normal(_) = self.owner {
                     // Create a normal signature
                     let result = Signature::Normal(signature);
-                    
+
                     // Attach signature to struct
                     self.signature = Some(result);
                 } else {
@@ -271,31 +268,29 @@ impl OpenContract {
             }
         };
     }
-    
+
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
     ///
-    /// This function panics if the transaction has a multi 
+    /// This function panics if the transaction has a multi
     /// signature attached to it or if the signer's address
     /// is not a normal address.
     pub fn verify_sig(&mut self) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(ref sig)) => { 
+            Some(Signature::Normal(ref sig)) => {
                 if let Address::Normal(ref addr) = self.owner {
                     crypto::verify(&message, sig.clone(), addr.pkey())
                 } else {
                     panic!("The address of the signer is not a normal address!");
                 }
-            },
+            }
             Some(Signature::MultiSig(_)) => {
                 panic!("Calling this function on a multi signature transaction is not permitted!");
-            },
-            None => {
-                false
             }
+            None => false,
         }
     }
 
@@ -303,7 +298,7 @@ impl OpenContract {
     ///
     /// Returns `false` if the signature field is missing.
     ///
-    /// This function panics if the transaction has a multi 
+    /// This function panics if the transaction has a multi
     /// signature attached to it or if the signer's address
     /// is not a normal address.
     pub fn verify_multi_sig(&mut self, required_keys: u8, pkeys: &[Pk]) -> bool {
@@ -313,15 +308,11 @@ impl OpenContract {
             let message = assemble_sign_message(&self);
 
             match self.signature {
-                Some(Signature::Normal(_)) => { 
+                Some(Signature::Normal(_)) => {
                     panic!("Calling this function on a transaction with a normal signature is not permitted!");
-                },
-                Some(Signature::MultiSig(ref sig)) => {
-                    sig.verify(&message, required_keys, pkeys)
-                },
-                None => {
-                    false
                 }
+                Some(Signature::MultiSig(ref sig)) => sig.verify(&message, required_keys, pkeys),
+                None => false,
             }
         }
     }
@@ -329,19 +320,21 @@ impl OpenContract {
     /// Verifies the multi signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(&mut self, required_percentile: u8, share_map: ShareMap) -> bool {
+    pub fn verify_multi_sig_shares(
+        &mut self,
+        required_percentile: u8,
+        share_map: ShareMap,
+    ) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(_)) => { 
+            Some(Signature::Normal(_)) => {
                 panic!("Calling this function on a transaction with a normal signature is not permitted!");
-            },
+            }
             Some(Signature::MultiSig(ref sig)) => {
                 sig.verify_shares(&message, required_percentile, share_map)
-            },
-            None => {
-                false
             }
+            None => false,
         }
     }
 
@@ -445,7 +438,7 @@ impl OpenContract {
             match result {
                 0 => false,
                 1 => true,
-                _ => return Err("Invalid self payable field")
+                _ => return Err("Invalid self payable field"),
             }
         } else {
             return Err("Bad self payable field");
@@ -505,10 +498,10 @@ impl OpenContract {
 
         let owner = if buf.len() > 33 as usize {
             let owner_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match Address::from_bytes(&owner_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the size for the owner field");
@@ -516,10 +509,10 @@ impl OpenContract {
 
         let address = if buf.len() > 33 as usize {
             let address_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match ContractAddress::from_bytes(&address_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the size for the owner field");
@@ -562,8 +555,8 @@ impl OpenContract {
             let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
 
             match Signature::from_bytes(&sig_vec) {
-                Ok(sig)   => sig,
-                Err(err)  => return Err(err)
+                Ok(sig) => sig,
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the size of the signature field");
@@ -574,10 +567,10 @@ impl OpenContract {
 
             match Balance::from_bytes(&amount_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad amount")
+                Err(_) => return Err("Bad amount"),
             }
         } else {
-            return Err("Incorrect packet structure! Buffer size is smaller than the size for the fee field")
+            return Err("Incorrect packet structure! Buffer size is smaller than the size for the fee field");
         };
 
         let fee = if buf.len() >= fee_len as usize {
@@ -585,22 +578,22 @@ impl OpenContract {
 
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad fee")
+                Err(_) => return Err("Bad fee"),
             }
         } else {
-            return Err("Incorrect packet structure! Buffer size is smaller than the size for the fee field")
+            return Err("Incorrect packet structure! Buffer size is smaller than the size for the fee field");
         };
 
         let default_state = if buf.len() >= state_len as usize {
             buf.drain(..state_len as usize).collect()
         } else {
-            return Err("Incorrect packet structure! Buffer size is smaller than the size for the default state field")
+            return Err("Incorrect packet structure! Buffer size is smaller than the size for the default state field");
         };
 
         let code = if buf.len() == code_len as usize {
             buf.drain(..code_len as usize).collect()
         } else {
-            return Err("Incorrect packet structure! Buffer size is not equal with the size for the code field")
+            return Err("Incorrect packet structure! Buffer size is not equal with the size for the code field");
         };
 
         let open_contract = OpenContract {
@@ -681,7 +674,7 @@ fn assemble_sign_message(obj: &OpenContract) -> Vec<u8> {
 use quickcheck::Arbitrary;
 
 impl Arbitrary for OpenContract {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> OpenContract {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> OpenContract {
         OpenContract {
             owner: Arbitrary::arbitrary(g),
             code: Arbitrary::arbitrary(g),
@@ -702,7 +695,7 @@ impl Arbitrary for OpenContract {
 #[cfg(test)]
 mod tests {
     extern crate test_helpers;
-    
+
     use super::*;
     use account::NormalAddress;
     use crypto::Identity;
@@ -718,7 +711,12 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize owner balance
-        test_helpers::init_balance(&mut trie, Address::Normal(owner_addr.clone()), asset_hash, b"10000.0");
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(owner_addr.clone()),
+            asset_hash,
+            b"10000.0",
+        );
 
         let amount = Balance::from_bytes(b"30.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -737,7 +735,7 @@ mod tests {
             nonce: 3429,
             address: None,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.compute_address();
@@ -746,13 +744,14 @@ mod tests {
 
         // Apply transaction
         tx.apply(&mut trie);
-        
+
         // Commit changes
         trie.commit();
-        
+
         let owner_nonce_key = format!("{}.n", hex::encode(&owner_addr.to_bytes()));
         let owner_nonce_key = owner_nonce_key.as_bytes();
-        let receiver_nonce_key = format!("{}.n", hex::encode(tx.address.clone().unwrap().to_bytes()));
+        let receiver_nonce_key =
+            format!("{}.n", hex::encode(tx.address.clone().unwrap().to_bytes()));
         let receiver_nonce_key = receiver_nonce_key.as_bytes();
 
         let code_key = format!("{}.c", hex::encode(tx.address.clone().unwrap().to_bytes()));
@@ -768,7 +767,8 @@ mod tests {
         let bin_asset_hash = asset_hash.to_vec();
         let hex_asset_hash = hex::encode(&bin_asset_hash);
 
-        let owner_balance_key = format!("{}.{}", hex::encode(&owner_addr.to_bytes()), hex_asset_hash);
+        let owner_balance_key =
+            format!("{}.{}", hex::encode(&owner_addr.to_bytes()), hex_asset_hash);
         let owner_balance_key = owner_balance_key.as_bytes();
 
         let balance = Balance::from_bytes(&trie.get(&owner_balance_key).unwrap().unwrap()).unwrap();
@@ -781,7 +781,10 @@ mod tests {
         assert_eq!(bin_receiver_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 0]);
 
         // Verify that the correct amount of funds have been subtracted from the sender
-        assert_eq!(balance, Balance::from_bytes(b"10000.0").unwrap() - amount.clone() - fee.clone());
+        assert_eq!(
+            balance,
+            Balance::from_bytes(b"10000.0").unwrap() - amount.clone() - fee.clone()
+        );
 
         // Verify shares and share map
         assert_eq!(written_code, code);
@@ -876,7 +879,7 @@ mod tests {
             for id in ids {
                 tx.sign(id.skey().clone());
             }
-            
+
             tx.verify_multi_sig(10, &pkeys)
         }
 
@@ -904,8 +907,8 @@ mod tests {
                 .iter()
                 .map(|pk| NormalAddress::from_pkey(*pk))
                 .collect();
-            
-            let mut share_map = ShareMap::new(); 
+
+            let mut share_map = ShareMap::new();
 
             for addr in addresses.clone() {
                 share_map.add_shareholder(addr, 100);
@@ -932,7 +935,7 @@ mod tests {
             for id in ids {
                 tx.sign(id.skey().clone());
             }
-            
+
             tx.verify_multi_sig_shares(10, share_map)
         }
     }

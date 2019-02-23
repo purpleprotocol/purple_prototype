@@ -31,7 +31,7 @@ macro_rules! impl_hash {
             self.hash = Some(hash);
         }
 
-        /// Computes the message that is passed to the 
+        /// Computes the message that is passed to the
         /// hash function of this transaction.
         ///
         /// This function will panic if the signature field is missing.
@@ -39,7 +39,7 @@ macro_rules! impl_hash {
 
         /// Verifies the correctness of the hash of the transaction.
         ///
-        /// This function will panic if the hash field or if the 
+        /// This function will panic if the hash field or if the
         /// signature field is missing.
         pub fn verify_hash(&mut self) -> bool {
             let hash = if let Some(hash) = &self.hash {
@@ -47,7 +47,7 @@ macro_rules! impl_hash {
             } else {
                 panic!("Hash field is missing!");
             };
-            
+
             let oracle_message = assemble_hash_message(&self);
             let oracle_hash = crypto::hash_slice(&oracle_message);
 
@@ -61,7 +61,7 @@ macro_rules! impl_validate_signature {
         fn validate_signature(&mut self, creator: &Address, signature: &Option<Signature>, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
             use crypto::PublicKey as Pk;
             use account::{NormalAddress, Shares};
-            
+
             match (creator, signature) {
                 (&Address::Normal(_), &Some(Signature::Normal(_))) => {
                     if !self.verify_sig() {
@@ -86,7 +86,7 @@ macro_rules! impl_validate_signature {
                     let keys: Result<Vec<Pk>, &'static str> = match trie.get(&keys_key) {
                         Ok(Some(keys)) => {
                             let keys: Vec<Vec<u8>> = rlp::decode_list(&keys);
-                            
+
                             keys
                                 .iter()
                                 .map(|k| NormalAddress::from_bytes(k))
@@ -98,7 +98,7 @@ macro_rules! impl_validate_signature {
                         },
                         Ok(None) => return false,
                         Err(err) => panic!(err)
-                    }; 
+                    };
 
                     let keys = if let Ok(keys) = keys {
                         keys
