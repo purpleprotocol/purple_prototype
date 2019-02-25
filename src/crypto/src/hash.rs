@@ -16,15 +16,15 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use rand::Rng;
-use quickcheck::Arbitrary;
-use blake2::VarBlake2b;
 use blake2::digest::{Input, VariableOutput};
+use blake2::VarBlake2b;
+use blake_hasher::BlakeHasher;
+use hashdb::Hasher;
+use quickcheck::Arbitrary;
+use rand::Rng;
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::convert::{AsMut, AsRef};
 use std::default::Default;
-use hashdb::Hasher;
-use blake_hasher::BlakeHasher;
-use rlp::{Encodable, Decodable, Rlp, RlpStream, DecoderError};
 
 pub const HASH_BYTES: usize = 32;
 
@@ -32,8 +32,14 @@ pub const HASH_BYTES: usize = 32;
 pub struct Hash(pub [u8; HASH_BYTES]);
 
 impl Hash {
-    pub const NULL: Hash = Hash([14, 87, 81, 192, 38, 229, 67, 178, 232, 171, 46, 176, 96, 153, 218, 161, 209, 229, 223, 71, 119, 143, 119, 135, 250, 171, 69, 205, 241, 47, 227, 168]);
-    pub const NULL_RLP: Hash = Hash([218, 34, 59, 9, 150, 124, 91, 210, 17, 7, 67, 48, 126, 10, 246, 211, 159, 97, 114, 10, 167, 33, 138, 100, 10, 8, 238, 209, 45, 213, 117, 199]);
+    pub const NULL: Hash = Hash([
+        14, 87, 81, 192, 38, 229, 67, 178, 232, 171, 46, 176, 96, 153, 218, 161, 209, 229, 223, 71,
+        119, 143, 119, 135, 250, 171, 69, 205, 241, 47, 227, 168,
+    ]);
+    pub const NULL_RLP: Hash = Hash([
+        218, 34, 59, 9, 150, 124, 91, 210, 17, 7, 67, 48, 126, 10, 246, 211, 159, 97, 114, 10, 167,
+        33, 138, 100, 10, 8, 238, 209, 45, 213, 117, 199,
+    ]);
 
     pub fn to_vec(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::with_capacity(HASH_BYTES);
@@ -75,8 +81,8 @@ impl Decodable for Hash {
                 result.copy_from_slice(data);
 
                 Ok(Hash(result))
-            },
-            _ => Err(DecoderError::Custom("Invalid rlp data"))
+            }
+            _ => Err(DecoderError::Custom("Invalid rlp data")),
         }
     }
 }
@@ -116,11 +122,9 @@ pub fn hash_slice(val: &[u8]) -> Hash {
 }
 
 impl Arbitrary for Hash {
-    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Hash {
+    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> Hash {
         let mut rng = rand::thread_rng();
-        let bytes: Vec<u8> = (0..32).map(|_| {
-            rng.gen_range(1, 255)
-        }).collect();
+        let bytes: Vec<u8> = (0..32).map(|_| rng.gen_range(1, 255)).collect();
 
         let mut result = [0; 32];
         result.copy_from_slice(&bytes);

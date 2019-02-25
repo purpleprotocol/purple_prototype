@@ -16,12 +16,12 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, MultiSigAddress, Balance};
+use account::{Balance, MultiSigAddress, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Signature, Hash, SecretKey as Sk};
-use std::io::Cursor;
-use patricia_trie::{TrieMut, TrieDBMut};
+use crypto::{Hash, SecretKey as Sk, Signature};
+use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
+use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenMultiSig {
@@ -54,10 +54,7 @@ impl OpenMultiSig {
         let bin_currency_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
         let required_keys = &self.required_keys;
-        let keys: Vec<Vec<u8>> = self.keys
-            .iter()
-            .map(|k| k.to_bytes())
-            .collect();
+        let keys: Vec<Vec<u8>> = self.keys.iter().map(|k| k.to_bytes()).collect();
 
         let bin_keys: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&keys);
 
@@ -70,7 +67,7 @@ impl OpenMultiSig {
         let fee_hash = hex::encode(bin_fee_hash);
 
         // Calculate nonce keys
-        // 
+        //
         // The key of a nonce has the following format:
         // `<account-address>.n`
         let creator_nonce_key = format!("{}.n", creator);
@@ -87,7 +84,7 @@ impl OpenMultiSig {
         // The key of the `required keys` entry has the following format:
         // `<account-address>.r`
         let required_ks_key = format!("{}.r", address);
-        let required_ks_key = required_ks_key.as_bytes(); 
+        let required_ks_key = required_ks_key.as_bytes();
 
         // Calculate `keys` key
         //
@@ -125,12 +122,10 @@ impl OpenMultiSig {
             // that is being transferred, so we only retrieve one
             // balance.
             let mut creator_balance = unwrap!(
-                Balance::from_bytes(
-                    &unwrap!(
-                        trie.get(&creator_cur_key.as_bytes()).unwrap(),
-                        "The creator does not have an entry for the given currency"
-                    )
-                ),
+                Balance::from_bytes(&unwrap!(
+                    trie.get(&creator_cur_key.as_bytes()).unwrap(),
+                    "The creator does not have an entry for the given currency"
+                )),
                 "Invalid stored balance format"
             );
 
@@ -145,30 +140,29 @@ impl OpenMultiSig {
             // Update trie
             trie.insert(ks_key, &bin_keys).unwrap();
             trie.insert(required_ks_key, &vec![*required_keys]).unwrap();
-            trie.insert(creator_cur_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
-            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+            trie.insert(creator_cur_key.as_bytes(), &creator_balance.to_bytes())
+                .unwrap();
+            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                .unwrap();
             trie.insert(creator_nonce_key, &nonce_buf).unwrap();
-            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
+                .unwrap();
         } else {
             // The transaction's fee is paid in a different currency
             // than the one being transferred so we retrieve both balances.
             let mut creator_cur_balance = unwrap!(
-                Balance::from_bytes(
-                    &unwrap!(
-                        trie.get(&creator_cur_key.as_bytes()).unwrap(),
-                        "The creator does not have an entry for the given currency"
-                    )
-                ),
+                Balance::from_bytes(&unwrap!(
+                    trie.get(&creator_cur_key.as_bytes()).unwrap(),
+                    "The creator does not have an entry for the given currency"
+                )),
                 "Invalid stored balance format"
             );
 
             let mut creator_fee_balance = unwrap!(
-                Balance::from_bytes(
-                    &unwrap!(
-                        trie.get(&creator_fee_key.as_bytes()).unwrap(),
-                        "The creator does not have an entry for the given currency"
-                    )
-                ),
+                Balance::from_bytes(&unwrap!(
+                    trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                    "The creator does not have an entry for the given currency"
+                )),
                 "Invalid stored balance format"
             );
 
@@ -183,11 +177,15 @@ impl OpenMultiSig {
             // Update trie
             trie.insert(ks_key, &bin_keys).unwrap();
             trie.insert(required_ks_key, &vec![*required_keys]).unwrap();
-            trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes()).unwrap();
-            trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes()).unwrap();
-            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+            trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes())
+                .unwrap();
+            trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes())
+                .unwrap();
+            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                .unwrap();
             trie.insert(creator_nonce_key, &nonce_buf).unwrap();
-            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
+                .unwrap();
         }
     }
 
@@ -218,12 +216,8 @@ impl OpenMultiSig {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => { 
-                crypto::verify(&message, sig.clone(), self.creator.pkey())
-            },
-            None => {
-                false
-            }
+            Some(ref sig) => crypto::verify(&message, sig.clone(), self.creator.pkey()),
+            None => false,
         }
     }
 
@@ -268,7 +262,7 @@ impl OpenMultiSig {
         };
 
         let mut keys: Vec<Vec<u8>> = Vec::with_capacity(self.keys.len());
-        
+
         for k in self.keys.iter() {
             keys.push(k.to_bytes());
         }
@@ -388,10 +382,10 @@ impl OpenMultiSig {
 
         let creator = if buf.len() > 33 as usize {
             let creator_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match NormalAddress::from_bytes(&creator_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -399,10 +393,10 @@ impl OpenMultiSig {
 
         let address = if buf.len() > 33 as usize {
             let address_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match MultiSigAddress::from_bytes(&address_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -423,8 +417,8 @@ impl OpenMultiSig {
             let sig_vec: Vec<u8> = buf.drain(..65 as usize).collect();
 
             match Signature::from_bytes(&sig_vec) {
-                Ok(sig)   => sig,
-                Err(err)  => return Err(err)
+                Ok(sig) => sig,
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -435,10 +429,10 @@ impl OpenMultiSig {
 
             match Balance::from_bytes(&amount_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad amount")
+                Err(_) => return Err("Bad amount"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let fee = if buf.len() > fee_len as usize {
@@ -446,10 +440,10 @@ impl OpenMultiSig {
 
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad fee")
+                Err(_) => return Err("Bad fee"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let keys = if buf.len() == keys_len as usize {
@@ -460,13 +454,13 @@ impl OpenMultiSig {
             for k in deserialized_keys {
                 match NormalAddress::from_bytes(&k) {
                     Ok(addr) => keys.push(addr),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
 
             keys
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let open_multi_sig = OpenMultiSig {
@@ -508,7 +502,7 @@ fn assemble_hash_message(obj: &OpenMultiSig) -> Vec<u8> {
     };
 
     let mut keys: Vec<Vec<u8>> = Vec::with_capacity(obj.keys.len());
-        
+
     for k in obj.keys.iter() {
         keys.push(k.to_bytes());
     }
@@ -549,7 +543,7 @@ fn assemble_sign_message(obj: &OpenMultiSig) -> Vec<u8> {
     };
 
     let mut keys: Vec<Vec<u8>> = Vec::with_capacity(obj.keys.len());
-        
+
     for k in obj.keys.iter() {
         keys.push(k.to_bytes());
     }
@@ -584,7 +578,7 @@ fn assemble_sign_message(obj: &OpenMultiSig) -> Vec<u8> {
 use quickcheck::Arbitrary;
 
 impl Arbitrary for OpenMultiSig {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> OpenMultiSig {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> OpenMultiSig {
         OpenMultiSig {
             creator: Arbitrary::arbitrary(g),
             keys: Arbitrary::arbitrary(g),
@@ -604,7 +598,7 @@ impl Arbitrary for OpenMultiSig {
 #[cfg(test)]
 mod tests {
     extern crate test_helpers;
-    
+
     use super::*;
     use account::Address;
     use crypto::Identity;
@@ -620,7 +614,12 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize creator balance
-        test_helpers::init_balance(&mut trie, Address::Normal(creator_addr.clone()), asset_hash, b"10000.0");
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(creator_addr.clone()),
+            asset_hash,
+            b"10000.0",
+        );
 
         let amount = Balance::from_bytes(b"30.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -645,7 +644,7 @@ mod tests {
             nonce: 3429,
             address: None,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.compute_address();
@@ -654,13 +653,14 @@ mod tests {
 
         // Apply transaction
         tx.apply(&mut trie);
-        
+
         // Commit changes
         trie.commit();
-        
+
         let creator_nonce_key = format!("{}.n", hex::encode(&creator_addr.to_bytes()));
         let creator_nonce_key = creator_nonce_key.as_bytes();
-        let receiver_nonce_key = format!("{}.n", hex::encode(tx.address.clone().unwrap().to_bytes()));
+        let receiver_nonce_key =
+            format!("{}.n", hex::encode(tx.address.clone().unwrap().to_bytes()));
         let receiver_nonce_key = receiver_nonce_key.as_bytes();
 
         let required_ks_key = format!("{}.r", hex::encode(tx.address.clone().unwrap().to_bytes()));
@@ -674,16 +674,21 @@ mod tests {
         let bin_asset_hash = asset_hash.to_vec();
         let hex_asset_hash = hex::encode(&bin_asset_hash);
 
-        let creator_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_asset_hash);
+        let creator_balance_key = format!(
+            "{}.{}",
+            hex::encode(&creator_addr.to_bytes()),
+            hex_asset_hash
+        );
         let creator_balance_key = creator_balance_key.as_bytes();
 
-        let balance = Balance::from_bytes(&trie.get(&creator_balance_key).unwrap().unwrap()).unwrap();
+        let balance =
+            Balance::from_bytes(&trie.get(&creator_balance_key).unwrap().unwrap()).unwrap();
         let decoded_keys: Vec<Vec<u8>> = rlp::decode_list(&trie.get(&ks_key).unwrap().unwrap());
         let written_keys: Vec<NormalAddress> = decoded_keys
             .iter()
             .map(|k| NormalAddress::from_bytes(k).unwrap())
             .collect();
-        
+
         let written_required_keys = trie.get(&required_ks_key).unwrap().unwrap().pop().unwrap();
 
         // Check nonces
@@ -691,7 +696,10 @@ mod tests {
         assert_eq!(bin_receiver_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 0]);
 
         // Verify that the correct amount of funds have been subtracted from the sender
-        assert_eq!(balance, Balance::from_bytes(b"10000.0").unwrap() - amount.clone() - fee.clone());
+        assert_eq!(
+            balance,
+            Balance::from_bytes(b"10000.0").unwrap() - amount.clone() - fee.clone()
+        );
 
         // Verify shares and share map
         assert_eq!(written_keys, keys);

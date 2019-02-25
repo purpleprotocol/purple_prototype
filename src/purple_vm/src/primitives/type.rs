@@ -61,43 +61,43 @@ pub enum VmType {
 impl VmType {
     pub fn from_op(op: u8) -> Option<VmType> {
         match Instruction::from_repr(op) {
-            Some(Instruction::i32Const)     => Some(VmType::I32),
-            Some(Instruction::i64Const)     => Some(VmType::I64),
-            Some(Instruction::f32Const)     => Some(VmType::F32),
-            Some(Instruction::f64Const)     => Some(VmType::F64),
-            Some(Instruction::i32Array2)    => Some(VmType::i32Array2),
-            Some(Instruction::i32Array4)    => Some(VmType::i32Array4),
-            Some(Instruction::i32Array8)    => Some(VmType::i32Array8),
-            Some(Instruction::i32Array16)   => Some(VmType::i32Array16),
-            Some(Instruction::i32Array32)   => Some(VmType::i32Array32),
-            Some(Instruction::i32Array64)   => Some(VmType::i32Array64),
-            Some(Instruction::i32Array128)  => Some(VmType::i32Array128),
-            Some(Instruction::i32Array256)  => Some(VmType::i32Array256),
-            Some(Instruction::i64Array2)    => Some(VmType::i64Array2),
-            Some(Instruction::i64Array4)    => Some(VmType::i64Array4),
-            Some(Instruction::i64Array8)    => Some(VmType::i64Array8),
-            Some(Instruction::i64Array16)   => Some(VmType::i64Array16),
-            Some(Instruction::i64Array32)   => Some(VmType::i64Array32),
-            Some(Instruction::i64Array64)   => Some(VmType::i64Array64),
-            Some(Instruction::i64Array128)  => Some(VmType::i64Array128),
-            Some(Instruction::i64Array256)  => Some(VmType::i64Array256),
-            Some(Instruction::f32Array2)    => Some(VmType::f32Array2),
-            Some(Instruction::f32Array4)    => Some(VmType::f32Array4),
-            Some(Instruction::f32Array8)    => Some(VmType::f32Array8),
-            Some(Instruction::f32Array16)   => Some(VmType::f32Array16),
-            Some(Instruction::f32Array32)   => Some(VmType::f32Array32),
-            Some(Instruction::f32Array64)   => Some(VmType::f32Array64),
-            Some(Instruction::f32Array128)  => Some(VmType::f32Array128),
-            Some(Instruction::f32Array256)  => Some(VmType::f32Array256),
-            Some(Instruction::f64Array2)    => Some(VmType::f64Array2),
-            Some(Instruction::f64Array4)    => Some(VmType::f64Array4),
-            Some(Instruction::f64Array8)    => Some(VmType::f64Array8),
-            Some(Instruction::f64Array16)   => Some(VmType::f64Array16),
-            Some(Instruction::f64Array32)   => Some(VmType::f64Array32),
-            Some(Instruction::f64Array64)   => Some(VmType::f64Array64),
-            Some(Instruction::f64Array128)  => Some(VmType::f64Array128),
-            Some(Instruction::f64Array256)  => Some(VmType::f64Array256),
-            _                               => None
+            Some(Instruction::i32Const) => Some(VmType::I32),
+            Some(Instruction::i64Const) => Some(VmType::I64),
+            Some(Instruction::f32Const) => Some(VmType::F32),
+            Some(Instruction::f64Const) => Some(VmType::F64),
+            Some(Instruction::i32Array2) => Some(VmType::i32Array2),
+            Some(Instruction::i32Array4) => Some(VmType::i32Array4),
+            Some(Instruction::i32Array8) => Some(VmType::i32Array8),
+            Some(Instruction::i32Array16) => Some(VmType::i32Array16),
+            Some(Instruction::i32Array32) => Some(VmType::i32Array32),
+            Some(Instruction::i32Array64) => Some(VmType::i32Array64),
+            Some(Instruction::i32Array128) => Some(VmType::i32Array128),
+            Some(Instruction::i32Array256) => Some(VmType::i32Array256),
+            Some(Instruction::i64Array2) => Some(VmType::i64Array2),
+            Some(Instruction::i64Array4) => Some(VmType::i64Array4),
+            Some(Instruction::i64Array8) => Some(VmType::i64Array8),
+            Some(Instruction::i64Array16) => Some(VmType::i64Array16),
+            Some(Instruction::i64Array32) => Some(VmType::i64Array32),
+            Some(Instruction::i64Array64) => Some(VmType::i64Array64),
+            Some(Instruction::i64Array128) => Some(VmType::i64Array128),
+            Some(Instruction::i64Array256) => Some(VmType::i64Array256),
+            Some(Instruction::f32Array2) => Some(VmType::f32Array2),
+            Some(Instruction::f32Array4) => Some(VmType::f32Array4),
+            Some(Instruction::f32Array8) => Some(VmType::f32Array8),
+            Some(Instruction::f32Array16) => Some(VmType::f32Array16),
+            Some(Instruction::f32Array32) => Some(VmType::f32Array32),
+            Some(Instruction::f32Array64) => Some(VmType::f32Array64),
+            Some(Instruction::f32Array128) => Some(VmType::f32Array128),
+            Some(Instruction::f32Array256) => Some(VmType::f32Array256),
+            Some(Instruction::f64Array2) => Some(VmType::f64Array2),
+            Some(Instruction::f64Array4) => Some(VmType::f64Array4),
+            Some(Instruction::f64Array8) => Some(VmType::f64Array8),
+            Some(Instruction::f64Array16) => Some(VmType::f64Array16),
+            Some(Instruction::f64Array32) => Some(VmType::f64Array32),
+            Some(Instruction::f64Array64) => Some(VmType::f64Array64),
+            Some(Instruction::f64Array128) => Some(VmType::f64Array128),
+            Some(Instruction::f64Array256) => Some(VmType::f64Array256),
+            _ => None,
         }
     }
 
@@ -107,79 +107,71 @@ impl VmType {
         }
 
         match *self {
-            VmType::I32 => {
-                match decode_be_i32!(buf) {
-                    Ok(_) => true,
-                    _     => false
-                }
+            VmType::I32 => match decode_be_i32!(buf) {
+                Ok(_) => true,
+                _ => false,
             },
-            VmType::I64 => {
-                match decode_be_i64!(buf) {
-                    Ok(_) => true,
-                    _     => false
-                }
+            VmType::I64 => match decode_be_i64!(buf) {
+                Ok(_) => true,
+                _ => false,
             },
-            VmType::F32 => {
-                match decode_be_f32!(buf) {
-                    Ok(_) => true,
-                    _     => false
-                }
+            VmType::F32 => match decode_be_f32!(buf) {
+                Ok(_) => true,
+                _ => false,
             },
-            VmType::F64 => {
-                match decode_be_f64!(buf) {
-                    Ok(_) => true,
-                    _     => false
-                }
+            VmType::F64 => match decode_be_f64!(buf) {
+                Ok(_) => true,
+                _ => false,
             },
 
             // TODO: Validate structure for arrays
             VmType::i32Array2 => {
                 unimplemented!();
-            },
+            }
             VmType::i32Array4 => {
                 unimplemented!();
-            },
+            }
             VmType::i32Array8 => {
                 unimplemented!();
-            },
+            }
             VmType::i64Array2 => {
                 unimplemented!();
-            },
+            }
             VmType::i64Array4 => {
                 unimplemented!();
-            },
+            }
             VmType::i64Array8 => {
                 unimplemented!();
-            },
+            }
             VmType::f32Array2 => {
                 unimplemented!();
-            },
+            }
             VmType::f32Array4 => {
                 unimplemented!();
-            },
+            }
             VmType::f32Array8 => {
                 unimplemented!();
-            },
+            }
             VmType::f64Array2 => {
                 unimplemented!();
-            },
+            }
             VmType::f64Array4 => {
                 unimplemented!();
-            },
+            }
             VmType::f64Array8 => {
                 unimplemented!();
-            },
-            _ => panic!()
+            }
+            _ => panic!(),
         }
     }
 
     /// Returns the byte size of the type.
     pub fn byte_size(&self) -> usize {
         match *self {
-            VmType::I32       => 4,
-            VmType::I64       => 8,
-            VmType::F32       => 4,
-            VmType::F64       => 8,
+            VmType::I32 => 4,
+            VmType::I64 => 8,
+            VmType::F32 => 4,
+            VmType::F64 => 8,
             VmType::i32Array2 => 8,
             VmType::i32Array4 => 16,
             VmType::i32Array8 => 32,
@@ -192,7 +184,7 @@ impl VmType {
             VmType::f64Array2 => 16,
             VmType::f64Array4 => 32,
             VmType::f64Array8 => 64,
-            _                 => panic!()
+            _ => panic!(),
         }
     }
 }

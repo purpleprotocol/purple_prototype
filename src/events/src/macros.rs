@@ -33,7 +33,7 @@ macro_rules! impl_hash {
 
         /// Verifies the correctness of the hash of the transaction.
         ///
-        /// This function will panic if the hash field or if the 
+        /// This function will panic if the hash field or if the
         /// signature field is missing.
         pub fn verify_hash(&mut self) -> bool {
             let hash = if let Some(hash) = &self.hash {
@@ -41,7 +41,7 @@ macro_rules! impl_hash {
             } else {
                 panic!("Hash field is missing!");
             };
-            
+
             let oracle_message = assemble_hash_message(&self);
             let oracle_hash = crypto::hash_slice(&oracle_message);
 

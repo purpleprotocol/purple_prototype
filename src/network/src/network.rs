@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use Peer;
-use NodeId;
 use std::net::SocketAddr;
+use NodeId;
+use Peer;
 
 #[derive(Debug, Clone)]
 pub struct Network {
@@ -29,7 +29,7 @@ pub struct Network {
     node_id: NodeId,
 
     /// The name of the network we are on
-    network_name: String
+    network_name: String,
 }
 
 impl Network {
@@ -37,7 +37,7 @@ impl Network {
         Network {
             peers: Vec::new(),
             node_id: node_id,
-            network_name: network_name
+            network_name: network_name,
         }
     }
 
@@ -56,7 +56,7 @@ impl Network {
     pub fn set_node_id(&mut self, addr: &SocketAddr, node_id: NodeId) {
         match self.peers.iter().position(|x| x.ip == *addr) {
             Some(idx) => self.peers[idx].set_id(node_id),
-            None      => panic!("There is no listed peer with the given address!")
+            None => panic!("There is no listed peer with the given address!"),
         };
     }
 
@@ -66,7 +66,7 @@ impl Network {
     pub fn remove_peer_with_addr(&mut self, addr: &SocketAddr) {
         match self.peers.iter().position(|x| x.ip == *addr) {
             Some(idx) => self.peers.remove(idx),
-            None      => panic!("There is no listed peer with the given address!")
+            None => panic!("There is no listed peer with the given address!"),
         };
     }
 
@@ -76,7 +76,7 @@ impl Network {
     pub fn is_none_id(&self, addr: &SocketAddr) -> bool {
         match self.peers.iter().position(|x| x.ip == *addr) {
             Some(idx) => self.peers[idx].id.is_none(),
-            None      => panic!("There is no listed peer with the given address!")
+            None => panic!("There is no listed peer with the given address!"),
         }
     }
 }

@@ -17,14 +17,13 @@
 */
 
 extern crate itc;
-extern crate serde;
 extern crate quickcheck;
 extern crate rand;
+extern crate serde;
 
-
-use quickcheck::Arbitrary;
 use itc::Stamp as ItcStamp;
 use itc::{IntervalTreeClock, LessThanOrEqual};
+use quickcheck::Arbitrary;
 use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::{Serialize, Serializer};
 use std::str::from_utf8;
@@ -138,13 +137,13 @@ impl<'a> Deserialize<'a> for Stamp {
 
         match ItcStamp::from_str(result) {
             Ok(res) => Ok(Stamp(res)),
-            Err(_)  => Err(Error::custom(format!("{} is not a valid stamp", result))),
+            Err(_) => Err(Error::custom(format!("{} is not a valid stamp", result))),
         }
     }
 }
 
 impl Arbitrary for Stamp {
-    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Stamp {
+    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> Stamp {
         let stamp = Stamp::seed();
 
         // TODO: Make this more random and complex

@@ -16,26 +16,26 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::Signature;
 use addresses::normal::NormalAddress;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use rust_decimal::Decimal;
+use crypto::Signature;
+use hashbrown::HashMap;
 use quickcheck::Arbitrary;
+use rust_decimal::Decimal;
 use std::io::Cursor;
 use std::str::FromStr;
-use hashbrown::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ShareMap {
     share_map: HashMap<NormalAddress, u32>,
-    pub issued_shares: u32
+    pub issued_shares: u32,
 }
 
 impl ShareMap {
     pub fn new() -> ShareMap {
         ShareMap {
             share_map: HashMap::new(),
-            issued_shares: 0
+            issued_shares: 0,
         }
     }
 
@@ -52,7 +52,7 @@ impl ShareMap {
     pub fn get(&self, key: NormalAddress) -> Option<u32> {
         match self.share_map.get(&key) {
             Some(res) => Some(res.clone()),
-            None      => None
+            None => None,
         }
     }
 
@@ -62,16 +62,12 @@ impl ShareMap {
         self.issued_shares += shares;
     }
 
-    /// Adds the given amount of shares to the shareholder with the 
+    /// Adds the given amount of shares to the shareholder with the
     /// given address, raising the total amount of issued shares.
     pub fn issue_shares(&mut self, addr: NormalAddress, shares: u32) {
         let shares = match self.share_map.get(&addr) {
-            Some(current_shares) => {
-                current_shares + shares
-            },
-            None => {
-                shares
-            }
+            Some(current_shares) => current_shares + shares,
+            None => shares,
         };
 
         self.share_map.insert(addr, shares);
@@ -80,11 +76,11 @@ impl ShareMap {
 
     /// Transfers a given amount of shares from a shareholder.
     ///
-    /// The receiving address will be listed in the share map if 
+    /// The receiving address will be listed in the share map if
     /// it isn't so already.
     ///
     /// This function will panic if the `from` address isn't listed
-    /// in the share map or the given amount is greater than the 
+    /// in the share map or the given amount is greater than the
     /// owned shares of the `from` address.
     pub fn transfer_shares(&mut self, from: &NormalAddress, to: &NormalAddress, amount: u32) {
         let from_shares = match self.share_map.get(from) {
@@ -94,19 +90,15 @@ impl ShareMap {
                 }
 
                 current_shares - &amount
-            },
+            }
             None => {
                 panic!("From address isn't listed!");
             }
         };
 
         let to_shares = match self.share_map.get(to) {
-            Some(current_shares) => {
-                current_shares + &amount
-            },
-            None => {
-                amount
-            }
+            Some(current_shares) => current_shares + &amount,
+            None => amount,
         };
 
         // Remove entry from share map if all shares are transferred
@@ -114,7 +106,7 @@ impl ShareMap {
             self.share_map.remove(from);
         } else {
             self.share_map.insert(*from, from_shares);
-        } 
+        }
 
         self.share_map.insert(*to, to_shares);
     }
@@ -134,12 +126,10 @@ impl ShareMap {
         for (addr, shares) in self.share_map.iter() {
             if crypto::verify(message, signature.clone(), addr.pkey()) {
                 // A match has been found
-                let signer_ratio = (
-                    Decimal::from_str(&format!("{}.0", *shares)).unwrap() 
-                    / 
-                    Decimal::from_str(&format!("{}.0", self.issued_shares)).unwrap()
-                ) * Decimal::from_str("100.0").unwrap();
-                
+                let signer_ratio = (Decimal::from_str(&format!("{}.0", *shares)).unwrap()
+                    / Decimal::from_str(&format!("{}.0", self.issued_shares)).unwrap())
+                    * Decimal::from_str("100.0").unwrap();
+
                 result = Some(signer_ratio);
                 break;
             }
@@ -150,7 +140,7 @@ impl ShareMap {
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf: Vec<Vec<u8>> = Vec::with_capacity(self.share_map.len());
-        
+
         for (k, v) in self.share_map.iter() {
             let mut b: Vec<u8> = Vec::with_capacity(36);
             let mut k = k.to_bytes();
@@ -190,8 +180,8 @@ impl ShareMap {
                     Ok(address) => {
                         issued_shares += shares;
                         buf.insert(address, shares)
-                    },
-                    Err(err) => return Err(err)
+                    }
+                    Err(err) => return Err(err),
                 };
             } else {
                 return Err("Bad address");
@@ -200,7 +190,7 @@ impl ShareMap {
 
         let share_map = ShareMap {
             share_map: buf,
-            issued_shares: issued_shares
+            issued_shares: issued_shares,
         };
 
         Ok(share_map)
@@ -216,19 +206,18 @@ impl IntoIterator for ShareMap {
     }
 }
 
-
 impl Arbitrary for ShareMap {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> ShareMap {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> ShareMap {
         let sm: HashMap<NormalAddress, u32> = Arbitrary::arbitrary(g);
         let mut shares: u32 = 0;
 
         for (_, v) in sm.iter() {
             shares += v;
-        } 
+        }
 
         ShareMap {
             share_map: sm,
-            issued_shares: shares
+            issued_shares: shares,
         }
     }
 }
@@ -273,8 +262,8 @@ mod tests {
     quickcheck! {
         fn add_shareholder(sm: ShareMap, shareholder: NormalAddress, shares: u32) -> bool {
             let mut sm = sm.clone();
-            
-            sm.add_shareholder(shareholder, shares); 
+
+            sm.add_shareholder(shareholder, shares);
             sm.get(shareholder).unwrap() == shares
         }
 
@@ -297,7 +286,7 @@ mod tests {
         fn issue_shares_to_new(sm: ShareMap, shareholder: NormalAddress, shares: u32) -> bool {
             let mut sm = sm.clone();
 
-            sm.issue_shares(shareholder.clone(), shares); 
+            sm.issue_shares(shareholder.clone(), shares);
             sm.get(shareholder).unwrap() == shares
         }
 

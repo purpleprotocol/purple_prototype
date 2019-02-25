@@ -18,25 +18,25 @@
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use causality::Stamp;
-use crypto::{Hash, PublicKey, BlakeHasher, Signature, SecretKey as Sk};
-use network::NodeId;
-use std::boxed::Box;
-use std::io::Cursor;
-use transactions::*;
-use rayon::prelude::*;
+use crypto::{BlakeHasher, Hash, PublicKey, SecretKey as Sk, Signature};
 use merkle_light::hash::Algorithm;
 use merkle_light::merkle::MerkleTree;
+use network::NodeId;
+use rayon::prelude::*;
+use std::boxed::Box;
 use std::hash::Hasher;
+use std::io::Cursor;
 use std::iter::FromIterator;
+use transactions::*;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Heartbeat {
     /// The node id of the event sender
     pub node_id: NodeId,
-    
+
     /// The current timestamp of the sender
     pub stamp: Stamp,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     /// The root hash of the transactions contained
     /// by the heartbeat event.
@@ -55,20 +55,21 @@ pub struct Heartbeat {
 }
 
 impl Heartbeat {
-    pub const EVENT_TYPE: u8 = 0; 
+    pub const EVENT_TYPE: u8 = 0;
 
     /// Calculates the root hash of the merkle
     /// tree formed by the transactions stored
     /// in the heartbeat event.
     pub fn calculate_root_hash(&mut self) {
         let mut hasher = BlakeHasher::new();
-        let txs_hashes: Vec<Hash> = self.transactions
+        let txs_hashes: Vec<Hash> = self
+            .transactions
             .iter()
             .map(|tx| {
-                let message: Vec<u8> = tx.compute_hash_message(); 
-                
+                let message: Vec<u8> = tx.compute_hash_message();
+
                 hasher.write(&message);
-                hasher.hash()             
+                hasher.hash()
             })
             .collect();
 
@@ -129,14 +130,13 @@ impl Heartbeat {
         };
 
         // Serialize transactions
-        let transactions: Result<Vec<Vec<u8>>, _> = self.transactions
+        let transactions: Result<Vec<Vec<u8>>, _> = self
+            .transactions
             .par_iter()
-            .map(|tx| {
-                match (*tx).to_bytes() {
-                    Ok(tx) => Ok(tx),
-                    Err(_) => Err("Bad transaction")
-                }
-            }) 
+            .map(|tx| match (*tx).to_bytes() {
+                Ok(tx) => Ok(tx),
+                Err(_) => Err("Bad transaction"),
+            })
             .collect();
 
         if let Err(err) = transactions {
@@ -261,91 +261,91 @@ impl Heartbeat {
                         1 => {
                             let deserialized = match Call::from_bytes(&tx) {
                                 Ok(result) => result,
-                                Err(_)     => return Err("Invalid call transaction")
+                                Err(_) => return Err("Invalid call transaction"),
                             };
 
                             Ok(Box::new(Tx::Call(deserialized)))
-                        },
+                        }
                         2 => {
                             let deserialized = match OpenContract::from_bytes(&tx) {
                                 Ok(result) => result,
-                                Err(e)     => return Err(e)
+                                Err(e) => return Err(e),
                             };
 
                             Ok(Box::new(Tx::OpenContract(deserialized)))
-                        },
+                        }
                         3 => {
                             let deserialized = match Send::from_bytes(&tx) {
                                 Ok(result) => result,
-                                Err(_)     => return Err("Invalid send transaction")
+                                Err(_) => return Err("Invalid send transaction"),
                             };
 
                             Ok(Box::new(Tx::Send(deserialized)))
-                        },
+                        }
                         4 => {
                             let deserialized = match Pay::from_bytes(&tx) {
                                 Ok(result) => result,
-                                Err(_)     => return Err("Invalid pay transaction")
+                                Err(_) => return Err("Invalid pay transaction"),
                             };
 
                             Ok(Box::new(Tx::Pay(deserialized)))
-                        },
+                        }
                         5 => {
                             let deserialized = match OpenMultiSig::from_bytes(&tx) {
                                 Ok(result) => result,
-                                Err(_)     => return Err("Invalid open multi signature transaction")
+                                Err(_) => return Err("Invalid open multi signature transaction"),
                             };
 
                             Ok(Box::new(Tx::OpenMultiSig(deserialized)))
-                        },
+                        }
                         6 => {
                             let deserialized = match OpenShares::from_bytes(&tx) {
                                 Ok(result) => result,
-                                Err(_)     => return Err("Invalid shares transaction")
+                                Err(_) => return Err("Invalid shares transaction"),
                             };
 
                             Ok(Box::new(Tx::OpenShares(deserialized)))
-                        },
+                        }
                         7 => {
                             let deserialized = match IssueShares::from_bytes(&tx) {
                                 Ok(result) => result,
-                                Err(_)     => return Err("Invalid create currency transaction")
+                                Err(_) => return Err("Invalid create currency transaction"),
                             };
 
                             Ok(Box::new(Tx::IssueShares(deserialized)))
-                        },
+                        }
                         8 => {
                             let deserialized = match CreateCurrency::from_bytes(&tx) {
                                 Ok(result) => result,
-                                Err(_)     => return Err("Invalid create currency transaction")
+                                Err(_) => return Err("Invalid create currency transaction"),
                             };
 
                             Ok(Box::new(Tx::CreateCurrency(deserialized)))
-                        },
+                        }
                         9 => {
                             let deserialized = match CreateMintable::from_bytes(&tx) {
                                 Ok(result) => result,
-                                Err(_)     => return Err("Invalid create mintable transaction")
+                                Err(_) => return Err("Invalid create mintable transaction"),
                             };
 
                             Ok(Box::new(Tx::CreateMintable(deserialized)))
-                        },
+                        }
                         10 => {
                             let deserialized = match Mint::from_bytes(&tx) {
                                 Ok(result) => result,
-                                Err(_)     => return Err("Invalid mint transaction")
+                                Err(_) => return Err("Invalid mint transaction"),
                             };
 
                             Ok(Box::new(Tx::Mint(deserialized)))
-                        },
+                        }
                         11 => {
                             let deserialized = match Burn::from_bytes(&tx) {
                                 Ok(result) => result,
-                                Err(_)     => return Err("Invalid burn transaction")
+                                Err(_) => return Err("Invalid burn transaction"),
                             };
 
                             Ok(Box::new(Tx::Burn(deserialized)))
-                        },
+                        }
                         _ => return Err("Bad transaction type"),
                     }
                 })
@@ -353,7 +353,7 @@ impl Heartbeat {
 
             match txs {
                 Ok(result) => result,
-                Err(err)   => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the size of the transactions");
@@ -387,7 +387,7 @@ use quickcheck::Arbitrary;
 
 #[cfg(test)]
 impl Arbitrary for Heartbeat {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Heartbeat {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Heartbeat {
         let mut txs: Vec<Box<Tx>> = Vec::with_capacity(30);
 
         for _ in 0..30 {

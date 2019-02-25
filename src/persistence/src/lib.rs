@@ -19,18 +19,18 @@
 #[cfg(test)]
 extern crate tempfile;
 
-extern crate rlp;
-extern crate patricia_trie;
-extern crate elastic_array;
 extern crate crypto;
+extern crate elastic_array;
 extern crate hashdb;
-extern crate parking_lot;
 extern crate kvdb_rocksdb;
+extern crate parking_lot;
+extern crate patricia_trie;
+extern crate rlp;
 
-pub use persistent_db::*;
 pub use hasher::*;
 pub use node_codec::*;
+pub use persistent_db::*;
 
-mod persistent_db;
-mod node_codec;
 mod hasher;
+mod node_codec;
+mod persistent_db;

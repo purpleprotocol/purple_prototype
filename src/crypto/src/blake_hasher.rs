@@ -16,21 +16,19 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use std::hash::Hasher;
 use hash::*;
-use std::default::Default;
-use std::u64;
 use merkle_light::hash::Algorithm;
+use std::default::Default;
+use std::hash::Hasher;
+use std::u64;
 
 pub struct BlakeHasher {
-    buffer: Vec<u8>
+    buffer: Vec<u8>,
 }
 
 impl BlakeHasher {
     pub fn new() -> BlakeHasher {
-        BlakeHasher {
-            buffer: Vec::new()
-        }
+        BlakeHasher { buffer: Vec::new() }
     }
 }
 

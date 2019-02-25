@@ -16,7 +16,6 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 use crypto::PublicKey;
 use quickcheck::Arbitrary;
 use rand::Rng;
@@ -35,11 +34,9 @@ impl NodeId {
 }
 
 impl Arbitrary for NodeId {
-    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> NodeId {
+    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> NodeId {
         let mut rng = rand::thread_rng();
-        let bytes: Vec<u8> = (0..32).map(|_| {
-            rng.gen_range(1, 255)
-        }).collect();
+        let bytes: Vec<u8> = (0..32).map(|_| rng.gen_range(1, 255)).collect();
 
         let mut result = [0; 32];
         result.copy_from_slice(&bytes);
@@ -47,11 +44,11 @@ impl Arbitrary for NodeId {
         NodeId(PublicKey(result))
     }
 
-    fn shrink(&self) -> Box<Iterator<Item=Self>> {
-        Box::new( (&(&self.0).0).to_vec().shrink().map(|p| {
+    fn shrink(&self) -> Box<Iterator<Item = Self>> {
+        Box::new((&(&self.0).0).to_vec().shrink().map(|p| {
             let mut result = [0; 32];
             result.copy_from_slice(&p);
-            
+
             NodeId(PublicKey(result))
         }))
     }

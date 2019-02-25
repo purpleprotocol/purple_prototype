@@ -20,6 +20,6 @@
 pub enum CfOperator {
     Begin,
     Loop,
-    If, 
-    Else
+    If,
+    Else,
 }

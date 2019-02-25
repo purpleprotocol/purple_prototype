@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, Signature, ShareMap, MultiSig};
+use account::{Address, Balance, MultiSig, ShareMap, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, SecretKey as Sk, PublicKey as Pk};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
 
 pub const ASSET_NAME_SIZE: usize = 32;
 pub const META_FIELD_SIZE: usize = 32;
@@ -72,27 +72,27 @@ impl CreateUnique {
         let signature = crypto::sign(&message, skey);
 
         match self.signature {
-            Some(Signature::Normal(_)) => { 
+            Some(Signature::Normal(_)) => {
                 if let Address::Normal(_) = self.creator {
                     let result = Signature::Normal(signature);
                     self.signature = Some(result);
                 } else {
                     panic!("Invalid address type");
                 }
-            },
+            }
             Some(Signature::MultiSig(ref mut sig)) => {
                 if let Address::Normal(_) = self.creator {
                     panic!("Invalid address type");
                 } else {
                     // Append signature to the multi sig struct
                     sig.append_sig(signature);
-                }           
-            },
+                }
+            }
             None => {
                 if let Address::Normal(_) = self.creator {
                     // Create a normal signature
                     let result = Signature::Normal(signature);
-                    
+
                     // Attach signature to struct
                     self.signature = Some(result);
                 } else {
@@ -105,31 +105,29 @@ impl CreateUnique {
             }
         };
     }
-    
+
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
     ///
-    /// This function panics if the transaction has a multi 
+    /// This function panics if the transaction has a multi
     /// signature attached to it or if the signer's address
     /// is not a normal address.
     pub fn verify_sig(&mut self) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(ref sig)) => { 
+            Some(Signature::Normal(ref sig)) => {
                 if let Address::Normal(ref addr) = self.creator {
                     crypto::verify(&message, sig.clone(), addr.pkey())
                 } else {
                     panic!("The address of the signer is not a normal address!");
                 }
-            },
+            }
             Some(Signature::MultiSig(_)) => {
                 panic!("Calling this function on a multi signature transaction is not permitted!");
-            },
-            None => {
-                false
             }
+            None => false,
         }
     }
 
@@ -137,7 +135,7 @@ impl CreateUnique {
     ///
     /// Returns `false` if the signature field is missing.
     ///
-    /// This function panics if the transaction has a multi 
+    /// This function panics if the transaction has a multi
     /// signature attached to it or if the signer's address
     /// is not a normal address.
     pub fn verify_multi_sig(&mut self, required_keys: u8, pkeys: &[Pk]) -> bool {
@@ -147,15 +145,11 @@ impl CreateUnique {
             let message = assemble_sign_message(&self);
 
             match self.signature {
-                Some(Signature::Normal(_)) => { 
+                Some(Signature::Normal(_)) => {
                     panic!("Calling this function on a transaction with a normal signature is not permitted!");
-                },
-                Some(Signature::MultiSig(ref sig)) => {
-                    sig.verify(&message, required_keys, pkeys)
-                },
-                None => {
-                    false
                 }
+                Some(Signature::MultiSig(ref sig)) => sig.verify(&message, required_keys, pkeys),
+                None => false,
             }
         }
     }
@@ -163,19 +157,21 @@ impl CreateUnique {
     /// Verifies the multi signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(&mut self, required_percentile: u8, share_map: ShareMap) -> bool {
+    pub fn verify_multi_sig_shares(
+        &mut self,
+        required_percentile: u8,
+        share_map: ShareMap,
+    ) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(_)) => { 
+            Some(Signature::Normal(_)) => {
                 panic!("Calling this function on a transaction with a normal signature is not permitted!");
-            },
+            }
             Some(Signature::MultiSig(ref sig)) => {
                 sig.verify_shares(&message, required_percentile, share_map)
-            },
-            None => {
-                false
             }
+            None => false,
         }
     }
 
@@ -280,13 +276,13 @@ use rand::Rng;
 struct Array32(pub [u8; 32]);
 
 impl Arbitrary for Array32 {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Array32 {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Array32 {
         Array32(rand::thread_rng().gen::<[u8; 32]>())
     }
 }
 
 impl Arbitrary for CreateUnique {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> CreateUnique {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> CreateUnique {
         let name: Array32 = Arbitrary::arbitrary(g);
         let meta1: Option<Array32> = Arbitrary::arbitrary(g);
         let meta2: Option<Array32> = Arbitrary::arbitrary(g);
@@ -365,10 +361,10 @@ mod tests {
 
         fn verify_signature(
             receiver: Address,
-            fee: Balance, 
+            fee: Balance,
             name: Array32,
             meta: (Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>),
-            asset_hash: Hash, 
+            asset_hash: Hash,
             fee_hash: Hash
         ) -> bool {
             let id = Identity::new();
@@ -448,7 +444,7 @@ mod tests {
                 .iter()
                 .map(|i| *i.pkey())
                 .collect();
-            
+
             let (
                 meta1,
                 meta2,
@@ -507,7 +503,7 @@ mod tests {
             for id in ids {
                 tx.sign(id.skey().clone());
             }
-            
+
             tx.verify_multi_sig(10, &pkeys)
         }
 
@@ -534,8 +530,8 @@ mod tests {
                 .iter()
                 .map(|pk| NormalAddress::from_pkey(*pk))
                 .collect();
-            
-            let mut share_map = ShareMap::new(); 
+
+            let mut share_map = ShareMap::new();
 
             for addr in addresses.clone() {
                 share_map.add_shareholder(addr, 100);
@@ -599,7 +595,7 @@ mod tests {
             for id in ids {
                 tx.sign(id.skey().clone());
             }
-            
+
             tx.verify_multi_sig_shares(10, share_map)
         }
     }

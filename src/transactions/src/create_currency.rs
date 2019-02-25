@@ -16,18 +16,18 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, NormalAddress, Balance};
+use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, Signature, SecretKey as Sk};
-use std::io::Cursor;
-use patricia_trie::{TrieMut, TrieDBMut};
+use crypto::{Hash, SecretKey as Sk, Signature};
+use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
+use std::io::Cursor;
 
 // Currency hashes per key
 pub const CUR_GROUP_CAPACITY: usize = 50;
 
 #[cfg(not(test))]
-// Mininum amount of transactions required for 
+// Mininum amount of transactions required for
 // being able to create a currency.
 pub const MIN_CREATOR_NONCE: u64 = 50;
 
@@ -64,7 +64,7 @@ impl CreateCurrency {
         if self.precision > 18 || self.precision == 1 {
             return false;
         }
-        
+
         // The coin supply cannot be lower than 1
         if self.coin_supply < 1 {
             return false;
@@ -74,7 +74,7 @@ impl CreateCurrency {
         if !self.verify_sig() {
             return false;
         }
- 
+
         let bin_creator = &self.creator.to_bytes();
         let bin_receiver = &self.receiver.to_bytes();
         let bin_asset_hash = &self.asset_hash.to_vec();
@@ -97,12 +97,12 @@ impl CreateCurrency {
         let asset_hash_prec_key = asset_hash_prec_key.as_bytes();
 
         // Calculate nonce key
-        // 
+        //
         // The key of a nonce has the following format:
         // `<account-address>.n`
         let creator_nonce_key = format!("{}.n", creator);
         let creator_nonce_key = creator_nonce_key.as_bytes();
-        
+
         // Calculate fee key
         //
         // The key of a currency entry has the following format:
@@ -113,15 +113,15 @@ impl CreateCurrency {
         // Retrieve serialized nonce
         let bin_creator_nonce = match trie.get(&creator_nonce_key) {
             Ok(Some(nonce)) => nonce,
-            Ok(None)        => return false,
-            Err(err)        => panic!(err)
+            Ok(None) => return false,
+            Err(err) => panic!(err),
         };
 
         // Retrieve serialized balance
         let bin_creator_balance = match trie.get(&creator_fee_key) {
             Ok(Some(nonce)) => nonce,
-            Ok(None)        => return false,
-            Err(err)        => panic!(err)
+            Ok(None) => return false,
+            Err(err) => panic!(err),
         };
 
         // Read the nonce of the creator
@@ -182,7 +182,7 @@ impl CreateCurrency {
         let asset_hash_supply_key = asset_hash_supply_key.as_bytes();
 
         // Calculate nonce keys
-        // 
+        //
         // The key of a nonce has the following format:
         // `<account-address>.n`
         let creator_nonce_key = format!("{}.n", creator);
@@ -229,18 +229,16 @@ impl CreateCurrency {
         // just add all the new currency to it's address.
         if bin_creator == bin_receiver {
             let mut creator_fee_balance = unwrap!(
-                Balance::from_bytes(
-                    &unwrap!(
-                        trie.get(&creator_fee_key.as_bytes()).unwrap(),
-                        "The creator does not have an entry for the given currency"
-                    )
-                ),
+                Balance::from_bytes(&unwrap!(
+                    trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                    "The creator does not have an entry for the given currency"
+                )),
                 "Invalid stored balance format"
             );
 
             // Subtract fee from sender balance
             creator_fee_balance -= self.fee.clone();
-                    
+
             // Calculate creator balance
             let creator_cur_balance = format!("{}.0", self.coin_supply);
             let creator_cur_balance = Balance::from_bytes(creator_cur_balance.as_bytes()).unwrap();
@@ -269,8 +267,10 @@ impl CreateCurrency {
             // Update trie
             trie.insert(asset_hash_supply_key, &coin_supply).unwrap();
             trie.insert(asset_hash_prec_key, &[self.precision]).unwrap();
-            trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes()).unwrap();
-            trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes()).unwrap();
+            trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes())
+                .unwrap();
+            trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes())
+                .unwrap();
             trie.insert(creator_nonce_key, &nonce).unwrap();
         } else {
             // The receiver is another account
@@ -278,21 +278,20 @@ impl CreateCurrency {
                 // The receiver account exists
                 Ok(Some(_)) => {
                     let mut creator_balance = unwrap!(
-                        Balance::from_bytes(
-                            &unwrap!(
-                                trie.get(&creator_fee_key.as_bytes()).unwrap(),
-                                "The creator does not have an entry for the given currency"
-                            )
-                        ),
+                        Balance::from_bytes(&unwrap!(
+                            trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                            "The creator does not have an entry for the given currency"
+                        )),
                         "Invalid stored balance format"
                     );
 
                     // Subtract fee from sender balance
                     creator_balance -= self.fee.clone();
-                    
+
                     // Calculate receiver balance
                     let receiver_balance = format!("{}.0", self.coin_supply);
-                    let receiver_balance = Balance::from_bytes(receiver_balance.as_bytes()).unwrap();
+                    let receiver_balance =
+                        Balance::from_bytes(receiver_balance.as_bytes()).unwrap();
 
                     // If the current group is maxed out, create a new entry at the next index
                     if currencies.len() == CUR_GROUP_CAPACITY {
@@ -318,28 +317,29 @@ impl CreateCurrency {
                     // Update trie
                     trie.insert(asset_hash_supply_key, &coin_supply).unwrap();
                     trie.insert(asset_hash_prec_key, &[self.precision]).unwrap();
-                    trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
-                    trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+                    trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes())
+                        .unwrap();
+                    trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                        .unwrap();
                     trie.insert(creator_nonce_key, &nonce).unwrap();
-                },
-                // The receiver account does not exist so we create it 
+                }
+                // The receiver account does not exist so we create it
                 Ok(None) => {
                     let mut creator_balance = unwrap!(
-                        Balance::from_bytes(
-                            &unwrap!(
-                                trie.get(&creator_fee_key.as_bytes()).unwrap(),
-                                "The creator does not have an entry for the given currency"
-                            )
-                        ),
+                        Balance::from_bytes(&unwrap!(
+                            trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                            "The creator does not have an entry for the given currency"
+                        )),
                         "Invalid stored balance format"
                     );
 
                     // Subtract fee from sender balance
                     creator_balance -= self.fee.clone();
-                    
+
                     // Calculate receiver balance
                     let receiver_balance = format!("{}.0", self.coin_supply);
-                    let receiver_balance = Balance::from_bytes(receiver_balance.as_bytes()).unwrap();
+                    let receiver_balance =
+                        Balance::from_bytes(receiver_balance.as_bytes()).unwrap();
 
                     // If the current group is maxed out, create a new entry at the next index
                     if currencies.len() == CUR_GROUP_CAPACITY {
@@ -365,12 +365,15 @@ impl CreateCurrency {
                     // Update trie
                     trie.insert(asset_hash_supply_key, &coin_supply).unwrap();
                     trie.insert(asset_hash_prec_key, &[self.precision]).unwrap();
-                    trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes()).unwrap();
-                    trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes()).unwrap();
+                    trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes())
+                        .unwrap();
+                    trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                        .unwrap();
                     trie.insert(creator_nonce_key, &nonce).unwrap();
-                    trie.insert(receiver_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
-                },
-                Err(err) => panic!(err)
+                    trie.insert(receiver_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
+                        .unwrap();
+                }
+                Err(err) => panic!(err),
             }
         }
     }
@@ -397,12 +400,8 @@ impl CreateCurrency {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => { 
-                crypto::verify(&message, sig.clone(), self.creator.pkey())
-            },
-            None => {
-                false
-            }
+            Some(ref sig) => crypto::verify(&message, sig.clone(), self.creator.pkey()),
+            None => false,
         }
     }
 
@@ -504,10 +503,10 @@ impl CreateCurrency {
 
         let creator = if buf.len() > 33 as usize {
             let creator_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match NormalAddress::from_bytes(&creator_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -515,10 +514,10 @@ impl CreateCurrency {
 
         let receiver = if buf.len() > 33 as usize {
             let receiver_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match Address::from_bytes(&receiver_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -559,10 +558,10 @@ impl CreateCurrency {
 
         let signature = if buf.len() > 65 as usize {
             let sig_vec: Vec<u8> = buf.drain(..65).collect();
-            
+
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,
-                Err(_)  => return Err("Bad signature")
+                Err(_) => return Err("Bad signature"),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -570,13 +569,13 @@ impl CreateCurrency {
 
         let fee = if buf.len() == fee_len as usize {
             let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
-            
+
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad gas price")
+                Err(_) => return Err("Bad gas price"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let create_currency = CreateCurrency {
@@ -658,7 +657,7 @@ fn assemble_sign_message(obj: &CreateCurrency) -> Vec<u8> {
 use quickcheck::Arbitrary;
 
 impl Arbitrary for CreateCurrency {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> CreateCurrency {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> CreateCurrency {
         CreateCurrency {
             creator: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
@@ -676,7 +675,7 @@ impl Arbitrary for CreateCurrency {
 #[cfg(test)]
 mod tests {
     extern crate test_helpers;
-    
+
     use super::*;
     use crypto::Identity;
 
@@ -707,7 +706,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id.skey().clone());
@@ -743,7 +742,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id.skey().clone());
@@ -779,7 +778,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id.skey().clone());
@@ -815,7 +814,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id.skey().clone());
@@ -851,7 +850,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: asset_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id.skey().clone());
@@ -883,7 +882,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id.skey().clone());
@@ -919,7 +918,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id.skey().clone());
@@ -927,10 +926,10 @@ mod tests {
 
         // Apply transaction
         tx.apply(&mut trie);
-        
+
         // Commit changes
         trie.commit();
-        
+
         let creator_nonce_key = format!("{}.n", hex::encode(&creator_addr.to_bytes()));
         let creator_nonce_key = creator_nonce_key.as_bytes();
 
@@ -943,19 +942,26 @@ mod tests {
         let asset_hash_prec_key = format!("{}.p", hex_asset_hash);
         let asset_hash_prec_key = asset_hash_prec_key.as_bytes();
         let fee_hash_prec_key = format!("{}.p", hex_fee_hash);
-        let fee_hash_prec_key = fee_hash_prec_key.as_bytes(); 
+        let fee_hash_prec_key = fee_hash_prec_key.as_bytes();
         let asset_hash_supply_key = format!("{}.s", hex_asset_hash);
         let asset_hash_supply_key = asset_hash_supply_key.as_bytes();
         let current_index_key = b"ci".to_vec();
         let currencies_idx_key = b"c.0".to_vec(); // Currency group 0
 
-        let creator_cur_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_asset_hash);
+        let creator_cur_balance_key = format!(
+            "{}.{}",
+            hex::encode(&creator_addr.to_bytes()),
+            hex_asset_hash
+        );
         let creator_cur_balance_key = creator_cur_balance_key.as_bytes();
-        let creator_fee_balance_key = format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_fee_hash);
+        let creator_fee_balance_key =
+            format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_fee_hash);
         let creator_fee_balance_key = creator_fee_balance_key.as_bytes();
 
-        let creator_fee_balance = Balance::from_bytes(&trie.get(&creator_fee_balance_key).unwrap().unwrap()).unwrap();
-        let creator_cur_balance = Balance::from_bytes(&trie.get(&creator_cur_balance_key).unwrap().unwrap()).unwrap();
+        let creator_fee_balance =
+            Balance::from_bytes(&trie.get(&creator_fee_balance_key).unwrap().unwrap()).unwrap();
+        let creator_cur_balance =
+            Balance::from_bytes(&trie.get(&creator_cur_balance_key).unwrap().unwrap()).unwrap();
 
         let current_index = &trie.get(&current_index_key).unwrap().unwrap();
         let mut ci_rdr = Cursor::new(current_index);
@@ -970,9 +976,12 @@ mod tests {
 
         // Check nonce
         assert_eq!(bin_creator_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
-        
+
         // Check balances
-        assert_eq!(creator_fee_balance, Balance::from_bytes(b"10000.0").unwrap() - fee.clone());
+        assert_eq!(
+            creator_fee_balance,
+            Balance::from_bytes(b"10000.0").unwrap() - fee.clone()
+        );
         assert_eq!(creator_cur_balance, amount.clone());
 
         // Check current index
@@ -986,7 +995,10 @@ mod tests {
         assert_eq!(&trie.get(&fee_hash_prec_key).unwrap().unwrap(), &vec![18]);
 
         // Check currency supply
-        assert_eq!(&trie.get(&asset_hash_supply_key).unwrap().unwrap(), &vec![0, 0, 0, 0, 0, 0, 0, 100]);
+        assert_eq!(
+            &trie.get(&asset_hash_supply_key).unwrap().unwrap(),
+            &vec![0, 0, 0, 0, 0, 0, 0, 100]
+        );
     }
 
     // #[test]
@@ -1011,10 +1023,10 @@ mod tests {
 
         fn verify_signature(
             receiver: Address,
-            fee: Balance, 
+            fee: Balance,
             coin_supply: u64,
             precision: u8,
-            asset_hash: Hash, 
+            asset_hash: Hash,
             fee_hash: Hash
         ) -> bool {
             let id = Identity::new();

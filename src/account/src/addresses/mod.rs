@@ -16,16 +16,16 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod normal;
-pub mod multi_sig;
-pub mod shareholders;
 pub mod contract;
+pub mod multi_sig;
+pub mod normal;
+pub mod shareholders;
 
-use crypto::PublicKey;
 use addresses::contract::*;
-use addresses::normal::*;
 use addresses::multi_sig::*;
+use addresses::normal::*;
 use addresses::shareholders::*;
+use crypto::PublicKey;
 
 #[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug)]
 pub enum Address {
@@ -42,35 +42,51 @@ impl Address {
     pub fn unwrap_normal(&self) -> NormalAddress {
         match *self {
             Address::Normal(ref addr) => *addr,
-            _                         => panic!("Unwrap normal called on a non normal address")
+            _ => panic!("Unwrap normal called on a non normal address"),
         }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         match *self {
-            Address::Normal(ref addr)        => addr.to_bytes(),
-            Address::MultiSig(ref addr)      => addr.to_bytes(),
-            Address::Shareholders(ref addr)  => addr.to_bytes(),
-            Address::Contract(ref addr)      => addr.to_bytes()
+            Address::Normal(ref addr) => addr.to_bytes(),
+            Address::MultiSig(ref addr) => addr.to_bytes(),
+            Address::Shareholders(ref addr) => addr.to_bytes(),
+            Address::Contract(ref addr) => addr.to_bytes(),
         }
     }
 
-    pub fn multi_sig_from_pkeys(pkeys: &[PublicKey], creator_address: PublicKey, nonce: u64) -> Address {
+    pub fn multi_sig_from_pkeys(
+        pkeys: &[PublicKey],
+        creator_address: PublicKey,
+        nonce: u64,
+    ) -> Address {
         let addresses: Vec<NormalAddress> = pkeys
             .iter()
             .map(|pk| NormalAddress::from_pkey(*pk))
             .collect();
-        
-        Address::MultiSig(MultiSigAddress::compute(&addresses, NormalAddress::from_pkey(creator_address), nonce))
+
+        Address::MultiSig(MultiSigAddress::compute(
+            &addresses,
+            NormalAddress::from_pkey(creator_address),
+            nonce,
+        ))
     }
 
-    pub fn shareholders_from_pkeys(pkeys: &[PublicKey], creator_address: PublicKey, nonce: u64) -> Address {
+    pub fn shareholders_from_pkeys(
+        pkeys: &[PublicKey],
+        creator_address: PublicKey,
+        nonce: u64,
+    ) -> Address {
         let addresses: Vec<NormalAddress> = pkeys
             .iter()
             .map(|pk| NormalAddress::from_pkey(*pk))
             .collect();
-        
-        Address::Shareholders(ShareholdersAddress::compute(&addresses, NormalAddress::from_pkey(creator_address), nonce))
+
+        Address::Shareholders(ShareholdersAddress::compute(
+            &addresses,
+            NormalAddress::from_pkey(creator_address),
+            nonce,
+        ))
     }
 
     pub fn normal_from_pkey(pkey: PublicKey) -> Address {
@@ -81,33 +97,23 @@ impl Address {
         let addr_type = bin[0];
 
         match addr_type {
-            1 => {
-                match NormalAddress::from_bytes(bin) {
-                    Ok(result) => Ok(Address::Normal(result)),
-                    Err(err)   => Err(err)
-                }
+            1 => match NormalAddress::from_bytes(bin) {
+                Ok(result) => Ok(Address::Normal(result)),
+                Err(err) => Err(err),
             },
-            2 => {
-                match MultiSigAddress::from_bytes(bin) {
-                    Ok(result) => Ok(Address::MultiSig(result)),
-                    Err(err)   => Err(err)
-                }
+            2 => match MultiSigAddress::from_bytes(bin) {
+                Ok(result) => Ok(Address::MultiSig(result)),
+                Err(err) => Err(err),
             },
-            3 => {
-                match ShareholdersAddress::from_bytes(bin) {
-                    Ok(result) => Ok(Address::Shareholders(result)),
-                    Err(err)   => Err(err)
-                }
+            3 => match ShareholdersAddress::from_bytes(bin) {
+                Ok(result) => Ok(Address::Shareholders(result)),
+                Err(err) => Err(err),
             },
-            4 => {
-                match ContractAddress::from_bytes(bin) {
-                    Ok(result) => Ok(Address::Contract(result)),
-                    Err(err)   => Err(err)
-                }
+            4 => match ContractAddress::from_bytes(bin) {
+                Ok(result) => Ok(Address::Contract(result)),
+                Err(err) => Err(err),
             },
-            _ => {
-                Err("Bad address type!")
-            }
+            _ => Err("Bad address type!"),
         }
     }
 }
@@ -116,16 +122,16 @@ use quickcheck::Arbitrary;
 use rand::Rng;
 
 impl Arbitrary for Address {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Address {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Address {
         let mut rng = rand::thread_rng();
         let random = rng.gen_range(1, 4);
 
         match random {
-            1  => Address::Normal(Arbitrary::arbitrary(g)),
-            2  => Address::MultiSig(Arbitrary::arbitrary(g)),
-            3  => Address::Shareholders(Arbitrary::arbitrary(g)),
-            4  => Address::Contract(Arbitrary::arbitrary(g)),
-            _  => panic!()
+            1 => Address::Normal(Arbitrary::arbitrary(g)),
+            2 => Address::MultiSig(Arbitrary::arbitrary(g)),
+            3 => Address::Shareholders(Arbitrary::arbitrary(g)),
+            4 => Address::Contract(Arbitrary::arbitrary(g)),
+            _ => panic!(),
         }
     }
 }

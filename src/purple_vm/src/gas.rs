@@ -17,11 +17,11 @@
 */
 
 use regex::Regex;
-use std::str;
 use rust_decimal::Decimal;
-use std::str::FromStr;
-use std::ops::{Add, Sub, AddAssign, SubAssign};
 use std::fmt;
+use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::str;
+use std::str::FromStr;
 
 lazy_static! {
     static ref PREC18: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,18})?$").unwrap();
@@ -34,7 +34,7 @@ impl Gas {
     pub fn to_inner(&self) -> Decimal {
         self.0.clone()
     }
-    
+
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::new();
         let formatted = format!("{}", &self.0);
@@ -55,10 +55,8 @@ impl Gas {
                 } else {
                     Err("Invalid gas")
                 }
-            },
-            Err(_) => {
-                Err("Invalid utf8 string given")
             }
+            Err(_) => Err("Invalid utf8 string given"),
         }
     }
 }
@@ -101,11 +99,11 @@ use quickcheck::Arbitrary;
 use rand::Rng;
 
 impl Arbitrary for Gas {
-    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Gas {
+    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> Gas {
         let mut rng = rand::thread_rng();
         let num1: u64 = rng.gen_range(1, 99999999999);
         let num2: u64 = rng.gen_range(1, 99999999999);
-        let generated_str = format!("{}.{}", num1, num2); 
+        let generated_str = format!("{}.{}", num1, num2);
 
         let result = Decimal::from_str(&generated_str).unwrap();
 

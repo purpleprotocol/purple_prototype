@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::{ToBase58, FromBase58, Hash};
-use rand::Rng;
+use crypto::{FromBase58, Hash, ToBase58};
 use quickcheck::Arbitrary;
+use rand::Rng;
 
 #[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, PartialOrd, Ord)]
 pub struct ContractAddress(Hash);
@@ -38,13 +38,13 @@ impl ContractAddress {
     pub fn from_base58(input: &str) -> Result<ContractAddress, &'static str> {
         match input.from_base58() {
             Ok(bin) => Self::from_bytes(&bin),
-            _       => Err("Invalid base58 string!")
+            _ => Err("Invalid base58 string!"),
         }
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<ContractAddress, &'static str> {
         let addr_type = bin[0];
-        
+
         if bin.len() == 33 && addr_type == Self::ADDR_TYPE {
             let (_, tail) = bin.split_at(1);
             let mut pkey = [0; 32];
@@ -74,11 +74,9 @@ impl ContractAddress {
 }
 
 impl Arbitrary for ContractAddress {
-    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> ContractAddress {
+    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> ContractAddress {
         let mut rng = rand::thread_rng();
-        let bytes: Vec<u8> = (0..32).map(|_| {
-            rng.gen_range(1, 255)
-        }).collect();
+        let bytes: Vec<u8> = (0..32).map(|_| rng.gen_range(1, 255)).collect();
 
         let mut result = [0; 32];
         result.copy_from_slice(&bytes);
@@ -86,11 +84,11 @@ impl Arbitrary for ContractAddress {
         ContractAddress(Hash(result))
     }
 
-    fn shrink(&self) -> Box<Iterator<Item=Self>> {
-        Box::new( (&(&self.0).0).to_vec().shrink().map(|p| {
+    fn shrink(&self) -> Box<Iterator<Item = Self>> {
+        Box::new((&(&self.0).0).to_vec().shrink().map(|p| {
             let mut result = [0; 32];
             result.copy_from_slice(&p);
-            
+
             ContractAddress(Hash(result))
         }))
     }
@@ -105,7 +103,7 @@ mod tests {
             let encoded = addr.to_base58();
             ContractAddress::from_base58(&encoded).unwrap() == addr
         }
-        
+
         fn serialize_deserialize(addr: ContractAddress) -> bool {
             addr == ContractAddress::from_bytes(&ContractAddress::to_bytes(&addr)).unwrap()
         }

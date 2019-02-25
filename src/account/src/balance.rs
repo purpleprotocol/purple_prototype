@@ -16,14 +16,14 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use regex::Regex;
-use std::str;
-use rand::Rng;
 use quickcheck::Arbitrary;
+use rand::Rng;
+use regex::Regex;
 use rust_decimal::Decimal;
-use std::str::FromStr;
-use std::ops::{Add, Sub, AddAssign, SubAssign};
 use std::fmt;
+use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::str;
+use std::str::FromStr;
 
 lazy_static! {
     static ref PREC0: Regex = Regex::new(r"^[0-9]*$").unwrap();
@@ -36,7 +36,7 @@ lazy_static! {
     static ref PREC8: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,8})?$").unwrap();
     static ref PREC9: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,9})?$").unwrap();
     static ref PREC10: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,10})?$").unwrap();
-    static ref PREC11: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,11})?$").unwrap(); 
+    static ref PREC11: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,11})?$").unwrap();
     static ref PREC12: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,12})?$").unwrap();
     static ref PREC13: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,13})?$").unwrap();
     static ref PREC14: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,14})?$").unwrap();
@@ -53,15 +53,15 @@ impl Balance {
     pub fn validate_smaller_precision(&self, precision: u8) -> bool {
         // Validate balance with corresponding precision
         match precision {
-            0  => PREC0.is_match(&self.0.to_string()),
-            2  => PREC2.is_match(&self.0.to_string()),
-            3  => PREC3.is_match(&self.0.to_string()),
-            4  => PREC4.is_match(&self.0.to_string()),
-            5  => PREC5.is_match(&self.0.to_string()),
-            6  => PREC6.is_match(&self.0.to_string()),
-            7  => PREC7.is_match(&self.0.to_string()),
-            8  => PREC8.is_match(&self.0.to_string()),
-            9  => PREC9.is_match(&self.0.to_string()),
+            0 => PREC0.is_match(&self.0.to_string()),
+            2 => PREC2.is_match(&self.0.to_string()),
+            3 => PREC3.is_match(&self.0.to_string()),
+            4 => PREC4.is_match(&self.0.to_string()),
+            5 => PREC5.is_match(&self.0.to_string()),
+            6 => PREC6.is_match(&self.0.to_string()),
+            7 => PREC7.is_match(&self.0.to_string()),
+            8 => PREC8.is_match(&self.0.to_string()),
+            9 => PREC9.is_match(&self.0.to_string()),
             10 => PREC10.is_match(&self.0.to_string()),
             11 => PREC11.is_match(&self.0.to_string()),
             12 => PREC12.is_match(&self.0.to_string()),
@@ -71,14 +71,16 @@ impl Balance {
             16 => PREC16.is_match(&self.0.to_string()),
             17 => PREC17.is_match(&self.0.to_string()),
             18 => PREC18.is_match(&self.0.to_string()),
-            _  => panic!("Invalid precision! The value must either be 0 or a number between 2 and 18!")
+            _ => panic!(
+                "Invalid precision! The value must either be 0 or a number between 2 and 18!"
+            ),
         }
     }
 
     pub fn to_inner(&self) -> Decimal {
         self.0.clone()
     }
-    
+
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::new();
         let formatted = format!("{}", &self.0);
@@ -99,10 +101,8 @@ impl Balance {
                 } else {
                     Err("Invalid balance")
                 }
-            },
-            Err(_) => {
-                Err("Invalid utf8 string given")
             }
+            Err(_) => Err("Invalid utf8 string given"),
         }
     }
 }
@@ -142,11 +142,11 @@ impl SubAssign for Balance {
 }
 
 impl Arbitrary for Balance {
-    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Balance {
+    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> Balance {
         let mut rng = rand::thread_rng();
         let num1: u64 = rng.gen_range(1, 99999999999);
         let num2: u64 = rng.gen_range(1, 99999999999);
-        let generated_str = format!("{}.{}", num1, num2); 
+        let generated_str = format!("{}.{}", num1, num2);
 
         let result = Decimal::from_str(&generated_str).unwrap();
 

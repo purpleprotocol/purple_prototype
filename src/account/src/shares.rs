@@ -32,7 +32,7 @@ impl Shares {
         Shares {
             issued_shares: issued_shares,
             authorized_shares: authorized_shares,
-            required_percentile: required_percentile
+            required_percentile: required_percentile,
         }
     }
 
@@ -62,7 +62,7 @@ impl Shares {
         buf.write_u8(*required_percentile).unwrap();
         buf.write_u32::<BigEndian>(*issued_shares).unwrap();
         buf.write_u32::<BigEndian>(*authorized_shares).unwrap();
-        
+
         buf
     }
 
@@ -94,7 +94,7 @@ impl Shares {
             let shares = Shares {
                 required_percentile: required_percentile,
                 issued_shares: issued_shares,
-                authorized_shares: authorized_shares
+                authorized_shares: authorized_shares,
             };
 
             Ok(shares)
@@ -105,7 +105,7 @@ impl Shares {
 }
 
 impl Arbitrary for Shares {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Shares {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Shares {
         Shares {
             issued_shares: Arbitrary::arbitrary(g),
             authorized_shares: Arbitrary::arbitrary(g),

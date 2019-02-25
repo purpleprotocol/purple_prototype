@@ -22,5 +22,5 @@ pub struct Import {
     pub addr_idx: u16,
 
     /// The name of the imported function.
-    pub function_name: String
+    pub function_name: String,
 }

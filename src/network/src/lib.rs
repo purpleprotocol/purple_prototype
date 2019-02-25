@@ -16,34 +16,36 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate quickcheck;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate quickcheck;
+#[macro_use]
+extern crate log;
 
-
-extern crate hex;
 extern crate byteorder;
-extern crate env_logger;
-extern crate persistence;
-extern crate hashdb;
-extern crate rlp;
 extern crate crypto;
-extern crate rand;
-extern crate parking_lot;
-extern crate tokio;
+extern crate env_logger;
 extern crate futures;
-extern crate tokio_timer;
+extern crate hashdb;
+extern crate hex;
+extern crate parking_lot;
+extern crate persistence;
+extern crate rand;
+extern crate rlp;
+extern crate tokio;
 extern crate tokio_io_timeout;
+extern crate tokio_timer;
 
-mod node_id;
-mod network;
-mod peer;
-mod connection;
 mod bootstrap;
+mod connection;
+mod network;
+mod node_id;
 pub mod packets;
+mod peer;
 
-pub use node_id::*;
-pub use network::*;
-pub use peer::*;
-pub use connection::*;
 pub use bootstrap::*;
+pub use connection::*;
+pub use network::*;
+pub use node_id::*;
+pub use peer::*;

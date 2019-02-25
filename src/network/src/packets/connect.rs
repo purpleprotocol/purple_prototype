@@ -16,15 +16,15 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::{Signature, PublicKey as Pk, SecretKey as Sk};
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Connect {
     node_id: Pk,
     kx_key: Pk,
-    signature: Option<Signature>
+    signature: Option<Signature>,
 }
 
 impl Connect {
@@ -34,7 +34,7 @@ impl Connect {
         Connect {
             node_id: node_id,
             kx_key: kx_key,
-            signature: None
+            signature: None,
         }
     }
 
@@ -49,7 +49,7 @@ impl Connect {
         // Attach signature to struct
         self.signature = Some(signature);
     }
-    
+
     /// Verifies the signature of the packet.
     ///
     /// Returns `false` if the signature field is missing.
@@ -57,12 +57,8 @@ impl Connect {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => { 
-                crypto::verify(&message, sig.clone(), self.node_id)
-            },
-            None => {
-                false
-            }
+            Some(ref sig) => crypto::verify(&message, sig.clone(), self.node_id),
+            None => false,
         }
     }
 
@@ -140,7 +136,7 @@ impl Connect {
         let packet = Connect {
             node_id: node_id,
             kx_key: kx_key,
-            signature: Some(signature)
+            signature: Some(signature),
         };
 
         Ok(packet)
@@ -167,14 +163,14 @@ use crypto::Identity;
 
 #[cfg(test)]
 impl Arbitrary for Connect {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Connect {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Connect {
         let id1 = Identity::new();
         let id2 = Identity::new();
-        
+
         Connect {
             node_id: *id1.pkey(),
             kx_key: *id2.pkey(),
-            signature: Some(Arbitrary::arbitrary(g))
+            signature: Some(Arbitrary::arbitrary(g)),
         }
     }
 }

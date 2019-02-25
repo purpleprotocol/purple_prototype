@@ -17,10 +17,10 @@
 */
 
 use account::NormalAddress;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use causality::Stamp;
 use crypto::{Hash, PublicKey, Signature};
 use network::NodeId;
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -38,7 +38,7 @@ pub struct Join {
 }
 
 impl Join {
-    pub const EVENT_TYPE: u8 = 1; 
+    pub const EVENT_TYPE: u8 = 1;
 
     /// Serializes a heartbeat struct.
     ///
@@ -151,10 +151,10 @@ impl Join {
 
         let collector_address = if buf.len() > 33 as usize {
             let collector_address_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match NormalAddress::from_bytes(&collector_address_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the collector address");
@@ -229,7 +229,7 @@ use quickcheck::Arbitrary;
 
 #[cfg(test)]
 impl Arbitrary for Join {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Join {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Join {
         Join {
             node_id: Arbitrary::arbitrary(g),
             stamp: Arbitrary::arbitrary(g),

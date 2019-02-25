@@ -36,10 +36,12 @@ impl<T: fmt::Debug + Clone> Stack<T> {
 
     pub fn pick(&mut self, idx: usize) {
         let len = self.0.len();
-        if idx >= len { panic!("There is no item at the given index!") }
-        
+        if idx >= len {
+            panic!("There is no item at the given index!")
+        }
+
         let item = self.0[idx].clone();
-        
+
         self.0.push(item);
     }
 
@@ -49,13 +51,17 @@ impl<T: fmt::Debug + Clone> Stack<T> {
 
     pub fn peek(&self) -> &T {
         let len = self.0.len();
-        if len == 0 { panic!("Cannot peek into empty stack!") }
+        if len == 0 {
+            panic!("Cannot peek into empty stack!")
+        }
         &self.0[len - 1]
     }
 
     pub fn peek_mut(&mut self) -> &mut T {
         let len = self.0.len();
-        if len == 0 { panic!("Cannot peek into empty stack!") }
+        if len == 0 {
+            panic!("Cannot peek into empty stack!")
+        }
         &mut self.0[len - 1]
     }
 

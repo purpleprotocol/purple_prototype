@@ -16,12 +16,12 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, ContractAddress, Balance, Signature, ShareMap, MultiSig};
+use account::{Address, Balance, ContractAddress, MultiSig, ShareMap, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, SecretKey as Sk, PublicKey as Pk};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
+use purple_vm::Gas;
 use std::io::Cursor;
 use std::str;
-use purple_vm::Gas;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Call {
@@ -56,27 +56,27 @@ impl Call {
         let signature = crypto::sign(&message, skey);
 
         match self.signature {
-            Some(Signature::Normal(_)) => { 
+            Some(Signature::Normal(_)) => {
                 if let Address::Normal(_) = self.from {
                     let result = Signature::Normal(signature);
                     self.signature = Some(result);
                 } else {
                     panic!("Invalid address type");
                 }
-            },
+            }
             Some(Signature::MultiSig(ref mut sig)) => {
                 if let Address::Normal(_) = self.from {
                     panic!("Invalid address type");
                 } else {
                     // Append signature to the multi sig struct
                     sig.append_sig(signature);
-                }           
-            },
+                }
+            }
             None => {
                 if let Address::Normal(_) = self.from {
                     // Create a normal signature
                     let result = Signature::Normal(signature);
-                    
+
                     // Attach signature to struct
                     self.signature = Some(result);
                 } else {
@@ -89,31 +89,29 @@ impl Call {
             }
         };
     }
-    
+
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
     ///
-    /// This function panics if the transaction has a multi 
+    /// This function panics if the transaction has a multi
     /// signature attached to it or if the signer's address
     /// is not a normal address.
     pub fn verify_sig(&mut self) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(ref sig)) => { 
+            Some(Signature::Normal(ref sig)) => {
                 if let Address::Normal(ref addr) = self.from {
                     crypto::verify(&message, sig.clone(), addr.pkey())
                 } else {
                     panic!("The address of the signer is not a normal address!");
                 }
-            },
+            }
             Some(Signature::MultiSig(_)) => {
                 panic!("Calling this function on a multi signature transaction is not permitted!");
-            },
-            None => {
-                false
             }
+            None => false,
         }
     }
 
@@ -121,7 +119,7 @@ impl Call {
     ///
     /// Returns `false` if the signature field is missing.
     ///
-    /// This function panics if the transaction has a multi 
+    /// This function panics if the transaction has a multi
     /// signature attached to it or if the signer's address
     /// is not a normal address.
     pub fn verify_multi_sig(&mut self, required_keys: u8, pkeys: &[Pk]) -> bool {
@@ -131,15 +129,11 @@ impl Call {
             let message = assemble_sign_message(&self);
 
             match self.signature {
-                Some(Signature::Normal(_)) => { 
+                Some(Signature::Normal(_)) => {
                     panic!("Calling this function on a transaction with a normal signature is not permitted!");
-                },
-                Some(Signature::MultiSig(ref sig)) => {
-                    sig.verify(&message, required_keys, pkeys)
-                },
-                None => {
-                    false
                 }
+                Some(Signature::MultiSig(ref sig)) => sig.verify(&message, required_keys, pkeys),
+                None => false,
             }
         }
     }
@@ -147,19 +141,21 @@ impl Call {
     /// Verifies the multi signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(&mut self, required_percentile: u8, share_map: ShareMap) -> bool {
+    pub fn verify_multi_sig_shares(
+        &mut self,
+        required_percentile: u8,
+        share_map: ShareMap,
+    ) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(_)) => { 
+            Some(Signature::Normal(_)) => {
                 panic!("Calling this function on a transaction with a normal signature is not permitted!");
-            },
+            }
             Some(Signature::MultiSig(ref sig)) => {
                 sig.verify_shares(&message, required_percentile, share_map)
-            },
-            None => {
-                false
             }
+            None => false,
         }
     }
 
@@ -305,10 +301,10 @@ impl Call {
 
         let from = if buf.len() > 33 as usize {
             let from_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match Address::from_bytes(&from_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -316,10 +312,10 @@ impl Call {
 
         let to = if buf.len() > 33 as usize {
             let to_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match ContractAddress::from_bytes(&to_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -360,10 +356,10 @@ impl Call {
 
         let signature = if buf.len() > signature_len as usize {
             let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
-            
+
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,
-                Err(_)  => return Err("Bad signature")
+                Err(_) => return Err("Bad signature"),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -371,56 +367,56 @@ impl Call {
 
         let gas_limit = if buf.len() > gas_limit_len as usize {
             let gas_limit_vec: Vec<u8> = buf.drain(..gas_limit_len as usize).collect();
-            
+
             match Gas::from_bytes(&gas_limit_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad gas limit")
+                Err(_) => return Err("Bad gas limit"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let gas_price = if buf.len() > gas_price_len as usize {
             let gas_price_vec: Vec<u8> = buf.drain(..gas_price_len as usize).collect();
-            
+
             match Balance::from_bytes(&gas_price_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad gas price")
+                Err(_) => return Err("Bad gas price"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let amount = if buf.len() > amount_len as usize {
             let amount_vec: Vec<u8> = buf.drain(..amount_len as usize).collect();
-            
+
             match Balance::from_bytes(&amount_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad amount")
+                Err(_) => return Err("Bad amount"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let fee = if buf.len() >= fee_len as usize {
             let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
-            
+
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad gas price")
+                Err(_) => return Err("Bad gas price"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let inputs = if buf.len() == inputs_len as usize {
             // TODO: Deserialize contract inputs
             match str::from_utf8(&buf) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad inputs")
+                Err(_) => return Err("Bad inputs"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let call = Call {
@@ -505,7 +501,7 @@ fn assemble_sign_message(obj: &Call) -> Vec<u8> {
 use quickcheck::Arbitrary;
 
 impl Arbitrary for Call {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Call {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Call {
         Call {
             from: Arbitrary::arbitrary(g),
             to: Arbitrary::arbitrary(g),
@@ -545,12 +541,12 @@ mod tests {
 
         fn verify_signature(
             to: ContractAddress,
-            amount: Balance, 
-            fee: Balance, 
+            amount: Balance,
+            fee: Balance,
             inputs: String,
             gas_price: Balance,
             gas_limit: Gas,
-            asset_hash: Hash, 
+            asset_hash: Hash,
             fee_hash: Hash
         ) -> bool {
             let id = Identity::new();
@@ -575,12 +571,12 @@ mod tests {
 
         fn verify_multi_signature(
             to: ContractAddress,
-            amount: Balance, 
-            fee: Balance, 
+            amount: Balance,
+            fee: Balance,
             inputs: String,
             gas_price: Balance,
             gas_limit: Gas,
-            asset_hash: Hash, 
+            asset_hash: Hash,
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
@@ -612,18 +608,18 @@ mod tests {
             for id in ids {
                 tx.sign(id.skey().clone());
             }
-            
+
             tx.verify_multi_sig(10, &pkeys)
         }
 
         fn verify_multi_signature_shares(
             to: ContractAddress,
-            amount: Balance, 
-            fee: Balance, 
+            amount: Balance,
+            fee: Balance,
             inputs: String,
             gas_price: Balance,
             gas_limit: Gas,
-            asset_hash: Hash, 
+            asset_hash: Hash,
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
@@ -641,8 +637,8 @@ mod tests {
                 .iter()
                 .map(|pk| NormalAddress::from_pkey(*pk))
                 .collect();
-            
-            let mut share_map = ShareMap::new(); 
+
+            let mut share_map = ShareMap::new();
 
             for addr in addresses.clone() {
                 share_map.add_shareholder(addr, 100);
@@ -666,7 +662,7 @@ mod tests {
             for id in ids {
                 tx.sign(id.skey().clone());
             }
-            
+
             tx.verify_multi_sig_shares(10, share_map)
         }
     }

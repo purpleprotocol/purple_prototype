@@ -16,10 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::{ToBase58, FromBase58};
 use addresses::NormalAddress;
-use rlp::*;
 use byteorder::{BigEndian, WriteBytesExt};
+use crypto::{FromBase58, ToBase58};
+use rlp::*;
 
 #[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct MultiSigAddress([u8; 32]);
@@ -35,16 +35,16 @@ impl MultiSigAddress {
     pub fn from_base58(input: &str) -> Result<MultiSigAddress, &'static str> {
         match input.from_base58() {
             Ok(bin) => Self::from_bytes(&bin),
-            _       => Err("Invalid base58 string!")
+            _ => Err("Invalid base58 string!"),
         }
     }
 
     /// Computes a multi signature address from the public keys of the
     /// the owners, the creator address and the creator's current nonce.
     pub fn compute(
-        keys: &[NormalAddress], 
-        creator_address: NormalAddress, 
-        nonce: u64
+        keys: &[NormalAddress],
+        creator_address: NormalAddress,
+        nonce: u64,
     ) -> MultiSigAddress {
         let mut buf: Vec<u8> = Vec::new();
         let mut stream = RlpStream::new_list(keys.len());
@@ -55,7 +55,7 @@ impl MultiSigAddress {
         }
 
         let mut encoded_keys = stream.out();
- 
+
         buf.write_u64::<BigEndian>(nonce).unwrap();
         buf.append(&mut creator_address.to_bytes());
         buf.append(&mut encoded_keys);
@@ -81,7 +81,7 @@ impl MultiSigAddress {
 
     pub fn from_bytes(bin: &[u8]) -> Result<MultiSigAddress, &'static str> {
         let addr_type = bin[0];
-        
+
         if bin.len() == 33 && addr_type == Self::ADDR_TYPE {
             let (_, tail) = bin.split_at(1);
             let mut addr = [0; 32];
@@ -96,15 +96,13 @@ impl MultiSigAddress {
     }
 }
 
-use rand::Rng;
 use quickcheck::Arbitrary;
+use rand::Rng;
 
 impl Arbitrary for MultiSigAddress {
-    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> MultiSigAddress {
+    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> MultiSigAddress {
         let mut rng = rand::thread_rng();
-        let bytes: Vec<u8> = (0..32).map(|_| {
-            rng.gen_range(1, 255)
-        }).collect();
+        let bytes: Vec<u8> = (0..32).map(|_| rng.gen_range(1, 255)).collect();
 
         let mut result = [0; 32];
         result.copy_from_slice(&bytes);
@@ -112,11 +110,11 @@ impl Arbitrary for MultiSigAddress {
         MultiSigAddress(result)
     }
 
-    fn shrink(&self) -> Box<Iterator<Item=Self>> {
+    fn shrink(&self) -> Box<Iterator<Item = Self>> {
         Box::new(self.0.to_vec().shrink().map(|p| {
             let mut result = [0; 32];
             result.copy_from_slice(&p);
-            
+
             MultiSigAddress(result)
         }))
     }
