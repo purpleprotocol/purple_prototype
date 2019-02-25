@@ -30,8 +30,8 @@ pub enum VmError {
     /// The called function is not defined.
     NotDefined,
 
-    /// The module containing the function imported at 
-    /// (module idx, import idx) is not loaded. 
+    /// The module containing the function imported at
+    /// (module idx, import idx) is not loaded.
     ImportNotLoaded(usize, usize),
 
     /// The module is already loaded.
@@ -48,5 +48,4 @@ pub enum VmError {
 
     /// F64 Overflow
     F64Overflow,
-
 }

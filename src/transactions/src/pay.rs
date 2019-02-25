@@ -16,13 +16,13 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{ShareholdersAddress, NormalAddress, Balance, MultiSig, ShareMap};
+use account::{Balance, MultiSig, NormalAddress, ShareMap, ShareholdersAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, SecretKey as Sk};
-use std::io::Cursor;
-use patricia_trie::{TrieMut, TrieDBMut};
+use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use rust_decimal::Decimal;
+use std::io::Cursor;
 use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -62,7 +62,7 @@ impl Pay {
         let payer_fee_key = payer_fee_key.as_bytes();
 
         // Calculate nonce key
-        // 
+        //
         // The key of a nonce has the following format:
         // `<account-address>.n`
         let payer_nonce_key = format!("{}.n", payer);
@@ -87,22 +87,18 @@ impl Pay {
 
         if asset_hash == fee_hash {
             let mut payer_balance = unwrap!(
-                Balance::from_bytes(
-                    &unwrap!(
-                        trie.get(&payer_cur_key).unwrap(),
-                        "The payer does not have an entry for the given currency"
-                    )
-                ),
+                Balance::from_bytes(&unwrap!(
+                    trie.get(&payer_cur_key).unwrap(),
+                    "The payer does not have an entry for the given currency"
+                )),
                 "Invalid stored balance format"
             );
 
             let share_map = unwrap!(
-                ShareMap::from_bytes(
-                    &unwrap!(
-                        trie.get(&share_map_key).unwrap(),
-                        "The payer does not have a stored share map"
-                    )
-                ),
+                ShareMap::from_bytes(&unwrap!(
+                    trie.get(&share_map_key).unwrap(),
+                    "The payer does not have a stored share map"
+                )),
                 "Invalid stored share map"
             );
 
@@ -121,35 +117,30 @@ impl Pay {
 
             // Update trie
             trie.insert(payer_nonce_key, &nonce).unwrap();
-            trie.insert(payer_cur_key, &payer_balance.to_bytes()).unwrap();
+            trie.insert(payer_cur_key, &payer_balance.to_bytes())
+                .unwrap();
         } else {
             let mut payer_cur_balance = unwrap!(
-                Balance::from_bytes(
-                    &unwrap!(
-                        trie.get(&payer_cur_key).unwrap(),
-                        "The payer does not have an entry for the given currency"
-                    )
-                ),
+                Balance::from_bytes(&unwrap!(
+                    trie.get(&payer_cur_key).unwrap(),
+                    "The payer does not have an entry for the given currency"
+                )),
                 "Invalid stored balance format"
             );
 
             let mut payer_fee_balance = unwrap!(
-                Balance::from_bytes(
-                    &unwrap!(
-                        trie.get(&payer_fee_key).unwrap(),
-                        "The payer does not have an entry for the given currency"
-                    )
-                ),
+                Balance::from_bytes(&unwrap!(
+                    trie.get(&payer_fee_key).unwrap(),
+                    "The payer does not have an entry for the given currency"
+                )),
                 "Invalid stored balance format"
             );
 
             let share_map = unwrap!(
-                ShareMap::from_bytes(
-                    &unwrap!(
-                        trie.get(&share_map_key).unwrap(),
-                        "The payer does not have a stored share map"
-                    )
-                ),
+                ShareMap::from_bytes(&unwrap!(
+                    trie.get(&share_map_key).unwrap(),
+                    "The payer does not have a stored share map"
+                )),
                 "Invalid stored share map"
             );
 
@@ -168,8 +159,10 @@ impl Pay {
 
             // Update trie
             trie.insert(payer_nonce_key, &nonce).unwrap();
-            trie.insert(payer_cur_key, &payer_cur_balance.to_bytes()).unwrap();
-            trie.insert(payer_fee_key, &payer_fee_balance.to_bytes()).unwrap();
+            trie.insert(payer_cur_key, &payer_cur_balance.to_bytes())
+                .unwrap();
+            trie.insert(payer_fee_key, &payer_fee_balance.to_bytes())
+                .unwrap();
         }
     }
 
@@ -184,8 +177,8 @@ impl Pay {
         match self.signature {
             Some(ref mut sig) => {
                 // Append signature to the multi sig struct
-                sig.append_sig(signature);        
-            },
+                sig.append_sig(signature);
+            }
             None => {
                 // Create a multi signature
                 let result = MultiSig::from_sig(signature);
@@ -199,16 +192,16 @@ impl Pay {
     /// Verifies the multi signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(&mut self, required_percentile: u8, share_map: ShareMap) -> bool {
+    pub fn verify_multi_sig_shares(
+        &mut self,
+        required_percentile: u8,
+        share_map: ShareMap,
+    ) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => {
-                sig.verify_shares(&message, required_percentile, share_map)
-            },
-            None => {
-                false
-            }
+            Some(ref sig) => sig.verify_shares(&message, required_percentile, share_map),
+            None => false,
         }
     }
 
@@ -310,10 +303,10 @@ impl Pay {
 
         let payer = if buf.len() > 33 as usize {
             let payer_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match ShareholdersAddress::from_bytes(&payer_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -357,10 +350,10 @@ impl Pay {
 
             match Balance::from_bytes(&amount_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad amount")
+                Err(_) => return Err("Bad amount"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let fee = if buf.len() > fee_len as usize {
@@ -368,18 +361,18 @@ impl Pay {
 
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad fee")
+                Err(_) => return Err("Bad fee"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let signature = if buf.len() == signature_len as usize {
             let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
 
             match MultiSig::from_bytes(&sig_vec) {
-                Ok(sig)   => sig,
-                Err(err)  => return Err(err)
+                Ok(sig) => sig,
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -407,12 +400,12 @@ impl Pay {
 }
 
 fn pay_dividend(
-    trie: &mut TrieDBMut<BlakeDbHasher, Codec>, 
+    trie: &mut TrieDBMut<BlakeDbHasher, Codec>,
     amount: &Balance,
     asset_hash: &Hash,
-    address: NormalAddress, 
-    address_shares: u32, 
-    issued_shares: u32
+    address: NormalAddress,
+    address_shares: u32,
+    issued_shares: u32,
 ) {
     let address = hex::encode(&address.to_bytes());
     let asset_hash = hex::encode(asset_hash.to_vec());
@@ -432,7 +425,7 @@ fn pay_dividend(
     let percentage = (address_shares / issued_shares) * one_hundred;
     let amount_deci = amount.to_inner();
 
-    // Calculate amount to be paid 
+    // Calculate amount to be paid
     let amount = (percentage / one_hundred) * amount_deci;
     let amount = format!("{}", amount);
     let amount = amount.as_bytes();
@@ -488,7 +481,7 @@ fn assemble_sign_message(obj: &Pay) -> Vec<u8> {
 use quickcheck::Arbitrary;
 
 impl Arbitrary for Pay {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Pay {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Pay {
         Pay {
             payer: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
@@ -504,9 +497,9 @@ impl Arbitrary for Pay {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use OpenShares;
-    use account::{Address, Shares, NormalAddress};
+    use account::{Address, NormalAddress, Shares};
     use crypto::{Identity, PublicKey as Pk};
+    use OpenShares;
 
     #[test]
     fn apply_it_pays_dividends() {
@@ -518,7 +511,7 @@ mod tests {
 
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
-        
+
         // Create shareholders addresses and skeys
         let sh1_addr = NormalAddress::from_pkey(*id2.pkey());
         let sh1_skey = id2.skey().clone();
@@ -534,7 +527,7 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         let shares = Shares::new(4000, 1000000, 60);
         let mut share_map = ShareMap::new();
 
@@ -542,7 +535,7 @@ mod tests {
         share_map.add_shareholder(sh2_addr, 1000);
         share_map.add_shareholder(sh3_addr, 1000);
         share_map.add_shareholder(sh4_addr, 1000);
-        
+
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr, asset_hash, b"10000.0");
 
@@ -575,7 +568,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: asset_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(sh1_skey);
@@ -608,10 +601,22 @@ mod tests {
         let sh3_balance = trie.get(sh3_balance_key).unwrap().unwrap();
         let sh4_balance = trie.get(sh4_balance_key).unwrap().unwrap();
 
-        assert_eq!(Balance::from_bytes(&sh1_balance).unwrap(), Balance::from_bytes(b"25.0").unwrap());
-        assert_eq!(Balance::from_bytes(&sh2_balance).unwrap(), Balance::from_bytes(b"25.0").unwrap());
-        assert_eq!(Balance::from_bytes(&sh3_balance).unwrap(), Balance::from_bytes(b"25.0").unwrap());
-        assert_eq!(Balance::from_bytes(&sh4_balance).unwrap(), Balance::from_bytes(b"25.0").unwrap());
+        assert_eq!(
+            Balance::from_bytes(&sh1_balance).unwrap(),
+            Balance::from_bytes(b"25.0").unwrap()
+        );
+        assert_eq!(
+            Balance::from_bytes(&sh2_balance).unwrap(),
+            Balance::from_bytes(b"25.0").unwrap()
+        );
+        assert_eq!(
+            Balance::from_bytes(&sh3_balance).unwrap(),
+            Balance::from_bytes(b"25.0").unwrap()
+        );
+        assert_eq!(
+            Balance::from_bytes(&sh4_balance).unwrap(),
+            Balance::from_bytes(b"25.0").unwrap()
+        );
     }
 
     quickcheck! {
@@ -631,7 +636,7 @@ mod tests {
 
         fn verify_multi_signature_shares(
             amount: Balance,
-            fee: Balance, 
+            fee: Balance,
             asset_hash: Hash,
             fee_hash: Hash
         ) -> bool {
@@ -650,8 +655,8 @@ mod tests {
                 .iter()
                 .map(|pk| NormalAddress::from_pkey(*pk))
                 .collect();
-            
-            let mut share_map = ShareMap::new(); 
+
+            let mut share_map = ShareMap::new();
 
             for addr in addresses.clone() {
                 share_map.add_shareholder(addr, 100);
@@ -671,7 +676,7 @@ mod tests {
             for id in ids {
                 tx.sign(id.skey().clone());
             }
-            
+
             tx.verify_multi_sig_shares(10, share_map)
         }
     }

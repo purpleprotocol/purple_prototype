@@ -16,9 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use gas::Gas;
 use code::transition::Transition;
+use gas::Gas;
 
+#[rustfmt::skip]
 #[EnumRepr(type = "u8")]
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Instruction {
@@ -213,6 +214,7 @@ pub enum Instruction {
     Suicide               = 0xff
 }
 
+#[rustfmt::skip]
 impl Instruction {
     pub fn transitions(&self) -> Vec<Transition> {
         match *self {
@@ -379,15 +381,10 @@ impl Instruction {
 }
 
 lazy_static! {
-    static ref DEFAULT_TRANSITIONS: Vec<Transition> = OPS_LIST
-        .iter()
-        .map(|op| Transition::Op(*op))
-        .collect();
-    
-    static ref COMP_TRANSITIONS: Vec<Transition> = COMP_OPS
-        .iter()
-        .map(|op| Transition::Op(*op))
-        .collect();
+    static ref DEFAULT_TRANSITIONS: Vec<Transition> =
+        OPS_LIST.iter().map(|op| Transition::Op(*op)).collect();
+    static ref COMP_TRANSITIONS: Vec<Transition> =
+        COMP_OPS.iter().map(|op| Transition::Op(*op)).collect();
 }
 
 /// List containing opcodes which handle control flow or begin blocks.
@@ -395,9 +392,10 @@ pub const CT_FLOW_OPS: &'static [Instruction] = &[
     Instruction::Begin,
     Instruction::Loop,
     Instruction::If,
-    Instruction::Else
+    Instruction::Else,
 ];
 
+#[rustfmt::skip]
 /// List containing all comparison operators.
 pub const COMP_OPS: &'static [Instruction] = &[
     Instruction::Eqz            ,
@@ -413,6 +411,7 @@ pub const COMP_OPS: &'static [Instruction] = &[
     Instruction::GeUnsigned     
 ];
 
+#[rustfmt::skip]
 /// Static array containing all default opcodes. 
 /// These do not contain block specific operators,
 /// such as `Else`, `Break` or `Break if`.

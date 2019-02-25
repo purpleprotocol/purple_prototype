@@ -22,7 +22,7 @@ use instruction_set::Instruction;
 pub enum Transition {
     Op(Instruction),
     Byte(u8),
-    AnyByte
+    AnyByte,
 }
 
 impl Transition {
@@ -30,10 +30,10 @@ impl Transition {
         match *self {
             Transition::Op(op) => match Instruction::from_repr(byte) {
                 Some(o) => o == op,
-                None    => false
+                None => false,
             },
             Transition::Byte(b) => b == byte,
-            Transition::AnyByte => true
+            Transition::AnyByte => true,
         }
     }
 }

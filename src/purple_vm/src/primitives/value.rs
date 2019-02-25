@@ -64,10 +64,10 @@ impl VmValue {
     /// Returns the byte size of the inner value.
     pub fn byte_size(&self) -> usize {
         match *self {
-            VmValue::I32(_)       => 4,
-            VmValue::I64(_)       => 8,
-            VmValue::F32(_)       => 4,
-            VmValue::F64(_)       => 8,
+            VmValue::I32(_) => 4,
+            VmValue::I64(_) => 8,
+            VmValue::F32(_) => 4,
+            VmValue::F64(_) => 8,
             VmValue::i32Array2(_) => 8,
             VmValue::i32Array4(_) => 16,
             VmValue::i32Array8(_) => 32,
@@ -80,7 +80,7 @@ impl VmValue {
             VmValue::f64Array2(_) => 8,
             VmValue::f64Array4(_) => 16,
             VmValue::f64Array8(_) => 32,
-            _                        => panic!()
+            _ => panic!(),
         }
     }
 }
@@ -88,10 +88,10 @@ impl VmValue {
 impl PartialEq for VmValue {
     fn eq(&self, other: &VmValue) -> bool {
         match (*self, *other) {
-            (VmValue::I32(val1), VmValue::I32(val2))             => val1 == val2,
-            (VmValue::I64(val1), VmValue::I64(val2))             => val1 == val2,
-            (VmValue::F32(val1), VmValue::F32(val2))             => val1 == val2,
-            (VmValue::F64(val1), VmValue::F64(val2))             => val1 == val2,
+            (VmValue::I32(val1), VmValue::I32(val2)) => val1 == val2,
+            (VmValue::I64(val1), VmValue::I64(val2)) => val1 == val2,
+            (VmValue::F32(val1), VmValue::F32(val2)) => val1 == val2,
+            (VmValue::F64(val1), VmValue::F64(val2)) => val1 == val2,
             (VmValue::i32Array2(val1), VmValue::i32Array2(val2)) => val1 == val2,
             (VmValue::i32Array4(val1), VmValue::i32Array4(val2)) => val1 == val2,
             (VmValue::i32Array8(val1), VmValue::i32Array8(val2)) => val1 == val2,
@@ -104,7 +104,7 @@ impl PartialEq for VmValue {
             (VmValue::f64Array2(val1), VmValue::f64Array2(val2)) => val1 == val2,
             (VmValue::f64Array4(val1), VmValue::f64Array4(val2)) => val1 == val2,
             (VmValue::f64Array8(val1), VmValue::f64Array8(val2)) => val1 == val2,
-            (_, _)                                               => panic!("Cannot perform equality between different variants!")
+            (_, _) => panic!("Cannot perform equality between different variants!"),
         }
     }
 }
@@ -115,10 +115,10 @@ impl Add for VmValue {
     // TODO: Possibly use native SIMD for arrays, but benchmark first
     fn add(self, other: VmValue) -> VmValue {
         match (self, other) {
-            (VmValue::I32(val1), VmValue::I32(val2))             => VmValue::I32(val1 + val2),
-            (VmValue::I64(val1), VmValue::I64(val2))             => VmValue::I64(val1 + val2),
-            (VmValue::F32(val1), VmValue::F32(val2))             => VmValue::F32(val1 + val2),
-            (VmValue::F64(val1), VmValue::F64(val2))             => VmValue::F64(val1 + val2),
+            (VmValue::I32(val1), VmValue::I32(val2)) => VmValue::I32(val1 + val2),
+            (VmValue::I64(val1), VmValue::I64(val2)) => VmValue::I64(val1 + val2),
+            (VmValue::F32(val1), VmValue::F32(val2)) => VmValue::F32(val1 + val2),
+            (VmValue::F64(val1), VmValue::F64(val2)) => VmValue::F64(val1 + val2),
             (VmValue::i32Array2(val1), VmValue::i32Array2(val2)) => {
                 let mut result: [i32; 2] = [0; 2];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -126,9 +126,9 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::i32Array2(result)
-            },
+            }
             (VmValue::i32Array4(val1), VmValue::i32Array4(val2)) => {
                 let mut result: [i32; 4] = [0; 4];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -136,9 +136,9 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::i32Array4(result)
-            },
+            }
             (VmValue::i32Array8(val1), VmValue::i32Array8(val2)) => {
                 let mut result: [i32; 8] = [0; 8];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -146,9 +146,9 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::i32Array8(result)
-            },
+            }
             (VmValue::i64Array2(val1), VmValue::i64Array2(val2)) => {
                 let mut result: [i64; 2] = [0; 2];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -156,9 +156,9 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::i64Array2(result)
-            },
+            }
             (VmValue::i64Array4(val1), VmValue::i64Array4(val2)) => {
                 let mut result: [i64; 4] = [0; 4];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -166,9 +166,9 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::i64Array4(result)
-            },
+            }
             (VmValue::i64Array8(val1), VmValue::i64Array8(val2)) => {
                 let mut result: [i64; 8] = [0; 8];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -176,9 +176,9 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::i64Array8(result)
-            },
+            }
             (VmValue::f32Array2(val1), VmValue::f32Array2(val2)) => {
                 let mut result: [f32; 2] = [0.0; 2];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -186,9 +186,9 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::f32Array2(result)
-            },
+            }
             (VmValue::f32Array4(val1), VmValue::f32Array4(val2)) => {
                 let mut result: [f32; 4] = [0.0; 4];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -196,9 +196,9 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::f32Array4(result)
-            },
+            }
             (VmValue::f32Array8(val1), VmValue::f32Array8(val2)) => {
                 let mut result: [f32; 8] = [0.0; 8];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -206,9 +206,9 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::f32Array8(result)
-            },
+            }
             (VmValue::f64Array2(val1), VmValue::f64Array2(val2)) => {
                 let mut result: [f64; 2] = [0.0; 2];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -216,9 +216,9 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::f64Array2(result)
-            },
+            }
             (VmValue::f64Array4(val1), VmValue::f64Array4(val2)) => {
                 let mut result: [f64; 4] = [0.0; 4];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -226,9 +226,9 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::f64Array4(result)
-            },
+            }
             (VmValue::f64Array8(val1), VmValue::f64Array8(val2)) => {
                 let mut result: [f64; 8] = [0.0; 8];
                 let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
@@ -236,10 +236,10 @@ impl Add for VmValue {
                 for (r, v) in result.iter_mut().zip(src) {
                     *r = v;
                 }
-                
+
                 VmValue::f64Array8(result)
-            },
-            (_, _)                                               => panic!("Cannot perform addition between different variants!")
+            }
+            (_, _) => panic!("Cannot perform addition between different variants!"),
         }
     }
 }
@@ -251,102 +251,38 @@ impl fmt::Debug for VmValue {
             VmValue::I64(val) => write!(f, "{}", val),
             VmValue::F32(val) => write!(f, "{}", val),
             VmValue::F64(val) => write!(f, "{}", val),
-            VmValue::i32Array2(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i32Array4(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i32Array8(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i32Array16(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i32Array32(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i32Array64(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i32Array128(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i32Array256(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i64Array2(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i64Array4(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i64Array8(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i64Array16(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i64Array32(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i64Array64(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i64Array128(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::i64Array256(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f32Array2(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f32Array4(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f32Array8(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f32Array16(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f32Array32(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f32Array64(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f32Array128(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f32Array256(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f64Array2(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f64Array4(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f64Array8(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f64Array16(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f64Array32(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f64Array64(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f64Array128(val) => {
-                write!(f, "{:?}", val.to_vec())
-            },
-            VmValue::f64Array256(val) => {
-                write!(f, "{:?}", val.to_vec())
-            }
-        }   
+            VmValue::i32Array2(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i32Array4(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i32Array8(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i32Array16(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i32Array32(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i32Array64(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i32Array128(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i32Array256(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i64Array2(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i64Array4(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i64Array8(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i64Array16(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i64Array32(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i64Array64(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i64Array128(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::i64Array256(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f32Array2(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f32Array4(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f32Array8(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f32Array16(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f32Array32(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f32Array64(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f32Array128(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f32Array256(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f64Array2(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f64Array4(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f64Array8(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f64Array16(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f64Array32(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f64Array64(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f64Array128(val) => write!(f, "{:?}", val.to_vec()),
+            VmValue::f64Array256(val) => write!(f, "{:?}", val.to_vec()),
+        }
     }
 }

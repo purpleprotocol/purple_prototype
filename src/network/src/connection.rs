@@ -16,29 +16,33 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use tokio::io;
-use tokio::net::{TcpStream, TcpListener};
-use tokio::prelude::*;
-use tokio_io_timeout::TimeoutStream;
-use tokio::prelude::future::ok;
 use network::Network;
-use peer::Peer;
 use packets::connect::Connect;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use parking_lot::Mutex;
+use peer::Peer;
 use std::io::BufReader;
 use std::iter;
-use parking_lot::Mutex;
-use std::time::Duration;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::executor::Spawn;
+use tokio::io;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::prelude::future::ok;
+use tokio::prelude::*;
+use tokio_io_timeout::TimeoutStream;
 
 /// Purple network port
 pub const PORT: u16 = 44034;
 const PEER_TIMEOUT: u64 = 3000;
 
-/// Initializes the listener for the given network 
-pub fn start_listener(network: Arc<Mutex<Network>>, accept_connections: Arc<AtomicBool>, max_peers: usize) -> Spawn {
+/// Initializes the listener for the given network
+pub fn start_listener(
+    network: Arc<Mutex<Network>>,
+    accept_connections: Arc<AtomicBool>,
+    max_peers: usize,
+) -> Spawn {
     info!("Starting TCP listener on port {}", PORT);
 
     // Bind the server's socket.
@@ -51,15 +55,36 @@ pub fn start_listener(network: Arc<Mutex<Network>>, accept_connections: Arc<Atom
         .incoming()
         .map_err(|e| warn!("accept failed = {:?}", e))
         .filter(move |_| accept_connections_clone.load(Ordering::Relaxed))
-        .for_each(move |s| process_connection(network.clone(), s, max_peers, accept_connections.clone(), ConnectionType::Server));
-    
+        .for_each(move |s| {
+            process_connection(
+                network.clone(),
+                s,
+                max_peers,
+                accept_connections.clone(),
+                ConnectionType::Server,
+            )
+        });
+
     tokio::spawn(server)
 }
 
-pub fn connect_to_peer(network: Arc<Mutex<Network>>, accept_connections: Arc<AtomicBool>, max_peers: usize, addr: &SocketAddr) -> Spawn {
+pub fn connect_to_peer(
+    network: Arc<Mutex<Network>>,
+    accept_connections: Arc<AtomicBool>,
+    max_peers: usize,
+    addr: &SocketAddr,
+) -> Spawn {
     let connect = TcpStream::connect(addr)
         .map_err(|e| warn!("connect failed = {:?}", e))
-        .and_then(move |sock| process_connection(network, sock, max_peers, accept_connections, ConnectionType::Client));
+        .and_then(move |sock| {
+            process_connection(
+                network,
+                sock,
+                max_peers,
+                accept_connections,
+                ConnectionType::Client,
+            )
+        });
 
     tokio::spawn(connect)
 }
@@ -69,11 +94,11 @@ fn process_connection(
     sock: TcpStream,
     max_peers: usize,
     accept_connections: Arc<AtomicBool>,
-    client_or_server: ConnectionType
+    client_or_server: ConnectionType,
 ) -> Spawn {
     let mut sock = TimeoutStream::new(sock);
-            
-    // Set timeout 
+
+    // Set timeout
     sock.set_read_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
     sock.set_write_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
 
@@ -82,7 +107,7 @@ fn process_connection(
 
     match client_or_server {
         ConnectionType::Client => info!("Connecting to {}", addr),
-        ConnectionType::Server => info!("Received connection request from {}", addr)
+        ConnectionType::Server => info!("Received connection request from {}", addr),
     };
 
     let network = network.clone();
@@ -126,32 +151,34 @@ fn process_connection(
             });
 
             let refuse_connection = refuse_connection.clone();
-            
-            line
-                .map(move |(reader, message)| {
-                    // We should receive a connect packet 
-                    // if the peer's id is non-existent.
-                    if network.lock().is_none_id(&addr) {
-                        match Connect::from_bytes(&message) {
-                            Ok(connect_packet) => {
-                                debug!("Received connect packet from {}: {:?}", addr, connect_packet);
-                                reader
-                            },
-                            _ => {
-                                // Invalid packet, remove peer
-                                debug!("Invalid connect packet from {}", addr);
 
-                                // Flag socket for connection refusal
-                                refuse_connection.store(true, Ordering::Relaxed);
-
-                                reader
-                            }
+            line.map(move |(reader, message)| {
+                // We should receive a connect packet
+                // if the peer's id is non-existent.
+                if network.lock().is_none_id(&addr) {
+                    match Connect::from_bytes(&message) {
+                        Ok(connect_packet) => {
+                            debug!(
+                                "Received connect packet from {}: {:?}",
+                                addr, connect_packet
+                            );
+                            reader
                         }
-                    } else {
-                        info!("{}: {}", addr, hex::encode(message));
-                        reader   
+                        _ => {
+                            // Invalid packet, remove peer
+                            debug!("Invalid connect packet from {}", addr);
+
+                            // Flag socket for connection refusal
+                            refuse_connection.store(true, Ordering::Relaxed);
+
+                            reader
+                        }
                     }
-                })
+                } else {
+                    info!("{}: {}", addr, hex::encode(message));
+                    reader
+                }
+            })
         });
 
     // Now that we've got futures representing each half of the socket, we
@@ -178,14 +205,14 @@ fn process_connection(
 
 enum ConnectionType {
     Client,
-    Server
+    Server,
 }
 
 // #[cfg(test)]
 // mod tests {
 //     use super::*;
 
-//     #[test] 
+//     #[test]
 //     fn it_timeouts() {
 
 //     }

@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use rust_sodium::crypto::sign::Signature as PrimitiveSig;
-use rand::Rng;
 use quickcheck::Arbitrary;
+use rand::Rng;
+use rust_sodium::crypto::sign::Signature as PrimitiveSig;
 
 const SIG_TYPE: u8 = 1;
 
@@ -45,7 +45,7 @@ impl Signature {
             result.push(*byte);
         }
 
-        result 
+        result
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -76,11 +76,9 @@ impl Signature {
 }
 
 impl Arbitrary for Signature {
-    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Signature {
+    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> Signature {
         let mut rng = rand::thread_rng();
-        let bytes: Vec<u8> = (0..64).map(|_| {
-            rng.gen_range(1, 255)
-        }).collect();
+        let bytes: Vec<u8> = (0..64).map(|_| rng.gen_range(1, 255)).collect();
 
         let mut result = [0; 64];
         result.copy_from_slice(&bytes);

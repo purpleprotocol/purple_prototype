@@ -11,7 +11,7 @@ macro_rules! encode_u8 {
         buf.write_u8($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -22,7 +22,7 @@ macro_rules! decode_u8 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_u8()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -34,7 +34,7 @@ macro_rules! encode_be_u16 {
         buf.write_u16::<BigEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -45,19 +45,19 @@ macro_rules! decode_be_u16 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_u16::<BigEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
 macro_rules! encode_be_u32 {
     ($x:expr) => {{
         use byteorder::{BigEndian, WriteBytesExt};
-        
+
         let mut buf: Vec<u8> = Vec::with_capacity(4);
         buf.write_u32::<BigEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -68,7 +68,7 @@ macro_rules! decode_be_u32 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_u32::<BigEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -80,7 +80,7 @@ macro_rules! encode_be_u64 {
         buf.write_u64::<BigEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -91,7 +91,7 @@ macro_rules! decode_be_u64 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_u64::<BigEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -103,7 +103,7 @@ macro_rules! encode_le_u16 {
         buf.write_u16::<LittleEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -114,7 +114,7 @@ macro_rules! decode_le_u16 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_u16::<LittleEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -126,7 +126,7 @@ macro_rules! encode_le_u32 {
         buf.write_u32::<LittleEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -137,7 +137,7 @@ macro_rules! decode_le_u32 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_u32::<LittleEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -149,7 +149,7 @@ macro_rules! encode_le_u64 {
         buf.write_u64::<LittleEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -160,7 +160,7 @@ macro_rules! decode_le_u64 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_u64::<LittleEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -172,7 +172,7 @@ macro_rules! encode_i8 {
         buf.write_i8($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -183,7 +183,7 @@ macro_rules! decode_i8 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_i8()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -195,7 +195,7 @@ macro_rules! encode_be_i16 {
         buf.write_i16::<BigEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -206,19 +206,19 @@ macro_rules! decode_be_i16 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_i16::<BigEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
 macro_rules! encode_be_i32 {
     ($x:expr) => {{
         use byteorder::{BigEndian, WriteBytesExt};
-        
+
         let mut buf: Vec<u8> = Vec::with_capacity(4);
         buf.write_i32::<BigEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -229,7 +229,7 @@ macro_rules! decode_be_i32 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_i32::<BigEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -241,7 +241,7 @@ macro_rules! encode_be_i64 {
         buf.write_i64::<BigEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -252,7 +252,7 @@ macro_rules! decode_be_i64 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_i64::<BigEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -264,7 +264,7 @@ macro_rules! encode_le_i16 {
         buf.write_i16::<LittleEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -275,7 +275,7 @@ macro_rules! decode_le_i16 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_i16::<LittleEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -287,7 +287,7 @@ macro_rules! encode_le_i32 {
         buf.write_i32::<LittleEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -298,7 +298,7 @@ macro_rules! decode_le_i32 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_i32::<LittleEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -310,7 +310,7 @@ macro_rules! encode_le_i64 {
         buf.write_i64::<LittleEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -321,7 +321,7 @@ macro_rules! decode_le_i64 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_i64::<LittleEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -333,19 +333,19 @@ macro_rules! encode_f8 {
         buf.write_f8($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
 macro_rules! encode_be_f32 {
     ($x:expr) => {{
         use byteorder::{BigEndian, WriteBytesExt};
-        
+
         let mut buf: Vec<u8> = Vec::with_capacity(4);
         buf.write_f32::<BigEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -356,7 +356,7 @@ macro_rules! decode_be_f32 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_f32::<BigEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -368,7 +368,7 @@ macro_rules! encode_be_f64 {
         buf.write_f64::<BigEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -379,7 +379,7 @@ macro_rules! decode_be_f64 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_f64::<BigEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -391,7 +391,7 @@ macro_rules! encode_le_f32 {
         buf.write_f32::<LittleEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -402,7 +402,7 @@ macro_rules! decode_le_f32 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_f32::<LittleEndian>()
-    }}
+    }};
 }
 
 #[macro_export]
@@ -414,7 +414,7 @@ macro_rules! encode_le_f64 {
         buf.write_f64::<LittleEndian>($x).unwrap();
 
         buf
-    }}
+    }};
 }
 
 #[macro_export]
@@ -425,7 +425,7 @@ macro_rules! decode_le_f64 {
 
         let mut cursor = Cursor::new($x);
         cursor.read_f64::<LittleEndian>()
-    }}
+    }};
 }
 
 #[cfg(test)]

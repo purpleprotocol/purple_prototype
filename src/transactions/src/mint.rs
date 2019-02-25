@@ -16,19 +16,19 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, ShareMap, MultiSig, Signature};
+use account::{Address, Balance, MultiSig, ShareMap, Signature};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, SecretKey as Sk, PublicKey as Pk};
-use std::io::Cursor;
-use patricia_trie::{TrieMut, TrieDBMut};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
+use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
+use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Mint {
     minter: Address,
     receiver: Address,
     amount: Balance,
-    asset_hash: Hash, 
+    asset_hash: Hash,
     fee_hash: Hash,
     fee: Balance,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -91,10 +91,10 @@ impl Mint {
                 // Check minter validity
                 if &stored_minter.to_vec() != &bin_minter.to_vec() {
                     return false;
-                } 
-            },
+                }
+            }
             Ok(None) => return false,
-            Err(err) => panic!(err)
+            Err(err) => panic!(err),
         };
 
         let coin_supply = trie.get(&coin_supply_key).unwrap().unwrap();
@@ -124,14 +124,14 @@ impl Mint {
         // Check for currency existence
         let _ = match trie.get(precision_key) {
             Ok(Some(result)) => result,
-            Ok(None)         => return false,
-            Err(err)         => panic!(err)
+            Ok(None) => return false,
+            Err(err) => panic!(err),
         };
 
         let mut balance = match trie.get(minter_fee_key) {
             Ok(Some(balance)) => Balance::from_bytes(&balance).unwrap(),
-            Ok(None)          => return false,
-            Err(err)          => panic!(err)
+            Ok(None) => return false,
+            Err(err) => panic!(err),
         };
 
         balance -= self.fee.clone();
@@ -161,7 +161,7 @@ impl Mint {
         let receiver_cur_key = receiver_cur_key.as_bytes();
 
         // Calculate nonce keys
-        // 
+        //
         // The key of a nonce has the following format:
         // `<account-address>.n`
         let minter_nonce_key = format!("{}.n", minter);
@@ -183,11 +183,9 @@ impl Mint {
                 nonce += 1;
 
                 encode_be_u64!(nonce)
-            },
-            Ok(None) => {
-                vec![0, 0, 0, 0, 0, 0, 0, 0]
-            },
-            Err(err) => panic!(err)
+            }
+            Ok(None) => vec![0, 0, 0, 0, 0, 0, 0, 0],
+            Err(err) => panic!(err),
         };
 
         match bin_receiver_nonce {
@@ -196,12 +194,10 @@ impl Mint {
                 if minter == receiver {
                     if asset_hash == fee_hash {
                         let mut minter_balance = unwrap!(
-                            Balance::from_bytes(
-                                &unwrap!(
-                                    trie.get(&minter_cur_key).unwrap(),
-                                    "The minter does not have an entry for the given currency"
-                                )
-                            ),
+                            Balance::from_bytes(&unwrap!(
+                                trie.get(&minter_cur_key).unwrap(),
+                                "The minter does not have an entry for the given currency"
+                            )),
                             "Invalid stored balance format"
                         );
 
@@ -213,15 +209,14 @@ impl Mint {
 
                         // Update trie
                         trie.insert(&minter_nonce_key, &nonce).unwrap();
-                        trie.insert(&minter_cur_key, &minter_balance.to_bytes()).unwrap();
+                        trie.insert(&minter_cur_key, &minter_balance.to_bytes())
+                            .unwrap();
                     } else {
                         let mut minter_fee_balance = unwrap!(
-                            Balance::from_bytes(
-                                &unwrap!(
-                                    trie.get(&minter_fee_key).unwrap(),
-                                    "The minter does not have an entry for the given currency"
-                                )
-                            ),
+                            Balance::from_bytes(&unwrap!(
+                                trie.get(&minter_fee_key).unwrap(),
+                                "The minter does not have an entry for the given currency"
+                            )),
                             "Invalid stored balance format"
                         );
 
@@ -230,27 +225,25 @@ impl Mint {
 
                         let minter_balance: Balance = match trie.get(&minter_cur_key) {
                             Ok(Some(balance)) => {
-                                Balance::from_bytes(&balance).unwrap() + self.amount.clone() 
-                            },
-                            Ok(None) => {
-                                self.amount.clone()
-                            },
-                            Err(err) => panic!(err)
+                                Balance::from_bytes(&balance).unwrap() + self.amount.clone()
+                            }
+                            Ok(None) => self.amount.clone(),
+                            Err(err) => panic!(err),
                         };
 
                         // Update trie
                         trie.insert(&minter_nonce_key, &nonce).unwrap();
-                        trie.insert(&minter_cur_key, &minter_balance.to_bytes()).unwrap();
-                        trie.insert(&minter_fee_key, &minter_fee_balance.to_bytes()).unwrap();
+                        trie.insert(&minter_cur_key, &minter_balance.to_bytes())
+                            .unwrap();
+                        trie.insert(&minter_fee_key, &minter_fee_balance.to_bytes())
+                            .unwrap();
                     }
                 } else {
                     let mut minter_balance = unwrap!(
-                        Balance::from_bytes(
-                            &unwrap!(
-                                trie.get(&minter_fee_key).unwrap(),
-                                "The minter does not have an entry for the given currency"
-                            )
-                        ),
+                        Balance::from_bytes(&unwrap!(
+                            trie.get(&minter_fee_key).unwrap(),
+                            "The minter does not have an entry for the given currency"
+                        )),
                         "Invalid stored balance format"
                     );
 
@@ -260,29 +253,27 @@ impl Mint {
                     // The receiver account exists so we try to retrieve his balance
                     let receiver_balance: Balance = match trie.get(&receiver_cur_key) {
                         Ok(Some(balance)) => {
-                            Balance::from_bytes(&balance).unwrap() + self.amount.clone() 
-                        },
-                        Ok(None) => {
-                            self.amount.clone()
-                        },
-                        Err(err) => panic!(err)
+                            Balance::from_bytes(&balance).unwrap() + self.amount.clone()
+                        }
+                        Ok(None) => self.amount.clone(),
+                        Err(err) => panic!(err),
                     };
 
                     // Update trie
                     trie.insert(&minter_nonce_key, &nonce).unwrap();
-                    trie.insert(&minter_fee_key, &minter_balance.to_bytes()).unwrap();
-                    trie.insert(&receiver_cur_key, &receiver_balance.to_bytes()).unwrap();
+                    trie.insert(&minter_fee_key, &minter_balance.to_bytes())
+                        .unwrap();
+                    trie.insert(&receiver_cur_key, &receiver_balance.to_bytes())
+                        .unwrap();
                 }
-            },
+            }
             // The receiver account doesn't exist so we create it
             Ok(None) => {
                 let mut minter_balance = unwrap!(
-                    Balance::from_bytes(
-                        &unwrap!(
-                            trie.get(&minter_cur_key).unwrap(),
-                            "The minter does not have an entry for the given currency"
-                        )
-                    ),
+                    Balance::from_bytes(&unwrap!(
+                        trie.get(&minter_cur_key).unwrap(),
+                        "The minter does not have an entry for the given currency"
+                    )),
                     "Invalid stored balance format"
                 );
 
@@ -291,11 +282,14 @@ impl Mint {
 
                 // Update trie
                 trie.insert(&minter_nonce_key, &nonce).unwrap();
-                trie.insert(&receiver_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
-                trie.insert(&minter_cur_key, &minter_balance.to_bytes()).unwrap();
-                trie.insert(&receiver_cur_key, &self.amount.to_bytes()).unwrap();
-            },
-            Err(err) => panic!(err)
+                trie.insert(&receiver_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
+                    .unwrap();
+                trie.insert(&minter_cur_key, &minter_balance.to_bytes())
+                    .unwrap();
+                trie.insert(&receiver_cur_key, &self.amount.to_bytes())
+                    .unwrap();
+            }
+            Err(err) => panic!(err),
         }
     }
 
@@ -312,27 +306,27 @@ impl Mint {
         let signature = crypto::sign(&message, skey);
 
         match self.signature {
-            Some(Signature::Normal(_)) => { 
+            Some(Signature::Normal(_)) => {
                 if let Address::Normal(_) = self.minter {
                     let result = Signature::Normal(signature);
                     self.signature = Some(result);
                 } else {
                     panic!("Invalid address type");
                 }
-            },
+            }
             Some(Signature::MultiSig(ref mut sig)) => {
                 if let Address::Normal(_) = self.minter {
                     panic!("Invalid address type");
                 } else {
                     // Append signature to the multi sig struct
                     sig.append_sig(signature);
-                }           
-            },
+                }
+            }
             None => {
                 if let Address::Normal(_) = self.minter {
                     // Create a normal signature
                     let result = Signature::Normal(signature);
-                    
+
                     // Attach signature to struct
                     self.signature = Some(result);
                 } else {
@@ -345,31 +339,29 @@ impl Mint {
             }
         };
     }
-    
+
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
     ///
-    /// This function panics if the transaction has a multi 
+    /// This function panics if the transaction has a multi
     /// signature attached to it or if the signer's address
     /// is not a normal address.
     pub fn verify_sig(&mut self) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(ref sig)) => { 
+            Some(Signature::Normal(ref sig)) => {
                 if let Address::Normal(ref addr) = self.minter {
                     crypto::verify(&message, sig.clone(), addr.pkey())
                 } else {
                     panic!("The address of the signer is not a normal address!");
                 }
-            },
+            }
             Some(Signature::MultiSig(_)) => {
                 panic!("Calling this function on a multi signature transaction is not permitted!");
-            },
-            None => {
-                false
             }
+            None => false,
         }
     }
 
@@ -377,7 +369,7 @@ impl Mint {
     ///
     /// Returns `false` if the signature field is missing.
     ///
-    /// This function panics if the transaction has a multi 
+    /// This function panics if the transaction has a multi
     /// signature attached to it or if the signer's address
     /// is not a normal address.
     pub fn verify_multi_sig(&mut self, required_keys: u8, pkeys: &[Pk]) -> bool {
@@ -387,15 +379,11 @@ impl Mint {
             let message = assemble_sign_message(&self);
 
             match self.signature {
-                Some(Signature::Normal(_)) => { 
+                Some(Signature::Normal(_)) => {
                     panic!("Calling this function on a transaction with a normal signature is not permitted!");
-                },
-                Some(Signature::MultiSig(ref sig)) => {
-                    sig.verify(&message, required_keys, pkeys)
-                },
-                None => {
-                    false
                 }
+                Some(Signature::MultiSig(ref sig)) => sig.verify(&message, required_keys, pkeys),
+                None => false,
             }
         }
     }
@@ -403,19 +391,21 @@ impl Mint {
     /// Verifies the multi signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(&mut self, required_percentile: u8, share_map: ShareMap) -> bool {
+    pub fn verify_multi_sig_shares(
+        &mut self,
+        required_percentile: u8,
+        share_map: ShareMap,
+    ) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(_)) => { 
+            Some(Signature::Normal(_)) => {
                 panic!("Calling this function on a transaction with a normal signature is not permitted!");
-            },
+            }
             Some(Signature::MultiSig(ref sig)) => {
                 sig.verify_shares(&message, required_percentile, share_map)
-            },
-            None => {
-                false
             }
+            None => false,
         }
     }
 
@@ -520,10 +510,10 @@ impl Mint {
 
         let minter = if buf.len() > 33 as usize {
             let minter_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match Address::from_bytes(&minter_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -531,10 +521,10 @@ impl Mint {
 
         let receiver = if buf.len() > 33 as usize {
             let receiver_vec: Vec<u8> = buf.drain(..33).collect();
-            
+
             match Address::from_bytes(&receiver_vec) {
                 Ok(addr) => addr,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -578,10 +568,10 @@ impl Mint {
 
             match Balance::from_bytes(&amount_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad amount")
+                Err(_) => return Err("Bad amount"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let fee = if buf.len() > fee_len as usize {
@@ -589,18 +579,18 @@ impl Mint {
 
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
-                Err(_)     => return Err("Bad fee")
+                Err(_) => return Err("Bad fee"),
             }
         } else {
-            return Err("Incorrect packet structure")
+            return Err("Incorrect packet structure");
         };
 
         let signature = if buf.len() == signature_len as usize {
             let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
 
             match Signature::from_bytes(&sig_vec) {
-                Ok(sig)   => sig,
-                Err(err)  => return Err(err)
+                Ok(sig) => sig,
+                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -679,12 +669,12 @@ fn assemble_sign_message(obj: &Mint) -> Vec<u8> {
 use quickcheck::Arbitrary;
 
 impl Arbitrary for Mint {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Mint {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Mint {
         Mint {
             minter: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
-            asset_hash: Arbitrary::arbitrary(g), 
+            asset_hash: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
@@ -696,10 +686,10 @@ impl Arbitrary for Mint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use CreateMintable;
     use account::NormalAddress;
     use create_currency::CreateCurrency;
     use crypto::Identity;
+    use CreateMintable;
 
     #[test]
     fn validate() {
@@ -714,7 +704,7 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         // Manually initialize creator and minter balances
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
         test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
@@ -731,7 +721,7 @@ mod tests {
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
             signature: None,
-            hash: None
+            hash: None,
         };
 
         create_mintable.sign(id2.skey().clone());
@@ -746,7 +736,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -768,7 +758,7 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         // Manually initialize creator and minter balances
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
         test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
@@ -785,7 +775,7 @@ mod tests {
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
             signature: None,
-            hash: None
+            hash: None,
         };
 
         create_mintable.sign(id2.skey().clone());
@@ -800,7 +790,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -822,7 +812,7 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         // Manually initialize creator and minter balances
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
         test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
@@ -839,7 +829,7 @@ mod tests {
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
             signature: None,
-            hash: None
+            hash: None,
         };
 
         create_mintable.sign(id2.skey().clone());
@@ -854,7 +844,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -876,7 +866,7 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         // Manually initialize creator and minter balances
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
         test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
@@ -889,7 +879,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -911,7 +901,7 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         // Manually initialize creator and minter balances
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
         test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
@@ -926,7 +916,7 @@ mod tests {
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
             signature: None,
-            hash: None
+            hash: None,
         };
 
         create_mintable.sign(id2.skey().clone());
@@ -941,7 +931,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -963,7 +953,7 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         // Manually initialize creator and minter balances
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
         test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
@@ -980,7 +970,7 @@ mod tests {
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
             signature: None,
-            hash: None
+            hash: None,
         };
 
         create_mintable.sign(id2.skey().clone());
@@ -995,7 +985,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -1027,9 +1017,18 @@ mod tests {
         let creator_nonce = trie.get(&creator_nonce_key).unwrap().unwrap();
         let minter_nonce = trie.get(&minter_nonce_key).unwrap().unwrap();
 
-        assert_eq!(cur_balance, Balance::from_bytes(b"10100.0").unwrap().to_bytes());
-        assert_eq!(fee_balance, Balance::from_bytes(b"9970.0").unwrap().to_bytes());
-        assert_eq!(minter_balance, Balance::from_bytes(b"90.0").unwrap().to_bytes());
+        assert_eq!(
+            cur_balance,
+            Balance::from_bytes(b"10100.0").unwrap().to_bytes()
+        );
+        assert_eq!(
+            fee_balance,
+            Balance::from_bytes(b"9970.0").unwrap().to_bytes()
+        );
+        assert_eq!(
+            minter_balance,
+            Balance::from_bytes(b"90.0").unwrap().to_bytes()
+        );
         assert_eq!(&creator_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
         assert_eq!(&minter_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
     }
@@ -1047,7 +1046,7 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         // Manually initialize creator and minter balances
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
         test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
@@ -1064,7 +1063,7 @@ mod tests {
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
             signature: None,
-            hash: None
+            hash: None,
         };
 
         create_mintable.sign(id2.skey().clone());
@@ -1079,7 +1078,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -1111,13 +1110,22 @@ mod tests {
         let creator_nonce = trie.get(&creator_nonce_key).unwrap().unwrap();
         let minter_nonce = trie.get(&minter_nonce_key).unwrap().unwrap();
 
-        assert_eq!(cur_balance, Balance::from_bytes(b"100.0").unwrap().to_bytes());
-        assert_eq!(fee_balance, Balance::from_bytes(b"9970.0").unwrap().to_bytes());
-        assert_eq!(minter_balance, Balance::from_bytes(b"90.0").unwrap().to_bytes());
+        assert_eq!(
+            cur_balance,
+            Balance::from_bytes(b"100.0").unwrap().to_bytes()
+        );
+        assert_eq!(
+            fee_balance,
+            Balance::from_bytes(b"9970.0").unwrap().to_bytes()
+        );
+        assert_eq!(
+            minter_balance,
+            Balance::from_bytes(b"90.0").unwrap().to_bytes()
+        );
         assert_eq!(&creator_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
         assert_eq!(&minter_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
     }
-    
+
     #[test]
     fn apply_it_mints_tokens_and_adds_them_to_the_minter_same_currency() {
         let id = Identity::new();
@@ -1131,7 +1139,7 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        
+
         // Manually initialize creator and minter balances
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
         test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
@@ -1148,7 +1156,7 @@ mod tests {
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
             signature: None,
-            hash: None
+            hash: None,
         };
 
         create_mintable.sign(id2.skey().clone());
@@ -1163,7 +1171,7 @@ mod tests {
             asset_hash: asset_hash,
             fee_hash: asset_hash,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         tx.sign(id2.skey().clone());
@@ -1192,8 +1200,14 @@ mod tests {
         let creator_nonce = trie.get(&creator_nonce_key).unwrap().unwrap();
         let minter_nonce = trie.get(&minter_nonce_key).unwrap().unwrap();
 
-        assert_eq!(cur_balance, Balance::from_bytes(b"10090.0").unwrap().to_bytes());
-        assert_eq!(fee_balance, Balance::from_bytes(b"9970.0").unwrap().to_bytes());
+        assert_eq!(
+            cur_balance,
+            Balance::from_bytes(b"10090.0").unwrap().to_bytes()
+        );
+        assert_eq!(
+            fee_balance,
+            Balance::from_bytes(b"9970.0").unwrap().to_bytes()
+        );
         assert_eq!(&creator_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
         assert_eq!(&minter_nonce.to_vec(), &[0, 0, 0, 0, 0, 0, 0, 1].to_vec());
     }
@@ -1215,9 +1229,9 @@ mod tests {
 
         fn verify_signature(
             receiver: Address,
-            amount: Balance, 
-            fee: Balance, 
-            asset_hash: Hash, 
+            amount: Balance,
+            fee: Balance,
+            asset_hash: Hash,
             fee_hash: Hash
         ) -> bool {
             let id = Identity::new();
@@ -1239,9 +1253,9 @@ mod tests {
 
         fn verify_multi_signature(
             receiver: Address,
-            amount: Balance, 
-            fee: Balance, 
-            asset_hash: Hash, 
+            amount: Balance,
+            fee: Balance,
+            asset_hash: Hash,
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
@@ -1270,15 +1284,15 @@ mod tests {
             for id in ids {
                 tx.sign(id.skey().clone());
             }
-            
+
             tx.verify_multi_sig(10, &pkeys)
         }
 
         fn verify_multi_signature_shares(
             receiver: Address,
-            amount: Balance, 
-            fee: Balance, 
-            asset_hash: Hash, 
+            amount: Balance,
+            fee: Balance,
+            asset_hash: Hash,
             fee_hash: Hash
         ) -> bool {
             let mut ids: Vec<Identity> = (0..30)
@@ -1296,8 +1310,8 @@ mod tests {
                 .iter()
                 .map(|pk| NormalAddress::from_pkey(*pk))
                 .collect();
-            
-            let mut share_map = ShareMap::new(); 
+
+            let mut share_map = ShareMap::new();
 
             for addr in addresses.clone() {
                 share_map.add_shareholder(addr, 100);
@@ -1318,7 +1332,7 @@ mod tests {
             for id in ids {
                 tx.sign(id.skey().clone());
             }
-            
+
             tx.verify_multi_sig_shares(10, share_map)
         }
     }

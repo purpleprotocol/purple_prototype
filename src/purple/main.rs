@@ -16,41 +16,44 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[macro_use] extern crate log;
-#[macro_use] extern crate unwrap;
-#[macro_use] extern crate jsonrpc_macros;
+#[macro_use]
+extern crate log;
+#[macro_use]
+extern crate unwrap;
+#[macro_use]
+extern crate jsonrpc_macros;
 
-extern crate tokio;
-extern crate dirs;
-extern crate jsonrpc_core;
+extern crate clap;
 extern crate crypto;
+extern crate dirs;
+extern crate elastic_array;
 extern crate env_logger;
-extern crate itc;
-extern crate jump;
 extern crate futures;
 extern crate hashdb;
-extern crate parking_lot;
-extern crate persistence;
+extern crate itc;
+extern crate jsonrpc_core;
+extern crate jump;
 extern crate kvdb;
 extern crate kvdb_rocksdb;
-extern crate clap;
 extern crate network;
-extern crate elastic_array;
+extern crate parking_lot;
+extern crate persistence;
+extern crate tokio;
 
-use clap::{Arg, App};
-use kvdb_rocksdb::{Database, DatabaseConfig};
-use parking_lot::Mutex;
-use std::path::Path;
-use std::sync::Arc;
-use network::*;
-use futures::Future;
-use hashdb::HashDB;
-use persistence::PersistentDb;
+use clap::{App, Arg};
 use crypto::Identity;
 use elastic_array::ElasticArray128;
-use std::sync::atomic::AtomicBool;
 use futures::future::ok;
+use futures::Future;
+use hashdb::HashDB;
+use kvdb_rocksdb::{Database, DatabaseConfig};
+use network::*;
+use parking_lot::Mutex;
+use persistence::PersistentDb;
 use std::alloc::System;
+use std::path::Path;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 // Enforce usage of system allocator.
 #[global_allocator]
@@ -69,7 +72,10 @@ fn main() {
     let ledger = PersistentDb::new(db, Some(2));
 
     let node_id = fetch_node_id(&mut node_storage);
-    let network = Arc::new(Mutex::new(Network::new(node_id, argv.network_name.to_owned())));
+    let network = Arc::new(Mutex::new(Network::new(
+        node_id,
+        argv.network_name.to_owned(),
+    )));
     let accept_connections = Arc::new(AtomicBool::new(true));
 
     // Start the tokio runtime
@@ -78,7 +84,12 @@ fn main() {
         start_listener(network.clone(), accept_connections.clone(), argv.max_peers);
 
         // Start bootstrap process
-        bootstrap(network, accept_connections, node_storage.clone(), argv.max_peers);
+        bootstrap(
+            network,
+            accept_connections,
+            node_storage.clone(),
+            argv.max_peers,
+        );
 
         Ok(())
     }));
@@ -87,14 +98,14 @@ fn main() {
 // Fetch stored node id or create new identity and store it
 fn fetch_node_id(db: &mut PersistentDb) -> NodeId {
     let node_id_key = crypto::hash_slice(b"node_id");
-    
+
     match db.get(&node_id_key) {
         Some(id) => {
             let mut buf = [0; 32];
             buf.copy_from_slice(&id);
 
             NodeId::new(buf)
-        },
+        }
         None => {
             // Create new identity and write keys to database
             let identity = Identity::new();
@@ -134,54 +145,45 @@ fn parse_cli_args() -> Argv {
                 .long("network-name")
                 .value_name("NETWORK_NAME")
                 .help("The name of the network")
-                .takes_value(true)
+                .takes_value(true),
         )
         .arg(
             Arg::with_name("mempool_size")
                 .long("mempool-size")
                 .value_name("MEMPOOL_SIZE")
                 .help("The size in megabytes of the mempool")
-                .takes_value(true)
+                .takes_value(true),
         )
         .arg(
             Arg::with_name("max_peers")
                 .long("max-peers")
                 .value_name("MAX_PEERS")
                 .help("The maximum number of allowed peer connections")
-                .takes_value(true)
+                .takes_value(true),
         )
         .get_matches();
 
     let network_name: String = if let Some(arg) = matches.value_of("network_name") {
-        unwrap!(
-            arg.parse(),
-            "Expected value for <NETWORK_NAME>"
-        )
+        unwrap!(arg.parse(), "Expected value for <NETWORK_NAME>")
     } else {
         DEFAULT_NETWORK_NAME.to_owned()
     };
 
     let mempool_size: u16 = if let Some(arg) = matches.value_of("mempool_size") {
-        unwrap!(
-            arg.parse(),
-            "Bad value for <MEMPOOL_SIZE>"
-        )
+        unwrap!(arg.parse(), "Bad value for <MEMPOOL_SIZE>")
     } else {
         150
     };
 
     let max_peers: usize = if let Some(arg) = matches.value_of("max_peers") {
-        unwrap!(
-            arg.parse(),
-            "Bad value for <MAX_PEERS>"
-        )
+        unwrap!(arg.parse(), "Bad value for <MAX_PEERS>")
     } else {
         8
     };
-    
+
     Argv {
         network_name: network_name,
         max_peers: max_peers,
-        mempool_size: mempool_size
+        mempool_size: mempool_size,
     }
 }

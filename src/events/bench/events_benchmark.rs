@@ -3,25 +3,25 @@
 #[macro_use]
 extern crate criterion;
 
-extern crate test_helpers;
+extern crate causality;
 extern crate crypto;
+extern crate events;
+extern crate network;
 extern crate patricia_trie;
 extern crate persistence;
 extern crate test;
-extern crate events;
+extern crate test_helpers;
 extern crate transactions;
-extern crate causality;
-extern crate network;
 
-use events::Heartbeat;
-use crypto::{Hash, Identity};
-use test::Bencher;
-use patricia_trie::{TrieMut, TrieDBMut};
-use persistence::{BlakeDbHasher, Codec};
-use criterion::Criterion;
-use transactions::Tx;
 use causality::Stamp;
+use criterion::Criterion;
+use crypto::{Hash, Identity};
+use events::Heartbeat;
 use network::NodeId;
+use patricia_trie::{TrieDBMut, TrieMut};
+use persistence::{BlakeDbHasher, Codec};
+use test::Bencher;
+use transactions::Tx;
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("calculate root hash 30", |b| {
@@ -35,14 +35,14 @@ fn criterion_benchmark(c: &mut Criterion) {
         for _ in 0..30 {
             txs.push(Box::new(Tx::arbitrary_valid(&mut trie)));
         }
-        
+
         let mut hb = Heartbeat {
             node_id: NodeId::from_pkey(*id.pkey()),
             stamp: Stamp::seed(),
             transactions: txs,
             root_hash: None,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         b.iter(|| hb.calculate_root_hash())
@@ -59,14 +59,14 @@ fn criterion_benchmark(c: &mut Criterion) {
         for _ in 0..30 {
             txs.push(Box::new(Tx::arbitrary_valid(&mut trie)));
         }
-        
+
         let mut hb = Heartbeat {
             node_id: NodeId::from_pkey(*id.pkey()),
             stamp: Stamp::seed(),
             transactions: txs,
             root_hash: None,
             signature: None,
-            hash: None
+            hash: None,
         };
 
         hb.calculate_root_hash();

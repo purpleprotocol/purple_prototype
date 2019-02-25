@@ -22,7 +22,7 @@ use std::ops::{Add, AddAssign};
 pub struct Address {
     pub ip: usize,
     pub fun_idx: usize,
-    pub module_idx: usize
+    pub module_idx: usize,
 }
 
 impl Address {
@@ -30,7 +30,7 @@ impl Address {
         Address {
             ip: ip,
             fun_idx: fun_idx,
-            module_idx: module_idx
+            module_idx: module_idx,
         }
     }
 

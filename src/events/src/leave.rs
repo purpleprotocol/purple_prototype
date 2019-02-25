@@ -16,10 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use causality::Stamp;
 use crypto::{Hash, PublicKey, Signature};
 use network::NodeId;
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -160,7 +160,7 @@ use quickcheck::Arbitrary;
 
 #[cfg(test)]
 impl Arbitrary for Leave {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Leave {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Leave {
         Leave {
             node_id: Arbitrary::arbitrary(g),
             stamp: Arbitrary::arbitrary(g),

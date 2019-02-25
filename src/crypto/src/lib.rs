@@ -19,26 +19,28 @@
 #[macro_use]
 extern crate serde_derive;
 
-extern crate merkle_light;
-extern crate rust_base58;
-extern crate rlp;
-extern crate hashdb;
-extern crate rand;
-extern crate hex;
 extern crate blake2;
-extern crate rust_sodium;
+extern crate hashdb;
+extern crate hex;
+extern crate merkle_light;
 extern crate quickcheck;
+extern crate rand;
+extern crate rlp;
+extern crate rust_base58;
+extern crate rust_sodium;
 
-pub use rust_base58::base58::*;
-pub use hash::*;
-pub use signature::*;
 pub use blake_hasher::*;
+pub use hash::*;
+pub use rust_base58::base58::*;
+pub use rust_sodium::crypto::kx::{
+    gen_keypair as gen_kx_keypair, PublicKey as KxPublicKey, SecretKey as KxSecretKey, SessionKey,
+};
 pub use rust_sodium::crypto::sign::{gen_keypair, PublicKey, SecretKey};
-pub use rust_sodium::crypto::kx::{gen_keypair as gen_kx_keypair, PublicKey as KxPublicKey, SecretKey as KxSecretKey, SessionKey};
+pub use signature::*;
 
+mod blake_hasher;
 mod hash;
 mod signature;
-mod blake_hasher;
 
 use rust_sodium::crypto::sign::{sign_detached, verify_detached};
 
@@ -72,7 +74,7 @@ impl Identity {
 use quickcheck::Arbitrary;
 
 impl Arbitrary for Identity {
-    fn arbitrary<G : quickcheck::Gen>(_g: &mut G) -> Identity {
+    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> Identity {
         Identity::new()
     }
 }

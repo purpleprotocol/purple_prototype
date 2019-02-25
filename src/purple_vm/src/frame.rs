@@ -17,32 +17,36 @@
 */
 
 use address::Address;
+use primitives::control_flow::CfOperator;
 use stack::Stack;
 use std::fmt;
-use primitives::control_flow::CfOperator;
 
 #[derive(Debug, Clone)]
 pub struct Frame<T: Clone> {
     pub locals: Stack<T>,
     pub scope_type: Option<CfOperator>,
-    pub return_address: Option<Address>
+    pub return_address: Option<Address>,
 }
 
 impl<T: fmt::Debug + Clone> Frame<T> {
-    pub fn new(scope_type: Option<CfOperator>, return_address: Option<Address>, argv: Option<Vec<T>>) -> Frame<T> {
+    pub fn new(
+        scope_type: Option<CfOperator>,
+        return_address: Option<Address>,
+        argv: Option<Vec<T>>,
+    ) -> Frame<T> {
         let mut locals = Stack::new();
-        
+
         if let Some(argv) = argv {
             // Push args to locals stack
             for arg in argv {
                 locals.push(arg);
             }
-        } 
+        }
 
         Frame {
             locals: locals,
             scope_type: scope_type,
-            return_address: return_address
+            return_address: return_address,
         }
     }
 }

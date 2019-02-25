@@ -21,17 +21,17 @@ pub mod import;
 pub mod transition;
 mod validator;
 
-use std::str;
-use std::io::Cursor;
-use byteorder::{BigEndian, ReadBytesExt};
-use instruction_set::Instruction;
-use primitives::r#type::VmType;
-use function::Function;
-use import::Import;
 use self::validator::Validator;
+use byteorder::{BigEndian, ReadBytesExt};
+use function::Function;
 use hashbrown::HashSet;
-use std::hash::Hash;
+use import::Import;
+use instruction_set::Instruction;
 use module::Module;
+use primitives::r#type::VmType;
+use std::hash::Hash;
+use std::io::Cursor;
+use std::str;
 
 const VM_VERSION: u8 = 1;
 
@@ -50,11 +50,11 @@ impl Code {
 
     /// Performs validations on the provided code.
     ///
-    /// The source code is a set of function signatures, each 
+    /// The source code is a set of function signatures, each
     /// of which has a representing block of instructions.
     ///   
     /// A contract is composed of 2 sections:
-    /// 1) The imports section 
+    /// 1) The imports section
     /// 2) The functions section
     ///
     /// Everything is encoded in Big Endian.
@@ -67,19 +67,19 @@ impl Code {
     /// 5) Functions payload     - Variable length      - The functions section data.
     ///
     /// The imports section describes function imports from
-    /// other contracts. It has the following format: 
+    /// other contracts. It has the following format:
     /// 1) Addresses length      - 16bits               - The length of the addresses field.
-    /// 2) Data length           - 16bits               - The length of the data field. 
+    /// 2) Data length           - 16bits               - The length of the data field.
     /// 3) Addresses payload     - Variable length      - The addresses field. Contains all contract addresses that can be called.
     /// 4) Data payload          - Variable length      - The imports section entries.
     ///
-    /// An entry in the imports section has 
+    /// An entry in the imports section has
     /// the following format:
-    /// 1) Functon name length   - 8bits                - The length of the function name field. 
+    /// 1) Functon name length   - 8bits                - The length of the function name field.
     /// 2) Address index         - 16bits               - The index of the address from the address index space.
     /// 3) Functon name          - Variable length      - The name of the function.
     ///
-    /// 
+    ///
     /// The functions section describes the functions that
     /// are defined in the contract.
     ///
@@ -105,22 +105,22 @@ impl Code {
                 if byte != VM_VERSION {
                     return false;
                 }
-            },
-            _ => return false
+            }
+            _ => return false,
         };
 
         cursor.set_position(1);
 
         let imports_len = match cursor.read_u16::<BigEndian>() {
             Ok(result) => result,
-            _          => return false
+            _ => return false,
         };
 
         cursor.set_position(3);
 
         let functions_len = match cursor.read_u16::<BigEndian>() {
             Ok(result) => result,
-            _          => return false
+            _ => return false,
         };
 
         // A contract cannot contain empty sections
@@ -151,7 +151,7 @@ impl Code {
 
         let addresses_len = match cursor.read_u16::<BigEndian>() {
             Ok(result) => result,
-            _          => return false
+            _ => return false,
         };
 
         if addresses_len % 33 != 0 {
@@ -162,7 +162,7 @@ impl Code {
 
         let imports_len = match cursor.read_u16::<BigEndian>() {
             Ok(result) => result,
-            _          => return false
+            _ => return false,
         };
 
         // Consume cursor
@@ -199,10 +199,10 @@ impl Code {
             if result[0] != 0x04 {
                 return false;
             }
-            
+
             buf.copy_from_slice(&result);
             addresses.push(buf);
-        };
+        }
 
         // Decode imports
         loop {
@@ -214,14 +214,14 @@ impl Code {
 
             let function_name_len = match cursor.read_u8() {
                 Ok(result) => result,
-                _          => return false 
+                _ => return false,
             };
 
             cursor.set_position(1);
 
             let address_idx = match cursor.read_u16::<BigEndian>() {
                 Ok(result) => result,
-                _          => return false
+                _ => return false,
             };
 
             // Invalid in case of out of bounds index
@@ -237,7 +237,7 @@ impl Code {
 
                 match str::from_utf8(&result) {
                     Ok(result) => result.to_owned(),
-                    _          => return false
+                    _ => return false,
                 }
             } else {
                 return false;
@@ -245,7 +245,7 @@ impl Code {
 
             let import = Import {
                 addr_idx: address_idx,
-                function_name: function_name
+                function_name: function_name,
             };
 
             imports.push(import);
@@ -263,33 +263,33 @@ impl Code {
 
             let function_name_len = match cursor.read_u8() {
                 Ok(result) => result,
-                _          => return false 
+                _ => return false,
             };
 
             cursor.set_position(1);
 
             let arity = match cursor.read_u8() {
                 Ok(result) => result,
-                _          => return false 
+                _ => return false,
             };
 
             cursor.set_position(2);
 
             let return_type = match cursor.read_u8() {
                 Ok(result) => VmType::from_op(result),
-                _          => return false 
+                _ => return false,
             };
 
             let return_type = match return_type {
                 Some(result) => result,
-                None         => return false
+                None => return false,
             };
 
             cursor.set_position(3);
 
             let block_len = match cursor.read_u16::<BigEndian>() {
                 Ok(result) => result,
-                _          => return false
+                _ => return false,
             };
 
             let buf = cursor.into_inner();
@@ -300,7 +300,7 @@ impl Code {
 
                 match str::from_utf8(&result) {
                     Ok(result) => result.to_owned(),
-                    _          => return false
+                    _ => return false,
                 }
             } else {
                 return false;
@@ -314,7 +314,7 @@ impl Code {
 
                 match result {
                     Some(result) => result,
-                    None         => return false
+                    None => return false,
                 }
             } else {
                 return false;
@@ -336,22 +336,16 @@ impl Code {
                 name: function_name,
                 arguments: arguments,
                 block: block,
-                return_type: Some(return_type)
+                return_type: Some(return_type),
             };
 
             functions.push(function);
-        };
+        }
 
         // Check for unique function names
-        let imports_names: Vec<&str> = imports
-            .iter()
-            .map(|i| i.function_name.as_str())
-            .collect();
+        let imports_names: Vec<&str> = imports.iter().map(|i| i.function_name.as_str()).collect();
 
-        let functions_names: Vec<&str> = functions
-            .iter()
-            .map(|f| f.name.as_str())
-            .collect();
+        let functions_names: Vec<&str> = functions.iter().map(|f| f.name.as_str()).collect();
 
         if !has_unique_elements(imports_names) || !has_unique_elements(functions_names) {
             return false;
@@ -372,7 +366,7 @@ where
 
 fn validate_block(block: &[u8], return_type: VmType, argv: &[VmType]) -> bool {
     let mut validator = Validator::new();
-    
+
     for byte in block {
         validator.push_op(*byte);
 
@@ -416,14 +410,22 @@ mod tests {
 #[cfg(test)]
 #[test]
 fn validate_block_it_fails_on_invalid_first_instruction() {
-    let block = vec![Instruction::Nop.repr(), Instruction::Nop.repr(), Instruction::End.repr()];
+    let block = vec![
+        Instruction::Nop.repr(),
+        Instruction::Nop.repr(),
+        Instruction::End.repr(),
+    ];
     assert!(!validate_block(&block, VmType::I32, &[]));
 }
 
 #[cfg(test)]
 #[test]
 fn validate_block_it_fails_on_invalid_last_instruction() {
-    let block = vec![Instruction::Begin.repr(), Instruction::Nop.repr(), Instruction::Nop.repr()];
+    let block = vec![
+        Instruction::Begin.repr(),
+        Instruction::Nop.repr(),
+        Instruction::Nop.repr(),
+    ];
     assert!(!validate_block(&block, VmType::I32, &[]));
 }
 
@@ -433,4 +435,3 @@ fn validate_block_it_fails_on_empty_block() {
     let block = vec![Instruction::Begin.repr(), Instruction::End.repr()];
     assert!(!validate_block(&block, VmType::I32, &[]));
 }
-

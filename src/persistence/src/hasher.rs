@@ -16,8 +16,8 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crypto::{BlakeHasher, Hash, HASH_BYTES};
 use hashdb::Hasher;
-use crypto::{Hash, BlakeHasher, HASH_BYTES};
 
 pub struct BlakeDbHasher;
 

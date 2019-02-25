@@ -16,22 +16,22 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use stack::Stack;
-use frame::Frame;
-use primitives::value::VmValue;
-use primitives::r#type::VmType;
-use primitives::control_flow::CfOperator;
-use code::function::Function;
 use address::Address;
-use module::Module;
-use instruction_set::{Instruction, COMP_OPS};
-use patricia_trie::{TrieMut, TrieDBMut};
-use persistence::{BlakeDbHasher, Codec};
-use byteorder::{BigEndian, ReadBytesExt};
-use error::VmError;
-use std::io::Cursor;
 use bitvec::Bits;
+use byteorder::{BigEndian, ReadBytesExt};
+use code::function::Function;
+use error::VmError;
+use frame::Frame;
 use gas::Gas;
+use instruction_set::{Instruction, COMP_OPS};
+use module::Module;
+use patricia_trie::{TrieDBMut, TrieMut};
+use persistence::{BlakeDbHasher, Codec};
+use primitives::control_flow::CfOperator;
+use primitives::r#type::VmType;
+use primitives::value::VmValue;
+use stack::Stack;
+use std::io::Cursor;
 
 const MAX_OP_ARITY: u8 = 8;
 
@@ -40,7 +40,7 @@ pub struct Vm {
     ip: Option<Address>,
     modules: Vec<Module>,
     call_stack: Stack<Frame<VmValue>>,
-    operand_stack: Stack<VmValue>
+    operand_stack: Stack<VmValue>,
 }
 
 impl Vm {
@@ -49,7 +49,7 @@ impl Vm {
             modules: Vec::new(),
             ip: None,
             call_stack: Stack::<Frame<VmValue>>::new(),
-            operand_stack: Stack::<VmValue>::new()
+            operand_stack: Stack::<VmValue>::new(),
         }
     }
 
@@ -62,7 +62,6 @@ impl Vm {
             Ok(())
         }
     }
-
 
     /// Unloads the module at the given index, if any.
     pub fn unload(&mut self, idx: usize) {
@@ -77,12 +76,12 @@ impl Vm {
     /// If it succeeds, this function returns the amount
     /// of gas that was consumed.
     pub fn execute(
-        &mut self, 
-        trie: &mut TrieDBMut<BlakeDbHasher, Codec>, 
-        module_idx: usize, 
+        &mut self,
+        trie: &mut TrieDBMut<BlakeDbHasher, Codec>,
+        module_idx: usize,
         fun_idx: usize,
-        argv: &[VmValue], 
-        gas: Gas
+        argv: &[VmValue],
+        gas: Gas,
     ) -> Result<Gas, VmError> {
         // Check module definition
         if module_idx >= self.modules.len() {
@@ -118,11 +117,11 @@ impl Vm {
                 match Instruction::from_repr(op) {
                     Some(Instruction::Halt) => {
                         break;
-                    },
+                    }
                     Some(Instruction::Nop) => {
                         // This does nothing. Just increment the instruction pointer.
                         ip.increment();
-                    },
+                    }
                     Some(Instruction::Call) => {
                         let mut buf: Vec<u8> = Vec::with_capacity(2);
 
@@ -151,12 +150,13 @@ impl Vm {
                         argv.reverse();
 
                         // Push new frame to call stack
-                        self.call_stack.push(Frame::new(None, Some(return_ip), Some(argv)));
-                    
+                        self.call_stack
+                            .push(Frame::new(None, Some(return_ip), Some(argv)));
+
                         // Set new ip
                         ip.ip = 2;
                         ip.fun_idx = idx;
-                    },
+                    }
                     Some(Instruction::Return) => {
                         ip.increment();
 
@@ -164,7 +164,8 @@ impl Vm {
                         let return_arity = fun.fetch(ip.ip);
                         let mut frame = self.call_stack.pop();
                         let return_address = frame.return_address.clone();
-                        let mut return_values: Vec<VmValue> = Vec::with_capacity(return_arity as usize); 
+                        let mut return_values: Vec<VmValue> =
+                            Vec::with_capacity(return_arity as usize);
 
                         // Move return values to buffer
                         for _ in 0..return_arity {
@@ -184,9 +185,9 @@ impl Vm {
 
                             // Replace operand stack with an empty one
                             self.operand_stack = Stack::new();
-                            
+
                             if let Some(return_address) = return_address.clone() {
-                                // Set ip to the current frame's return address 
+                                // Set ip to the current frame's return address
                                 *ip = return_address;
                             }
                         } else {
@@ -205,9 +206,9 @@ impl Vm {
 
                                     // Replace operand stack with an empty one
                                     self.operand_stack = Stack::new();
-                                    
+
                                     if let Some(return_address) = return_address {
-                                        // Set ip to the current frame's return address 
+                                        // Set ip to the current frame's return address
                                         *ip = return_address;
                                     }
 
@@ -215,16 +216,37 @@ impl Vm {
                                 }
                             }
                         }
-                    },
+                    }
                     Some(Instruction::Begin) => {
-                        handle_begin_block(CfOperator::Begin, ip, &mut self.call_stack, &mut self.operand_stack, &fun, &argv);
-                    },
+                        handle_begin_block(
+                            CfOperator::Begin,
+                            ip,
+                            &mut self.call_stack,
+                            &mut self.operand_stack,
+                            &fun,
+                            &argv,
+                        );
+                    }
                     Some(Instruction::Loop) => {
-                        handle_begin_block(CfOperator::Loop, ip, &mut self.call_stack, &mut self.operand_stack, &fun, &argv);
-                    },
+                        handle_begin_block(
+                            CfOperator::Loop,
+                            ip,
+                            &mut self.call_stack,
+                            &mut self.operand_stack,
+                            &fun,
+                            &argv,
+                        );
+                    }
                     Some(Instruction::If) => {
-                        handle_begin_block(CfOperator::If, ip, &mut self.call_stack, &mut self.operand_stack, &fun, &argv);
-                    },
+                        handle_begin_block(
+                            CfOperator::If,
+                            ip,
+                            &mut self.call_stack,
+                            &mut self.operand_stack,
+                            &fun,
+                            &argv,
+                        );
+                    }
                     Some(Instruction::PushOperand) => {
                         ip.increment();
 
@@ -242,7 +264,8 @@ impl Vm {
 
                         // Fetch arguments
                         let frame = self.call_stack.peek_mut();
-                        let (_, argv) = fetch_argv(frame, &mut self.operand_stack, ip, fun, arity as usize);
+                        let (_, argv) =
+                            fetch_argv(frame, &mut self.operand_stack, ip, fun, arity as usize);
 
                         // Push arguments to operand stack
                         for arg in argv {
@@ -250,7 +273,7 @@ impl Vm {
                         }
 
                         ip.increment();
-                    },
+                    }
                     Some(Instruction::PushLocal) => {
                         ip.increment();
 
@@ -267,7 +290,13 @@ impl Vm {
                         }
 
                         // Fetch arguments
-                        let (_, argv) = fetch_argv(self.call_stack.peek_mut(), &mut self.operand_stack, ip, fun, arity as usize);
+                        let (_, argv) = fetch_argv(
+                            self.call_stack.peek_mut(),
+                            &mut self.operand_stack,
+                            ip,
+                            fun,
+                            arity as usize,
+                        );
                         let frame = self.call_stack.peek_mut();
 
                         // Push arguments to locals stack
@@ -276,21 +305,21 @@ impl Vm {
                         }
 
                         ip.increment();
-                    },
+                    }
                     Some(Instruction::PopOperand) => {
                         self.operand_stack.pop();
                         ip.increment();
-                    },
+                    }
                     Some(Instruction::PopLocal) => {
                         let frame = self.call_stack.peek_mut();
-                        
+
                         // Pop item from locals
                         frame.locals.pop();
 
                         ip.increment();
-                    },
+                    }
                     Some(Instruction::PickLocal) => {
-                        ip.increment(); 
+                        ip.increment();
 
                         // The next two bytes after a `PickLocal`
                         // instruction are the given index.
@@ -304,18 +333,18 @@ impl Vm {
                         frame.locals.pick(idx as usize);
 
                         ip.increment();
-                    },
+                    }
                     Some(Instruction::End) => {
                         let frame = self.call_stack.pop();
                         let scope_type = frame.scope_type.clone();
 
                         // Replace operand stack with an empty one
                         self.operand_stack = Stack::new();
-                        
+
                         if let Some(return_address) = frame.return_address.clone() {
                             let block_len = fun.fetch_block_len(return_address.ip);
 
-                            // Set ip to the current frame's return address 
+                            // Set ip to the current frame's return address
                             *ip = return_address;
 
                             let current_ip = ip.ip;
@@ -327,9 +356,9 @@ impl Vm {
 
                                     // Set instruction pointer to the beginning
                                     ip.set_ip(current_ip + 2);
-                                },
+                                }
                                 _ => {
-                                    // Set instruction pointer to the next 
+                                    // Set instruction pointer to the next
                                     // instruction after the block.
                                     ip.set_ip(current_ip + block_len);
                                 }
@@ -338,7 +367,7 @@ impl Vm {
                             // Return address is non-existent. Stop execution in this case.
                             break;
                         }
-                    },
+                    }
                     Some(Instruction::Break) => {
                         // Pop frames until one has a `Loop` scope type
                         loop {
@@ -347,38 +376,37 @@ impl Vm {
                             if let Some(CfOperator::Loop) = frame.scope_type {
                                 // Replace operand stack with an empty one
                                 self.operand_stack = Stack::new();
-                                
+
                                 if let Some(return_address) = frame.return_address {
                                     let block_len = fun.fetch_block_len(return_address.ip);
 
-                                    // Set ip to the current frame's return address 
+                                    // Set ip to the current frame's return address
                                     *ip = return_address;
 
                                     let current_ip = ip.ip;
 
-                                    // Set instruction pointer to the next 
+                                    // Set instruction pointer to the next
                                     // instruction after the block.
                                     ip.set_ip(current_ip + block_len);
                                 } else {
                                     unreachable!();
                                 }
-                                
+
                                 break;
                             }
                         }
-                    },
+                    }
                     Some(Instruction::BreakIf) => {
                         ip.increment();
 
                         let op = fun.fetch(ip.ip);
 
                         if let Some(instruction) = Instruction::from_repr(op) {
-                            let is_comp_operator = COMP_OPS
-                                .iter()
-                                .any(|o| *o == instruction);
+                            let is_comp_operator = COMP_OPS.iter().any(|o| *o == instruction);
 
                             if is_comp_operator {
-                                let mut operands: Vec<VmValue> = Vec::with_capacity(self.operand_stack.len());
+                                let mut operands: Vec<VmValue> =
+                                    Vec::with_capacity(self.operand_stack.len());
                                 let mut operand_stack = self.operand_stack.clone();
 
                                 for _ in 0..operand_stack.len() {
@@ -393,20 +421,21 @@ impl Vm {
                                     // Pop frames until we find one with a `Loop` scope type
                                     loop {
                                         let frame = self.call_stack.pop();
-                                        
+
                                         if let Some(CfOperator::Loop) = frame.scope_type {
                                             // Replace operand stack with an empty one
                                             self.operand_stack = Stack::new();
-                                            
-                                            if let Some(return_address) = frame.return_address {
-                                                let block_len = fun.fetch_block_len(return_address.ip);
 
-                                                // Set ip to the current frame's return address 
+                                            if let Some(return_address) = frame.return_address {
+                                                let block_len =
+                                                    fun.fetch_block_len(return_address.ip);
+
+                                                // Set ip to the current frame's return address
                                                 *ip = return_address;
 
                                                 let current_ip = ip.ip;
 
-                                                // Set instruction pointer to the next 
+                                                // Set instruction pointer to the next
                                                 // instruction after the block.
                                                 ip.set_ip(current_ip + block_len);
                                             } else {
@@ -425,12 +454,12 @@ impl Vm {
                         } else {
                             panic!("Invalid instruction after `BreakIf`. Expected a comparison operator!");
                         }
-                    },
+                    }
                     Some(Instruction::Add) => {
                         perform_addition(Instruction::Add, &mut self.operand_stack);
                         ip.increment();
-                    },
-                    _ => unimplemented!()
+                    }
+                    _ => unimplemented!(),
                 }
             } else {
                 unreachable!();
@@ -441,7 +470,7 @@ impl Vm {
         self.ip = None;
         self.call_stack = Stack::<Frame<VmValue>>::new();
         self.operand_stack = Stack::<VmValue>::new();
-        
+
         Ok(Gas::from_bytes(b"0.0").unwrap())
     }
 }
@@ -450,11 +479,11 @@ impl Vm {
 /// that begin a block.
 fn handle_begin_block(
     block_type: CfOperator,
-    ip: &mut Address, 
-    call_stack: &mut Stack<Frame<VmValue>>, 
+    ip: &mut Address,
+    call_stack: &mut Stack<Frame<VmValue>>,
     operand_stack: &mut Stack<VmValue>,
-    fun: &Function, 
-    init_argv: &[VmValue]
+    fun: &Function,
+    init_argv: &[VmValue],
 ) {
     let initial_ip = ip.clone();
 
@@ -467,23 +496,30 @@ fn handle_begin_block(
         // The first begin instruction. With arity 0.
         (&CfOperator::Begin, 0, 0) => {
             // Push initial frame
-            call_stack.push(Frame::new(Some(CfOperator::Begin), None, Some(init_argv.to_vec())));
-        },
-        
+            call_stack.push(Frame::new(
+                Some(CfOperator::Begin),
+                None,
+                Some(init_argv.to_vec()),
+            ));
+        }
+
         // The first begin instruction. With arity other than 0.
         (&CfOperator::Begin, arity, 0) => {
-            panic!(format!("The first begin instruction cannot have an arity other than 0! Received: {}", arity));
-        },
+            panic!(format!(
+                "The first begin instruction cannot have an arity other than 0! Received: {}",
+                arity
+            ));
+        }
 
         // Loop as first instruction.
         (&CfOperator::Loop, _, 0) => {
             panic!("The first instruction cannot be a Loop instruction!");
-        },
+        }
 
         // If as first instruction.
         (&CfOperator::If, _, 0) => {
             panic!("The first instruction cannot be an If instruction!");
-        },
+        }
 
         // Nested if instruction. With arity 0.
         (&CfOperator::If, 0, _) => {
@@ -491,10 +527,8 @@ fn handle_begin_block(
             let op = fun.fetch(ip.ip);
 
             if let Some(instruction) = Instruction::from_repr(op) {
-                let is_comp_operator = COMP_OPS
-                    .iter()
-                    .any(|o| *o == instruction);
-                
+                let is_comp_operator = COMP_OPS.iter().any(|o| *o == instruction);
+
                 if is_comp_operator {
                     let mut operands: Vec<VmValue> = Vec::with_capacity(operand_stack.len());
                     let mut os = operand_stack.clone();
@@ -511,21 +545,31 @@ fn handle_begin_block(
                         let block_len = fun.fetch_block_len(initial_ip.ip);
                         let op = fun.fetch(initial_ip.ip + block_len);
 
-                        // Determine if the `If` block has a 
+                        // Determine if the `If` block has a
                         // corresponding `Else` block to which
                         // we can jump to.
                         if let Some(Instruction::Else) = Instruction::from_repr(op) {
                             ip.set_ip(initial_ip.ip + block_len);
-                            handle_begin_block(CfOperator::Else, ip, call_stack, operand_stack, fun, init_argv);
+                            handle_begin_block(
+                                CfOperator::Else,
+                                ip,
+                                call_stack,
+                                operand_stack,
+                                fun,
+                                init_argv,
+                            );
                         }
                     }
                 } else {
-                    panic!(format!("Can only receive a comparison operator after `If`. Got: {:?}", instruction))
+                    panic!(format!(
+                        "Can only receive a comparison operator after `If`. Got: {:?}",
+                        instruction
+                    ))
                 }
             } else {
                 unreachable!();
             }
-        },
+        }
 
         // Nested if instruction. With arity other than 0.
         (&CfOperator::If, arity, _) => {
@@ -533,10 +577,8 @@ fn handle_begin_block(
             let op = fun.fetch(ip.ip);
 
             if let Some(instruction) = Instruction::from_repr(op) {
-                let is_comp_operator = COMP_OPS
-                    .iter()
-                    .any(|o| *o == instruction);
-                
+                let is_comp_operator = COMP_OPS.iter().any(|o| *o == instruction);
+
                 if is_comp_operator {
                     let mut operands: Vec<VmValue> = Vec::with_capacity(operand_stack.len());
                     let mut os = operand_stack.clone();
@@ -563,33 +605,47 @@ fn handle_begin_block(
                         }
 
                         // Push frame
-                        call_stack.push(Frame::new(Some(CfOperator::If), Some(initial_ip), Some(buf)));
+                        call_stack.push(Frame::new(
+                            Some(CfOperator::If),
+                            Some(initial_ip),
+                            Some(buf),
+                        ));
                     } else {
                         let block_len = fun.fetch_block_len(initial_ip.ip);
                         let op = fun.fetch(initial_ip.ip + block_len);
 
-                        // Determine if the `If` block has a 
+                        // Determine if the `If` block has a
                         // corresponding `Else` block to which
                         // we can jump to.
                         if let Some(Instruction::Else) = Instruction::from_repr(op) {
                             ip.set_ip(initial_ip.ip + block_len);
-                            handle_begin_block(CfOperator::Else, ip, call_stack, operand_stack, fun, init_argv);
+                            handle_begin_block(
+                                CfOperator::Else,
+                                ip,
+                                call_stack,
+                                operand_stack,
+                                fun,
+                                init_argv,
+                            );
                         }
                     }
                 } else {
-                    panic!(format!("Can only receive a comparison operator after `If`. Got: {:?}", instruction))
+                    panic!(format!(
+                        "Can only receive a comparison operator after `If`. Got: {:?}",
+                        instruction
+                    ))
                 }
             } else {
                 unreachable!();
             }
-        },
+        }
 
         // Nested begin/loop instruction. With arity 0.
         (block_type, 0, _) => {
             // Push frame
             call_stack.push(Frame::new(Some(block_type.clone()), Some(initial_ip), None));
-        },
-        
+        }
+
         // Nested begin/loop instruction. With arity other than 0.
         (block_type, _, _) => {
             let mut buf: Vec<VmValue> = Vec::with_capacity(arity as usize);
@@ -608,11 +664,15 @@ fn handle_begin_block(
             }
 
             // Push frame
-            call_stack.push(Frame::new(Some(block_type.clone()), Some(initial_ip), Some(buf)));
+            call_stack.push(Frame::new(
+                Some(block_type.clone()),
+                Some(initial_ip),
+                Some(buf),
+            ));
         }
-    }   
+    }
 
-    if let CfOperator::Else = block_type { 
+    if let CfOperator::Else = block_type {
         // Do nothing
     } else {
         ip.increment();
@@ -624,10 +684,10 @@ fn fetch_bytes(amount: usize, ip: &mut Address, fun: &Function) -> Vec<u8> {
 
     for i in 0..amount {
         let byte = fun.fetch(ip.ip);
-    
+
         b.push(byte);
-        
-        if i != amount-1 {
+
+        if i != amount - 1 {
             ip.increment();
         }
     }
@@ -638,17 +698,17 @@ fn fetch_bytes(amount: usize, ip: &mut Address, fun: &Function) -> Vec<u8> {
 #[derive(Clone, Debug)]
 enum ArgLocation {
     Inline,
-    Memory
+    Memory,
 }
 
 fn fetch_argv(
-    frame: &mut Frame<VmValue>, 
-    operand_stack: &mut Stack<VmValue>, 
-    ip: &mut Address, 
-    fun: &Function, 
-    arity: usize
+    frame: &mut Frame<VmValue>,
+    operand_stack: &mut Stack<VmValue>,
+    ip: &mut Address,
+    fun: &Function,
+    arity: usize,
 ) -> (Vec<VmType>, Vec<VmValue>) {
-    let mut argv_types: Vec<(VmType, ArgLocation)> = Vec::with_capacity(arity);  
+    let mut argv_types: Vec<(VmType, ArgLocation)> = Vec::with_capacity(arity);
     let mut argv: Vec<VmValue> = Vec::with_capacity(arity);
 
     ip.increment();
@@ -659,11 +719,11 @@ fn fetch_argv(
     // Fetch argument types
     for i in 0..arity {
         ip.increment();
-        
+
         let op = fun.fetch(ip.ip);
         let arg = match VmType::from_op(op) {
             Some(result) => result,
-            _            => panic!(format!("Invalid argument type! Received: {}", op))
+            _ => panic!(format!("Invalid argument type! Received: {}", op)),
         };
 
         let arg_type = if args_bitmask.get(i as u8) {
@@ -715,7 +775,7 @@ fn fetch_argv(
 
                     argv.push(VmValue::I32(val));
                 }
-            },
+            }
             VmType::I64 => {
                 let byte = fun.fetch(ip.ip);
 
@@ -750,7 +810,7 @@ fn fetch_argv(
 
                     argv.push(VmValue::I64(val));
                 }
-            },
+            }
             VmType::F32 => {
                 let byte = fun.fetch(ip.ip);
 
@@ -785,7 +845,7 @@ fn fetch_argv(
 
                     argv.push(VmValue::F32(val));
                 }
-            },
+            }
             VmType::F64 => {
                 let byte = fun.fetch(ip.ip);
 
@@ -820,7 +880,7 @@ fn fetch_argv(
 
                     argv.push(VmValue::F64(val));
                 }
-            },
+            }
             VmType::i32Array2 => {
                 let mut result: [i32; 2] = [0; 2];
                 let mut buffer: Vec<i32> = Vec::with_capacity(2);
@@ -865,7 +925,7 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::i32Array2(result));
-            },
+            }
             VmType::i32Array4 => {
                 let mut result: [i32; 4] = [0; 4];
                 let mut buffer: Vec<i32> = Vec::with_capacity(4);
@@ -910,7 +970,7 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::i32Array4(result));
-            },
+            }
             VmType::i32Array8 => {
                 let mut result: [i32; 8] = [0; 8];
                 let mut buffer: Vec<i32> = Vec::with_capacity(8);
@@ -955,7 +1015,7 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::i32Array8(result));
-            },
+            }
             VmType::i64Array2 => {
                 let mut result: [i64; 2] = [0; 2];
                 let mut buffer: Vec<i64> = Vec::with_capacity(2);
@@ -1000,7 +1060,7 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::i64Array2(result));
-            },
+            }
             VmType::i64Array4 => {
                 let mut result: [i64; 4] = [0; 4];
                 let mut buffer: Vec<i64> = Vec::with_capacity(4);
@@ -1045,7 +1105,7 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::i64Array4(result));
-            },
+            }
             VmType::i64Array8 => {
                 let mut result: [i64; 8] = [0; 8];
                 let mut buffer: Vec<i64> = Vec::with_capacity(8);
@@ -1090,7 +1150,7 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::i64Array8(result));
-            },
+            }
             VmType::f32Array2 => {
                 let mut result: [f32; 2] = [0.0; 2];
                 let mut buffer: Vec<f32> = Vec::with_capacity(2);
@@ -1135,7 +1195,7 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::f32Array2(result));
-            },
+            }
             VmType::f32Array4 => {
                 let mut result: [f32; 4] = [0.0; 4];
                 let mut buffer: Vec<f32> = Vec::with_capacity(4);
@@ -1180,7 +1240,7 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::f32Array4(result));
-            },
+            }
             VmType::f32Array8 => {
                 let mut result: [f32; 8] = [0.0; 8];
                 let mut buffer: Vec<f32> = Vec::with_capacity(8);
@@ -1225,7 +1285,7 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::f32Array8(result));
-            },
+            }
             VmType::f64Array2 => {
                 let mut result: [f64; 2] = [0.0; 2];
                 let mut buffer: Vec<f64> = Vec::with_capacity(2);
@@ -1270,7 +1330,7 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::f64Array2(result));
-            },
+            }
             VmType::f64Array4 => {
                 let mut result: [f64; 4] = [0.0; 4];
                 let mut buffer: Vec<f64> = Vec::with_capacity(4);
@@ -1315,7 +1375,7 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::f64Array4(result));
-            },
+            }
             VmType::f64Array8 => {
                 let mut result: [f64; 8] = [0.0; 8];
                 let mut buffer: Vec<f64> = Vec::with_capacity(8);
@@ -1360,16 +1420,17 @@ fn fetch_argv(
                 // Push argument
                 result.copy_from_slice(&buffer);
                 argv.push(VmValue::f64Array8(result));
-            },
+            }
             op => {
-                panic!(format!("Invalid argument type in begin block! Received: {:?}", op));
+                panic!(format!(
+                    "Invalid argument type in begin block! Received: {:?}",
+                    op
+                ));
             }
         }
     }
 
-    let argv_types = argv_types
-        .iter()
-        .map(|t| t.0).collect();
+    let argv_types = argv_types.iter().map(|t| t.0).collect();
 
     (argv_types, argv)
 }
@@ -1378,33 +1439,37 @@ fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> bool {
     match op {
         Instruction::Eqz => {
             if operands.len() != 1 {
-                panic!(format!("Can only perform equality on 1 operand! Got: {}", operands.len()));
+                panic!(format!(
+                    "Can only perform equality on 1 operand! Got: {}",
+                    operands.len()
+                ));
             }
 
             unimplemented!();
-        },
+        }
         Instruction::Eq => {
             if operands.len() < 2 {
-                panic!(format!("Cannot perform equality on less than 2 operands! Got: {}", operands.len()));
+                panic!(format!(
+                    "Cannot perform equality on less than 2 operands! Got: {}",
+                    operands.len()
+                ));
             }
 
-            let (result, _) = operands
-                .iter()
-                .fold((true, None), |(result, last), op| {
-                    if let Some(last) = last {
-                        if result {
-                            (op == last, Some(op))
-                        } else {
-                            (result, Some(op))
-                        }
+            let (result, _) = operands.iter().fold((true, None), |(result, last), op| {
+                if let Some(last) = last {
+                    if result {
+                        (op == last, Some(op))
                     } else {
                         (result, Some(op))
                     }
-                });
+                } else {
+                    (result, Some(op))
+                }
+            });
 
             result
-        },
-        _ => unimplemented!()
+        }
+        _ => unimplemented!(),
     }
 }
 
@@ -1413,7 +1478,10 @@ fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) {
     let len = operand_stack.len();
 
     if len < 2 {
-        panic!(format!("Cannot perform addition on less than 2 operands! Got: {}", len));
+        panic!(format!(
+            "Cannot perform addition on less than 2 operands! Got: {}",
+            len
+        ));
     }
 
     match op {
@@ -1426,15 +1494,13 @@ fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) {
             }
 
             // Perform addition
-            let result = buf
-                .iter()
-                .fold(None, |acc: Option<VmValue>, x| {
-                    if let Some(acc) = acc {
-                        Some(acc + *x)
-                    } else {
-                        Some(*x)
-                    }
-                });
+            let result = buf.iter().fold(None, |acc: Option<VmValue>, x| {
+                if let Some(acc) = acc {
+                    Some(acc + *x)
+                } else {
+                    Some(*x)
+                }
+            });
 
             // Push result back to operand stack
             if let Some(result) = result {
@@ -1442,8 +1508,11 @@ fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) {
             } else {
                 unreachable!();
             }
-        },
-        _ => panic!(format!("Must receive an addition instruction! Got: {:?}", op))
+        }
+        _ => panic!(format!(
+            "Must receive an addition instruction! Got: {:?}",
+            op
+        )),
     };
 }
 
@@ -1453,6 +1522,7 @@ mod tests {
     use crypto::Hash;
 
     #[test]
+    #[rustfmt::skip]
     #[should_panic(expected = "first instruction cannot be a Loop instruction")]
     fn it_fails_with_first_loop_instruction() {
         let mut vm = Vm::new();
@@ -1486,6 +1556,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     #[should_panic]
     fn it_fails_with_first_begin_arity_other_than_zero() {
         let mut vm = Vm::new();
@@ -1519,6 +1590,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn it_executes_correctly() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
@@ -1614,6 +1686,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn it_executes_correctly_with_loops() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
@@ -1745,6 +1818,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn it_breaks_loops_from_nested_scopes1() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
@@ -1888,6 +1962,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn it_breaks_loops_from_nested_scopes2() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
@@ -2032,24 +2107,24 @@ mod tests {
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
         let mut bitmask: u8 = 0;
-        
+
         bitmask.set(0, true);
 
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
-            0x00,                             // 0 Arity
+            0x00, // 0 Arity
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
-            0x03,                             // 3 Arity
+            0x03, // 3 Arity
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i64Const.repr(),
             Instruction::f32Const.repr(),
-            0x00,                             // i32 value
+            0x00, // i32 value
             0x00,
             0x00,
             0x05,
-            0x00,                             // i64 value
+            0x00, // i64 value
             0x00,
             0x00,
             0x00,
@@ -2057,11 +2132,11 @@ mod tests {
             0x00,
             0x00,
             0x1b,
-            0x00,                             // f32 value
+            0x00, // f32 value
             0x00,
             0x00,
             0x5f,
-            Instruction::PickLocal.repr(),    // Dupe elems on stack 11 times (usize is 16bits)
+            Instruction::PickLocal.repr(), // Dupe elems on stack 11 times (usize is 16bits)
             0x00,
             0x00,
             Instruction::PickLocal.repr(),
@@ -2079,7 +2154,7 @@ mod tests {
             Instruction::PickLocal.repr(),
             0x00,
             0x02,
-            Instruction::PushLocal.repr(),   // Push loop counter to locals stack
+            Instruction::PushLocal.repr(), // Push loop counter to locals stack
             0x01,
             0x00,
             Instruction::i32Const.repr(),
@@ -2088,17 +2163,17 @@ mod tests {
             0x00,
             0x00,
             Instruction::Loop.repr(),
-            0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
-            Instruction::PickLocal.repr(),   // Dupe counter
+            0x05, // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
+            Instruction::PickLocal.repr(), // Dupe counter
             0x00,
             0x04,
-            Instruction::PushOperand.repr(), 
+            Instruction::PushOperand.repr(),
             0x02,
             bitmask,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            Instruction::PopLocal.repr(),    // Push counter to operand stack
-            0x00,                            // Loop 5 times
+            Instruction::PopLocal.repr(), // Push counter to operand stack
+            0x00,                         // Loop 5 times
             0x00,
             0x00,
             0x04,
@@ -2108,10 +2183,10 @@ mod tests {
             Instruction::PickLocal.repr(),
             0x00,
             0x01,
-            Instruction::If.repr(),          // Break if items on the operand stack are equal  
-            0x02,                            // Arity 0
+            Instruction::If.repr(), // Break if items on the operand stack are equal
+            0x02,                   // Arity 0
             Instruction::Eq.repr(),
-            Instruction::Break.repr(),       // Break loop
+            Instruction::Break.repr(), // Break loop
             Instruction::End.repr(),
             Instruction::Else.repr(),
             0x02,
@@ -2120,7 +2195,7 @@ mod tests {
             Instruction::End.repr(),
             Instruction::PushOperand.repr(), // Increment counter
             0x02,
-            bitmask,                         // Reference bits
+            bitmask, // Reference bits
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
             Instruction::PopLocal.repr(),
@@ -2129,14 +2204,14 @@ mod tests {
             0x00,
             0x01,
             Instruction::Add.repr(),
-            Instruction::PushLocal.repr(),   // Move counter from operand stack back to call stack
+            Instruction::PushLocal.repr(), // Move counter from operand stack back to call stack
             0x01,
-            bitmask,                         // Reference bits
+            bitmask, // Reference bits
             Instruction::i32Const.repr(),
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
-            Instruction::End.repr()
+            Instruction::End.repr(),
         ];
 
         let function = Function {
@@ -2144,17 +2219,18 @@ mod tests {
             name: "debug_test".to_owned(),
             block: block,
             return_type: None,
-            arguments: vec![]
+            arguments: vec![],
         };
 
         let module = Module {
             module_hash: Hash::NULL_RLP,
             functions: vec![function],
-            imports: vec![]
+            imports: vec![],
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap())
+            .unwrap();
 
         assert!(true);
     }
@@ -2166,12 +2242,12 @@ mod tests {
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
         let mut bitmask: u8 = 0;
-        
+
         bitmask.set(0, true);
 
         let main_block: Vec<u8> = vec![
             Instruction::Begin.repr(),
-            0x00,                             // 0 Arity
+            0x00, // 0 Arity
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x01,
@@ -2184,32 +2260,32 @@ mod tests {
             Instruction::Loop.repr(),
             0x01,
             Instruction::Call.repr(),
-            0x00,                             // Fun idx (16 bits)
-            0x01,          
+            0x00, // Fun idx (16 bits)
+            0x01,
             Instruction::PickLocal.repr(),
             0x00,
-            0x00,           
+            0x00,
             Instruction::PushOperand.repr(),
             0x02,
             bitmask,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
             Instruction::PopLocal.repr(),
-            0x00,                             // Loop 4 times
+            0x00, // Loop 4 times
             0x00,
             0x00,
             0x04,
             Instruction::BreakIf.repr(),
             Instruction::Eq.repr(),
             Instruction::End.repr(),
-            Instruction::End.repr()
+            Instruction::End.repr(),
         ];
 
         let increment_block: Vec<u8> = vec![
             Instruction::Begin.repr(),
-            0x00,                             // 0 Arity
+            0x00, // 0 Arity
             Instruction::Nop.repr(),
-            Instruction::PushOperand.repr(),  // Increment given arg by 1
+            Instruction::PushOperand.repr(), // Increment given arg by 1
             0x02,
             bitmask,
             Instruction::i32Const.repr(),
@@ -2227,7 +2303,7 @@ mod tests {
             Instruction::PopOperand.repr(),
             Instruction::Return.repr(),
             0x01,
-            Instruction::End.repr()
+            Instruction::End.repr(),
         ];
 
         let f1 = Function {
@@ -2235,7 +2311,7 @@ mod tests {
             name: "debug_test1".to_owned(),
             block: main_block,
             return_type: None,
-            arguments: vec![]
+            arguments: vec![],
         };
 
         let f2 = Function {
@@ -2243,18 +2319,18 @@ mod tests {
             name: "debug_test2".to_owned(),
             block: increment_block,
             return_type: Some(VmType::I32),
-            arguments: vec![VmType::I32]
+            arguments: vec![VmType::I32],
         };
-
 
         let module = Module {
             module_hash: Hash::NULL_RLP,
             functions: vec![f1, f2],
-            imports: vec![]
+            imports: vec![],
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap())
+            .unwrap();
 
         assert!(true);
     }
@@ -2266,12 +2342,12 @@ mod tests {
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
         let mut bitmask: u8 = 0;
-        
+
         bitmask.set(0, true);
 
         let main_block: Vec<u8> = vec![
             Instruction::Begin.repr(),
-            0x00,                             // 0 Arity
+            0x00, // 0 Arity
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x01,
@@ -2284,32 +2360,32 @@ mod tests {
             Instruction::Loop.repr(),
             0x01,
             Instruction::Call.repr(),
-            0x00,                             // Fun idx (16 bits)
-            0x01,          
+            0x00, // Fun idx (16 bits)
+            0x01,
             Instruction::PickLocal.repr(),
             0x00,
-            0x00,           
+            0x00,
             Instruction::PushOperand.repr(),
             0x02,
             bitmask,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
             Instruction::PopLocal.repr(),
-            0x00,                             // Loop 4 times
+            0x00, // Loop 4 times
             0x00,
             0x00,
             0x04,
             Instruction::BreakIf.repr(),
             Instruction::Eq.repr(),
             Instruction::End.repr(),
-            Instruction::End.repr()
+            Instruction::End.repr(),
         ];
 
         let increment_block: Vec<u8> = vec![
             Instruction::Begin.repr(),
-            0x00,                             // 0 Arity
+            0x00, // 0 Arity
             Instruction::Nop.repr(),
-            Instruction::PushOperand.repr(),  // Increment given arg by 1
+            Instruction::PushOperand.repr(), // Increment given arg by 1
             0x02,
             bitmask,
             Instruction::i32Const.repr(),
@@ -2330,7 +2406,7 @@ mod tests {
             Instruction::Return.repr(),
             0x01,
             Instruction::End.repr(),
-            Instruction::End.repr()
+            Instruction::End.repr(),
         ];
 
         let f1 = Function {
@@ -2338,7 +2414,7 @@ mod tests {
             name: "debug_test1".to_owned(),
             block: main_block,
             return_type: None,
-            arguments: vec![]
+            arguments: vec![],
         };
 
         let f2 = Function {
@@ -2346,18 +2422,18 @@ mod tests {
             name: "debug_test2".to_owned(),
             block: increment_block,
             return_type: Some(VmType::I32),
-            arguments: vec![VmType::I32]
+            arguments: vec![VmType::I32],
         };
-
 
         let module = Module {
             module_hash: Hash::NULL_RLP,
             functions: vec![f1, f2],
-            imports: vec![]
+            imports: vec![],
         };
 
         vm.load(module).unwrap();
-        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap())
+            .unwrap();
 
         assert!(true);
     }

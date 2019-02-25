@@ -18,9 +18,9 @@
 
 use crypto::{PublicKey, Signature};
 use quickcheck::Arbitrary;
+use rand::Rng;
 use rust_decimal::Decimal;
 use std::str::FromStr;
-use rand::Rng;
 use ShareMap;
 
 const SIG_TYPE: u8 = 2;
@@ -32,7 +32,7 @@ impl MultiSig {
     pub fn from_sig(signature: Signature) -> MultiSig {
         let inner: Vec<Signature> = vec![signature];
         MultiSig(inner)
-    } 
+    }
 
     pub fn verify(&self, message: &[u8], required_keys: u8, pkeys: &[PublicKey]) -> bool {
         if required_keys < 2 {
@@ -42,9 +42,9 @@ impl MultiSig {
         if pkeys.len() < required_keys as usize {
             panic!("The length of the given public keys list is smaller than the required keys!")
         }
-        
+
         let mut validated_keys: u8 = 0;
-        
+
         for sig in &self.0 {
             let mut valid = false;
 
@@ -54,7 +54,7 @@ impl MultiSig {
                     valid = true;
                     break;
                 }
-            } 
+            }
 
             if !valid {
                 return false;
@@ -70,11 +70,16 @@ impl MultiSig {
         false
     }
 
-    pub fn verify_shares(&self, message: &[u8], required_percentile: u8, share_map: ShareMap) -> bool {
+    pub fn verify_shares(
+        &self,
+        message: &[u8],
+        required_percentile: u8,
+        share_map: ShareMap,
+    ) -> bool {
         if required_percentile > 100 || required_percentile == 0 {
             panic!("Invalid required percentile!");
         }
-        
+
         let mut signed_ratio = Decimal::from_str("0").unwrap();
         let required_percentile = Decimal::from_str(&format!("{}", required_percentile)).unwrap();
 
@@ -82,7 +87,7 @@ impl MultiSig {
             // Find a matching address in the share map for the signature
             match share_map.find_signer(message, sig.clone()) {
                 Some(sh_ratio) => signed_ratio += sh_ratio,
-                None           => return false
+                None => return false,
             }
 
             if signed_ratio >= required_percentile {
@@ -127,7 +132,7 @@ impl MultiSig {
 
                         match Signature::from_bytes(&sig) {
                             Ok(sig) => result.push(sig),
-                            Err(_)  => return Err("Invalid signature") 
+                            Err(_) => return Err("Invalid signature"),
                         };
                     } else {
                         return Err("Invalid signature length");
@@ -135,16 +140,14 @@ impl MultiSig {
                 }
 
                 Ok(MultiSig(result))
-            },
-            _ => {
-                Err("Invalid signature type")
             }
+            _ => Err("Invalid signature type"),
         }
     }
 }
 
 impl Arbitrary for MultiSig {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> MultiSig {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> MultiSig {
         let mut rng = rand::thread_rng();
         let random = rng.gen_range(1, 255);
         let signatures: Vec<Signature> = (0..random).map(|_| Arbitrary::arbitrary(g)).collect();

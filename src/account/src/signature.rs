@@ -17,9 +17,9 @@
 */
 
 use crypto::Signature as PrimitiveSig;
-use MultiSig;
-use rand::Rng;
 use quickcheck::Arbitrary;
+use rand::Rng;
+use MultiSig;
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
 pub enum Signature {
@@ -30,8 +30,8 @@ pub enum Signature {
 impl Signature {
     pub fn to_bytes(&self) -> Vec<u8> {
         match *self {
-            Signature::Normal(ref sig)   => sig.to_bytes(),
-            Signature::MultiSig(ref sig) => sig.to_bytes()
+            Signature::Normal(ref sig) => sig.to_bytes(),
+            Signature::MultiSig(ref sig) => sig.to_bytes(),
         }
     }
 
@@ -44,35 +44,30 @@ impl Signature {
                 if bin.len() == 65 {
                     match PrimitiveSig::from_bytes(&bin) {
                         Ok(sig) => Ok(Signature::Normal(sig)),
-                        Err(_)  => Err("Invalid signature")
+                        Err(_) => Err("Invalid signature"),
                     }
-                    
                 } else {
                     Err("Invalid signature")
                 }
-            },
-            [2] => {
-                match MultiSig::from_bytes(bin) {
-                    Ok(msig) => Ok(Signature::MultiSig(msig)),
-                    Err(err) => Err(err)
-                }
-            },
-            _ => {
-                Err("Invalid signature type")
             }
+            [2] => match MultiSig::from_bytes(bin) {
+                Ok(msig) => Ok(Signature::MultiSig(msig)),
+                Err(err) => Err(err),
+            },
+            _ => Err("Invalid signature type"),
         }
     }
 }
 
 impl Arbitrary for Signature {
-    fn arbitrary<G : quickcheck::Gen>(g: &mut G) -> Signature {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Signature {
         let mut rng = rand::thread_rng();
         let random = rng.gen_range(1, 2);
 
         match random {
             1 => Signature::Normal(Arbitrary::arbitrary(g)),
             2 => Signature::MultiSig(Arbitrary::arbitrary(g)),
-            _ => panic!()
+            _ => panic!(),
         }
     }
 }

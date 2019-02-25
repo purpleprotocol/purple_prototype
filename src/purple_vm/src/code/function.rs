@@ -16,10 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use bitvec::Bits;
+use instruction_set::{Instruction, CT_FLOW_OPS};
 use primitives::r#type::VmType;
 use stack::Stack;
-use instruction_set::{Instruction, CT_FLOW_OPS};
-use bitvec::Bits;
 
 #[derive(Clone, Debug)]
 pub struct Function {
@@ -31,12 +31,12 @@ pub struct Function {
 
     /// The name of the function.
     pub name: String,
-    
+
     /// The types of the arguments.
     pub arguments: Vec<VmType>,
 
     // The return type of the function.
-    pub return_type: Option<VmType>
+    pub return_type: Option<VmType>,
 }
 
 impl Function {
@@ -53,10 +53,12 @@ impl Function {
 
         match Instruction::from_repr(op) {
             Some(Instruction::Begin) => self.find_block_len(idx),
-            Some(Instruction::Loop)  => self.find_block_len(idx),
-            Some(Instruction::If)    => self.find_block_len(idx),
-            Some(Instruction::Else)  => self.find_block_len(idx),
-            _                        => panic!("The length of a block can only be queried for a control flow instruction!")
+            Some(Instruction::Loop) => self.find_block_len(idx),
+            Some(Instruction::If) => self.find_block_len(idx),
+            Some(Instruction::Else) => self.find_block_len(idx),
+            _ => {
+                panic!("The length of a block can only be queried for a control flow instruction!")
+            }
         }
     }
 
@@ -66,14 +68,12 @@ impl Function {
         let mut offset: usize = 0;
         let mut stack: Stack<()> = Stack::new();
         let len = self.block.len();
-        
+
         for i in idx..len {
             result_len += 1;
 
-            if let Some(op) = Instruction::from_repr(self.block[i+offset]) {
-                let is_cf_operator = CT_FLOW_OPS
-                    .iter()
-                    .any(|o| *o == op);
+            if let Some(op) = Instruction::from_repr(self.block[i + offset]) {
+                let is_cf_operator = CT_FLOW_OPS.iter().any(|o| *o == op);
 
                 if let Instruction::End = op {
                     stack.pop();
@@ -85,7 +85,7 @@ impl Function {
                     // Escape arity
                     if let Instruction::If = op {
                         // In case of `If` instruction, we escape
-                        // 2 characters, in order to include the  
+                        // 2 characters, in order to include the
                         // comparison operator as well.
                         offset += 2;
                         result_len += 2;
@@ -102,33 +102,33 @@ impl Function {
                             // Account for idx
                             offset += 2;
                             result_len += 2;
-                        },
+                        }
                         Instruction::Call => {
                             offset += 2;
                             result_len += 2;
-                        },
+                        }
                         Instruction::Return => {
                             offset += 1;
                             result_len += 1;
-                        },
+                        }
                         Instruction::PushLocal => {
                             let mut acc = 0;
 
                             offset += 1;
                             result_len += 1;
 
-                            let arity = self.block[i+offset];
-                            
+                            let arity = self.block[i + offset];
+
                             offset += 1;
                             result_len += 1;
 
-                            let bitmask = self.block[i+offset];
+                            let bitmask = self.block[i + offset];
 
                             for j in 0..arity {
                                 offset += 1;
                                 result_len += 1;
 
-                                let arg_primitive_type = self.block[i+offset];
+                                let arg_primitive_type = self.block[i + offset];
 
                                 match VmType::from_op(arg_primitive_type) {
                                     Some(op) => match bitmask.get(j) {
@@ -139,37 +139,37 @@ impl Function {
                                             // the byte size of the type
                                             result_len += byte_size;
                                             acc += byte_size;
-                                        },
+                                        }
                                         true => {
                                             // Pop operand, so we increment only by 1
                                             result_len += 1;
                                             acc += 1;
                                         }
                                     },
-                                    None => panic!("Invalid type!")
+                                    None => panic!("Invalid type!"),
                                 };
                             }
 
                             offset += acc;
-                        },
+                        }
                         Instruction::PushOperand => {
                             let mut acc = 0;
 
                             offset += 1;
                             result_len += 1;
 
-                            let arity = self.block[i+offset];
+                            let arity = self.block[i + offset];
 
                             offset += 1;
                             result_len += 1;
 
-                            let bitmask = self.block[i+offset];
+                            let bitmask = self.block[i + offset];
 
                             for j in 0..arity {
                                 offset += 1;
                                 result_len += 1;
 
-                                let arg_primitive_type = self.block[i+offset];
+                                let arg_primitive_type = self.block[i + offset];
 
                                 match VmType::from_op(arg_primitive_type) {
                                     Some(op) => match bitmask.get(j) {
@@ -180,19 +180,19 @@ impl Function {
                                             // the byte size of the type
                                             result_len += byte_size;
                                             acc += byte_size;
-                                        },
+                                        }
                                         true => {
                                             // Pop operand, so we increment only by 1
                                             result_len += 1;
                                             acc += 1;
                                         }
                                     },
-                                    None => panic!("Invalid type!")
+                                    None => panic!("Invalid type!"),
                                 };
                             }
 
                             offset += acc;
-                        },
+                        }
                         _ => {
                             // Do nothing
                         }
@@ -210,6 +210,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[rustfmt::skip]
     fn find_block_len() {
         let mut bitmask: u8 = 0;
 
@@ -331,6 +332,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn find_block_len_with_nested1() {
         let mut bitmask: u8 = 0;
 
@@ -452,6 +454,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn find_block_len_with_nested2() {
         let mut bitmask: u8 = 0;
 
@@ -573,6 +576,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn find_block_len_with_call_and_return() {
         let mut bitmask: u8 = 0;
 

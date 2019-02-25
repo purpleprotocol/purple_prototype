@@ -16,6 +16,6 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+pub mod control_flow;
 pub mod r#type;
 pub mod value;
-pub mod control_flow;

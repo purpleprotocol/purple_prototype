@@ -19,13 +19,13 @@
   https://github.com/paritytech/parity-ethereum/blob/c313039526269f4690f6f3ea006b32f2d81ee6ab/util/patricia-trie-ethereum/src/rlp_node_codec.rs
 */
 
-use patricia_trie::node::Node;
-use patricia_trie::{NibbleSlice, NodeCodec, ChildReference};
-use hashdb::Hasher;
-use BlakeDbHasher;
 use crypto::Hash;
-use rlp::{DecoderError, Rlp, RlpStream, Prototype};
 use elastic_array::ElasticArray128;
+use hashdb::Hasher;
+use patricia_trie::node::Node;
+use patricia_trie::{ChildReference, NibbleSlice, NodeCodec};
+use rlp::{DecoderError, Prototype, Rlp, RlpStream};
+use BlakeDbHasher;
 
 pub struct Codec;
 
@@ -34,45 +34,52 @@ impl NodeCodec<BlakeDbHasher> for Codec {
     const HASHED_NULL_NODE: Hash = Hash::NULL_RLP;
 
     fn decode(data: &[u8]) -> ::std::result::Result<Node, Self::Error> {
-		let r = Rlp::new(data);
+        let r = Rlp::new(data);
 
-		match r.prototype()? {
-			Prototype::List(2) => match NibbleSlice::from_encoded(r.at(0)?.data()?) {
-				(slice, true)  => Ok(Node::Leaf(slice, r.at(1)?.data()?)),
-				(slice, false) => Ok(Node::Extension(slice, r.at(1)?.as_raw())),
-			},
-			// branch - first 16 are nodes, 17th is a value (or empty).
-			Prototype::List(17) => {
-				let mut nodes = [&[] as &[u8]; 16];
-				for i in 0..16 {
-					nodes[i] = r.at(i)?.as_raw();
-				}
-				Ok(Node::Branch(nodes, if r.at(16)?.is_empty() { None } else { Some(r.at(16)?.data()?) }))
-			},
-			// an empty branch index.
-			Prototype::Data(0) => Ok(Node::Empty),
-			// something went wrong.
-			_ => Err(DecoderError::Custom("Rlp is not valid."))
-		}
-	}
+        match r.prototype()? {
+            Prototype::List(2) => match NibbleSlice::from_encoded(r.at(0)?.data()?) {
+                (slice, true) => Ok(Node::Leaf(slice, r.at(1)?.data()?)),
+                (slice, false) => Ok(Node::Extension(slice, r.at(1)?.as_raw())),
+            },
+            // branch - first 16 are nodes, 17th is a value (or empty).
+            Prototype::List(17) => {
+                let mut nodes = [&[] as &[u8]; 16];
+                for i in 0..16 {
+                    nodes[i] = r.at(i)?.as_raw();
+                }
+                Ok(Node::Branch(
+                    nodes,
+                    if r.at(16)?.is_empty() {
+                        None
+                    } else {
+                        Some(r.at(16)?.data()?)
+                    },
+                ))
+            }
+            // an empty branch index.
+            Prototype::Data(0) => Ok(Node::Empty),
+            // something went wrong.
+            _ => Err(DecoderError::Custom("Rlp is not valid.")),
+        }
+    }
 
-	fn try_decode_hash(data: &[u8]) -> Option<Hash> {
-		let r = Rlp::new(data);
+    fn try_decode_hash(data: &[u8]) -> Option<Hash> {
+        let r = Rlp::new(data);
 
-		if r.is_data() && r.size() == BlakeDbHasher::LENGTH {
-			Some(r.as_val().unwrap())
-		} else {
-			None
-		}
-	}
-    
+        if r.is_data() && r.size() == BlakeDbHasher::LENGTH {
+            Some(r.as_val().unwrap())
+        } else {
+            None
+        }
+    }
+
     fn is_empty_node(data: &[u8]) -> bool {
-		Rlp::new(data).is_empty()
-	}
+        Rlp::new(data).is_empty()
+    }
 
     fn empty_node() -> Vec<u8> {
         let mut stream = RlpStream::new();
-        
+
         stream.append_empty_data();
         stream.drain()
     }
@@ -82,30 +89,31 @@ impl NodeCodec<BlakeDbHasher> for Codec {
 
         stream.append(&partial);
         stream.append(&value);
-		stream.drain()
+        stream.drain()
     }
 
     fn ext_node(partial: &[u8], child_ref: ChildReference<Hash>) -> Vec<u8> {
         let mut stream = RlpStream::new_list(2);
-        
+
         stream.append(&partial);
-        
+
         match child_ref {
             ChildReference::Hash(h) => stream.append(&h),
             ChildReference::Inline(inline_data, len) => {
                 let bytes = &AsRef::<[u8]>::as_ref(&inline_data)[..len];
                 stream.append_raw(bytes, 1)
-            },
+            }
         };
 
         stream.drain()
-	}
+    }
 
-	fn branch_node<I>(children: I, value: Option<ElasticArray128<u8>>) -> Vec<u8>
-	    where I: IntoIterator<Item=Option<ChildReference<Hash>>>
+    fn branch_node<I>(children: I, value: Option<ElasticArray128<u8>>) -> Vec<u8>
+    where
+        I: IntoIterator<Item = Option<ChildReference<Hash>>>,
     {
         let mut stream = RlpStream::new_list(17);
-        
+
         for child_ref in children {
             match child_ref {
                 Some(c) => match c {
@@ -113,9 +121,9 @@ impl NodeCodec<BlakeDbHasher> for Codec {
                     ChildReference::Inline(inline_data, len) => {
                         let bytes = &AsRef::<[u8]>::as_ref(&inline_data)[..len];
                         stream.append_raw(bytes, 1)
-                    },
+                    }
                 },
-                None => stream.append_empty_data()
+                None => stream.append_empty_data(),
             };
         }
 
@@ -124,7 +132,7 @@ impl NodeCodec<BlakeDbHasher> for Codec {
         } else {
             stream.append_empty_data();
         }
-        
+
         stream.drain()
     }
 }

@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{ShareholdersAddress, NormalAddress, ShareMap, Balance, Shares};
+use account::{Balance, NormalAddress, ShareMap, ShareholdersAddress, Shares};
 use crypto::Hash;
-use patricia_trie::{TrieMut, TrieDBMut};
+use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use std::default::Default;
 
@@ -54,12 +54,12 @@ impl Default for Genesis {
 
         Genesis {
             coin_supply: COIN_SUPPLY,
-            treasury_balance: Balance::from_bytes(TREASURY_INITIAL_BALANCE).unwrap(), 
+            treasury_balance: Balance::from_bytes(TREASURY_INITIAL_BALANCE).unwrap(),
             treasury_address: ShareholdersAddress::new(treasury_address.0),
             treasury_shares: Shares::new(TREASURY_ISSUED_SHARES, TREASURY_AUTHORIZED_SHARES, 80),
             treasury_share_map: treasury_share_map,
             treasury_stock_hash: treasury_stock_hash,
-            asset_hash: main_asset_hash
+            asset_hash: main_asset_hash,
         }
     }
 }
@@ -72,7 +72,7 @@ impl Genesis {
         match trie.get(b"treasury") {
             Ok(Some(_)) => {
                 panic!("The treasury account already exists!");
-            },
+            }
             Ok(None) => {
                 let bin_addr = &self.treasury_address.to_bytes();
                 let bin_shares = &self.treasury_shares.to_bytes();
@@ -106,8 +106,8 @@ impl Genesis {
                 // Init currencies index and list main currency
                 trie.insert(b"ci", &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
                 trie.insert(b"c.0", &currencies).unwrap();
-            },
-            Err(err) => panic!(err)
+            }
+            Err(err) => panic!(err),
         }
     }
 }
@@ -159,15 +159,24 @@ mod tests {
         // Apply genesis to state
         tx.apply(&mut trie);
 
-        assert_eq!(&trie.get(b"treasury").unwrap().unwrap(), &treasury_address.to_bytes());
-        assert_eq!(&trie.get(nonce_key).unwrap().unwrap(), &vec![0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(
+            &trie.get(b"treasury").unwrap().unwrap(),
+            &treasury_address.to_bytes()
+        );
+        assert_eq!(
+            &trie.get(nonce_key).unwrap().unwrap(),
+            &vec![0, 0, 0, 0, 0, 0, 0, 0]
+        );
         assert_eq!(&trie.get(shares_key).unwrap().unwrap(), &bin_shares);
         assert_eq!(&trie.get(share_map_key).unwrap().unwrap(), &bin_share_map);
         assert_eq!(&trie.get(stock_hash_key).unwrap().unwrap(), &bin_stock_hash);
         assert_eq!(&trie.get(treasury_cur_key).unwrap().unwrap(), &coin_supply);
 
         // Init currencies index and list main currency
-        assert_eq!(&trie.get(b"ci").unwrap().unwrap(), &vec![0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(
+            &trie.get(b"ci").unwrap().unwrap(),
+            &vec![0, 0, 0, 0, 0, 0, 0, 0]
+        );
         assert_eq!(&trie.get(b"c.0").unwrap().unwrap(), &currencies);
     }
 }

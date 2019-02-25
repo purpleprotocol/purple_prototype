@@ -16,15 +16,15 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::Hash;
 use code::function::Function;
 use code::import::Import;
+use crypto::Hash;
 
 #[derive(Clone, Debug)]
 pub struct Module {
     pub module_hash: Hash,
     pub functions: Vec<Function>,
-    pub imports: Vec<Import>
+    pub imports: Vec<Import>,
 }
 
 impl PartialEq for Module {

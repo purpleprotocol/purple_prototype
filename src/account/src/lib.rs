@@ -16,32 +16,35 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate quickcheck;
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate quickcheck;
+#[macro_use]
+extern crate lazy_static;
 
-extern crate crypto;
-extern crate rlp;
 extern crate byteorder;
-extern crate regex;
-extern crate rand;
-extern crate rust_decimal;
+extern crate crypto;
 extern crate hashbrown;
+extern crate rand;
+extern crate regex;
+extern crate rlp;
+extern crate rust_decimal;
 
 pub mod addresses;
 pub mod balance;
-pub mod signature;
 pub mod multi_sig;
-pub mod shares;
 pub mod share_map;
+pub mod shares;
+pub mod signature;
 
-pub use addresses::*;
-pub use addresses::normal::*;
-pub use addresses::multi_sig::*;
-pub use addresses::shareholders::*;
 pub use addresses::contract::*;
+pub use addresses::multi_sig::*;
+pub use addresses::normal::*;
+pub use addresses::shareholders::*;
+pub use addresses::*;
 pub use balance::*;
-pub use signature::*;
 pub use multi_sig::*;
-pub use shares::*;
 pub use share_map::*;
+pub use shares::*;
+pub use signature::*;
