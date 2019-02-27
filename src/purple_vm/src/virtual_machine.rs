@@ -273,7 +273,7 @@ impl Vm {
                         // Fetch arguments
                         let frame = self.call_stack.peek_mut();
                         let (_, argv) =
-                            fetch_argv(frame, &mut self.operand_stack, ip, fun, arity as usize);
+                            fetch_argv(frame, &mut self.operand_stack, ip, &mut self.heap, fun, arity as usize);
 
                         // Push arguments to operand stack
                         for arg in argv {
@@ -302,6 +302,7 @@ impl Vm {
                             self.call_stack.peek_mut(),
                             &mut self.operand_stack,
                             ip,
+                            &mut self.heap,
                             fun,
                             arity as usize,
                         );
@@ -756,6 +757,7 @@ fn fetch_argv(
     frame: &mut Frame<VmValue>,
     operand_stack: &mut Stack<VmValue>,
     ip: &mut Address,
+    heap: &mut Vec<Vec<Option<VmValue>>>,
     fun: &Function,
     arity: usize,
 ) -> (Vec<VmType>, Vec<VmValue>) {
@@ -816,6 +818,22 @@ fn fetch_argv(
                                 panic!("Popped value that is not i32!");
                             }
                         },
+                        Some(Instruction::i32Load) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::I32(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i32!");
+                            }
+                        },
                         Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
                         _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
@@ -844,6 +862,22 @@ fn fetch_argv(
                         },
                         Some(Instruction::PopOperand) => {
                             let value = operand_stack.pop();
+
+                            if let VmValue::I64(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i64!");
+                            }
+                        },
+                        Some(Instruction::i64Load) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
 
                             if let VmValue::I64(_) = value {
                                 argv.push(value);
@@ -886,6 +920,22 @@ fn fetch_argv(
                                 panic!("Popped value that is not f32!");
                             }
                         },
+                        Some(Instruction::f32Load) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::F32(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not f32!");
+                            }
+                        },
                         Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
                         _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
@@ -914,6 +964,22 @@ fn fetch_argv(
                         },
                         Some(Instruction::PopOperand) => {
                             let value = operand_stack.pop();
+
+                            if let VmValue::F64(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not f64!");
+                            }
+                        },
+                        Some(Instruction::f64Load) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
 
                             if let VmValue::F64(_) = value {
                                 argv.push(value);
@@ -954,6 +1020,22 @@ fn fetch_argv(
                             },
                             Some(Instruction::PopOperand) => {
                                 let value = operand_stack.pop();
+
+                                if let VmValue::I32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
 
                                 if let VmValue::I32(_) = value {
                                     argv.push(value);
@@ -1006,6 +1088,22 @@ fn fetch_argv(
                                     panic!("Popped value that is not i32!");
                                 }
                             },
+                            Some(Instruction::i32Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
                             Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
@@ -1044,6 +1142,22 @@ fn fetch_argv(
                             },
                             Some(Instruction::PopOperand) => {
                                 let value = operand_stack.pop();
+
+                                if let VmValue::I32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
 
                                 if let VmValue::I32(_) = value {
                                     argv.push(value);
@@ -1096,6 +1210,22 @@ fn fetch_argv(
                                     panic!("Popped value that is not i64!");
                                 }
                             },
+                            Some(Instruction::i64Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
                             Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
@@ -1134,6 +1264,22 @@ fn fetch_argv(
                             },
                             Some(Instruction::PopOperand) => {
                                 let value = operand_stack.pop();
+
+                                if let VmValue::I64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
 
                                 if let VmValue::I64(_) = value {
                                     argv.push(value);
@@ -1186,6 +1332,22 @@ fn fetch_argv(
                                     panic!("Popped value that is not i64!");
                                 }
                             },
+                            Some(Instruction::i64Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
                             Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
@@ -1224,6 +1386,22 @@ fn fetch_argv(
                             },
                             Some(Instruction::PopOperand) => {
                                 let value = operand_stack.pop();
+
+                                if let VmValue::F32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f32!");
+                                }
+                            },
+                            Some(Instruction::f32Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
 
                                 if let VmValue::F32(_) = value {
                                     argv.push(value);
@@ -1276,6 +1454,22 @@ fn fetch_argv(
                                     panic!("Popped value that is not f32!");
                                 }
                             },
+                            Some(Instruction::f32Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::F32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f32!");
+                                }
+                            },
                             Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
@@ -1314,6 +1508,22 @@ fn fetch_argv(
                             },
                             Some(Instruction::PopOperand) => {
                                 let value = operand_stack.pop();
+
+                                if let VmValue::F32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f32!");
+                                }
+                            },
+                            Some(Instruction::f32Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
 
                                 if let VmValue::F32(_) = value {
                                     argv.push(value);
@@ -1366,6 +1576,22 @@ fn fetch_argv(
                                     panic!("Popped value that is not f64!");
                                 }
                             },
+                            Some(Instruction::f64Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::F64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f64!");
+                                }
+                            },
                             Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
@@ -1411,6 +1637,22 @@ fn fetch_argv(
                                     panic!("Popped value that is not f64!");
                                 }
                             },
+                            Some(Instruction::f64Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::F64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f64!");
+                                }
+                            },
                             Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
@@ -1449,6 +1691,22 @@ fn fetch_argv(
                             },
                             Some(Instruction::PopOperand) => {
                                 let value = operand_stack.pop();
+
+                                if let VmValue::F64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not f64!");
+                                }
+                            },
+                            Some(Instruction::f64Load) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
 
                                 if let VmValue::F64(_) = value {
                                     argv.push(value);
@@ -2507,7 +2765,7 @@ mod tests {
             Instruction::Begin.repr(),
             0x00,                                 // 0 Arity
             Instruction::Nop.repr(),
-            Instruction::PushLocal.repr(),
+            Instruction::PushOperand.repr(),
             0x01,
             0x00,
             Instruction::i32Const.repr(),
@@ -2515,25 +2773,44 @@ mod tests {
             0x00,
             0x00,
             0x00,
+            Instruction::i32Store.repr(),
+            0x00,
+            0x00,
             Instruction::Loop.repr(),
-            0x01,
+            0x00,
             Instruction::Call.repr(),
             0x00,                                // Fun idx (16 bits)
             0x01,
+            Instruction::PushLocal.repr(),
+            0x01,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Load.repr(),         // Load element at x, y = 0x00, 0x00
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
             Instruction::PushOperand.repr(),
             0x02,
             bitmask,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            Instruction::i32Load.repr(),         // Load element at x, y = 0x00, 0x00
-            0x00,
-            0x00,
+            Instruction::PopLocal.repr(),
             0x00,                                // Loop 4 times
             0x00,
             0x00,
             0x04,
             Instruction::BreakIf.repr(),
             Instruction::Eq.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            Instruction::i32Store.repr(),
+            0x00,
+            0x00,
             Instruction::End.repr(),
             Instruction::End.repr(),
         ];
@@ -2547,7 +2824,9 @@ mod tests {
             bitmask,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            Instruction::PopLocal.repr(),
+            Instruction::i32Load.repr(),        // Load element at x, y = 0x00, 0x00
+            0x00,
+            0x00,
             0x00,
             0x00,
             0x00,
@@ -2570,11 +2849,11 @@ mod tests {
         };
 
         let f2 = Function {
-            arity: 1,
+            arity: 0,
             name: "debug_test2".to_owned(),
             block: increment_block,
-            return_type: Some(VmType::I32),
-            arguments: vec![VmType::I32],
+            return_type: None,
+            arguments: vec![],
         };
 
         let module = Module {
