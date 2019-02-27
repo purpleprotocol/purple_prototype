@@ -25,7 +25,7 @@ use frame::Frame;
 use gas::Gas;
 use instruction_set::{Instruction, COMP_OPS};
 use module::Module;
-use patricia_trie::{TrieDBMut, TrieMut};
+use patricia_trie::TrieDBMut;
 use persistence::{BlakeDbHasher, Codec};
 use primitives::control_flow::CfOperator;
 use primitives::r#type::VmType;
@@ -41,15 +41,21 @@ pub struct Vm {
     modules: Vec<Module>,
     call_stack: Stack<Frame<VmValue>>,
     operand_stack: Stack<VmValue>,
-    heap: Vec<Vec<VmValue>>
+    heap: Vec<Vec<Option<VmValue>>>,
 }
 
 impl Vm {
     pub fn new() -> Vm {
+        let mut heap = Vec::with_capacity(256);
+
+        for _ in 0..256 {
+            heap.push(vec![None; 256]);
+        }
+
         Vm {
             modules: Vec::new(),
             ip: None,
-            heap: Vec::new(),
+            heap: heap,
             call_stack: Stack::<Frame<VmValue>>::new(),
             operand_stack: Stack::<VmValue>::new(),
         }
@@ -462,9 +468,9 @@ impl Vm {
                         ip.increment();
                     }
                     Some(Instruction::i32Store)
-                  | Some(Instruction::i64Store)
-                  | Some(Instruction::f32Store)
-                  | Some(Instruction::f64Store) => {
+                    | Some(Instruction::i64Store)
+                    | Some(Instruction::f32Store)
+                    | Some(Instruction::f64Store) => {
                         if self.operand_stack.is_empty() {
                             panic!("The operand stack cannot be empty when calling a store instruction!");
                         }
@@ -477,9 +483,30 @@ impl Vm {
                         let x = fun.fetch(ip.ip) as usize;
                         ip.increment();
                         let y = fun.fetch(ip.ip) as usize;
-                        
+
                         // Store to heap
-                        self.heap[x][y] = elem;
+                        self.heap[x][y] = Some(elem);
+
+                        ip.increment();
+                    }
+                    Some(Instruction::i32Load)
+                    | Some(Instruction::i64Load)
+                    | Some(Instruction::f32Load)
+                    | Some(Instruction::f64Load) => {
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Fetch elem
+                        let elem = self.heap[x][y].unwrap();
+
+                        // Set heap location to `None`
+                        self.heap[x][y] = None;
+
+                        // Push element to operand stack
+                        self.operand_stack.push(elem);
 
                         ip.increment();
                     }
@@ -2528,6 +2555,8 @@ mod tests {
             Instruction::Add.repr(),
             Instruction::i32Store.repr(),        // Store result to heap at x, y = 0x00, 0x00
             0x00,
+            0x00,
+            Instruction::Return.repr(),
             0x00,
             Instruction::End.repr(),
         ];
