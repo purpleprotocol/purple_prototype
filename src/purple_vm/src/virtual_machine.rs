@@ -41,6 +41,7 @@ pub struct Vm {
     modules: Vec<Module>,
     call_stack: Stack<Frame<VmValue>>,
     operand_stack: Stack<VmValue>,
+    heap: Vec<Vec<VmValue>>
 }
 
 impl Vm {
@@ -48,6 +49,7 @@ impl Vm {
         Vm {
             modules: Vec::new(),
             ip: None,
+            heap: Vec::new(),
             call_stack: Stack::<Frame<VmValue>>::new(),
             operand_stack: Stack::<VmValue>::new(),
         }
@@ -108,11 +110,11 @@ impl Vm {
                 let fun = &module.functions[ip.fun_idx];
                 let op = fun.fetch(ip.ip);
 
-                // if let Some(op) = Instruction::from_repr(op) {
-                //     println!("DEBUG OP: {:?}", op);
-                // }
+                if let Some(op) = Instruction::from_repr(op) {
+                    println!("DEBUG OP: {:?}", op);
+                }
 
-                // println!("DEBUG IP: {}, FUN IDX: {}", ip.ip, ip.fun_idx);
+                println!("DEBUG IP: {}, FUN IDX: {}", ip.ip, ip.fun_idx);
 
                 match Instruction::from_repr(op) {
                     Some(Instruction::Halt) => {
@@ -457,6 +459,28 @@ impl Vm {
                     }
                     Some(Instruction::Add) => {
                         perform_addition(Instruction::Add, &mut self.operand_stack);
+                        ip.increment();
+                    }
+                    Some(Instruction::i32Store)
+                  | Some(Instruction::i64Store)
+                  | Some(Instruction::f32Store)
+                  | Some(Instruction::f64Store) => {
+                        if self.operand_stack.is_empty() {
+                            panic!("The operand stack cannot be empty when calling a store instruction!");
+                        }
+
+                        // Fetch stored item
+                        let elem = self.operand_stack.pop();
+
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+                        
+                        // Store to heap
+                        self.heap[x][y] = elem;
+
                         ip.increment();
                     }
                     _ => unimplemented!(),
@@ -2101,6 +2125,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn it_works_with_if_else_arguments() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
@@ -2112,19 +2137,19 @@ mod tests {
 
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
-            0x00, // 0 Arity
+            0x00,                             // 0 Arity
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
-            0x03, // 3 Arity
+            0x03,                             // 3 Arity
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i64Const.repr(),
             Instruction::f32Const.repr(),
-            0x00, // i32 value
+            0x00,                             // i32 value
             0x00,
             0x00,
             0x05,
-            0x00, // i64 value
+            0x00,                             // i64 value
             0x00,
             0x00,
             0x00,
@@ -2136,7 +2161,7 @@ mod tests {
             0x00,
             0x00,
             0x5f,
-            Instruction::PickLocal.repr(), // Dupe elems on stack 11 times (usize is 16bits)
+            Instruction::PickLocal.repr(),   // Dupe elems on stack 11 times (usize is 16bits)
             0x00,
             0x00,
             Instruction::PickLocal.repr(),
@@ -2154,7 +2179,7 @@ mod tests {
             Instruction::PickLocal.repr(),
             0x00,
             0x02,
-            Instruction::PushLocal.repr(), // Push loop counter to locals stack
+            Instruction::PushLocal.repr(),   // Push loop counter to locals stack
             0x01,
             0x00,
             Instruction::i32Const.repr(),
@@ -2163,8 +2188,8 @@ mod tests {
             0x00,
             0x00,
             Instruction::Loop.repr(),
-            0x05, // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
-            Instruction::PickLocal.repr(), // Dupe counter
+            0x05,                            // 5 arity. The latest 5 items on the caller stack will be pushed to the new frame
+            Instruction::PickLocal.repr(),   // Dupe counter
             0x00,
             0x04,
             Instruction::PushOperand.repr(),
@@ -2172,8 +2197,8 @@ mod tests {
             bitmask,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            Instruction::PopLocal.repr(), // Push counter to operand stack
-            0x00,                         // Loop 5 times
+            Instruction::PopLocal.repr(),    // Push counter to operand stack
+            0x00,                            // Loop 5 times
             0x00,
             0x00,
             0x04,
@@ -2183,10 +2208,10 @@ mod tests {
             Instruction::PickLocal.repr(),
             0x00,
             0x01,
-            Instruction::If.repr(), // Break if items on the operand stack are equal
-            0x02,                   // Arity 0
+            Instruction::If.repr(),          // Break if items on the operand stack are equal
+            0x02,                            // Arity 0
             Instruction::Eq.repr(),
-            Instruction::Break.repr(), // Break loop
+            Instruction::Break.repr(),       // Break loop
             Instruction::End.repr(),
             Instruction::Else.repr(),
             0x02,
@@ -2204,7 +2229,7 @@ mod tests {
             0x00,
             0x01,
             Instruction::Add.repr(),
-            Instruction::PushLocal.repr(), // Move counter from operand stack back to call stack
+            Instruction::PushLocal.repr(),  // Move counter from operand stack back to call stack
             0x01,
             bitmask, // Reference bits
             Instruction::i32Const.repr(),
@@ -2236,6 +2261,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn it_executes_correctly_with_calls_and_returns() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
@@ -2247,7 +2273,7 @@ mod tests {
 
         let main_block: Vec<u8> = vec![
             Instruction::Begin.repr(),
-            0x00, // 0 Arity
+            0x00,                               // 0 Arity
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x01,
@@ -2260,7 +2286,7 @@ mod tests {
             Instruction::Loop.repr(),
             0x01,
             Instruction::Call.repr(),
-            0x00, // Fun idx (16 bits)
+            0x00,                               // Fun idx (16 bits)
             0x01,
             Instruction::PickLocal.repr(),
             0x00,
@@ -2271,7 +2297,7 @@ mod tests {
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
             Instruction::PopLocal.repr(),
-            0x00, // Loop 4 times
+            0x00,                               // Loop 4 times
             0x00,
             0x00,
             0x04,
@@ -2283,9 +2309,9 @@ mod tests {
 
         let increment_block: Vec<u8> = vec![
             Instruction::Begin.repr(),
-            0x00, // 0 Arity
+            0x00,                               // 0 Arity
             Instruction::Nop.repr(),
-            Instruction::PushOperand.repr(), // Increment given arg by 1
+            Instruction::PushOperand.repr(),    // Increment given arg by 1
             0x02,
             bitmask,
             Instruction::i32Const.repr(),
@@ -2336,6 +2362,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn it_executes_correctly_with_return_from_nested_block() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
@@ -2347,7 +2374,7 @@ mod tests {
 
         let main_block: Vec<u8> = vec![
             Instruction::Begin.repr(),
-            0x00, // 0 Arity
+            0x00,                                // 0 Arity
             Instruction::Nop.repr(),
             Instruction::PushLocal.repr(),
             0x01,
@@ -2360,7 +2387,7 @@ mod tests {
             Instruction::Loop.repr(),
             0x01,
             Instruction::Call.repr(),
-            0x00, // Fun idx (16 bits)
+            0x00,                               // Fun idx (16 bits)
             0x01,
             Instruction::PickLocal.repr(),
             0x00,
@@ -2371,7 +2398,7 @@ mod tests {
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
             Instruction::PopLocal.repr(),
-            0x00, // Loop 4 times
+            0x00,                              // Loop 4 times
             0x00,
             0x00,
             0x04,
@@ -2385,7 +2412,7 @@ mod tests {
             Instruction::Begin.repr(),
             0x00, // 0 Arity
             Instruction::Nop.repr(),
-            Instruction::PushOperand.repr(), // Increment given arg by 1
+            Instruction::PushOperand.repr(),   // Increment given arg by 1
             0x02,
             bitmask,
             Instruction::i32Const.repr(),
@@ -2406,6 +2433,102 @@ mod tests {
             Instruction::Return.repr(),
             0x01,
             Instruction::End.repr(),
+            Instruction::End.repr(),
+        ];
+
+        let f1 = Function {
+            arity: 0,
+            name: "debug_test1".to_owned(),
+            block: main_block,
+            return_type: None,
+            arguments: vec![],
+        };
+
+        let f2 = Function {
+            arity: 1,
+            name: "debug_test2".to_owned(),
+            block: increment_block,
+            return_type: Some(VmType::I32),
+            arguments: vec![VmType::I32],
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![f1, f2],
+            imports: vec![],
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap())
+            .unwrap();
+
+        assert!(true);
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_executes_correctly_with_loading_heap_value_set_from_fun_call() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut bitmask: u8 = 0;
+
+        bitmask.set(0, true);
+
+        let main_block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                                 // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushLocal.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x01,
+            Instruction::Call.repr(),
+            0x00,                                // Fun idx (16 bits)
+            0x01,
+            Instruction::PushOperand.repr(),
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Load.repr(),         // Load element at x, y = 0x00, 0x00
+            0x00,
+            0x00,
+            0x00,                                // Loop 4 times
+            0x00,
+            0x00,
+            0x04,
+            Instruction::BreakIf.repr(),
+            Instruction::Eq.repr(),
+            Instruction::End.repr(),
+            Instruction::End.repr(),
+        ];
+
+        let increment_block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                               // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),    // Increment given arg by 1
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::i32Store.repr(),        // Store result to heap at x, y = 0x00, 0x00
+            0x00,
+            0x00,
             Instruction::End.repr(),
         ];
 
