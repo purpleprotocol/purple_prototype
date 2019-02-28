@@ -272,8 +272,14 @@ impl Vm {
 
                         // Fetch arguments
                         let frame = self.call_stack.peek_mut();
-                        let (_, argv) =
-                            fetch_argv(frame, &mut self.operand_stack, ip, &mut self.heap, fun, arity as usize);
+                        let (_, argv) = fetch_argv(
+                            frame,
+                            &mut self.operand_stack,
+                            ip,
+                            &mut self.heap,
+                            fun,
+                            arity as usize,
+                        );
 
                         // Push arguments to operand stack
                         for arg in argv {
@@ -340,6 +346,20 @@ impl Vm {
 
                         // Pick item on locals stack
                         frame.locals.pick(idx as usize);
+
+                        ip.increment();
+                    }
+                    Some(Instruction::PickOperand) => {
+                        ip.increment();
+
+                        // The next two bytes after a `PickOperand`
+                        // instruction are the given index.
+                        let bytes: Vec<u8> = fetch_bytes(2, ip, fun);
+                        let mut cursor = Cursor::new(&bytes);
+                        let idx: u16 = cursor.read_u16::<BigEndian>().unwrap();
+
+                        // Pick item on operand stack
+                        self.operand_stack.pick(idx as usize);
 
                         ip.increment();
                     }
@@ -490,6 +510,94 @@ impl Vm {
 
                         ip.increment();
                     }
+
+                    // 8bits store ops
+                    Some(Instruction::i32Store8) | Some(Instruction::i64Store8) => {
+                        if self.operand_stack.is_empty() {
+                            panic!("The operand stack cannot be empty when calling a store instruction!");
+                        }
+
+                        // Fetch stored item
+                        let elem = self.operand_stack.pop();
+                        
+                        if let VmValue::I32(inner) = elem {
+                            if inner > std::u8::MAX as i32 || inner < std::i8::MIN as i32 {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot store a value other than i32!");
+                        }
+
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Store to heap
+                        self.heap[x][y] = Some(elem);
+
+                        ip.increment();
+                    }
+
+                    // 16bits store ops
+                    Some(Instruction::i32Store16) | Some(Instruction::i64Store16) => {
+                        if self.operand_stack.is_empty() {
+                            panic!("The operand stack cannot be empty when calling a store instruction!");
+                        }
+
+                        // Fetch stored item
+                        let elem = self.operand_stack.pop();
+                        
+                        if let VmValue::I32(inner) = elem {
+                            if inner > std::u16::MAX as i32 || inner < std::i16::MIN as i32 {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot store a value other than i32!");
+                        }
+
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Store to heap
+                        self.heap[x][y] = Some(elem);
+
+                        ip.increment();
+                    }
+
+                    // 32bits store
+                    Some(Instruction::i64Store32) => {
+                        if self.operand_stack.is_empty() {
+                            panic!("The operand stack cannot be empty when calling a store instruction!");
+                        }
+
+                        // Fetch stored item
+                        let elem = self.operand_stack.pop();
+                        
+                        if let VmValue::I64(inner) = elem {
+                            if inner > std::u32::MAX as i64 || inner < std::i32::MIN as i64 {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot store a value other than i64!");
+                        }
+
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Store to heap
+                        self.heap[x][y] = Some(elem);
+
+                        ip.increment();
+                    }
+
                     Some(Instruction::i32Load)
                     | Some(Instruction::i64Load)
                     | Some(Instruction::f32Load)
@@ -834,7 +942,7 @@ fn fetch_argv(
                                 panic!("Popped value that is not i32!");
                             }
                         },
-                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                         _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
                 } else {
@@ -885,7 +993,7 @@ fn fetch_argv(
                                 panic!("Popped value that is not i64!");
                             }
                         },
-                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                         _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
                 } else {
@@ -936,7 +1044,7 @@ fn fetch_argv(
                                 panic!("Popped value that is not f32!");
                             }
                         },
-                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                         _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
                 } else {
@@ -987,7 +1095,7 @@ fn fetch_argv(
                                 panic!("Popped value that is not f64!");
                             }
                         },
-                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                        Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                         _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
                 } else {
@@ -1043,7 +1151,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not i32!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -1104,7 +1212,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not i32!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -1165,7 +1273,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not i32!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -1226,7 +1334,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not i64!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -1287,7 +1395,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not i64!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -1348,7 +1456,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not i64!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -1409,7 +1517,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not f32!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -1470,7 +1578,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not f32!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -1531,7 +1639,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not f32!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -1592,7 +1700,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not f64!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -1653,7 +1761,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not f64!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -1714,7 +1822,7 @@ fn fetch_argv(
                                     panic!("Popped value that is not f64!");
                                 }
                             },
-                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand`! Got: `{:?}` ", op)),
+                            Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
@@ -2516,7 +2624,7 @@ mod tests {
             Instruction::Add.repr(),
             Instruction::PushLocal.repr(),  // Move counter from operand stack back to call stack
             0x01,
-            bitmask, // Reference bits
+            bitmask,                        // Reference bits
             Instruction::i32Const.repr(),
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
@@ -2867,5 +2975,269 @@ mod tests {
             .unwrap();
 
         assert!(true);
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_executes_correctly_with_lower_sized_integer_interpretations() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut bitmask: u8 = 0;
+
+        bitmask.set(0, true);
+
+        let main_block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                                          // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::i32Store8.repr(),
+            0x00,
+            0x00,
+            Instruction::Loop.repr(),
+            0x00,
+            Instruction::Call.repr(),
+            0x00,                                         // Fun idx (16 bits)
+            0x01,
+            Instruction::PushLocal.repr(),
+            0x01,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Load8Unsigned.repr(),         // Load element at x, y = 0x00, 0x00
+            0x00,
+            0x00,
+            Instruction::PickLocal.repr(),
+            0x00,
+            0x00,
+            Instruction::PushOperand.repr(),
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            0x00,                                        // Loop 4 times
+            0x00,   
+            0x00,
+            0x04,
+            Instruction::BreakIf.repr(),
+            Instruction::Eq.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::PopLocal.repr(),
+            Instruction::i32Store8.repr(),
+            0x00,
+            0x00,
+            Instruction::End.repr(),
+            Instruction::End.repr(),
+        ];
+
+        let increment_block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                                      // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),           // Increment given arg by 1
+            0x02,
+            bitmask,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Load8Unsigned.repr(),               // Load element at x, y = 0x00, 0x00
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::i32Store8.repr(),             // Store result to heap at x, y = 0x00, 0x00
+            0x00,
+            0x00,
+            Instruction::Return.repr(),
+            0x00,
+            Instruction::End.repr(),
+        ];
+
+        let f1 = Function {
+            arity: 0,
+            name: "debug_test1".to_owned(),
+            block: main_block,
+            return_type: None,
+            arguments: vec![],
+        };
+
+        let f2 = Function {
+            arity: 0,
+            name: "debug_test2".to_owned(),
+            block: increment_block,
+            return_type: None,
+            arguments: vec![],
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![f1, f2],
+            imports: vec![],
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap())
+            .unwrap();
+
+        assert!(true);
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_returns_correctly_on_overflow_1() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x07,
+            0xff,
+            0xff,
+            0xff,
+            Instruction::i32Store8.repr(),
+            0x00,
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: None,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        let result = vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap());
+
+        assert_eq!(result, Err(VmError::Overflow));
+    }
+
+     #[test]
+    #[rustfmt::skip]
+    fn it_returns_correctly_on_overflow_2() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x07,
+            0xff,
+            0xff,
+            0xff,
+            Instruction::i32Store16.repr(),
+            0x00,
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: None,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        let result = vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap());
+
+        assert_eq!(result, Err(VmError::Overflow));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_returns_correctly_on_overflow_3() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x07,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            Instruction::i64Store32.repr(),
+            0x00,
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: None,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        let result = vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap());
+
+        assert_eq!(result, Err(VmError::Overflow));
     }
 }

@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum VmError {
     /// The module is not loaded.
     NoModule,
@@ -37,15 +37,6 @@ pub enum VmError {
     /// The module is already loaded.
     AlreadyLoaded,
 
-    /// I32 Overflow
-    I32Overflow,
-
-    /// I64 Overflow
-    I64Overflow,
-
-    /// F32 Overflow
-    F32Overflow,
-
-    /// F64 Overflow
-    F64Overflow,
+    /// Integer overflow
+    Overflow,
 }

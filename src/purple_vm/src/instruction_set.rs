@@ -42,8 +42,9 @@ pub enum Instruction {
     PeekLocal             = 0x0e,
 
     // Operand stack 
-    PushOperand           = 0x10,
-    PopOperand            = 0x11,
+    PushOperand           = 0x0f,
+    PopOperand            = 0x10,
+    PickOperand           = 0x11,
     PeekOperand           = 0x12,
 
     // State
@@ -193,18 +194,16 @@ pub enum Instruction {
     f32Reinterpreti32     = 0x9f,
     f64Reinterpreti64     = 0xa0,
 
-    // Vm interface
-    GcStart               = 0xb1,
-    MemoryGrow            = 0xb2,
-
     // Blockchain api
-    GetBalance            = 0xf2,
-    SendCurrency          = 0xf3,
-    Mint                  = 0xf4,
-    Burn                  = 0xf5,
-    CreateContract        = 0xf6,
-    CreateCurrency        = 0xf7,
-    CreateMintable        = 0xf8,
+    AssetInfo             = 0xf0,
+    GetBalance            = 0xf1,
+    SendCurrency          = 0xf2,
+    Mint                  = 0xf3,
+    Burn                  = 0xf4,
+    CreateContract        = 0xf5,
+    CreateCurrency        = 0xf6,
+    CreateMintable        = 0xf7,
+    CreateUnique          = 0xf8,
     CallerAddress         = 0xf9,
     CallCurrency          = 0xfa,
     RandomNumber          = 0xfb,
@@ -237,7 +236,8 @@ impl Instruction {
             Instruction::Loop                   => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::End                    => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::PushOperand            => DEFAULT_TRANSITIONS.to_vec(),  
-            Instruction::PopOperand             => DEFAULT_TRANSITIONS.to_vec(),  
+            Instruction::PopOperand             => DEFAULT_TRANSITIONS.to_vec(), 
+            Instruction::PickOperand            => DEFAULT_TRANSITIONS.to_vec(), 
             Instruction::PushLocal              => DEFAULT_TRANSITIONS.to_vec(),  
             Instruction::PopLocal               => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::PickLocal              => DEFAULT_TRANSITIONS.to_vec(),  
@@ -349,17 +349,15 @@ impl Instruction {
             Instruction::f32Reinterpreti32      => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::f64Reinterpreti64      => DEFAULT_TRANSITIONS.to_vec(),
 
-            // Vm interface
-            Instruction::GcStart                => DEFAULT_TRANSITIONS.to_vec(),
-            Instruction::MemoryGrow             => DEFAULT_TRANSITIONS.to_vec(),
-
             // Blockchain api
+            Instruction::AssetInfo              => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::GetBalance             => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::SendCurrency           => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::Mint                   => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::Burn                   => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::CreateContract         => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::CreateCurrency         => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::CreateUnique           => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::CreateMintable         => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::CallerAddress          => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::CallCurrency           => DEFAULT_TRANSITIONS.to_vec(),
@@ -433,6 +431,7 @@ pub const OPS_LIST: &'static [Instruction] = &[
     // Operand stack 
     Instruction::PushOperand           ,
     Instruction::PopOperand            ,
+    Instruction::PickOperand           ,
 
     // State
     Instruction::GetState              ,
@@ -539,10 +538,6 @@ pub const OPS_LIST: &'static [Instruction] = &[
     Instruction::i64Reinterpretf64     ,
     Instruction::f32Reinterpreti32     ,
     Instruction::f64Reinterpreti64     ,
-
-    // Vm interface
-    Instruction::GcStart               ,
-    Instruction::MemoryGrow            ,
 
     // Blockchain api
     Instruction::GetBalance            ,
