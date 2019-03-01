@@ -272,7 +272,7 @@ impl Vm {
 
                         // Fetch arguments
                         let frame = self.call_stack.peek_mut();
-                        let (_, argv) = fetch_argv(
+                        let result = fetch_argv(
                             frame,
                             &mut self.operand_stack,
                             ip,
@@ -281,12 +281,17 @@ impl Vm {
                             arity as usize,
                         );
 
-                        // Push arguments to operand stack
-                        for arg in argv {
-                            self.operand_stack.push(arg);
-                        }
+                        match result {
+                            Ok((_, argv)) => {
+                                // Push arguments to operand stack
+                                for arg in argv {
+                                    self.operand_stack.push(arg);
+                                }
 
-                        ip.increment();
+                                ip.increment();
+                            },
+                            Err(err) => return Err(err)
+                        }
                     }
                     Some(Instruction::PushLocal) => {
                         ip.increment();
@@ -304,7 +309,7 @@ impl Vm {
                         }
 
                         // Fetch arguments
-                        let (_, argv) = fetch_argv(
+                        let result = fetch_argv(
                             self.call_stack.peek_mut(),
                             &mut self.operand_stack,
                             ip,
@@ -312,14 +317,20 @@ impl Vm {
                             fun,
                             arity as usize,
                         );
-                        let frame = self.call_stack.peek_mut();
 
-                        // Push arguments to locals stack
-                        for arg in argv {
-                            frame.locals.push(arg);
+                        match result {
+                            Ok((_, argv)) => {
+                                let frame = self.call_stack.peek_mut();
+
+                                // Push arguments to locals stack
+                                for arg in argv {
+                                    frame.locals.push(arg);
+                                }
+
+                                ip.increment();
+                            },
+                            Err(err) => return Err(err)
                         }
-
-                        ip.increment();
                     }
                     Some(Instruction::PopOperand) => {
                         self.operand_stack.pop();
@@ -619,6 +630,276 @@ impl Vm {
 
                         ip.increment();
                     }
+
+                    Some(Instruction::i32Load8Signed) => {
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Fetch elem
+                        let elem = self.heap[x][y].unwrap();
+
+                        if let VmValue::I32(inner) = elem {
+                            if inner > std::i8::MAX as i32 || inner < std::i8::MIN as i32 {
+                                // Set heap location to `None`
+                                self.heap[x][y] = None;
+
+                                // Push element to operand stack
+                                self.operand_stack.push(elem);
+
+                                ip.increment();
+                            } else {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot receive value other than i32!");
+                        }
+                    }
+
+                    Some(Instruction::i32Load8Unsigned) => {
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Fetch elem
+                        let elem = self.heap[x][y].unwrap();
+
+                        if let VmValue::I32(inner) = elem {
+                            if inner > std::u8::MAX as i32 || inner < std::u8::MIN as i32 {
+                                // Set heap location to `None`
+                                self.heap[x][y] = None;
+
+                                // Push element to operand stack
+                                self.operand_stack.push(elem);
+
+                                ip.increment();
+                            } else {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot receive value other than i32!");
+                        }
+                    }
+
+                    Some(Instruction::i32Load16Signed) => {
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Fetch elem
+                        let elem = self.heap[x][y].unwrap();
+
+                        if let VmValue::I32(inner) = elem {
+                            if inner > std::i16::MAX as i32 || inner < std::i16::MIN as i32 {
+                                // Set heap location to `None`
+                                self.heap[x][y] = None;
+
+                                // Push element to operand stack
+                                self.operand_stack.push(elem);
+
+                                ip.increment();
+                            } else {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot receive value other than i32!");
+                        }
+                    }
+
+                    Some(Instruction::i32Load16Unsigned) => {
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Fetch elem
+                        let elem = self.heap[x][y].unwrap();
+
+                        if let VmValue::I32(inner) = elem {
+                            if inner > std::u16::MAX as i32 || inner < std::u16::MIN as i32 {
+                                // Set heap location to `None`
+                                self.heap[x][y] = None;
+
+                                // Push element to operand stack
+                                self.operand_stack.push(elem);
+
+                                ip.increment();
+                            } else {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot receive value other than i32!");
+                        }
+                    }
+
+                    Some(Instruction::i64Load8Signed) => {
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Fetch elem
+                        let elem = self.heap[x][y].unwrap();
+
+                        if let VmValue::I64(inner) = elem {
+                            if inner > std::i8::MAX as i64 || inner < std::i8::MIN as i64 {
+                                // Set heap location to `None`
+                                self.heap[x][y] = None;
+
+                                // Push element to operand stack
+                                self.operand_stack.push(elem);
+
+                                ip.increment();
+                            } else {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot receive value other than i64!");
+                        }
+                    }
+
+                    Some(Instruction::i64Load8Unsigned) => {
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Fetch elem
+                        let elem = self.heap[x][y].unwrap();
+
+                        if let VmValue::I64(inner) = elem {
+                            if inner > std::u8::MAX as i64 || inner < std::u8::MIN as i64 {
+                                // Set heap location to `None`
+                                self.heap[x][y] = None;
+
+                                // Push element to operand stack
+                                self.operand_stack.push(elem);
+
+                                ip.increment();
+                            } else {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot receive value other than i64!");
+                        }
+                    }
+
+                    Some(Instruction::i64Load16Signed) => {
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Fetch elem
+                        let elem = self.heap[x][y].unwrap();
+
+                        if let VmValue::I64(inner) = elem {
+                            if inner > std::i16::MAX as i64 || inner < std::i16::MIN as i64 {
+                                // Set heap location to `None`
+                                self.heap[x][y] = None;
+
+                                // Push element to operand stack
+                                self.operand_stack.push(elem);
+
+                                ip.increment();
+                            } else {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot receive value other than i64!");
+                        }
+                    }
+
+                    Some(Instruction::i64Load16Unsigned) => {
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Fetch elem
+                        let elem = self.heap[x][y].unwrap();
+
+                        if let VmValue::I64(inner) = elem {
+                            if inner > std::u16::MAX as i64 || inner < std::u16::MIN as i64 {
+                                // Set heap location to `None`
+                                self.heap[x][y] = None;
+
+                                // Push element to operand stack
+                                self.operand_stack.push(elem);
+
+                                ip.increment();
+                            } else {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot receive value other than i64!");
+                        }
+                    }
+
+                    Some(Instruction::i64Load32Signed) => {
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Fetch elem
+                        let elem = self.heap[x][y].unwrap();
+
+                        if let VmValue::I64(inner) = elem {
+                            if inner > std::i32::MAX as i64 || inner < std::i32::MIN as i64 {
+                                // Set heap location to `None`
+                                self.heap[x][y] = None;
+
+                                // Push element to operand stack
+                                self.operand_stack.push(elem);
+
+                                ip.increment();
+                            } else {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot receive value other than i64!");
+                        }
+                    }
+
+                    Some(Instruction::i64Load32Unsigned) => {
+                        // Fetch coordinates
+                        ip.increment();
+                        let x = fun.fetch(ip.ip) as usize;
+                        ip.increment();
+                        let y = fun.fetch(ip.ip) as usize;
+
+                        // Fetch elem
+                        let elem = self.heap[x][y].unwrap();
+
+                        if let VmValue::I64(inner) = elem {
+                            if inner > std::u32::MAX as i64 || inner < std::u32::MIN as i64 {
+                                // Set heap location to `None`
+                                self.heap[x][y] = None;
+
+                                // Push element to operand stack
+                                self.operand_stack.push(elem);
+
+                                ip.increment();
+                            } else {
+                                return Err(VmError::Overflow);
+                            }
+                        } else {
+                            panic!("Cannot receive value other than i64!");
+                        }
+                    }
                     _ => unimplemented!(),
                 }
             } else {
@@ -868,7 +1149,7 @@ fn fetch_argv(
     heap: &mut Vec<Vec<Option<VmValue>>>,
     fun: &Function,
     arity: usize,
-) -> (Vec<VmType>, Vec<VmValue>) {
+) -> Result<(Vec<VmType>, Vec<VmValue>), VmError> {
     let mut argv_types: Vec<(VmType, ArgLocation)> = Vec::with_capacity(arity);
     let mut argv: Vec<VmValue> = Vec::with_capacity(arity);
 
@@ -942,6 +1223,86 @@ fn fetch_argv(
                                 panic!("Popped value that is not i32!");
                             }
                         },
+                        Some(Instruction::i32Load8Signed) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::I32(inner) = value {
+                                if inner > std::i8::MAX as i32 || inner < std::i8::MIN as i32 {
+                                    return Err(VmError::Overflow);
+                                }
+                            
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i32!");
+                            }
+                        },
+                        Some(Instruction::i32Load8Unsigned) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::I32(inner) = value {
+                                if inner > std::u8::MAX as i32 || inner < std::u8::MIN as i32 {
+                                    return Err(VmError::Overflow);
+                                }
+
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i32!");
+                            }
+                        },
+                        Some(Instruction::i32Load16Signed) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::I32(inner) = value {
+                                if inner > std::i16::MAX as i32 || inner < std::i16::MIN as i32 {
+                                    return Err(VmError::Overflow);
+                                }
+
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i32!");
+                            }
+                        },
+                        Some(Instruction::i32Load16Unsigned) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::I32(inner) = value {
+                                if inner > std::u16::MAX as i32 || inner < std::u16::MIN as i32 {
+                                    return Err(VmError::Overflow);
+                                }
+
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i32!");
+                            }
+                        },
                         Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                         _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
@@ -988,6 +1349,126 @@ fn fetch_argv(
                             heap[x][y] = None;
 
                             if let VmValue::I64(_) = value {
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i64!");
+                            }
+                        },
+                        Some(Instruction::i64Load8Signed) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::I64(inner) = value {
+                                if inner > std::i8::MAX as i64 || inner < std::i8::MIN as i64 {
+                                    return Err(VmError::Overflow);
+                                }
+                            
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i64!");
+                            }
+                        },
+                        Some(Instruction::i64Load8Unsigned) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::I64(inner) = value {
+                                if inner > std::u8::MAX as i64 || inner < std::u8::MIN as i64 {
+                                    return Err(VmError::Overflow);
+                                }
+
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i64!");
+                            }
+                        },
+                        Some(Instruction::i64Load16Signed) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::I64(inner) = value {
+                                if inner > std::i16::MAX as i64 || inner < std::i16::MIN as i64 {
+                                    return Err(VmError::Overflow);
+                                }
+
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i64!");
+                            }
+                        },
+                        Some(Instruction::i64Load16Unsigned) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::I64(inner) = value {
+                                if inner > std::u16::MAX as i64 || inner < std::u16::MIN as i64 {
+                                    return Err(VmError::Overflow);
+                                }
+
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i64!");
+                            }
+                        },
+                        Some(Instruction::i64Load32Signed) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::I64(inner) = value {
+                                if inner > std::i32::MAX as i64 || inner < std::i32::MIN as i64 {
+                                    return Err(VmError::Overflow);
+                                }
+
+                                argv.push(value);
+                            } else {
+                                panic!("Popped value that is not i64!");
+                            }
+                        },
+                        Some(Instruction::i64Load32Unsigned) => {
+                            // Fetch coordinates
+                            ip.increment();
+                            let x = fun.fetch(ip.ip) as usize;
+                            ip.increment();
+                            let y = fun.fetch(ip.ip) as usize;
+
+                            let value = heap[x][y].unwrap();
+                            heap[x][y] = None;
+
+                            if let VmValue::I64(inner) = value {
+                                if inner > std::u32::MAX as i64 || inner < std::u32::MIN as i64 {
+                                    return Err(VmError::Overflow);
+                                }
+
                                 argv.push(value);
                             } else {
                                 panic!("Popped value that is not i64!");
@@ -1151,6 +1632,86 @@ fn fetch_argv(
                                     panic!("Popped value that is not i32!");
                                 }
                             },
+                            Some(Instruction::i32Load8Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::i8::MAX as i32 || inner < std::i8::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+                                
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load8Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::u8::MAX as i32 || inner < std::u8::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load16Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::i16::MAX as i32 || inner < std::i16::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load16Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::u16::MAX as i32 || inner < std::u16::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
                             Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
@@ -1207,6 +1768,86 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::I32(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load8Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::i8::MAX as i32 || inner < std::i8::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+                                
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load8Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::u8::MAX as i32 || inner < std::u8::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load16Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::i16::MAX as i32 || inner < std::i16::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load16Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::u16::MAX as i32 || inner < std::u16::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+
                                     argv.push(value);
                                 } else {
                                     panic!("Popped value that is not i32!");
@@ -1273,6 +1914,86 @@ fn fetch_argv(
                                     panic!("Popped value that is not i32!");
                                 }
                             },
+                            Some(Instruction::i32Load8Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::i8::MAX as i32 || inner < std::i8::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+                                
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load8Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::u8::MAX as i32 || inner < std::u8::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load16Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::i16::MAX as i32 || inner < std::i16::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
+                            Some(Instruction::i32Load16Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I32(inner) = value {
+                                    if inner > std::u16::MAX as i32 || inner < std::u16::MIN as i32 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i32!");
+                                }
+                            },
                             Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
@@ -1329,6 +2050,126 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::I64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load8Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::i8::MAX as i64 || inner < std::i8::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+                                
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load8Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::u8::MAX as i64 || inner < std::u8::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load16Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::i16::MAX as i64 || inner < std::i16::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load16Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::u16::MAX as i64 || inner < std::u16::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load32Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::i32::MAX as i64 || inner < std::i32::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load32Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::u32::MAX as i64 || inner < std::u32::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
                                     argv.push(value);
                                 } else {
                                     panic!("Popped value that is not i64!");
@@ -1395,6 +2236,126 @@ fn fetch_argv(
                                     panic!("Popped value that is not i64!");
                                 }
                             },
+                            Some(Instruction::i64Load8Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::i8::MAX as i64 || inner < std::i8::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+                                
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load8Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::u8::MAX as i64 || inner < std::u8::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load16Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::i16::MAX as i64 || inner < std::i16::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load16Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::u16::MAX as i64 || inner < std::u16::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load32Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::i32::MAX as i64 || inner < std::i32::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load32Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::u32::MAX as i64 || inner < std::u32::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
                             Some(op) => panic!(format!("Cannot fetch from memory! Invalid instruction! Expected `PopLocal` or `PopOperand` or a load instruction! Got: `{:?}` ", op)),
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
@@ -1451,6 +2412,126 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::I64(_) = value {
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load8Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::i8::MAX as i64 || inner < std::i8::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+                                
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load8Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::u8::MAX as i64 || inner < std::u8::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load16Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::i16::MAX as i64 || inner < std::i16::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load16Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::u16::MAX as i64 || inner < std::u16::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load32Signed) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::i32::MAX as i64 || inner < std::i32::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
+                                    argv.push(value);
+                                } else {
+                                    panic!("Popped value that is not i64!");
+                                }
+                            },
+                            Some(Instruction::i64Load32Unsigned) => {
+                                // Fetch coordinates
+                                ip.increment();
+                                let x = fun.fetch(ip.ip) as usize;
+                                ip.increment();
+                                let y = fun.fetch(ip.ip) as usize;
+
+                                let value = heap[x][y].unwrap();
+                                heap[x][y] = None;
+
+                                if let VmValue::I64(inner) = value {
+                                    if inner > std::u32::MAX as i64 || inner < std::u32::MIN as i64 {
+                                        return Err(VmError::Overflow);
+                                    }
+
                                     argv.push(value);
                                 } else {
                                     panic!("Popped value that is not i64!");
@@ -1849,7 +2930,7 @@ fn fetch_argv(
 
     let argv_types = argv_types.iter().map(|t| t.0).collect();
 
-    (argv_types, argv)
+    Ok((argv_types, argv))
 }
 
 fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> bool {
