@@ -16,7 +16,6 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use instruction_set::Instruction;
 use std::fmt;
 use std::ops::Add;
 
