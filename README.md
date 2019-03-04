@@ -1,17 +1,10 @@
-
 # Purple Protocol
-
-[![Build Status](https://travis-ci.org/purpleprotocol/purple.svg?branch=master)](https://travis-ci.org/purpleprotocol/purple-rs)
-
-[![Discord](https://img.shields.io/discord/435827644915777536.svg)](https://discord.gg/UCYWSsd)
-
-[![_pdf whitepaper](https://img.shields.io/badge/_pdf-whitepaper-blue.svg)](https://purpleprotocol.org/whitepaper/)
-
-  
+[![Build Status](https://travis-ci.org/purpleprotocol/purple.svg?branch=master)](https://travis-ci.org/purpleprotocol/purple-rs) [![Discord](https://img.shields.io/discord/435827644915777536.svg)](https://discord.gg/UCYWSsd) [![_pdf whitepaper](https://img.shields.io/badge/_pdf-whitepaper-blue.svg)](https://purpleprotocol.org/whitepaper/)
 
 Welcome to the official Rust implementation of the Purple Protocol!
 
 ---
+
 Purple is an advanced, experimental open blockchain protocol that has been designed from day one with an emphasis on scalability and complete decentralization. Its aim is to provide a performance that is greater or at least equal to the payment processor VISA, which can in peak times achieve up to 50.000 transactions per second, but in a decentralized scenario.
 
 In order to achieve this, a new consensus mechanism has been devised from scratch by starting from the latest distributed systems and cryptocurrency research.  The result is an extension of the Nakamoto Consensus Scheme present in Bitcoin and other cryptocurrencies.
@@ -40,53 +33,28 @@ If you want a clear description of the progress so far you can look at the [mile
   
 
 ## Building
-
 Building the project requires cmake. After all dependencies are installed, run:
 
-  
-
 ```
-
 cargo build
-
 ```
-
-  
 
 #### Using docker
-
 A Purple node can also be run from a docker container:
 
-  
-
 ```
-
 docker build .
-
 ```
-
-  
 
 ## Running
-
 To run the node in development mode with all logging enabled:
 
-  
-
 ##### Set permission to run the script
-
 ```
-
 chmod ug+x ./run_debug.sh
-
 ```
-
-  
 
 ##### Run node
-
 ```
-
 ./run_debug.sh
-
 ```
