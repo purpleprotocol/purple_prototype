@@ -1,0 +1,11 @@
+[package]
+name = "consensus"
+version = "0.1.0"
+authors = ["Octavian Oncescu <octavonce@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+petgraph = "0.4.13"
+events = { path = "../events" }
+network = { path = "../network" }
+causality = { path = "../causality" }

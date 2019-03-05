@@ -16,40 +16,5 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[cfg(test)]
-#[macro_use]
-extern crate quickcheck;
-
-#[macro_use]
-extern crate serde_derive;
-
-extern crate account;
-extern crate byteorder;
-extern crate causality;
-extern crate crypto;
-extern crate merkle_light;
-extern crate network;
-extern crate parking_lot;
-extern crate patricia_trie;
-extern crate persistence;
-extern crate rayon;
-extern crate rlp;
-extern crate serde;
-extern crate transactions;
-
-#[macro_use]
-mod macros;
-mod heartbeat;
-mod join;
-mod leave;
-
-pub use heartbeat::*;
-pub use join::*;
-pub use leave::*;
-
-#[derive(Clone, Debug)]
-pub enum Event {
-    Heartbeat(Heartbeat),
-    Join(Join),
-    Leave(Leave)
-}
+mod causal_graph;
+mod candidate_set;
