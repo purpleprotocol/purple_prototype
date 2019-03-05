@@ -18,3 +18,7 @@
 
 mod causal_graph;
 mod candidate_set;
+pub mod parameters;
+
+pub use causal_graph::*;
+pub use candidate_set::*;
