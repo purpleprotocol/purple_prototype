@@ -36,7 +36,7 @@ pub enum CGError {
 
 #[derive(Debug)]
 pub struct ConsensusMachine {
-    causal_graph: Arc<CausalGraph>,
+    causal_graph: Arc<Mutex<CausalGraph>>,
     candidate_sets: Vec<Arc<Mutex<CandidateSet>>>,
     validators: Vec<Arc<Mutex<ValidatorState>>>,
 }
@@ -44,7 +44,7 @@ pub struct ConsensusMachine {
 impl ConsensusMachine {
     pub fn new() -> ConsensusMachine {
         ConsensusMachine {
-            causal_graph: Arc::new(CausalGraph::new()),
+            causal_graph: Arc::new(Mutex::new(CausalGraph::new())),
             candidate_sets: Vec::new(),
             validators: Vec::new()
         }
@@ -68,7 +68,7 @@ impl ConsensusMachine {
     /// that **does not** belong to the node with the
     /// given `NodeId`. 
     pub fn highest(&self, node_id: &NodeId) -> Result<Arc<Event>, CGError> {
-        let graph = &(*self.causal_graph).0;
+        let graph = &(*self.causal_graph).lock().0;
         
         let mut dfs = Dfs::empty(graph);
         let mut acc = None;
@@ -100,7 +100,35 @@ impl ConsensusMachine {
     /// given stamp in the causal graph that **does not**
     /// belong to the node with the given `NodeId`.
     pub fn highest_following(&self, node_id: &NodeId, stamp: &Stamp) -> Result<Arc<Event>, CGError> {
-        unimplemented!();
+        let graph = &(*self.causal_graph).lock().0;
+        
+        let mut dfs = Dfs::empty(graph);
+        let mut acc = None;
+        
+        while let Some(i) = dfs.next(graph) {
+            if acc.is_none() {
+                if (*graph[i]).stamp().happened_after(stamp.clone()) && (*graph[i]).node_id() != *node_id {
+                    acc = Some(i);
+                }
+
+                continue;
+            } 
+
+            let acc_i = acc.unwrap();
+            
+            // If next happened after accumulated val and it
+            // doesn't belong to the given node id, store as 
+            // new accumulated value.
+            if (*graph[i]).stamp().happened_after((*graph[acc_i]).stamp()) && (*graph[i]).node_id() != *node_id {
+                acc = Some(i);
+            }
+        }
+
+        if let Some(i) = acc {
+            Ok(graph[i].clone())
+        } else {
+            Err(CGError::NoEventFound)
+        }
     }
 
     /// Returns valid candidate sets that can be included
