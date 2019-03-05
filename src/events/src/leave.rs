@@ -24,12 +24,12 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Leave {
-    node_id: NodeId,
-    stamp: Stamp,
+    pub node_id: NodeId,
+    pub stamp: Stamp,
     #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<Hash>,
+    pub hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
+    pub signature: Option<Signature>,
 }
 
 impl Leave {

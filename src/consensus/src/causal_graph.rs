@@ -18,55 +18,29 @@
 
 use petgraph::stable_graph::StableGraph;
 use petgraph::Directed;
-use causality::Stamp;
 use events::Event;
-use network::NodeId;
+use petgraph::visit::Dfs;
 use std::sync::Arc;
-use crate::candidate_set::CandidateSet;
 
 #[derive(Clone, Debug)]
-pub enum CGError {
-    NoEventFound,
-    NoCandidateSetFound,
-    InvalidEvent
-}
-
-#[derive(Clone, Debug)]
-pub struct CausalGraph(StableGraph<Arc<Event>, (), Directed>);
+pub struct CausalGraph(pub StableGraph<Arc<Event>, (), Directed>);
 
 impl CausalGraph {
     pub fn new() -> CausalGraph {
         CausalGraph(StableGraph::new())
     }
 
-    /// Attempts to push an atomic reference to an
-    /// event to the causal graph. This function also
-    /// validates the event in accordance with the rest
-    /// of the causal graph.
-    /// 
-    /// This will return `Err(CGError::InvalidEvent)` if the 
-    /// event that the given reference points to is invalid.
-    pub fn push(&mut self, event: Arc<Event>) -> Result<(), CGError> {
-        unimplemented!();
-    }
+    /// Returns `true` if any event from the `CausalGraph`
+    /// matches the given condition closure.
+    pub fn any(&self, fun: &Fn(Arc<Event>) -> bool) -> bool {
+        let mut dfs = Dfs::empty(&self.0);
 
-    /// Returns the highest event in the causal graph
-    /// that **does not** belong to the node with the
-    /// given `NodeId`. 
-    pub fn highest(&self, node_id: &NodeId) -> Result<Arc<Event>, CGError> {
-        unimplemented!();
-    }
+        while let Some(i) = dfs.next(&self.0) {
+            if fun(self.0[i].clone()) {
+                return true;
+            }
+        }
 
-    /// Return the highest event that follows the given 
-    /// given stamp in the causal graph that **does not**
-    /// belong to the node with the given `NodeId`.
-    pub fn highest_following(&self, node_id: &NodeId, stamp: &Stamp) -> Result<Arc<Event>, CGError> {
-        unimplemented!();
-    }
-
-    /// Returns valid candidate sets that can be included
-    /// into the total order.
-    pub fn fetch_cs(&self) -> Result<CandidateSet, CGError> {
-        unimplemented!();
+        false
     }
 }

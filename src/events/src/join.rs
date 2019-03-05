@@ -25,16 +25,16 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Join {
-    node_id: NodeId,
-    stamp: Stamp,
-    collector_address: NormalAddress,
-    nonce: u64,
-    proof: Vec<u32>,
-    parent_hash: Hash,
+    pub node_id: NodeId,
+    pub stamp: Stamp,
+    pub collector_address: NormalAddress,
+    pub nonce: u64,
+    pub proof: Vec<u32>,
+    pub parent_hash: Hash,
     #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<Hash>,
+    pub hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
+    pub signature: Option<Signature>,
 }
 
 impl Join {

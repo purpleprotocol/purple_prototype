@@ -47,9 +47,30 @@ pub use heartbeat::*;
 pub use join::*;
 pub use leave::*;
 
+use causality::Stamp;
+use network::NodeId;
+
 #[derive(Clone, Debug)]
 pub enum Event {
     Heartbeat(Heartbeat),
     Join(Join),
-    Leave(Leave)
+    Leave(Leave),
+}
+
+impl Event {
+    pub fn stamp(&self) -> Stamp {
+        match *self {
+            Event::Heartbeat(ref event) => event.stamp.clone(),
+            Event::Join(ref event) => event.stamp.clone(),
+            Event::Leave(ref event) => event.stamp.clone(),
+        }
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        match *self {
+            Event::Heartbeat(ref event) => event.node_id.clone(),
+            Event::Join(ref event) => event.node_id.clone(),
+            Event::Leave(ref event) => event.node_id.clone(),
+        }
+    }
 }

@@ -16,12 +16,20 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-mod causal_graph;
-mod candidate_set;
-mod consensus_machine;
-mod validator_state;
-pub mod parameters;
+use network::NodeId;
 
-pub use validator_state::*;
-pub use consensus_machine::*;
-pub use candidate_set::*;
+#[derive(Clone, Debug)]
+pub struct ValidatorState {
+    /// The node id of the validator
+    node_id: NodeId
+
+    // TODO: Add more relevant fields
+}
+
+impl ValidatorState {
+    pub fn new(node_id: &NodeId) -> ValidatorState {
+        ValidatorState {
+            node_id: node_id.clone()
+        }
+    }
+}
