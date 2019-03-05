@@ -16,5 +16,51 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use std::sync::Arc;
+use events::Event;
+use crate::causal_graph::CausalGraph;
+
 #[derive(Clone, Debug)]
-pub struct CandidateSet;
+pub struct CandidateSet {
+    /// Atomic references to events that are
+    /// situated in the `CandidateSet`.
+    events: Vec<Arc<Event>>,
+
+    /// Atomic references to events that vote
+    /// for the `CandidateSet`.
+    voters: Vec<Arc<Event>>,
+
+    /// Total number of votes.
+    votes: u16,
+
+    /// Total number of proposals.
+    proposals: u16
+}
+
+impl CandidateSet {
+    pub fn new(events: &[Arc<Event>]) -> CandidateSet {
+        CandidateSet {
+            events: events.to_vec(),
+            voters: Vec::new(),
+            votes: 0,
+            proposals: 0
+        }
+    }
+
+    /// Returns `true` if the events in the `CandidateSet`
+    /// are valid for inclusion into the total order.
+    pub fn is_valid(&self) -> bool {
+        unimplemented!();
+    }
+
+    /// Counts the number of votes and proposals
+    /// of the `CandidateSet` based on the provided
+    /// `CausalGraph`.
+    /// 
+    /// This function will panic if any event in 
+    /// the `CandidateSet` is not residing in the
+    /// provided `CausalGraph`. 
+    pub fn count_votes(&mut self, causal_graph: &CausalGraph) {
+        unimplemented!();
+    }
+}
