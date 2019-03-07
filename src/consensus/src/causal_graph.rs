@@ -16,10 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use petgraph::stable_graph::StableGraph;
-use petgraph::Directed;
 use events::Event;
+use petgraph::stable_graph::StableGraph;
 use petgraph::visit::Dfs;
+use petgraph::Directed;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -32,7 +32,10 @@ impl CausalGraph {
 
     /// Returns `true` if any event from the `CausalGraph`
     /// matches the given condition closure.
-    pub fn any(&self, fun: &Fn(Arc<Event>) -> bool) -> bool {
+    pub fn any<F>(&self, fun: F) -> bool
+    where
+        F: Fn(Arc<Event>) -> bool,
+    {
         let mut dfs = Dfs::empty(&self.0);
 
         while let Some(i) = dfs.next(&self.0) {
@@ -42,5 +45,9 @@ impl CausalGraph {
         }
 
         false
+    }
+
+    pub fn empty(&self) -> bool {
+        self.0.node_count() == 0
     }
 }

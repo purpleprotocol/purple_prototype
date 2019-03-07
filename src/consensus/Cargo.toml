@@ -10,3 +10,7 @@ parking_lot = "0.6"
 events = { path = "../events" }
 network = { path = "../network" }
 causality = { path = "../causality" }
+
+[dev-dependencies]
+rand = "0.6.0"
+crypto = { path = "../crypto" }

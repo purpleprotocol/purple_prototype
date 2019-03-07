@@ -21,15 +21,13 @@ use network::NodeId;
 #[derive(Clone, Debug)]
 pub struct ValidatorState {
     /// The node id of the validator
-    node_id: NodeId
-
-    // TODO: Add more relevant fields
+    node_id: NodeId, // TODO: Add more relevant fields
 }
 
 impl ValidatorState {
     pub fn new(node_id: &NodeId) -> ValidatorState {
         ValidatorState {
-            node_id: node_id.clone()
+            node_id: node_id.clone(),
         }
     }
 }

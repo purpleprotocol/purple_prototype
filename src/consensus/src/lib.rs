@@ -16,12 +16,12 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-mod causal_graph;
 mod candidate_set;
+mod causal_graph;
 mod consensus_machine;
-mod validator_state;
 pub mod parameters;
+mod validator_state;
 
-pub use validator_state::*;
-pub use consensus_machine::*;
 pub use candidate_set::*;
+pub use consensus_machine::*;
+pub use validator_state::*;

@@ -50,11 +50,14 @@ pub use leave::*;
 use causality::Stamp;
 use network::NodeId;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Event {
     Heartbeat(Heartbeat),
     Join(Join),
     Leave(Leave),
+
+    /// Dummy event used for testing
+    Dummy(NodeId, Stamp),
 }
 
 impl Event {
@@ -63,6 +66,7 @@ impl Event {
             Event::Heartbeat(ref event) => event.stamp.clone(),
             Event::Join(ref event) => event.stamp.clone(),
             Event::Leave(ref event) => event.stamp.clone(),
+            Event::Dummy(_, ref stamp) => stamp.clone(),
         }
     }
 
@@ -71,6 +75,7 @@ impl Event {
             Event::Heartbeat(ref event) => event.node_id.clone(),
             Event::Join(ref event) => event.node_id.clone(),
             Event::Leave(ref event) => event.node_id.clone(),
+            Event::Dummy(ref node_id, _) => node_id.clone(),
         }
     }
 }
