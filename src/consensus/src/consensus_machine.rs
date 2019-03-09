@@ -97,7 +97,7 @@ impl ConsensusMachine {
                 while let Some(i) = dfs.next(&graph.0) {
                     let edge_count = graph.0.edge_count();
 
-                    println!("DEBUG I: {:?}", i);
+                    println!("DEBUG I1: {:?}", i);
 
                     // Skip pushed event
                     if event == graph.0[i] {
@@ -184,10 +184,12 @@ impl ConsensusMachine {
                         continue;
                     }
 
+                    println!("DEBUG I2 {:?}", i);
+
                     // Pushed event happened after stored event.
                     if event_stamp.happened_after((*graph.0[i]).stamp()) {
                         let mut n = graph.0.neighbors_directed(i, Direction::Outgoing);
-                        let mut neighbors: Vec< NodeIndex> = Vec::new();
+                        let mut neighbors: Vec<NodeIndex> = Vec::new();
 
                         // Fetch neighbors and their indexes
                         while let Some(i) = n.next() {
@@ -202,7 +204,8 @@ impl ConsensusMachine {
                         }
 
                         for idx in neighbors {
-                            traverse_and_add_edge(&mut graph, event.clone(), idx, Direction::Outgoing);
+                            let new_roots = traverse_and_add_edge(&mut graph, self.graph_roots.clone(), event.clone(), pushed_idx, idx, Direction::Outgoing);
+                            self.graph_roots = new_roots;
                         }
 
                         continue;
@@ -242,7 +245,8 @@ impl ConsensusMachine {
                         }
 
                         for idx in neighbors {
-                            traverse_and_add_edge(&mut graph, event.clone(), idx, Direction::Incoming);
+                            let new_roots = traverse_and_add_edge(&mut graph, self.graph_roots.clone(), event.clone(), pushed_idx, idx, Direction::Incoming);
+                            self.graph_roots = new_roots;
                         }
 
                         continue;
@@ -301,30 +305,35 @@ impl ConsensusMachine {
         stamp: &Stamp,
     ) -> Option<Arc<Event>> {
         let graph = &(*self.causal_graph).read().0;
+        let mut roots = self.graph_roots.clone();
 
         let mut dfs = Dfs::empty(graph);
         let mut acc = None;
 
-        while let Some(i) = dfs.next(graph) {
-            if acc.is_none() {
-                if (*graph[i]).stamp().happened_after(stamp.clone())
+        while let Some(r) = roots.pop() {
+            dfs.move_to(r);
+
+            while let Some(i) = dfs.next(graph) {
+                if acc.is_none() {
+                    if (*graph[i]).stamp().happened_after(stamp.clone())
+                        && (*graph[i]).node_id() != *node_id
+                    {
+                        acc = Some(i);
+                    }
+
+                    continue;
+                }
+
+                let acc_i = acc.unwrap();
+
+                // If next happened after accumulated val and it
+                // doesn't belong to the given node id, store as
+                // new accumulated value.
+                if (*graph[i]).stamp().happened_after((*graph[acc_i]).stamp())
                     && (*graph[i]).node_id() != *node_id
                 {
                     acc = Some(i);
                 }
-
-                continue;
-            }
-
-            let acc_i = acc.unwrap();
-
-            // If next happened after accumulated val and it
-            // doesn't belong to the given node id, store as
-            // new accumulated value.
-            if (*graph[i]).stamp().happened_after((*graph[acc_i]).stamp())
-                && (*graph[i]).node_id() != *node_id
-            {
-                acc = Some(i);
             }
         }
 
@@ -352,8 +361,197 @@ fn is_root(roots: &[NodeIndex], idx: &NodeIndex) -> bool {
 /// index in the given `Direction`. An edge is added between
 /// the event and the other already placed events based on
 /// their causal relationship.
-fn traverse_and_add_edge(graph: &mut CausalGraph, event: Arc<Event>, start_idx: NodeIndex, direction: Direction) {
-    unimplemented!();
+/// 
+/// This function will return the updated graph roots vector.
+fn traverse_and_add_edge(graph: &mut CausalGraph, graph_roots: Vec<NodeIndex>, event: Arc<Event>, event_idx: NodeIndex, start_idx: NodeIndex, direction: Direction) -> Vec<NodeIndex> {
+    let mut start_indexes: Vec<NodeIndex> = vec![start_idx];
+    let mut graph_roots = graph_roots;
+
+    let mut unvisited_nodes: Vec<NodeIndex> = Vec::new();
+
+    for idx in graph.0.node_indices() {
+        unvisited_nodes.push(idx);
+    }
+
+    // Such recursion with non-recursive code, much fun
+    while let Some(start_idx) = start_indexes.pop() {
+        let mut last_idx: Option<NodeIndex> = None;
+        let mut idx = start_idx;
+
+        println!("Start idx: {:?}", start_idx);
+
+        loop {
+            if unvisited_nodes.is_empty() {
+                break;
+            }
+
+            let is_unvisited = unvisited_nodes
+                .iter()
+                .any(|i| *graph.0[*i] == *graph.0[idx]);
+
+            if !is_unvisited {
+                continue;
+            }
+
+            if Some(idx) == last_idx {
+                break;
+            }
+
+            unvisited_nodes = unvisited_nodes
+                .iter()
+                .filter(|i| *graph.0[**i] != *graph.0[idx])
+                .map(|i| i.clone())
+                .collect();
+
+            // if *graph.0[idx] == *event {
+            //     continue;
+            // }
+
+            println!("Current idx: {:?}", idx);
+
+
+            // Try to place event between last and current index
+            if let Some(last_idx) = last_idx {
+                let last_node = graph.0[last_idx].clone();
+                let cur_node = graph.0[idx].clone();
+
+                println!("DEBUG 3");
+
+                //  The event is between the last node and current node:
+                //  CURRENT > EVENT > LAST
+                if event.stamp().happened_before(last_node.stamp()) && event.stamp().happened_after(cur_node.stamp()) {
+                    let edge_idx = graph.0.find_edge(idx, last_idx);
+
+                    match edge_idx {
+                        Some(idx) => { graph.0.remove_edge(idx); },
+                        _         => { } // Do nothing 
+                    };
+
+                    graph.0.add_edge(event_idx, last_idx, ());
+                    graph.0.add_edge(idx, event_idx, ());
+
+                    println!("DEBUG 1");
+
+                    break;
+                }
+
+                // The event is between the last node and the current node
+                // LAST > EVENT > CURRENT
+                if event.stamp().happened_after(last_node.stamp()) && event.stamp().happened_before(cur_node.stamp()) {
+                    let edge_idx = graph.0.find_edge(idx, last_idx);
+
+                    match edge_idx {
+                        Some(idx) => { graph.0.remove_edge(idx); },
+                        _         => { } // Do nothing 
+                    };
+
+                    graph.0.add_edge(last_idx, event_idx, ());
+                    graph.0.add_edge(event_idx, idx, ());
+
+                    println!("DEBUG 5");
+
+                    break;
+                }
+
+                // The event happened before the current event
+                // EVENT > CURRENT
+                if event.stamp().happened_before(cur_node.stamp()) {
+                    graph.0.add_edge(event_idx, idx, ());
+                    break;
+                };
+
+
+                // The event happened after the current event
+                // EVENT > CURRENT
+                if event.stamp().happened_after(cur_node.stamp()) {
+                    graph.0.add_edge(idx, event_idx, ());
+                    break;
+                };
+
+                if event.stamp().concurrent(last_node.stamp()) {
+                    println!("DEBUG 2");
+                    break;
+                }
+
+                if event.stamp().eq(&cur_node.stamp()) {
+                    let out_neighbors: Vec<NodeIndex> = graph.0.neighbors_directed(idx, Direction::Outgoing).collect();
+                    let in_neighbors: Vec<NodeIndex> = graph.0.neighbors_directed(idx, Direction::Incoming).collect();
+
+                    // Attach stamp to cur stamp's neighbors
+                    for idx in out_neighbors {
+                        let edge_idx = graph.0.find_edge(event_idx, idx);
+                        
+                        if let Some(_) = edge_idx {
+                            // Do nothing
+                        } else {
+                            graph.0.add_edge(event_idx, idx, ());
+                        }
+                    }
+
+                    for idx in in_neighbors {
+                        let edge_idx = graph.0.find_edge(idx, event_idx);
+                        
+                        if let Some(_) = edge_idx {
+                            // Do nothing
+                        } else {
+                            graph.0.add_edge(idx, event_idx, ());
+                        }
+                    }
+
+                    
+                    println!("DEBUG 4");
+                    break;
+                }
+            }
+
+            last_idx = Some(idx);
+
+            let mut n = graph.0.neighbors_directed(idx, direction);
+            let mut neighbors: Vec<NodeIndex> = Vec::new();
+
+            // Fetch neighbors indexes
+            while let Some(i) = n.next() {
+                neighbors.push(i);
+            }
+
+            println!("DEBUG NEIGHBORS: {:?}, LAST_IDX: {:?}", neighbors, last_idx);
+
+            // use std::{thread, time};
+
+            // let ten_millis = time::Duration::from_millis(300);
+            // let now = time::Instant::now();
+
+            // thread::sleep(ten_millis);
+
+            // No neighbors which means this will
+            // be a root node in the graph.
+            if neighbors.len() == 0 {
+                // Replace old root with new one
+                let mut new_roots: Vec<NodeIndex> = graph_roots
+                    .iter()
+                    .filter(|j| *j != &idx)
+                    .map(|x| x.clone())
+                    .collect();
+
+                new_roots.push(event_idx);
+                
+                graph_roots = new_roots;
+
+                graph.0.add_edge(event_idx, idx, ());
+                break;
+            } else {
+                let (h, t) = neighbors.split_at(1);
+                start_indexes.extend_from_slice(&t);
+                start_indexes.sort_unstable();
+                start_indexes.dedup();
+
+                println!("DEBUG START IDXS: {:?}, {:?}", start_indexes, h);
+                idx = h[0];
+            }
+        }
+    }
+
+    graph_roots
 } 
 
 #[cfg(test)]

@@ -10,6 +10,8 @@ parking_lot = "0.6"
 events = { path = "../events" }
 network = { path = "../network" }
 causality = { path = "../causality" }
+recursive = { path = "../util/recursive" }
+graphlib = { path = "../util/graphlib" }
 
 [dev-dependencies]
 rand = "0.6.0"
