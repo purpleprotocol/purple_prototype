@@ -560,182 +560,182 @@ mod tests {
     use rand::{thread_rng, Rng};
     use crypto::Identity;
 
-    #[test]
-    /// Causal graph structure:
-    /// 
-    /// A -> B -> C -> D -> E -> F
-    /// |
-    /// A' -> B' -> C' -> D'
-    ///       |
-    ///       A''
-    ///
-    /// The intended result for calling the function on A should be F
-    /// and the intended result for A' should be D'.
-    fn highest_following() {
-        let i1 = Identity::new();
-        let i2 = Identity::new();
-        let i3 = Identity::new();
-        let n1 = NodeId(*i1.pkey());
-        let n2 = NodeId(*i2.pkey());
-        let n3 = NodeId(*i3.pkey());
-        let seed = Stamp::seed();
-        let (s_a, s_b) = seed.fork();
-        let (s_b, s_c) = s_b.fork();
+    // #[test]
+    // /// Causal graph structure:
+    // /// 
+    // /// A -> B -> C -> D -> E -> F
+    // /// |
+    // /// A' -> B' -> C' -> D'
+    // ///       |
+    // ///       A''
+    // ///
+    // /// The intended result for calling the function on A should be F
+    // /// and the intended result for A' should be D'.
+    // fn highest_following() {
+    //     let i1 = Identity::new();
+    //     let i2 = Identity::new();
+    //     let i3 = Identity::new();
+    //     let n1 = NodeId(*i1.pkey());
+    //     let n2 = NodeId(*i2.pkey());
+    //     let n3 = NodeId(*i3.pkey());
+    //     let seed = Stamp::seed();
+    //     let (s_a, s_b) = seed.fork();
+    //     let (s_b, s_c) = s_b.fork();
 
-        let s_a = s_a.event();
-        let A = Event::Dummy(n1.clone(), s_a.clone());
+    //     let s_a = s_a.event();
+    //     let A = Event::Dummy(n1.clone(), s_a.clone());
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let B = Event::Dummy(n2.clone(), s_b.clone());
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let B = Event::Dummy(n2.clone(), s_b.clone());
 
-        let s_a = s_a.join(s_b.peek()).event();
-        let C = Event::Dummy(n1.clone(), s_a.clone());
+    //     let s_a = s_a.join(s_b.peek()).event();
+    //     let C = Event::Dummy(n1.clone(), s_a.clone());
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let D = Event::Dummy(n2.clone(), s_b.clone());
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let D = Event::Dummy(n2.clone(), s_b.clone());
 
-        let s_a = s_a.join(s_b.peek()).event();
-        let E = Event::Dummy(n1, s_a.clone());
+    //     let s_a = s_a.join(s_b.peek()).event();
+    //     let E = Event::Dummy(n1, s_a.clone());
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let F = Event::Dummy(n2.clone(), s_b.clone());
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let F = Event::Dummy(n2.clone(), s_b.clone());
 
-        let s_c = s_c.join(s_a.peek()).event();
-        let A_prime = Event::Dummy(n3.clone(), s_c.clone());
+    //     let s_c = s_c.join(s_a.peek()).event();
+    //     let A_prime = Event::Dummy(n3.clone(), s_c.clone());
 
-        let s_c = s_c.event();
-        let B_prime = Event::Dummy(n3.clone(), s_c.clone());
+    //     let s_c = s_c.event();
+    //     let B_prime = Event::Dummy(n3.clone(), s_c.clone());
 
-        let s_c = s_c.event();
-        let C_prime = Event::Dummy(n3.clone(), s_c.clone());
-        let B_second = Event::Dummy(n3.clone(), s_c.clone());
+    //     let s_c = s_c.event();
+    //     let C_prime = Event::Dummy(n3.clone(), s_c.clone());
+    //     let B_second = Event::Dummy(n3.clone(), s_c.clone());
 
-        let s_c = s_c.event();
-        let D_prime = Event::Dummy(n3, s_c);
+    //     let s_c = s_c.event();
+    //     let D_prime = Event::Dummy(n3, s_c);
 
-        let events = vec![
-            A,
-            B,
-            C,
-            D,
-            E,
-            F,
-            A_prime,
-            B_prime,
-            C_prime,
-            D_prime,
-            B_second
-        ];
+    //     let events = vec![
+    //         A,
+    //         B,
+    //         C,
+    //         D,
+    //         E,
+    //         F,
+    //         A_prime,
+    //         B_prime,
+    //         C_prime,
+    //         D_prime,
+    //         B_second
+    //     ];
 
-        let mut events: Vec<Arc<Event>> = events
-            .iter()
-            .map(|e| Arc::new(e.clone()))
-            .collect();
+    //     let mut events: Vec<Arc<Event>> = events
+    //         .iter()
+    //         .map(|e| Arc::new(e.clone()))
+    //         .collect();
 
-        let A = events[0].clone();
-        let F = events[5].clone();
-        let A_prime = events[6].clone();
-        let D_prime = events[9].clone();
+    //     let A = events[0].clone();
+    //     let F = events[5].clone();
+    //     let A_prime = events[6].clone();
+    //     let D_prime = events[9].clone();
 
-        // The causal graph should be the same regardless
-        // of the order in which the events are pushed.
-        thread_rng().shuffle(&mut events);
+    //     // The causal graph should be the same regardless
+    //     // of the order in which the events are pushed.
+    //     thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new();
+    //     let mut machine = ConsensusMachine::new();
 
-        for e in events {
-            machine.push(e).unwrap();
-        }
+    //     for e in events {
+    //         machine.push(e).unwrap();
+    //     }
 
-        println!("DEBUG {:?}", machine);
+    //     println!("DEBUG {:?}", machine);
 
-        assert_eq!(machine.highest_following(&n2, &A.stamp()).unwrap(), F);
-        assert_eq!(machine.highest_following(&n2, &A_prime.stamp()).unwrap(), D_prime);
-    }
+    //     assert_eq!(machine.highest_following(&n2, &A.stamp()).unwrap(), F);
+    //     assert_eq!(machine.highest_following(&n2, &A_prime.stamp()).unwrap(), D_prime);
+    // }
 
-    #[test]
-    /// Causal graph structure:
-    /// 
-    /// A -> B -> C -> D -> E -> F
-    /// |
-    /// A' -> B' -> C' -> D'
-    ///       |
-    ///       A''
-    ///
-    /// The intended result for calling the function should be F.
-    fn highest() {
-        let i1 = Identity::new();
-        let i2 = Identity::new();
-        let i3 = Identity::new();
-        let n1 = NodeId(*i1.pkey());
-        let n2 = NodeId(*i2.pkey());
-        let n3 = NodeId(*i3.pkey());
-        let seed = Stamp::seed();
-        let (s_a, s_b) = seed.fork();
-        let (s_b, s_c) = s_b.fork();
+    // #[test]
+    // /// Causal graph structure:
+    // /// 
+    // /// A -> B -> C -> D -> E -> F
+    // /// |
+    // /// A' -> B' -> C' -> D'
+    // ///       |
+    // ///       A''
+    // ///
+    // /// The intended result for calling the function should be F.
+    // fn highest() {
+    //     let i1 = Identity::new();
+    //     let i2 = Identity::new();
+    //     let i3 = Identity::new();
+    //     let n1 = NodeId(*i1.pkey());
+    //     let n2 = NodeId(*i2.pkey());
+    //     let n3 = NodeId(*i3.pkey());
+    //     let seed = Stamp::seed();
+    //     let (s_a, s_b) = seed.fork();
+    //     let (s_b, s_c) = s_b.fork();
 
-        let s_a = s_a.event();
-        let A = Event::Dummy(n1.clone(), s_a.clone());
+    //     let s_a = s_a.event();
+    //     let A = Event::Dummy(n1.clone(), s_a.clone());
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let B = Event::Dummy(n2.clone(), s_b.clone());
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let B = Event::Dummy(n2.clone(), s_b.clone());
 
-        let s_a = s_a.join(s_b.peek()).event();
-        let C = Event::Dummy(n1.clone(), s_a.clone());
+    //     let s_a = s_a.join(s_b.peek()).event();
+    //     let C = Event::Dummy(n1.clone(), s_a.clone());
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let D = Event::Dummy(n2.clone(), s_b.clone());
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let D = Event::Dummy(n2.clone(), s_b.clone());
 
-        let s_a = s_a.join(s_b.peek()).event();
-        let E = Event::Dummy(n1, s_a.clone());
+    //     let s_a = s_a.join(s_b.peek()).event();
+    //     let E = Event::Dummy(n1, s_a.clone());
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let F = Event::Dummy(n2.clone(), s_b.clone());
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let F = Event::Dummy(n2.clone(), s_b.clone());
 
-        let s_c = s_c.join(s_a.peek()).event();
-        let A_prime = Event::Dummy(n3.clone(), s_c.clone());
+    //     let s_c = s_c.join(s_a.peek()).event();
+    //     let A_prime = Event::Dummy(n3.clone(), s_c.clone());
 
-        let s_c = s_c.event();
-        let B_prime = Event::Dummy(n3.clone(), s_c.clone());
+    //     let s_c = s_c.event();
+    //     let B_prime = Event::Dummy(n3.clone(), s_c.clone());
 
-        let s_c = s_c.event();
-        let C_prime = Event::Dummy(n3.clone(), s_c.clone());
-        let B_second = Event::Dummy(n3.clone(), s_c.clone());
+    //     let s_c = s_c.event();
+    //     let C_prime = Event::Dummy(n3.clone(), s_c.clone());
+    //     let B_second = Event::Dummy(n3.clone(), s_c.clone());
 
-        let s_c = s_c.event();
-        let D_prime = Event::Dummy(n3, s_c);
+    //     let s_c = s_c.event();
+    //     let D_prime = Event::Dummy(n3, s_c);
 
-        let events = vec![
-            A,
-            B,
-            C,
-            D,
-            E,
-            F,
-            A_prime,
-            B_prime,
-            C_prime,
-            D_prime,
-            B_second
-        ];
+    //     let events = vec![
+    //         A,
+    //         B,
+    //         C,
+    //         D,
+    //         E,
+    //         F,
+    //         A_prime,
+    //         B_prime,
+    //         C_prime,
+    //         D_prime,
+    //         B_second
+    //     ];
 
-        let mut events: Vec<Arc<Event>> = events
-            .iter()
-            .map(|e| Arc::new(e.clone()))
-            .collect();
+    //     let mut events: Vec<Arc<Event>> = events
+    //         .iter()
+    //         .map(|e| Arc::new(e.clone()))
+    //         .collect();
 
-        let F = events[5].clone();
+    //     let F = events[5].clone();
 
-        // The causal graph should be the same regardless
-        // of the order in which the events are pushed.
-        thread_rng().shuffle(&mut events);
+    //     // The causal graph should be the same regardless
+    //     // of the order in which the events are pushed.
+    //     thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new();
+    //     let mut machine = ConsensusMachine::new();
 
-        for e in events {
-            machine.push(e).unwrap();
-        }
+    //     for e in events {
+    //         machine.push(e).unwrap();
+    //     }
 
-        assert_eq!(machine.highest(&n2).unwrap(), F);
-    }
+    //     assert_eq!(machine.highest(&n2).unwrap(), F);
+    // }
 }
