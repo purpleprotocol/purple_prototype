@@ -1,5 +1,8 @@
 // Copyright 2019 Octavian Oncescu
 
-mod vertex_id;
-mod graph;
 mod edge;
+mod graph;
+mod vertex_id;
+
+pub use graph::*;
+pub use vertex_id::*;

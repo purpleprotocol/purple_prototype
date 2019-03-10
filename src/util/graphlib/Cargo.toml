@@ -6,4 +6,4 @@ edition = "2018"
 
 [dependencies]
 rand = "0.6.0"
-hashbrown = { git = "https://github.com/octavonce/hashbrown" }
+hashbrown = { version = "0.1", features = ["rayon"] }

@@ -146,15 +146,16 @@ impl ConsensusMachine {
 
                             if is_root(&self.graph_roots, &i) {
                                 // Replace old root with new one
-                                let mut new_roots: Vec<NodeIndex> = self.graph_roots
+                                let mut new_roots: Vec<NodeIndex> = self
+                                    .graph_roots
                                     .iter()
                                     .filter(|j| *j != &i)
                                     .map(|x| x.clone())
                                     .collect();
 
                                 new_roots.push(i);
-                               
-                               self.graph_roots = new_roots;
+
+                                self.graph_roots = new_roots;
                             } else {
                                 self.graph_roots.push(i);
                             }
@@ -162,7 +163,7 @@ impl ConsensusMachine {
                             continue;
                         }
 
-                        // Event has no relationship to any other events 
+                        // Event has no relationship to any other events
                         // so we just update the roots vector.
                         self.graph_roots.push(i);
                     }
@@ -204,7 +205,14 @@ impl ConsensusMachine {
                         }
 
                         for idx in neighbors {
-                            let new_roots = traverse_and_add_edge(&mut graph, self.graph_roots.clone(), event.clone(), pushed_idx, idx, Direction::Outgoing);
+                            let new_roots = traverse_and_add_edge(
+                                &mut graph,
+                                self.graph_roots.clone(),
+                                event.clone(),
+                                pushed_idx,
+                                idx,
+                                Direction::Outgoing,
+                            );
                             self.graph_roots = new_roots;
                         }
 
@@ -228,14 +236,15 @@ impl ConsensusMachine {
 
                             if is_root(&self.graph_roots, &i) {
                                 // Replace old root with new one
-                                let mut new_roots: Vec<NodeIndex> = self.graph_roots
+                                let mut new_roots: Vec<NodeIndex> = self
+                                    .graph_roots
                                     .iter()
                                     .filter(|j| *j != &i)
                                     .map(|x| x.clone())
                                     .collect();
 
                                 new_roots.push(i);
-                                
+
                                 self.graph_roots = new_roots;
                             } else {
                                 self.graph_roots.push(i);
@@ -245,14 +254,21 @@ impl ConsensusMachine {
                         }
 
                         for idx in neighbors {
-                            let new_roots = traverse_and_add_edge(&mut graph, self.graph_roots.clone(), event.clone(), pushed_idx, idx, Direction::Incoming);
+                            let new_roots = traverse_and_add_edge(
+                                &mut graph,
+                                self.graph_roots.clone(),
+                                event.clone(),
+                                pushed_idx,
+                                idx,
+                                Direction::Incoming,
+                            );
                             self.graph_roots = new_roots;
                         }
 
                         continue;
                     }
 
-                    // Event has no relationship to any other events 
+                    // Event has no relationship to any other events
                     // so we just update the roots vector.
                     self.graph_roots.push(i);
                 }
@@ -299,11 +315,7 @@ impl ConsensusMachine {
     /// Return the highest event that follows the given
     /// given stamp in the causal graph that **does not**
     /// belong to the node with the given `NodeId`.
-    pub fn highest_following(
-        &self,
-        node_id: &NodeId,
-        stamp: &Stamp,
-    ) -> Option<Arc<Event>> {
+    pub fn highest_following(&self, node_id: &NodeId, stamp: &Stamp) -> Option<Arc<Event>> {
         let graph = &(*self.causal_graph).read().0;
         let mut roots = self.graph_roots.clone();
 
@@ -348,22 +360,27 @@ impl ConsensusMachine {
     /// into the total order.
     pub fn fetch_cs(&self) -> Result<Vec<Arc<Mutex<CandidateSet>>>, CGError> {
         unimplemented!();
-    }   
+    }
 }
 
 fn is_root(roots: &[NodeIndex], idx: &NodeIndex) -> bool {
-    roots
-        .iter()
-        .any(|i| i == idx)
+    roots.iter().any(|i| i == idx)
 }
 
 /// Traverses the neighbors of the node with the given start
 /// index in the given `Direction`. An edge is added between
 /// the event and the other already placed events based on
 /// their causal relationship.
-/// 
+///
 /// This function will return the updated graph roots vector.
-fn traverse_and_add_edge(graph: &mut CausalGraph, graph_roots: Vec<NodeIndex>, event: Arc<Event>, event_idx: NodeIndex, start_idx: NodeIndex, direction: Direction) -> Vec<NodeIndex> {
+fn traverse_and_add_edge(
+    graph: &mut CausalGraph,
+    graph_roots: Vec<NodeIndex>,
+    event: Arc<Event>,
+    event_idx: NodeIndex,
+    start_idx: NodeIndex,
+    direction: Direction,
+) -> Vec<NodeIndex> {
     let mut start_indexes: Vec<NodeIndex> = vec![start_idx];
     let mut graph_roots = graph_roots;
 
@@ -409,7 +426,6 @@ fn traverse_and_add_edge(graph: &mut CausalGraph, graph_roots: Vec<NodeIndex>, e
 
             println!("Current idx: {:?}", idx);
 
-
             // Try to place event between last and current index
             if let Some(last_idx) = last_idx {
                 let last_node = graph.0[last_idx].clone();
@@ -419,12 +435,16 @@ fn traverse_and_add_edge(graph: &mut CausalGraph, graph_roots: Vec<NodeIndex>, e
 
                 //  The event is between the last node and current node:
                 //  CURRENT > EVENT > LAST
-                if event.stamp().happened_before(last_node.stamp()) && event.stamp().happened_after(cur_node.stamp()) {
+                if event.stamp().happened_before(last_node.stamp())
+                    && event.stamp().happened_after(cur_node.stamp())
+                {
                     let edge_idx = graph.0.find_edge(idx, last_idx);
 
                     match edge_idx {
-                        Some(idx) => { graph.0.remove_edge(idx); },
-                        _         => { } // Do nothing 
+                        Some(idx) => {
+                            graph.0.remove_edge(idx);
+                        }
+                        _ => {} // Do nothing
                     };
 
                     graph.0.add_edge(event_idx, last_idx, ());
@@ -437,12 +457,16 @@ fn traverse_and_add_edge(graph: &mut CausalGraph, graph_roots: Vec<NodeIndex>, e
 
                 // The event is between the last node and the current node
                 // LAST > EVENT > CURRENT
-                if event.stamp().happened_after(last_node.stamp()) && event.stamp().happened_before(cur_node.stamp()) {
+                if event.stamp().happened_after(last_node.stamp())
+                    && event.stamp().happened_before(cur_node.stamp())
+                {
                     let edge_idx = graph.0.find_edge(idx, last_idx);
 
                     match edge_idx {
-                        Some(idx) => { graph.0.remove_edge(idx); },
-                        _         => { } // Do nothing 
+                        Some(idx) => {
+                            graph.0.remove_edge(idx);
+                        }
+                        _ => {} // Do nothing
                     };
 
                     graph.0.add_edge(last_idx, event_idx, ());
@@ -460,7 +484,6 @@ fn traverse_and_add_edge(graph: &mut CausalGraph, graph_roots: Vec<NodeIndex>, e
                     break;
                 };
 
-
                 // The event happened after the current event
                 // EVENT > CURRENT
                 if event.stamp().happened_after(cur_node.stamp()) {
@@ -474,13 +497,19 @@ fn traverse_and_add_edge(graph: &mut CausalGraph, graph_roots: Vec<NodeIndex>, e
                 }
 
                 if event.stamp().eq(&cur_node.stamp()) {
-                    let out_neighbors: Vec<NodeIndex> = graph.0.neighbors_directed(idx, Direction::Outgoing).collect();
-                    let in_neighbors: Vec<NodeIndex> = graph.0.neighbors_directed(idx, Direction::Incoming).collect();
+                    let out_neighbors: Vec<NodeIndex> = graph
+                        .0
+                        .neighbors_directed(idx, Direction::Outgoing)
+                        .collect();
+                    let in_neighbors: Vec<NodeIndex> = graph
+                        .0
+                        .neighbors_directed(idx, Direction::Incoming)
+                        .collect();
 
                     // Attach stamp to cur stamp's neighbors
                     for idx in out_neighbors {
                         let edge_idx = graph.0.find_edge(event_idx, idx);
-                        
+
                         if let Some(_) = edge_idx {
                             // Do nothing
                         } else {
@@ -490,7 +519,7 @@ fn traverse_and_add_edge(graph: &mut CausalGraph, graph_roots: Vec<NodeIndex>, e
 
                     for idx in in_neighbors {
                         let edge_idx = graph.0.find_edge(idx, event_idx);
-                        
+
                         if let Some(_) = edge_idx {
                             // Do nothing
                         } else {
@@ -498,7 +527,6 @@ fn traverse_and_add_edge(graph: &mut CausalGraph, graph_roots: Vec<NodeIndex>, e
                         }
                     }
 
-                    
                     println!("DEBUG 4");
                     break;
                 }
@@ -534,7 +562,7 @@ fn traverse_and_add_edge(graph: &mut CausalGraph, graph_roots: Vec<NodeIndex>, e
                     .collect();
 
                 new_roots.push(event_idx);
-                
+
                 graph_roots = new_roots;
 
                 graph.0.add_edge(event_idx, idx, ());
@@ -552,17 +580,17 @@ fn traverse_and_add_edge(graph: &mut CausalGraph, graph_roots: Vec<NodeIndex>, e
     }
 
     graph_roots
-} 
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{thread_rng, Rng};
     use crypto::Identity;
+    use rand::{thread_rng, Rng};
 
     // #[test]
     // /// Causal graph structure:
-    // /// 
+    // ///
     // /// A -> B -> C -> D -> E -> F
     // /// |
     // /// A' -> B' -> C' -> D'
@@ -655,7 +683,7 @@ mod tests {
 
     // #[test]
     // /// Causal graph structure:
-    // /// 
+    // ///
     // /// A -> B -> C -> D -> E -> F
     // /// |
     // /// A' -> B' -> C' -> D'

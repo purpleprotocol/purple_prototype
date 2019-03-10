@@ -12,7 +12,6 @@ pub fn tail_recurse<C, R>(mut init: C, mut f: impl FnMut(C) -> RecResult<C, R>) 
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
