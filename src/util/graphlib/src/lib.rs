@@ -3,6 +3,7 @@
 mod edge;
 mod graph;
 mod vertex_id;
+pub mod iterators;
 
 pub use graph::*;
 pub use vertex_id::*;

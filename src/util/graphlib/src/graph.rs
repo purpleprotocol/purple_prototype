@@ -2,6 +2,7 @@
 
 use crate::edge::Edge;
 use crate::vertex_id::VertexId;
+use crate::iterators::Neighbors;
 use hashbrown::HashMap;
 use std::ptr;
 
@@ -87,10 +88,10 @@ impl<T, M> Graph<T, M> {
                         let mut outbounds = outbounds.clone();
                         outbounds.push(id_ptr2.clone());
 
-                        self.outbound_table.insert(Box::new(*a), outbounds);
+                        self.outbound_table.insert(id_ptr1.clone(), outbounds);
                     }
                     None => {
-                        self.outbound_table.insert(Box::new(*a), vec![id_ptr2.clone()]);
+                        self.outbound_table.insert(id_ptr1.clone(), vec![id_ptr2.clone()]);
                     }
                 }
 
@@ -100,10 +101,10 @@ impl<T, M> Graph<T, M> {
                         let mut inbounds = inbounds.clone();
                         inbounds.push(id_ptr1.clone());
 
-                        self.inbound_table.insert(Box::new(*b), inbounds);
+                        self.inbound_table.insert(id_ptr2.clone(), inbounds);
                     }
                     None => {
-                        self.inbound_table.insert(Box::new(*b), vec![id_ptr1.clone()]);
+                        self.inbound_table.insert(id_ptr2.clone(), vec![id_ptr1.clone()]);
                     }
                 }
 
@@ -185,8 +186,8 @@ impl<T, M> Graph<T, M> {
         self.vertices.len()
     }
 
-    /// Attempts to fetch an item placed in the graph
-    /// using the provided `VertexId`.
+    /// Attempts to fetch a reference to an item placed 
+    /// in the graph using the provided `VertexId`.
     ///
     /// ## Example
     /// ```rust
@@ -195,10 +196,39 @@ impl<T, M> Graph<T, M> {
     /// let mut graph: Graph<usize, ()> = Graph::new();
     /// let id = graph.add_vertex(1);
     ///
-    /// assert_eq!(graph.fetch(&id), Some(&1));
+    /// assert_eq!(*graph.fetch(&id).unwrap(), 1);
     /// ```
     pub fn fetch(&self, id: &VertexId) -> Option<&T> {
         let result = self.vertices.get(id);
+
+        match result {
+            Some((result, _)) => Some(result),
+            None => None,
+        }
+    }
+
+    /// Attempts to fetch a mutable reference to an item placed 
+    /// in the graph using the provided `VertexId`.
+    ///
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let id = graph.add_vertex(1);
+    ///
+    /// assert_eq!(*graph.fetch(&id).unwrap(), 1);
+    /// 
+    /// // Fetch a mutable reference
+    /// let v = graph.fetch_mut(&id).unwrap();
+    /// 
+    /// // Mutate vertex value
+    /// *v = 2;
+    ///
+    /// assert_eq!(*graph.fetch(&id).unwrap(), 2);
+    /// ```
+    pub fn fetch_mut(&mut self, id: &VertexId) -> Option<&mut T> {
+        let result = self.vertices.get_mut(id);
 
         match result {
             Some((result, _)) => Some(result),
@@ -284,9 +314,156 @@ impl<T, M> Graph<T, M> {
         }
     }
 
-    // pub fn in_neighbors(&self, id: &VertexId) -> impl Iterator<Item = &T> {
-    //     unimplemented!();
-    // }
+    /// Returns an iterator over the inbound neighbors
+    /// of the vertex with the given id.
+    /// 
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut neighbors = vec![];
+    ///
+    /// let v1 = graph.add_vertex(0);
+    /// let v2 = graph.add_vertex(1);
+    /// let v3 = graph.add_vertex(2);
+    /// let v4 = graph.add_vertex(3);
+    ///
+    /// graph.add_edge(&v1, &v2).unwrap();
+    /// graph.add_edge(&v3, &v1).unwrap();
+    /// graph.add_edge(&v1, &v4).unwrap();
+    ///
+    /// // Iterate over neighbors
+    /// for v in graph.in_neighbors(&v1) {
+    ///     neighbors.push(v);
+    /// }
+    /// 
+    /// assert_eq!(neighbors.len(), 1);
+    /// assert_eq!(neighbors[0], &v3);
+    /// ```
+    pub fn in_neighbors<'a>(&self, id: &VertexId) -> Neighbors<'_> {
+        let mut collection: Vec<&VertexId> = vec![]; 
+        
+        match self.inbound_table.get(id) {
+            Some(inbounds) => {
+                collection = inbounds
+                    .iter()
+                    .map(|v| v.as_ref())
+                    .collect();
+            },
+            None => { } // Do nothing
+        };
+
+        Neighbors::new(collection)
+    }
+
+    /// Returns an iterator over the outbound neighbors
+    /// of the vertex with the given id.
+    /// 
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut neighbors = vec![];
+    ///
+    /// let v1 = graph.add_vertex(0);
+    /// let v2 = graph.add_vertex(1);
+    /// let v3 = graph.add_vertex(2);
+    /// let v4 = graph.add_vertex(3);
+    ///
+    /// graph.add_edge(&v1, &v2).unwrap();
+    /// graph.add_edge(&v3, &v1).unwrap();
+    /// graph.add_edge(&v1, &v4).unwrap();
+    ///
+    /// // Iterate over neighbors
+    /// for v in graph.out_neighbors(&v1) {
+    ///     neighbors.push(v);
+    /// }
+    /// 
+    /// assert_eq!(neighbors.len(), 2);
+    /// assert_eq!(neighbors[0], &v2);
+    /// assert_eq!(neighbors[1], &v4);
+    /// ```
+    pub fn out_neighbors<'a>(&self, id: &VertexId) -> Neighbors<'_> {
+        let mut collection: Vec<&VertexId> = vec![]; 
+        
+        match self.outbound_table.get(id) {
+            Some(outbounds) => {
+                collection = outbounds
+                    .iter()
+                    .map(|v| v.as_ref())
+                    .collect();
+            },
+            None => { } // Do nothing
+        };
+
+        Neighbors::new(collection)
+    }
+
+    /// Returns an iterator over the outbound neighbors
+    /// of the vertex with the given id.
+    /// 
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut neighbors = vec![];
+    ///
+    /// let v1 = graph.add_vertex(0);
+    /// let v2 = graph.add_vertex(1);
+    /// let v3 = graph.add_vertex(2);
+    /// let v4 = graph.add_vertex(3);
+    ///
+    /// graph.add_edge(&v1, &v2).unwrap();
+    /// graph.add_edge(&v3, &v1).unwrap();
+    /// graph.add_edge(&v1, &v4).unwrap();
+    ///
+    /// // Iterate over neighbors
+    /// for v in graph.neighbors(&v1) {
+    ///     neighbors.push(v);
+    /// }
+    /// 
+    /// assert_eq!(neighbors.len(), 3);
+    /// assert_eq!(neighbors[0], &v2);
+    /// assert_eq!(neighbors[1], &v4);
+    /// assert_eq!(neighbors[2], &v3);
+    /// ```
+    pub fn neighbors<'a>(&self, id: &VertexId) -> Neighbors<'_> {
+        let mut collection: Vec<&VertexId> = vec![]; 
+        
+        match (self.outbound_table.get(id), self.inbound_table.get(id)) {
+            (Some(outbounds), None) => {
+                collection = outbounds
+                    .iter()
+                    .map(|v| v.as_ref())
+                    .collect();
+            },
+            (None, Some(inbounds)) => {
+                collection = inbounds
+                    .iter()
+                    .map(|v| v.as_ref())
+                    .collect();
+            },
+            (Some(outbounds), Some(inbounds)) => {
+                collection = outbounds
+                    .iter()
+                    .map(|v| v.as_ref())
+                    .collect();
+
+                let inbounds: Vec<&VertexId> = inbounds
+                    .iter()
+                    .map(|v| v.as_ref())
+                    .collect();
+
+                collection.extend_from_slice(&inbounds);
+            },
+            (None, None) => { } // Do nothing
+        };
+
+        Neighbors::new(collection)
+    }
 
     // pub fn dfs() -> impl Iterator<Item = &'g T> {
     //     unimplemented!();
