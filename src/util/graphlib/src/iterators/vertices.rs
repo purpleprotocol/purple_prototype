@@ -3,21 +3,21 @@
 use crate::vertex_id::VertexId;
 
 #[derive(Debug)]
-pub struct Neighbors<'a> {
+pub struct VertexIter<'a> {
     current: usize,
     iterable: Vec<&'a VertexId>
 }
 
-impl<'a> Neighbors<'a> {
-    pub fn new(neighbors: Vec<&'a VertexId>) -> Neighbors<'a> {
-        Neighbors {
+impl<'a> VertexIter<'a> {
+    pub fn new(neighbors: Vec<&'a VertexId>) -> VertexIter<'a> {
+        VertexIter {
             current: 0,
             iterable: neighbors
         }
     }
 }
 
-impl<'a> Iterator for Neighbors<'a> {
+impl<'a> Iterator for VertexIter<'a> {
     type Item = &'a VertexId;
 
     fn next(&mut self) -> Option<Self::Item> {

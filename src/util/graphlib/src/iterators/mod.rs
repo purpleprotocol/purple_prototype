@@ -2,8 +2,8 @@
 
 mod dfs;
 mod bfs;
-mod neighbors;
+mod vertices;
 
-pub use neighbors::*;
+pub use vertices::*;
 pub use dfs::*;
 pub use bfs::*;

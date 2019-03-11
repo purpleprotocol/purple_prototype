@@ -2,9 +2,9 @@
 
 use crate::edge::Edge;
 use crate::vertex_id::VertexId;
-use crate::iterators::Neighbors;
+use crate::iterators::VertexIter;
 use hashbrown::HashMap;
-use std::ptr;
+use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum GraphErr {
@@ -13,10 +13,11 @@ pub enum GraphErr {
 
 #[derive(Debug)]
 pub struct Graph<T, M> {
-    vertices: HashMap<Box<VertexId>, (T, Box<VertexId>)>,
+    vertices: HashMap<Arc<VertexId>, (T, Arc<VertexId>)>,
     edges: Vec<Edge<M>>,
-    inbound_table: HashMap<Box<VertexId>, Vec<Box<VertexId>>>,
-    outbound_table: HashMap<Box<VertexId>, Vec<Box<VertexId>>>,
+    roots: Vec<Arc<VertexId>>,
+    inbound_table: HashMap<Arc<VertexId>, Vec<Arc<VertexId>>>,
+    outbound_table: HashMap<Arc<VertexId>, Vec<Arc<VertexId>>>,
 }
 
 impl<T, M> Graph<T, M> {
@@ -24,6 +25,7 @@ impl<T, M> Graph<T, M> {
         Graph {
             vertices: HashMap::new(),
             edges: Vec::new(),
+            roots: Vec::new(),
             inbound_table: HashMap::new(),
             outbound_table: HashMap::new(),
         }
@@ -43,8 +45,11 @@ impl<T, M> Graph<T, M> {
     /// ```
     pub fn add_vertex(&mut self, item: T) -> VertexId {
         let id = VertexId::random();
-        let id_ptr = Box::new(id.clone()); 
+        let id_ptr = Arc::new(id.clone()); 
+
         self.vertices.insert(id_ptr.clone(), (item, id_ptr.clone()));
+        self.roots.push(id_ptr);
+        
         id
     }
 
@@ -107,6 +112,13 @@ impl<T, M> Graph<T, M> {
                         self.inbound_table.insert(id_ptr2.clone(), vec![id_ptr1.clone()]);
                     }
                 }
+
+                // Remove outbound vertex from roots
+                self.roots = self.roots
+                    .iter()
+                    .filter(|v| ***v != *b)
+                    .map(|v| v.clone())
+                    .collect();
 
                 Ok(())
             }
@@ -236,6 +248,30 @@ impl<T, M> Graph<T, M> {
         }
     }
 
+    /// Returns the number of root vertices
+    /// in the graph.
+    /// 
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    ///
+    /// let v1 = graph.add_vertex(0);
+    /// let v2 = graph.add_vertex(1);
+    /// let v3 = graph.add_vertex(2);
+    /// let v4 = graph.add_vertex(3);
+    ///
+    /// graph.add_edge(&v1, &v2).unwrap();
+    /// graph.add_edge(&v3, &v1).unwrap();
+    /// graph.add_edge(&v1, &v4).unwrap();
+    ///
+    /// assert_eq!(graph.roots_count(), 1);
+    /// ```
+    pub fn roots_count(&self) -> usize {
+        self.roots.len()
+    }
+
     /// Returns the total count of neighboring vertices
     /// of the vertex with the given id.
     ///
@@ -341,7 +377,7 @@ impl<T, M> Graph<T, M> {
     /// assert_eq!(neighbors.len(), 1);
     /// assert_eq!(neighbors[0], &v3);
     /// ```
-    pub fn in_neighbors<'a>(&self, id: &VertexId) -> Neighbors<'_> {
+    pub fn in_neighbors<'a>(&self, id: &VertexId) -> VertexIter<'_> {
         let mut collection: Vec<&VertexId> = vec![]; 
         
         match self.inbound_table.get(id) {
@@ -354,7 +390,7 @@ impl<T, M> Graph<T, M> {
             None => { } // Do nothing
         };
 
-        Neighbors::new(collection)
+        VertexIter::new(collection)
     }
 
     /// Returns an iterator over the outbound neighbors
@@ -385,7 +421,7 @@ impl<T, M> Graph<T, M> {
     /// assert_eq!(neighbors[0], &v2);
     /// assert_eq!(neighbors[1], &v4);
     /// ```
-    pub fn out_neighbors<'a>(&self, id: &VertexId) -> Neighbors<'_> {
+    pub fn out_neighbors<'a>(&self, id: &VertexId) -> VertexIter<'_> {
         let mut collection: Vec<&VertexId> = vec![]; 
         
         match self.outbound_table.get(id) {
@@ -398,7 +434,7 @@ impl<T, M> Graph<T, M> {
             None => { } // Do nothing
         };
 
-        Neighbors::new(collection)
+        VertexIter::new(collection)
     }
 
     /// Returns an iterator over the outbound neighbors
@@ -430,7 +466,7 @@ impl<T, M> Graph<T, M> {
     /// assert_eq!(neighbors[1], &v4);
     /// assert_eq!(neighbors[2], &v3);
     /// ```
-    pub fn neighbors<'a>(&self, id: &VertexId) -> Neighbors<'_> {
+    pub fn neighbors<'a>(&self, id: &VertexId) -> VertexIter<'_> {
         let mut collection: Vec<&VertexId> = vec![]; 
         
         match (self.outbound_table.get(id), self.inbound_table.get(id)) {
@@ -462,7 +498,43 @@ impl<T, M> Graph<T, M> {
             (None, None) => { } // Do nothing
         };
 
-        Neighbors::new(collection)
+        VertexIter::new(collection)
+    }
+
+    /// Returns an iterator over the root vertices
+    /// of the graph.
+    /// 
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut roots = vec![];
+    ///
+    /// let v1 = graph.add_vertex(0);
+    /// let v2 = graph.add_vertex(1);
+    /// let v3 = graph.add_vertex(2);
+    /// let v4 = graph.add_vertex(3);
+    ///
+    /// graph.add_edge(&v1, &v2).unwrap();
+    /// graph.add_edge(&v3, &v1).unwrap();
+    /// graph.add_edge(&v1, &v4).unwrap();
+    ///
+    /// // Iterate over roots
+    /// for v in graph.roots() {
+    ///     roots.push(v);
+    /// }
+    /// 
+    /// assert_eq!(roots.len(), 1);
+    /// assert_eq!(roots[0], &v3);
+    /// ```
+    pub fn roots<'a>(&self) -> VertexIter<'_> {
+        let collection: Vec<&VertexId> = self.roots
+            .iter()
+            .map(|v| v.as_ref())
+            .collect();
+
+        VertexIter::new(collection)
     }
 
     // pub fn dfs() -> impl Iterator<Item = &'g T> {
