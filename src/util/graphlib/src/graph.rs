@@ -2,7 +2,7 @@
 
 use crate::edge::Edge;
 use crate::vertex_id::VertexId;
-use crate::iterators::VertexIter;
+use crate::iterators::{Dfs, VertexIter};
 use hashbrown::HashMap;
 use std::sync::Arc;
 
@@ -537,16 +537,113 @@ impl<T, M> Graph<T, M> {
         VertexIter::new(collection)
     }
 
-    // pub fn dfs() -> impl Iterator<Item = &'g T> {
-    //     unimplemented!();
-    // }
+    /// Returns an iterator over all of the
+    /// vertices that are placed in the graph.
+    ///
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut vertices = vec![];
+    ///
+    /// let v1 = graph.add_vertex(0);
+    /// let v2 = graph.add_vertex(1);
+    /// let v3 = graph.add_vertex(2);
+    /// let v4 = graph.add_vertex(3);
+    ///
+    /// // Iterate over vertices
+    /// for v in graph.vertices() {
+    ///     vertices.push(v);
+    /// }
+    /// 
+    /// assert_eq!(vertices.len(), 4);
+    /// ```
+    pub fn vertices(&self) -> VertexIter<'_> {
+        let collection: Vec<&VertexId> = self.vertices
+            .iter()
+            .map(|(v, _)| v.as_ref())
+            .collect();
+
+        VertexIter::new(collection)
+    }
+
+    /// Returns an iterator over the vertices
+    /// of the graph in Depth-First Order.
+    /// 
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut vertices = vec![];
+    ///
+    /// let v1 = graph.add_vertex(0);
+    /// let v2 = graph.add_vertex(1);
+    /// let v3 = graph.add_vertex(2);
+    /// let v4 = graph.add_vertex(3);
+    ///
+    /// graph.add_edge(&v1, &v2).unwrap();
+    /// graph.add_edge(&v3, &v1).unwrap();
+    /// graph.add_edge(&v1, &v4).unwrap();
+    ///
+    /// // Iterate over vertices
+    /// for v in graph.dfs() {
+    ///     vertices.push(v);
+    /// }
+    /// 
+    /// assert_eq!(vertices.len(), 4);
+    /// assert_eq!(vertices[0], &v3);
+    /// assert_eq!(vertices[1], &v1);
+    /// assert_eq!(vertices[2], &v2);
+    /// assert_eq!(vertices[3], &v4);
+    /// ```
+    pub fn dfs<'a>(&self) -> Dfs<'_, T, M> {
+        Dfs::new(self)
+    }
 
     // pub fn bfs() -> impl Iterator<Item = &'g T> {
     //     unimplemented!();
     // }
+
+
+    /// Attempts to fetch a reference to a stored vertex id
+    /// which is equal to the given `VertexId`.
+    pub fn fetch_id_ref<'b>(&'b self, id: &VertexId) -> Option<&'b VertexId> {
+        match self.vertices.get(id) {
+            Some((_, id_ptr)) => Some(id_ptr.as_ref()),
+            None => None
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dfs() {
+        let mut graph: Graph<usize, ()> = Graph::new();
+        let mut vertices = vec![];
+    
+        let v1 = graph.add_vertex(0);
+        let v2 = graph.add_vertex(1);
+        let v3 = graph.add_vertex(2);
+        let v4 = graph.add_vertex(3);
+    
+        graph.add_edge(&v1, &v2).unwrap();
+        graph.add_edge(&v3, &v1).unwrap();
+        graph.add_edge(&v1, &v4).unwrap();
+    
+        // Iterate over vertices
+        for v in graph.dfs() {
+            vertices.push(v);
+        }
+     
+        assert_eq!(vertices.len(), 4);
+        assert_eq!(vertices[0], &v3);
+        assert_eq!(vertices[1], &v1);
+        assert_eq!(vertices[2], &v2);
+        assert_eq!(vertices[3], &v4);
+    }
 }
