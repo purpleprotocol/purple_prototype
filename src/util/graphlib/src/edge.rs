@@ -20,4 +20,10 @@ impl<M> Edge<M> {
             meta: meta,
         }
     }
+
+    /// Returns true if either the inbound or outbound
+    /// vertex is matching the given `VertexId`.
+    pub fn matches_any(&self, id: &VertexId) -> bool {
+        id == self.inbound.as_ref() || id == self.outbound.as_ref()
+    }
 }

@@ -248,6 +248,33 @@ impl<T, M> Graph<T, M> {
         }
     }
 
+    /// Removes a vertex that matches the given `VertexId`.
+    /// 
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    ///
+    /// let v1 = graph.add_vertex(1);
+    /// let v2 = graph.add_vertex(2);
+    /// let v3 = graph.add_vertex(3);
+    ///
+    /// // The remove operation is idempotent
+    /// graph.remove(&v2);
+    /// graph.remove(&v2);
+    /// graph.remove(&v2);
+    /// 
+    /// assert_eq!(graph.vertex_count(), 2);
+    /// ```
+    pub fn remove(&mut self, id: &VertexId) {
+        self.vertices.remove(id);
+        self.inbound_table.remove(id);
+        self.outbound_table.remove(id);
+        self.edges.retain(|e| !e.matches_any(id));
+        self.roots.retain(|r| r.as_ref() != id);
+    }
+
     /// Returns the number of root vertices
     /// in the graph.
     /// 
