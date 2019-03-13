@@ -275,6 +275,39 @@ impl<T, M> Graph<T, M> {
         self.roots.retain(|r| r.as_ref() != id);
     }
 
+
+    /// Iterates through the graph and only keeps
+    /// vertices that match the given condition.
+    /// 
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    ///
+    /// graph.add_vertex(1);
+    /// graph.add_vertex(2);
+    /// graph.add_vertex(2);
+    /// graph.add_vertex(2);
+    /// graph.add_vertex(3);
+    ///
+    /// graph.retain(|v| *v != 2);
+    /// 
+    /// assert_eq!(graph.vertex_count(), 2);
+    /// ```
+    pub fn retain(&mut self, f: impl Fn(&T) -> bool) {
+        let vertices: Vec<VertexId> = self.vertices().map(|v| *v).collect();
+        let vertices: Vec<VertexId> = vertices
+            .iter()
+            .filter(|v| !f(self.fetch(v).unwrap()))
+            .map(|v| *v)
+            .collect();
+
+        vertices 
+            .iter()
+            .for_each(|v| self.remove(v));
+    }
+
     /// Returns the number of root vertices
     /// in the graph.
     /// 
