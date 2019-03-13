@@ -295,17 +295,44 @@ impl<T, M> Graph<T, M> {
     /// 
     /// assert_eq!(graph.vertex_count(), 2);
     /// ```
-    pub fn retain(&mut self, f: impl Fn(&T) -> bool) {
+    pub fn retain(&mut self, fun: impl Fn(&T) -> bool) {
         let vertices: Vec<VertexId> = self.vertices().map(|v| *v).collect();
         let vertices: Vec<VertexId> = vertices
             .iter()
-            .filter(|v| !f(self.fetch(v).unwrap()))
+            .filter(|v| !fun(self.fetch(v).unwrap()))
             .map(|v| *v)
             .collect();
 
         vertices 
             .iter()
             .for_each(|v| self.remove(v));
+    }
+
+    /// Performs a fold over the vertices that are
+    /// situated in the graph in Depth-First Order.
+    ///
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    ///
+    /// graph.add_vertex(1);
+    /// graph.add_vertex(2);
+    /// graph.add_vertex(3);
+    ///
+    /// let result = graph.fold(0, |v, acc| v + acc);
+    /// 
+    /// assert_eq!(result, 6);
+    /// ```
+    pub fn fold<A>(&mut self, initial: A, fun: impl Fn(&T, A) -> A) -> A {
+        let mut acc = initial;
+
+        for v in self.dfs() {
+            acc = fun(self.fetch(v).unwrap(), acc)
+        }
+
+        acc
     }
 
     /// Returns the number of root vertices
