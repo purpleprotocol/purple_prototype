@@ -34,8 +34,6 @@ impl<'a, T, M> Iterator for Dfs<'a, T, M> {
     type Item = &'a VertexId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        println!("DEBUG 1");
-
         while self.roots_stack.len() != 0 {
             let root = self.roots_stack[self.roots_stack.len()-1].clone();
 
@@ -60,7 +58,6 @@ impl<'a, T, M> Iterator for Dfs<'a, T, M> {
             loop {
                 if self.iterable.in_neighbors_count(current.as_ref()) == 0 && self.recursion_stack.len() > 0 {
                     current = self.recursion_stack.pop().unwrap();
-
                     continue;
                 } 
 

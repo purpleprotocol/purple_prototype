@@ -2,7 +2,7 @@
 
 use crate::edge::Edge;
 use crate::vertex_id::VertexId;
-use crate::iterators::{Dfs, VertexIter};
+use crate::iterators::{Bfs, Dfs, VertexIter};
 use hashbrown::HashMap;
 use std::sync::Arc;
 
@@ -602,9 +602,48 @@ impl<T, M> Graph<T, M> {
         Dfs::new(self)
     }
 
-    // pub fn bfs() -> impl Iterator<Item = &'g T> {
-    //     unimplemented!();
-    // }
+    /// Returns an iterator over the vertices
+    /// of the graph in Breadth-First Order.
+    /// 
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut vertices = vec![];
+    ///
+    /// let v1 = graph.add_vertex(0);
+    /// let v2 = graph.add_vertex(1);
+    /// let v3 = graph.add_vertex(2);
+    /// let v4 = graph.add_vertex(3);
+    /// let v5 = graph.add_vertex(4);
+    /// let v6 = graph.add_vertex(5);
+    /// let v7 = graph.add_vertex(6);
+    ///
+    /// graph.add_edge(&v1, &v2).unwrap();
+    /// graph.add_edge(&v3, &v1).unwrap();
+    /// graph.add_edge(&v1, &v4).unwrap();
+    /// graph.add_edge(&v1, &v7).unwrap();
+    /// graph.add_edge(&v2, &v5).unwrap();
+    /// graph.add_edge(&v5, &v6).unwrap();
+    ///
+    /// // Iterate over vertices
+    /// for v in graph.bfs() {
+    ///     vertices.push(v);
+    /// }
+    /// 
+    /// assert_eq!(vertices.len(), 7);
+    /// assert_eq!(vertices[0], &v3);
+    /// assert_eq!(vertices[1], &v1);
+    /// assert_eq!(vertices[2], &v2);
+    /// assert_eq!(vertices[3], &v4);
+    /// assert_eq!(vertices[4], &v7);
+    /// assert_eq!(vertices[5], &v5);
+    /// assert_eq!(vertices[6], &v6);
+    /// ```
+    pub fn bfs<'a>(&self) -> Bfs<'_, T, M> {
+        Bfs::new(self)
+    }
 
 
     /// Attempts to fetch a reference to a stored vertex id
@@ -645,5 +684,37 @@ mod tests {
         assert_eq!(vertices[1], &v1);
         assert_eq!(vertices[2], &v2);
         assert_eq!(vertices[3], &v4);
+    }
+
+    #[test]
+    fn dfs_mul_roots() {
+        let mut graph: Graph<usize, ()> = Graph::new();
+        let mut vertices = vec![];
+    
+        let v1 = graph.add_vertex(0);
+        let v2 = graph.add_vertex(1);
+        let v3 = graph.add_vertex(2);
+        let v4 = graph.add_vertex(3);
+    
+        let v5 = graph.add_vertex(4);
+        let v6 = graph.add_vertex(5);
+
+        graph.add_edge(&v1, &v2).unwrap();
+        graph.add_edge(&v3, &v1).unwrap();
+        graph.add_edge(&v1, &v4).unwrap();
+        graph.add_edge(&v5, &v6).unwrap();
+
+        // Iterate over vertices
+        for v in graph.dfs() {
+            vertices.push(v);
+        }
+     
+        assert_eq!(vertices.len(), 6);
+        assert_eq!(vertices[0], &v5);
+        assert_eq!(vertices[1], &v6);
+        assert_eq!(vertices[2], &v3);
+        assert_eq!(vertices[3], &v1);
+        assert_eq!(vertices[4], &v2);
+        assert_eq!(vertices[5], &v4);
     }
 }
