@@ -21,6 +21,12 @@ impl<M> Edge<M> {
         }
     }
 
+    /// Returns true if the given vertex ids are the 
+    /// inbound and outbound vertices of the edge.
+    pub fn matches(&self, a: &VertexId, b: &VertexId) -> bool {
+        a == self.inbound.as_ref() && b == self.outbound.as_ref()
+    }
+
     /// Returns true if either the inbound or outbound
     /// vertex is matching the given `VertexId`.
     pub fn matches_any(&self, id: &VertexId) -> bool {

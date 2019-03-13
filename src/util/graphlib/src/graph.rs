@@ -275,6 +275,44 @@ impl<T, M> Graph<T, M> {
         self.roots.retain(|r| r.as_ref() != id);
     }
 
+    /// Removes the specified edge from the graph.
+    /// 
+    /// ## Example
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize, ()> = Graph::new();
+    ///
+    /// let v1 = graph.add_vertex(0);
+    /// let v2 = graph.add_vertex(1);
+    /// let v3 = graph.add_vertex(2);
+    /// let v4 = graph.add_vertex(3);
+    ///
+    /// graph.add_edge(&v1, &v2).unwrap();
+    /// graph.add_edge(&v2, &v3).unwrap();
+    /// graph.add_edge(&v3, &v4).unwrap();
+    /// 
+    /// assert_eq!(graph.edge_count(), 3);
+    /// 
+    /// // The remove edge operation is idempotent
+    /// graph.remove_edge(&v2, &v3);
+    /// graph.remove_edge(&v2, &v3);
+    /// graph.remove_edge(&v2, &v3);
+    /// 
+    /// assert_eq!(graph.edge_count(), 2);
+    /// ```
+    pub fn remove_edge(&mut self, a: &VertexId, b: &VertexId) {
+        let mut remove = false;
+
+        if let Some(outbounds) = self.outbound_table.get_mut(a) {
+            outbounds.retain(|v| *v.as_ref() != *b);
+            remove = true;
+        } 
+
+        if remove {
+            self.edges.retain(|e| !e.matches(a, b));
+        }
+    } 
 
     /// Iterates through the graph and only keeps
     /// vertices that match the given condition.
