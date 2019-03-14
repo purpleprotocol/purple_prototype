@@ -7,11 +7,11 @@ edition = "2018"
 [dependencies]
 petgraph = "0.4.13"
 parking_lot = "0.6"
+graphlib = "0.1.0"
 events = { path = "../events" }
 network = { path = "../network" }
 causality = { path = "../causality" }
 recursive = { path = "../util/recursive" }
-graphlib = { path = "../util/graphlib" }
 
 [dev-dependencies]
 rand = "0.6.0"
