@@ -9,19 +9,20 @@ use std::sync::Arc;
 #[derive(Clone, Debug, PartialEq)]
 pub enum GraphErr {
     NoSuchVertex,
+    CannotAddEdge
 }
 
 #[derive(Debug)]
-pub struct Graph<T, M> {
+pub struct Graph<T> {
     vertices: HashMap<Arc<VertexId>, (T, Arc<VertexId>)>,
-    edges: Vec<Edge<M>>,
+    edges: Vec<Edge>,
     roots: Vec<Arc<VertexId>>,
     inbound_table: HashMap<Arc<VertexId>, Vec<Arc<VertexId>>>,
     outbound_table: HashMap<Arc<VertexId>, Vec<Arc<VertexId>>>,
 }
 
-impl<T, M> Graph<T, M> {
-    pub fn new() -> Graph<T, M> {
+impl<T> Graph<T> {
+    pub fn new() -> Graph<T> {
         Graph {
             vertices: HashMap::new(),
             edges: Vec::new(),
@@ -38,7 +39,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     /// let id = graph.add_vertex(1);
     ///
     /// assert_eq!(graph.fetch(&id).unwrap(), &1);
@@ -59,7 +60,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::{Graph, GraphErr, VertexId};
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// // Id of vertex that is not place in the graph
     /// let id = VertexId::random();
@@ -67,22 +68,27 @@ impl<T, M> Graph<T, M> {
     /// let v1 = graph.add_vertex(1);
     /// let v2 = graph.add_vertex(2);
     ///
-    /// // Succeeds on adding an edge between
-    /// // existing vertices.
-    /// assert_eq!(graph.add_edge(&v1, &v2), Ok(()));
+    /// // Adding an edge is idempotent
+    /// graph.add_edge(&v1, &v2);
+    /// graph.add_edge(&v1, &v2);
+    /// graph.add_edge(&v1, &v2);
     ///
     /// // Fails on adding an edge between an
     /// // existing vertex and a non-existing one.
     /// assert_eq!(graph.add_edge(&v1, &id), Err(GraphErr::NoSuchVertex));
     /// ```
     pub fn add_edge(&mut self, a: &VertexId, b: &VertexId) -> Result<(), GraphErr> {
+        if self.has_edge(a, b) {
+            return Ok(());
+        }
+        
         let a_prime = self.vertices.get(a);
         let b_prime = self.vertices.get(b);
 
         // Check vertices existence
         match (a_prime, b_prime) {
             (Some((_, id_ptr1)), Some((_, id_ptr2))) => {
-                let edge = Edge::<M>::new(id_ptr1.clone(), id_ptr2.clone(), None);
+                let edge = Edge::new(id_ptr1.clone(), id_ptr2.clone());
 
                 // Push edge
                 self.edges.push(edge);
@@ -133,7 +139,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// let v1 = graph.add_vertex(1);
     /// let v2 = graph.add_vertex(2);
@@ -162,7 +168,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// let v1 = graph.add_vertex(0);
     /// let v2 = graph.add_vertex(1);
@@ -186,7 +192,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// graph.add_vertex(1);
     /// graph.add_vertex(2);
@@ -205,7 +211,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     /// let id = graph.add_vertex(1);
     ///
     /// assert_eq!(*graph.fetch(&id).unwrap(), 1);
@@ -226,7 +232,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     /// let id = graph.add_vertex(1);
     ///
     /// assert_eq!(*graph.fetch(&id).unwrap(), 1);
@@ -254,7 +260,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// let v1 = graph.add_vertex(1);
     /// let v2 = graph.add_vertex(2);
@@ -270,6 +276,14 @@ impl<T, M> Graph<T, M> {
     pub fn remove(&mut self, id: &VertexId) {
         self.vertices.remove(id);
         self.inbound_table.remove(id);
+
+        // Mark outbounds as roots if they have no inbounds.
+        for (n, _) in self.outbound_table.iter() {
+            if self.in_neighbors_count(n) == 0 {
+                self.roots.push(n.clone());
+            }
+        }
+
         self.outbound_table.remove(id);
         self.edges.retain(|e| !e.matches_any(id));
         self.roots.retain(|r| r.as_ref() != id);
@@ -281,7 +295,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// let v1 = graph.add_vertex(0);
     /// let v2 = graph.add_vertex(1);
@@ -309,6 +323,12 @@ impl<T, M> Graph<T, M> {
             remove = true;
         } 
 
+        // If outbound vertex doesn't have any more inbounds,
+        // mark it as root.
+        if self.in_neighbors_count(&b) == 0 {
+            self.roots.push(Arc::from(*b));
+        }
+
         if remove {
             self.edges.retain(|e| !e.matches(a, b));
         }
@@ -321,7 +341,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// graph.add_vertex(1);
     /// graph.add_vertex(2);
@@ -353,7 +373,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// graph.add_vertex(1);
     /// graph.add_vertex(2);
@@ -373,6 +393,38 @@ impl<T, M> Graph<T, M> {
         acc
     }
 
+    /// Returns true if the graph has cycles.
+    /// 
+    /// ```rust
+    /// use graphlib::Graph;
+    ///
+    /// let mut graph: Graph<usize> = Graph::new();
+    ///
+    /// let v1 = graph.add_vertex(0);
+    /// let v2 = graph.add_vertex(1);
+    /// let v3 = graph.add_vertex(2);
+    /// let v4 = graph.add_vertex(3);
+    /// 
+    /// println!("V1: {:?}", v1);
+    /// println!("V2: {:?}", v2);
+    /// println!("V3: {:?}", v3);
+    /// println!("V4: {:?}", v4);
+    ///
+    /// graph.add_edge(&v1, &v2).unwrap();
+    /// graph.add_edge(&v2, &v3).unwrap();
+    /// graph.add_edge(&v3, &v4).unwrap();
+    /// 
+    /// assert!(!graph.is_cyclic());
+    /// 
+    /// graph.add_edge(&v3, &v1);
+    /// 
+    /// assert!(graph.is_cyclic());
+    /// ```
+    pub fn is_cyclic(&self) -> bool {
+        let mut dfs = self.dfs();
+        dfs.is_cyclic()
+    }
+
     /// Returns the number of root vertices
     /// in the graph.
     /// 
@@ -380,7 +432,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// let v1 = graph.add_vertex(0);
     /// let v2 = graph.add_vertex(1);
@@ -404,7 +456,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// let v1 = graph.add_vertex(0);
     /// let v2 = graph.add_vertex(1);
@@ -428,7 +480,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// let v1 = graph.add_vertex(0);
     /// let v2 = graph.add_vertex(1);
@@ -455,18 +507,22 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     ///
     /// let v1 = graph.add_vertex(0);
     /// let v2 = graph.add_vertex(1);
     /// let v3 = graph.add_vertex(2);
     /// let v4 = graph.add_vertex(3);
+    /// let v5 = graph.add_vertex(4);
     ///
     /// graph.add_edge(&v1, &v2).unwrap();
     /// graph.add_edge(&v3, &v1).unwrap();
     /// graph.add_edge(&v1, &v4).unwrap();
+    /// graph.add_edge(&v2, &v5).unwrap();
+    /// graph.add_edge(&v2, &v3).unwrap();
     ///
     /// assert_eq!(graph.out_neighbors_count(&v1), 2);
+    /// assert_eq!(graph.out_neighbors_count(&v2), 2);
     /// ```
     pub fn out_neighbors_count(&self, id: &VertexId) -> usize {
         match self.outbound_table.get(id) {
@@ -482,7 +538,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     /// let mut neighbors = vec![];
     ///
     /// let v1 = graph.add_vertex(0);
@@ -525,7 +581,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     /// let mut neighbors = vec![];
     ///
     /// let v1 = graph.add_vertex(0);
@@ -569,7 +625,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     /// let mut neighbors = vec![];
     ///
     /// let v1 = graph.add_vertex(0);
@@ -633,7 +689,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     /// let mut roots = vec![];
     ///
     /// let v1 = graph.add_vertex(0);
@@ -669,7 +725,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     /// let mut vertices = vec![];
     ///
     /// let v1 = graph.add_vertex(0);
@@ -700,7 +756,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     /// let mut vertices = vec![];
     ///
     /// let v1 = graph.add_vertex(0);
@@ -723,7 +779,7 @@ impl<T, M> Graph<T, M> {
     /// assert_eq!(vertices[2], &v2);
     /// assert_eq!(vertices[3], &v4);
     /// ```
-    pub fn dfs<'a>(&self) -> Dfs<'_, T, M> {
+    pub fn dfs<'a>(&self) -> Dfs<'_, T> {
         Dfs::new(self)
     }
 
@@ -734,7 +790,7 @@ impl<T, M> Graph<T, M> {
     /// ```rust
     /// use graphlib::Graph;
     ///
-    /// let mut graph: Graph<usize, ()> = Graph::new();
+    /// let mut graph: Graph<usize> = Graph::new();
     /// let mut vertices = vec![];
     ///
     /// let v1 = graph.add_vertex(0);
@@ -766,7 +822,7 @@ impl<T, M> Graph<T, M> {
     /// assert_eq!(vertices[5], &v5);
     /// assert_eq!(vertices[6], &v6);
     /// ```
-    pub fn bfs<'a>(&self) -> Bfs<'_, T, M> {
+    pub fn bfs<'a>(&self) -> Bfs<'_, T> {
         Bfs::new(self)
     }
 
@@ -787,7 +843,7 @@ mod tests {
 
     #[test]
     fn dfs() {
-        let mut graph: Graph<usize, ()> = Graph::new();
+        let mut graph: Graph<usize> = Graph::new();
         let mut vertices = vec![];
     
         let v1 = graph.add_vertex(0);
@@ -813,7 +869,7 @@ mod tests {
 
     #[test]
     fn dfs_mul_roots() {
-        let mut graph: Graph<usize, ()> = Graph::new();
+        let mut graph: Graph<usize> = Graph::new();
         let mut vertices = vec![];
     
         let v1 = graph.add_vertex(0);

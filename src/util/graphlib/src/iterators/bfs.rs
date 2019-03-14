@@ -7,16 +7,16 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 #[derive(Debug)]
-pub struct Bfs<'a, T, M> {
+pub struct Bfs<'a, T> {
     queue: VecDeque<Arc<VertexId>>,
     current_ptr: Option<Arc<VertexId>>,
     visited_stack: Vec<Arc<VertexId>>,
     roots_stack: Vec<Arc<VertexId>>,
-    iterable: &'a Graph<T, M>
+    iterable: &'a Graph<T>
 }
 
-impl<'a, T, M> Bfs<'a, T, M> {
-    pub fn new(graph: &'a Graph<T, M>) -> Bfs<'_, T, M> {
+impl<'a, T> Bfs<'a, T> {
+    pub fn new(graph: &'a Graph<T>) -> Bfs<'_, T> {
         let mut roots_stack = Vec::with_capacity(graph.roots_count());
 
         for v in graph.roots() {
@@ -35,7 +35,7 @@ impl<'a, T, M> Bfs<'a, T, M> {
     }
 }
 
-impl<'a, T, M> Iterator for Bfs<'a, T, M> {
+impl<'a, T> Iterator for Bfs<'a, T> {
     type Item = &'a VertexId;
 
     fn next(&mut self) -> Option<Self::Item> {
