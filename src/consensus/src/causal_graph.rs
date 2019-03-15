@@ -17,17 +17,15 @@
 */
 
 use events::Event;
-use petgraph::stable_graph::StableGraph;
-use petgraph::visit::Dfs;
-use petgraph::Directed;
+use graphlib::Graph;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
-pub struct CausalGraph(pub StableGraph<Arc<Event>, (), Directed>);
+pub struct CausalGraph(pub Graph<Arc<Event>>);
 
 impl CausalGraph {
     pub fn new() -> CausalGraph {
-        CausalGraph(StableGraph::new())
+        CausalGraph(Graph::new())
     }
 
     /// Returns `true` if any event from the `CausalGraph`
@@ -36,10 +34,8 @@ impl CausalGraph {
     where
         F: Fn(Arc<Event>) -> bool,
     {
-        let mut dfs = Dfs::empty(&self.0);
-
-        while let Some(i) = dfs.next(&self.0) {
-            if fun(self.0[i].clone()) {
+        for v in self.0.vertices() {
+            if fun(self.0.fetch(v).unwrap().clone()) {
                 return true;
             }
         }
@@ -48,6 +44,6 @@ impl CausalGraph {
     }
 
     pub fn empty(&self) -> bool {
-        self.0.node_count() == 0
+        self.0.vertex_count() == 0
     }
 }
