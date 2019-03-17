@@ -22,9 +22,11 @@ use crate::validator_state::ValidatorState;
 use causality::Stamp;
 use events::Event;
 use network::NodeId;
+use hashbrown::HashMap;
 use parking_lot::{Mutex, RwLock};
 use graphlib::{VertexId, Graph};
 use std::sync::Arc;
+use recursive::*;
 
 #[derive(Clone, Debug)]
 pub enum CGError {
@@ -69,9 +71,9 @@ impl ConsensusMachine {
         let mut graph = self.causal_graph.write();
         let event_stamp = event.stamp();
 
-        if graph.any(|e| e == event) {
-            return Err(CGError::AlreadyInCG);
-        }
+        // if graph.any(|e| e == event) {
+        //     return Err(CGError::AlreadyInCG);
+        // }
 
         // If the causal graph is empty,
         // just append a new node and return.
@@ -82,106 +84,104 @@ impl ConsensusMachine {
 
         // Append node to graph
         let pushed = graph.0.add_vertex(event.clone());
-        let mut edges_to_add = vec![];
 
-        {
-            if graph.0.edge_count() == 0 {
-                for v in graph.0.vertices() {
-                    let edge_count = graph.0.edge_count();
-
-                    // Skip pushed event
-                    if *v == pushed {
-                        continue;
-                    }
-
-                    // Pushed event happened after stored event with 0 edge count.
-                    if event_stamp.happened_after(graph.0.fetch(v).unwrap().stamp()) && edge_count == 0 {
-                        edges_to_add.push((v.clone(), pushed));
-                        continue;
-                    }
-
-                    // Pushed event happened after stored event.
-                    if event_stamp.happened_after(graph.0.fetch(v).unwrap().stamp()) {
-                        if graph.0.out_neighbors_count(v) == 0 {
-                            edges_to_add.push((v.clone(), pushed));
-                            continue;
-                        }
-                    }
-
-                    // Pushed event happened before stored event with 0 edge count.
-                    if event_stamp.happened_before(graph.0.fetch(v).unwrap().stamp()) && edge_count == 0 {
-                        edges_to_add.push((pushed, v.clone()));
-                        continue;
-                    }
-
-                    // Pushed event happened before stored event.
-                    if event_stamp.happened_before(graph.0.fetch(v).unwrap().stamp()) {
-                        if graph.0.in_neighbors_count(v) == 0 {
-                            edges_to_add.push((pushed, v.clone()));
-                        }
-                    }
-                }
-            } else {
-                // Create edges based on the causal relationships
-                // of the events that are placed in the graph.
-                for v in graph.0.vertices() {
-                    // Skip pushed event
-                    if *v == pushed {
-                        continue;
-                    }
-
-                    // Pushed event happened after stored event.
-                    if event_stamp.happened_after(graph.0.fetch(v).unwrap().stamp()) {
-                        // Add edge and continue if there aren't
-                        // any outgoing neighbors.
-                        if graph.0.out_neighbors_count(v) == 0 {
-                            edges_to_add.push((v.clone(), pushed));
-                            continue;
-                        }
-
-                        for v in graph.0.out_neighbors(v) {
-                            let edges = traverse_and_add_edge(
-                                &graph,
-                                event.clone(),
-                                &pushed,
-                                v,
-                                Direction::Outgoing,
-                            );
-
-                            edges
-                                .iter()
-                                .for_each(|(o, i)| edges_to_add.push((**o, **i)));
-                        }
-
-                        continue;
-                    }
-
-                    // Pushed event happened before stored event.
-                    if event_stamp.happened_before(graph.0.fetch(v).unwrap().stamp()) {
-                        // Add edge and continue if there aren't
-                        // any incoming neighbors.
-                        if graph.0.in_neighbors_count(v) == 0 {
-                            edges_to_add.push((pushed, v.clone()));
-                            continue;
-                        }
-
-                        for v in graph.0.in_neighbors(v) {
-                            let edges = traverse_and_add_edge(
-                                &graph,
-                                event.clone(),
-                                &pushed,
-                                v,
-                                Direction::Incoming,
-                            );
-
-                            edges
-                                .iter()
-                                .for_each(|(o, i)| edges_to_add.push((**o, **i)));
-                        }
-                    }
-                }
-            }
+        if graph.0.vertex_count() == 1 {
+            return Ok(());
         }
+
+        let edges_to_add = {
+            let mut visited_map: HashMap<&VertexId, bool> = graph.0
+                .vertices()
+                .map(|v| (v, false))
+                .collect();
+
+            // Traverse neighbors starting from root vertices
+            // using a recursive algorithm.
+            //
+            // While traversing:
+            //
+            // If the event happened after the current event,
+            // we add an edge between the current event and it 
+            // and we continue to the next outbound neighbors.
+            //
+            // If the event happened before the current event,
+            // and there is an edge between the last event
+            // and the pushed event, remove the vertex between
+            // last and current then add an edge between pushed
+            // and current such that the following is true:
+            //
+            // `last < pushed < current`
+            // 
+            // If there is no event between between the last and 
+            // pushed event, we just add an edge between pushed and
+            // current.
+            let start_events = graph.0.roots().collect();
+
+            let (edges_to_add, _)  = tail_recurse((vec![], start_events), |(mut edges, events): (Vec<(VertexId, VertexId)>, Vec<&VertexId>)| {
+                let edge_count = edges.len() + graph.0.edge_count();
+                
+                // Exit condition
+                if events.len() == 0 {
+                    return RecResult::Return((edges, ()));
+                }
+
+                // Split into head and tail
+                let (h, t) = events.split_at(1);
+                let h = h[0];
+                let mut t = t.to_vec();
+                let is_visited = visited_map.get(h).unwrap();
+                
+                // Skip visited vertices
+                if *is_visited {
+                    return RecResult::Continue((edges, t));
+                }
+
+                // Skip pushed event
+                if pushed == *h {
+                    return RecResult::Continue((edges, t));
+                } 
+
+                // Mark as visited
+                visited_map.insert(h, true);
+
+                // Pushed event happened after stored event with 0 edge count.
+                if event_stamp.happened_after(graph.0.fetch(h).unwrap().stamp()) && edge_count == 0 {
+                    edges.push((h.clone(), pushed.clone()));
+                    return RecResult::Continue((edges, t));
+                }
+
+                // Pushed event happened after stored event.
+                if event_stamp.happened_after(graph.0.fetch(h).unwrap().stamp()) {
+                    if graph.0.out_neighbors_count(h) == 0 {
+                        edges.push((h.clone(), pushed.clone()));
+                        return RecResult::Continue((edges, t));
+                    }
+                }
+
+                // Pushed event happened before stored event with 0 edge count.
+                if event_stamp.happened_before(graph.0.fetch(h).unwrap().stamp()) && edge_count == 0 {
+                    edges.push((pushed.clone(), h.clone()));
+                    return RecResult::Continue((edges, t));
+                }
+
+                // Pushed event happened before stored event.
+                if event_stamp.happened_before(graph.0.fetch(h).unwrap().stamp()) {
+                    if graph.0.in_neighbors_count(h) == 0 {
+                        edges.push((pushed.clone(), h.clone()));
+                        return RecResult::Continue((edges, t));
+                    }
+                }
+
+                // Append out neighbors to neighbors list
+                for v in graph.0.out_neighbors(h) {
+                    t.push(v);
+                }
+
+                RecResult::Continue((edges, t))
+            });
+            
+            edges_to_add
+        };
 
         // Add the edges to the graph
         edges_to_add
@@ -242,221 +242,6 @@ impl ConsensusMachine {
     pub fn fetch_cs(&self) -> Result<Vec<Arc<Mutex<CandidateSet>>>, CGError> {
         unimplemented!();
     }
-}
-
-/// Traverses the neighbors of the node with the given start
-/// index in the given `Direction`. An edge is added between
-/// the event and the other already placed events based on
-/// their causal relationship.
-///
-/// This function will return the updated graph roots vector.
-fn traverse_and_add_edge<'a>(
-    graph: &'a CausalGraph,
-    event: Arc<Event>,
-    event_id: &VertexId,
-    start_id: &VertexId,
-    direction: Direction,
-) -> Vec<(&'a VertexId, &'a VertexId)> {
-    unimplemented!();
-    // let mut start_indexes: Vec<NodeIndex> = vec![start_idx];
-    // let mut graph_roots = graph_roots;
-
-    // let mut unvisited_nodes: Vec<NodeIndex> = Vec::new();
-
-    // for idx in graph.0.node_indices() {
-    //     unvisited_nodes.push(idx);
-    // }
-
-    // // Such recursion with non-recursive code, much fun
-    // while let Some(start_idx) = start_indexes.pop() {
-    //     let mut last_idx: Option<NodeIndex> = None;
-    //     let mut idx = start_idx;
-
-    //     println!("Start idx: {:?}", start_idx);
-
-    //     loop {
-    //         if unvisited_nodes.is_empty() {
-    //             break;
-    //         }
-
-    //         let is_unvisited = unvisited_nodes
-    //             .iter()
-    //             .any(|i| *graph.0[*i] == *graph.0[idx]);
-
-    //         if !is_unvisited {
-    //             continue;
-    //         }
-
-    //         if Some(idx) == last_idx {
-    //             break;
-    //         }
-
-    //         unvisited_nodes = unvisited_nodes
-    //             .iter()
-    //             .filter(|i| *graph.0[**i] != *graph.0[idx])
-    //             .map(|i| i.clone())
-    //             .collect();
-
-    //         // if *graph.0[idx] == *event {
-    //         //     continue;
-    //         // }
-
-    //         println!("Current idx: {:?}", idx);
-
-    //         // Try to place event between last and current index
-    //         if let Some(last_idx) = last_idx {
-    //             let last_node = graph.0[last_idx].clone();
-    //             let cur_node = graph.0[idx].clone();
-
-    //             println!("DEBUG 3");
-
-    //             //  The event is between the last node and current node:
-    //             //  CURRENT > EVENT > LAST
-    //             if event.stamp().happened_before(last_node.stamp())
-    //                 && event.stamp().happened_after(cur_node.stamp())
-    //             {
-    //                 let edge_idx = graph.0.find_edge(idx, last_idx);
-
-    //                 match edge_idx {
-    //                     Some(idx) => {
-    //                         graph.0.remove_edge(idx);
-    //                     }
-    //                     _ => {} // Do nothing
-    //                 };
-
-    //                 graph.0.add_edge(event_idx, last_idx);
-    //                 graph.0.add_edge(idx, event_idx);
-
-    //                 println!("DEBUG 1");
-
-    //                 break;
-    //             }
-
-    //             // The event is between the last node and the current node
-    //             // LAST > EVENT > CURRENT
-    //             if event.stamp().happened_after(last_node.stamp())
-    //                 && event.stamp().happened_before(cur_node.stamp())
-    //             {
-    //                 let edge_idx = graph.0.find_edge(idx, last_idx);
-
-    //                 match edge_idx {
-    //                     Some(idx) => {
-    //                         graph.0.remove_edge(idx);
-    //                     }
-    //                     _ => {} // Do nothing
-    //                 };
-
-    //                 graph.0.add_edge(last_idx, event_idx);
-    //                 graph.0.add_edge(event_idx, idx);
-
-    //                 println!("DEBUG 5");
-
-    //                 break;
-    //             }
-
-    //             // The event happened before the current event
-    //             // EVENT > CURRENT
-    //             if event.stamp().happened_before(cur_node.stamp()) {
-    //                 graph.0.add_edge(event_idx, idx);
-    //                 break;
-    //             };
-
-    //             // The event happened after the current event
-    //             // EVENT > CURRENT
-    //             if event.stamp().happened_after(cur_node.stamp()) {
-    //                 graph.0.add_edge(idx, event_idx);
-    //                 break;
-    //             };
-
-    //             if event.stamp().concurrent(last_node.stamp()) {
-    //                 println!("DEBUG 2");
-    //                 break;
-    //             }
-
-    //             if event.stamp().eq(&cur_node.stamp()) {
-    //                 let out_neighbors: Vec<NodeIndex> = graph
-    //                     .0
-    //                     .neighbors_directed(idx, Direction::Outgoing)
-    //                     .collect();
-    //                 let in_neighbors: Vec<NodeIndex> = graph
-    //                     .0
-    //                     .neighbors_directed(idx, Direction::Incoming)
-    //                     .collect();
-
-    //                 // Attach stamp to cur stamp's neighbors
-    //                 for idx in out_neighbors {
-    //                     let edge_idx = graph.0.find_edge(event_idx, idx);
-
-    //                     if let Some(_) = edge_idx {
-    //                         // Do nothing
-    //                     } else {
-    //                         graph.0.add_edge(event_idx, idx);
-    //                     }
-    //                 }
-
-    //                 for idx in in_neighbors {
-    //                     let edge_idx = graph.0.find_edge(idx, event_idx);
-
-    //                     if let Some(_) = edge_idx {
-    //                         // Do nothing
-    //                     } else {
-    //                         graph.0.add_edge(idx, event_idx);
-    //                     }
-    //                 }
-
-    //                 println!("DEBUG 4");
-    //                 break;
-    //             }
-    //         }
-
-    //         last_idx = Some(idx);
-
-    //         let mut n = graph.0.neighbors_directed(idx, direction);
-    //         let mut neighbors: Vec<NodeIndex> = Vec::new();
-
-    //         // Fetch neighbors indexes
-    //         while let Some(i) = n.next() {
-    //             neighbors.push(i);
-    //         }
-
-    //         println!("DEBUG NEIGHBORS: {:?}, LAST_IDX: {:?}", neighbors, last_idx);
-
-    //         // use std::{thread, time};
-
-    //         // let ten_millis = time::Duration::from_millis(300);
-    //         // let now = time::Instant::now();
-
-    //         // thread::sleep(ten_millis);
-
-    //         // No neighbors which means this will
-    //         // be a root node in the graph.
-    //         if neighbors.len() == 0 {
-    //             // Replace old root with new one
-    //             let mut new_roots: Vec<NodeIndex> = graph_roots
-    //                 .iter()
-    //                 .filter(|j| *j != &idx)
-    //                 .map(|x| x.clone())
-    //                 .collect();
-
-    //             new_roots.push(event_idx);
-
-    //             graph_roots = new_roots;
-
-    //             graph.0.add_edge(event_idx, idx);
-    //             break;
-    //         } else {
-    //             let (h, t) = neighbors.split_at(1);
-    //             start_indexes.extend_from_slice(&t);
-    //             start_indexes.sort_unstable();
-    //             start_indexes.dedup();
-
-    //             println!("DEBUG START IDXS: {:?}, {:?}", start_indexes, h);
-    //             idx = h[0];
-    //         }
-    //     }
-    // }
-
-    // graph_roots
 }
 
 #[cfg(test)]
