@@ -57,6 +57,11 @@ impl ConsensusMachine {
         }
     }
 
+    /// Returns true if the second event happened exactly after the first event.
+    pub fn is_direct_follower(&self, event1: Arc<Event>, event2: Arc<Event>) -> bool {
+        self.causal_graph.read().is_direct_follower(event1, event2)
+    }
+
     /// Attempts to push an atomic reference to an
     /// event to the causal graph. This function also
     /// validates the event in accordance with the rest
@@ -68,7 +73,7 @@ impl ConsensusMachine {
     /// This will return `Err(CGError::InvalidEvent)` if the
     /// event that the given reference points to is invalid.
     pub fn push(&mut self, event: Arc<Event>) -> Result<(), CGError> {
-        let mut graph = self.causal_graph.write();
+        let mut g = self.causal_graph.write();
         let event_stamp = event.stamp();
 
         // if graph.any(|e| e == event) {
@@ -77,21 +82,21 @@ impl ConsensusMachine {
 
         // If the causal graph is empty,
         // just append a new node and return.
-        if graph.empty() {
-            graph.0.add_vertex(event);
+        if g.graph.vertex_count() == 0 {
+            g.graph.add_vertex(event);
             return Ok(());
         }
 
         // Append node to graph
-        let pushed = graph.0.add_vertex(event.clone());
+        let pushed = g.graph.add_vertex(event.clone());
 
-        if graph.0.vertex_count() == 1 {
+        if g.graph.vertex_count() == 1 {
             return Ok(());
         }
 
         let edges_to_add = {
-            let mut visited_map: HashMap<&VertexId, bool> = graph.0
-                .vertices()
+            let mut visited_map: HashMap<&VertexId, bool> = g.graph
+                .dfs()
                 .map(|v| (v, false))
                 .collect();
 
@@ -115,10 +120,10 @@ impl ConsensusMachine {
             // If there is no event between between the last and 
             // pushed event, we just add an edge between pushed and
             // current.
-            let start_events = graph.0.roots().collect();
+            let start_events = g.graph.roots().collect();
 
             let (edges_to_add, _)  = tail_recurse((vec![], start_events), |(mut edges, events): (Vec<(VertexId, VertexId)>, Vec<&VertexId>)| {
-                let edge_count = edges.len() + graph.0.edge_count();
+                let edge_count = edges.len() + g.graph.edge_count();
                 
                 // Exit condition
                 if events.len() == 0 {
@@ -145,35 +150,35 @@ impl ConsensusMachine {
                 visited_map.insert(h, true);
 
                 // Pushed event happened after stored event with 0 edge count.
-                if event_stamp.happened_after(graph.0.fetch(h).unwrap().stamp()) && edge_count == 0 {
+                if event_stamp.happened_after(g.graph.fetch(h).unwrap().stamp()) && edge_count == 0 {
                     edges.push((h.clone(), pushed.clone()));
                     return RecResult::Continue((edges, t));
                 }
 
                 // Pushed event happened after stored event.
-                if event_stamp.happened_after(graph.0.fetch(h).unwrap().stamp()) {
-                    if graph.0.out_neighbors_count(h) == 0 {
+                if event_stamp.happened_after(g.graph.fetch(h).unwrap().stamp()) {
+                    if g.graph.out_neighbors_count(h) == 0 {
                         edges.push((h.clone(), pushed.clone()));
                         return RecResult::Continue((edges, t));
                     }
                 }
 
                 // Pushed event happened before stored event with 0 edge count.
-                if event_stamp.happened_before(graph.0.fetch(h).unwrap().stamp()) && edge_count == 0 {
+                if event_stamp.happened_before(g.graph.fetch(h).unwrap().stamp()) && edge_count == 0 {
                     edges.push((pushed.clone(), h.clone()));
                     return RecResult::Continue((edges, t));
                 }
 
                 // Pushed event happened before stored event.
-                if event_stamp.happened_before(graph.0.fetch(h).unwrap().stamp()) {
-                    if graph.0.in_neighbors_count(h) == 0 {
+                if event_stamp.happened_before(g.graph.fetch(h).unwrap().stamp()) {
+                    if g.graph.in_neighbors_count(h) == 0 {
                         edges.push((pushed.clone(), h.clone()));
                         return RecResult::Continue((edges, t));
                     }
                 }
 
                 // Append out neighbors to neighbors list
-                for v in graph.0.out_neighbors(h) {
+                for v in g.graph.out_neighbors(h) {
                     t.push(v);
                 }
 
@@ -186,7 +191,7 @@ impl ConsensusMachine {
         // Add the edges to the graph
         edges_to_add
             .iter()
-            .for_each(|(o, i)| graph.0.add_edge(o, i).unwrap());
+            .for_each(|(o, i)| g.graph.add_edge(o, i).unwrap());
 
         Ok(())
     }
@@ -195,7 +200,7 @@ impl ConsensusMachine {
     /// that **does not** belong to the node with the
     /// given `NodeId`.
     pub fn highest(&mut self, node_id: &NodeId) -> Option<Arc<Event>> {
-        let graph = &(*self.causal_graph).read().0;
+        let graph = &(*self.causal_graph).read().graph;
 
         graph.fold(None, |v, acc| {
             if acc.is_none() {
@@ -217,12 +222,14 @@ impl ConsensusMachine {
     /// given stamp in the causal graph that **does not**
     /// belong to the node with the given `NodeId`.
     pub fn highest_following(&mut self, node_id: &NodeId, stamp: &Stamp) -> Option<Arc<Event>> {
-        let graph = &(*self.causal_graph).read().0;
+        let graph = &(*self.causal_graph).read().graph;
         
         graph.fold(None, |v, acc| {
             if acc.is_none() {
                 if v.stamp().happened_after(stamp.clone()) && v.node_id() != *node_id {
                     return Some(v.clone());
+                } else {
+                    return acc;
                 }
             }
 
@@ -246,8 +253,9 @@ impl ConsensusMachine {
 
 #[cfg(test)]
 mod tests {
+    #[macro_use] use quickcheck::*;
     use super::*;
-    use crypto::Identity;
+    use crypto::{Identity, Hash};
     use rand::{thread_rng, Rng};
 
     #[test]
@@ -273,35 +281,35 @@ mod tests {
         let (s_b, s_c) = s_b.fork();
 
         let s_a = s_a.event();
-        let A = Event::Dummy(n1.clone(), s_a.clone());
+        let A = Event::Dummy(n1.clone(), None, s_a.clone());
 
         let s_b = s_b.join(s_a.peek()).event();
-        let B = Event::Dummy(n2.clone(), s_b.clone());
+        let B = Event::Dummy(n2.clone(), None, s_b.clone());
 
         let s_a = s_a.join(s_b.peek()).event();
-        let C = Event::Dummy(n1.clone(), s_a.clone());
+        let C = Event::Dummy(n1.clone(), None, s_a.clone());
 
         let s_b = s_b.join(s_a.peek()).event();
-        let D = Event::Dummy(n2.clone(), s_b.clone());
+        let D = Event::Dummy(n2.clone(), None, s_b.clone());
 
         let s_a = s_a.join(s_b.peek()).event();
-        let E = Event::Dummy(n1, s_a.clone());
+        let E = Event::Dummy(n1, None, s_a.clone());
 
         let s_b = s_b.join(s_a.peek()).event();
-        let F = Event::Dummy(n2.clone(), s_b.clone());
+        let F = Event::Dummy(n2.clone(), None, s_b.clone());
 
         let s_c = s_c.join(s_a.peek()).event();
-        let A_prime = Event::Dummy(n3.clone(), s_c.clone());
+        let A_prime = Event::Dummy(n3.clone(), None, s_c.clone());
 
         let s_c = s_c.event();
-        let B_prime = Event::Dummy(n3.clone(), s_c.clone());
+        let B_prime = Event::Dummy(n3.clone(), None, s_c.clone());
 
         let s_c = s_c.event();
-        let C_prime = Event::Dummy(n3.clone(), s_c.clone());
-        let B_second = Event::Dummy(n3.clone(), s_c.clone());
+        let C_prime = Event::Dummy(n3.clone(), None, s_c.clone());
+        let B_second = Event::Dummy(n3.clone(), None, s_c.clone());
 
         let s_c = s_c.event();
-        let D_prime = Event::Dummy(n3, s_c);
+        let D_prime = Event::Dummy(n3, None, s_c);
 
         let events = vec![
             A,
@@ -337,8 +345,6 @@ mod tests {
             machine.push(e).unwrap();
         }
 
-        println!("DEBUG {:?}", machine);
-
         assert_eq!(machine.highest_following(&n2, &A.stamp()).unwrap(), F);
         assert_eq!(machine.highest_following(&n2, &A_prime.stamp()).unwrap(), D_prime);
     }
@@ -365,35 +371,35 @@ mod tests {
         let (s_b, s_c) = s_b.fork();
 
         let s_a = s_a.event();
-        let A = Event::Dummy(n1.clone(), s_a.clone());
+        let A = Event::Dummy(n1.clone(), None, s_a.clone());
 
         let s_b = s_b.join(s_a.peek()).event();
-        let B = Event::Dummy(n2.clone(), s_b.clone());
+        let B = Event::Dummy(n2.clone(), None, s_b.clone());
 
         let s_a = s_a.join(s_b.peek()).event();
-        let C = Event::Dummy(n1.clone(), s_a.clone());
+        let C = Event::Dummy(n1.clone(), None, s_a.clone());
 
         let s_b = s_b.join(s_a.peek()).event();
-        let D = Event::Dummy(n2.clone(), s_b.clone());
+        let D = Event::Dummy(n2.clone(), None, s_b.clone());
 
         let s_a = s_a.join(s_b.peek()).event();
-        let E = Event::Dummy(n1, s_a.clone());
+        let E = Event::Dummy(n1, None, s_a.clone());
 
         let s_b = s_b.join(s_a.peek()).event();
-        let F = Event::Dummy(n2.clone(), s_b.clone());
+        let F = Event::Dummy(n2.clone(), None, s_b.clone());
 
         let s_c = s_c.join(s_a.peek()).event();
-        let A_prime = Event::Dummy(n3.clone(), s_c.clone());
+        let A_prime = Event::Dummy(n3.clone(), None, s_c.clone());
 
         let s_c = s_c.event();
-        let B_prime = Event::Dummy(n3.clone(), s_c.clone());
+        let B_prime = Event::Dummy(n3.clone(), None, s_c.clone());
 
         let s_c = s_c.event();
-        let C_prime = Event::Dummy(n3.clone(), s_c.clone());
-        let B_second = Event::Dummy(n3.clone(), s_c.clone());
+        let C_prime = Event::Dummy(n3.clone(), None, s_c.clone());
+        let B_second = Event::Dummy(n3.clone(), None, s_c.clone());
 
         let s_c = s_c.event();
-        let D_prime = Event::Dummy(n3, s_c);
+        let D_prime = Event::Dummy(n3, None, s_c);
 
         let events = vec![
             A,
@@ -427,5 +433,118 @@ mod tests {
         }
 
         assert_eq!(machine.highest(&n2).unwrap(), F);
+    }
+
+    quickcheck! {
+        /// Causal graph structure:
+        ///
+        /// A -> B -> C -> D -> E -> F
+        /// |
+        /// A' -> B' -> C' -> D'
+        ///       |
+        ///       A''
+        fn graph_assembly() -> bool {
+            let i1 = Identity::new();
+            let i2 = Identity::new();
+            let i3 = Identity::new();
+            let n1 = NodeId(*i1.pkey());
+            let n2 = NodeId(*i2.pkey());
+            let n3 = NodeId(*i3.pkey());
+            let seed = Stamp::seed();
+            let (s_a, s_b) = seed.fork();
+            let (s_b, s_c) = s_b.fork();
+
+            let s_a = s_a.event();
+            let A = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
+
+            let s_b = s_b.join(s_a.peek()).event();
+            let B = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+
+            let s_a = s_b.join(s_b.peek()).event();
+            let C = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
+
+            let s_b = s_b.join(s_a.peek()).event();
+            let D = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+
+            let s_a = s_a.join(s_b.peek()).event();
+            let E = Event::Dummy(n1, Some(Hash::random()), s_a.clone());
+
+            let s_b = s_b.join(s_a.peek()).event();
+            let F = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+
+            let s_c = s_c.join(s_a.peek()).event();
+            let A_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+
+            let s_c = s_c.event();
+            let B_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+
+            let s_c = s_c.event();
+            let C_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+            let B_second = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+
+            let s_c = s_c.event();
+            let D_prime = Event::Dummy(n3, Some(Hash::random()), s_c);
+
+            let events = vec![
+                A,
+                B,
+                C,
+                D,
+                E,
+                F,
+                A_prime,
+                B_prime,
+                C_prime,
+                D_prime,
+                B_second
+            ];
+
+            let mut events: Vec<Arc<Event>> = events
+                .iter()
+                .map(|e| Arc::new(e.clone()))
+                .collect();
+
+            let A = events[0].clone();
+            let B = events[1].clone();
+            let C = events[2].clone();
+            let D = events[3].clone();
+            let E = events[4].clone();
+            let F = events[5].clone();
+            let A_prime = events[6].clone();
+            let B_prime = events[7].clone();
+            let C_prime = events[8].clone();
+            let D_prime = events[9].clone();
+            let B_second = events[10].clone();
+
+            // The causal graph should be the same regardless
+            // of the order in which the events are pushed.
+            thread_rng().shuffle(&mut events);
+
+            let mut machine = ConsensusMachine::new();
+
+            for e in events {
+                machine.push(e).unwrap();
+            }
+
+            assert!(machine.is_direct_follower(B.clone(), A.clone()));
+            assert!(machine.is_direct_follower(C.clone(), B.clone()));
+            assert!(machine.is_direct_follower(D.clone(), C.clone()));
+            assert!(machine.is_direct_follower(E.clone(), D.clone()));
+            assert!(machine.is_direct_follower(F.clone(), E));
+            assert!(machine.is_direct_follower(A_prime.clone(), A.clone()));
+            assert!(machine.is_direct_follower(B_prime.clone(), A_prime));
+            assert!(machine.is_direct_follower(C_prime.clone(), B_prime.clone()));
+            assert!(machine.is_direct_follower(D_prime.clone(), C_prime));
+            assert!(machine.is_direct_follower(B_second, B_prime.clone()));
+            assert!(!machine.is_direct_follower(A.clone(), B.clone()));
+            assert!(!machine.is_direct_follower(F.clone(), A.clone()));
+            assert!(!machine.is_direct_follower(A, F.clone()));
+            assert!(!machine.is_direct_follower(B_prime.clone(), B));
+            assert!(!machine.is_direct_follower(B_prime.clone(), C));
+            assert!(!machine.is_direct_follower(B_prime.clone(), D));
+            assert!(!machine.is_direct_follower(B_prime, F));
+
+            true
+        }
     }
 }

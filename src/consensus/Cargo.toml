@@ -6,7 +6,8 @@ edition = "2018"
 
 [dependencies]
 parking_lot = "0.6"
-graphlib = "0.2.0"
+graphlib = "0.2.1"
+crypto = { path = "../crypto" }
 events = { path = "../events" }
 network = { path = "../network" }
 causality = { path = "../causality" }
@@ -15,4 +16,5 @@ hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde
 
 [dev-dependencies]
 rand = "0.6.0"
+quickcheck = "0.7.2"
 crypto = { path = "../crypto" }

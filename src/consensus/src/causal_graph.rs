@@ -17,15 +17,23 @@
 */
 
 use events::Event;
-use graphlib::Graph;
+use crypto::Hash;
+use graphlib::{Graph, VertexId};
 use std::sync::Arc;
+use hashbrown::HashMap;
 
 #[derive(Clone, Debug)]
-pub struct CausalGraph(pub Graph<Arc<Event>>);
+pub struct CausalGraph {
+    pub graph: Graph<Arc<Event>>,
+    lookup_table: HashMap<Hash, VertexId>, 
+}
 
 impl CausalGraph {
     pub fn new() -> CausalGraph {
-        CausalGraph(Graph::new())
+        CausalGraph {
+            graph: Graph::new(),
+            lookup_table: HashMap::new()
+        }
     }
 
     /// Returns `true` if any event from the `CausalGraph`
@@ -34,8 +42,8 @@ impl CausalGraph {
     where
         F: Fn(Arc<Event>) -> bool,
     {
-        for v in self.0.vertices() {
-            if fun(self.0.fetch(v).unwrap().clone()) {
+        for v in self.graph.dfs() {
+            if fun(self.graph.fetch(v).unwrap().clone()) {
                 return true;
             }
         }
@@ -43,7 +51,25 @@ impl CausalGraph {
         false
     }
 
+    pub fn add_vertex(&mut self, event: Arc<Event>) {
+        let id = self.graph.add_vertex(event.clone());
+        self.lookup_table.insert(event.hash().unwrap(), id);
+    }
+
+    /// Returns true if the second event happened exactly after the first event.
+    pub fn is_direct_follower(&self, event1: Arc<Event>, event2: Arc<Event>) -> bool {
+        let id1 = self.lookup_table.get(&event1.hash().unwrap());
+        let id2 = self.lookup_table.get(&event2.hash().unwrap());
+
+        match (id1, id2) {
+            (Some(id1), Some(id2)) => {
+                self.graph.has_edge(id2, id1)
+            },
+            _ => false
+        }
+    }
+
     pub fn empty(&self) -> bool {
-        self.0.vertex_count() == 0
+        self.graph.vertex_count() == 0
     }
 }
