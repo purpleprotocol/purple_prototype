@@ -22,11 +22,12 @@ use crate::validator_state::ValidatorState;
 use causality::Stamp;
 use events::Event;
 use network::NodeId;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use parking_lot::{Mutex, RwLock};
 use graphlib::{VertexId, Graph};
 use std::sync::Arc;
 use recursive::*;
+use std::collections::VecDeque;
 
 #[derive(Clone, Debug)]
 pub enum CGError {
@@ -90,11 +91,7 @@ impl ConsensusMachine {
         // Append node to graph
         let pushed = g.graph.add_vertex(event.clone());
 
-        if g.graph.vertex_count() == 1 {
-            return Ok(());
-        }
-
-        let edges_to_add = {
+        let (edges_to_add, edges_to_remove) = {
             let mut visited_map: HashMap<&VertexId, bool> = g.graph
                 .dfs()
                 .map(|v| (v, false))
@@ -117,81 +114,152 @@ impl ConsensusMachine {
             //
             // `last < pushed < current`
             // 
-            // If there is no event between between the last and 
+            // If there is no event between the last and the
             // pushed event, we just add an edge between pushed and
             // current.
-            let start_events = g.graph.roots().collect();
+            let start_events: VecDeque<&VertexId> = g.graph.roots().collect();
 
-            let (edges_to_add, _)  = tail_recurse((vec![], start_events), |(mut edges, events): (Vec<(VertexId, VertexId)>, Vec<&VertexId>)| {
-                let edge_count = edges.len() + g.graph.edge_count();
+            let (edges_to_add, edges_to_remove, _)  = tail_recurse((vec![], HashSet::new(), start_events), |(mut edges_to_add, mut edges_to_remove, mut events): (Vec<(VertexId, VertexId)>, HashSet<(VertexId, VertexId)>, VecDeque<&VertexId>)| {
+                let edge_count = edges_to_add.len() + g.graph.edge_count();
+                let front = events.pop_front();
                 
-                // Exit condition
-                if events.len() == 0 {
-                    return RecResult::Return((edges, ()));
-                }
-
-                // Split into head and tail
-                let (h, t) = events.split_at(1);
-                let h = h[0];
-                let mut t = t.to_vec();
-                let is_visited = visited_map.get(h).unwrap();
-                
-                // Skip visited vertices
-                if *is_visited {
-                    return RecResult::Continue((edges, t));
-                }
-
-                // Skip pushed event
-                if pushed == *h {
-                    return RecResult::Continue((edges, t));
-                } 
-
-                // Mark as visited
-                visited_map.insert(h, true);
-
-                // Pushed event happened after stored event with 0 edge count.
-                if event_stamp.happened_after(g.graph.fetch(h).unwrap().stamp()) && edge_count == 0 {
-                    edges.push((h.clone(), pushed.clone()));
-                    return RecResult::Continue((edges, t));
-                }
-
-                // Pushed event happened after stored event.
-                if event_stamp.happened_after(g.graph.fetch(h).unwrap().stamp()) {
-                    if g.graph.out_neighbors_count(h) == 0 {
-                        edges.push((h.clone(), pushed.clone()));
-                        return RecResult::Continue((edges, t));
+                if let Some(current) = front {
+                    let is_visited = visited_map.get(current).unwrap();
+                    
+                    // Skip visited vertices
+                    if *is_visited {
+                        return RecResult::Continue((edges_to_add, edges_to_remove, events));
                     }
-                }
 
-                // Pushed event happened before stored event with 0 edge count.
-                if event_stamp.happened_before(g.graph.fetch(h).unwrap().stamp()) && edge_count == 0 {
-                    edges.push((pushed.clone(), h.clone()));
-                    return RecResult::Continue((edges, t));
-                }
+                    // Skip pushed event
+                    if pushed == *current {
+                        return RecResult::Continue((edges_to_add, edges_to_remove, events));
+                    } 
 
-                // Pushed event happened before stored event.
-                if event_stamp.happened_before(g.graph.fetch(h).unwrap().stamp()) {
-                    if g.graph.in_neighbors_count(h) == 0 {
-                        edges.push((pushed.clone(), h.clone()));
-                        return RecResult::Continue((edges, t));
+                    // Mark as visited
+                    visited_map.insert(current, true);
+
+                    // Pushed event happened after stored event with 0 edge count.
+                    if event_stamp.happened_after(g.graph.fetch(current).unwrap().stamp()) && edge_count == 0 {
+                        edges_to_add.push((current.clone(), pushed.clone()));
+                        println!("DEBUG 1");
+
+                        g.graph
+                            .out_neighbors(current)
+                            // Filter and append out neighbors to neighbors list
+                            .filter(|v| !visited_map.get(v).unwrap())
+                            .for_each(|v| events.push_front(v));
+
+                        return RecResult::Continue((edges_to_add, edges_to_remove, events));
                     }
-                }
 
-                // Append out neighbors to neighbors list
-                for v in g.graph.out_neighbors(h) {
-                    t.push(v);
-                }
+                    // Pushed event happened after stored event.
+                    if event_stamp.happened_after(g.graph.fetch(current).unwrap().stamp()) {
+                        // In this case we remove any edges between the stored 
+                        // event's inbound neighbors and the pushed event.
+                        let to_remove: Vec<(VertexId, VertexId)> = g.graph
+                            .in_neighbors(current)
+                            .map(|n| (n.clone(), pushed.clone()))
+                            .collect();
 
-                RecResult::Continue((edges, t))
+                        edges_to_remove.extend(&to_remove);
+                        edges_to_add.push((current.clone(), pushed.clone()));
+                        println!("DEBUG 2: {:?}", to_remove);
+
+                        g.graph
+                            .out_neighbors(current)
+                            // Filter and append out neighbors to neighbors list
+                            .filter(|v| !visited_map.get(v).unwrap())
+                            .for_each(|v| events.push_front(v));
+
+                        return RecResult::Continue((edges_to_add, edges_to_remove, events));
+                    }
+
+                    // Pushed event happened before stored event with 0 edge count.
+                    if event_stamp.happened_before(g.graph.fetch(current).unwrap().stamp()) && edge_count == 0 {
+                        edges_to_add.push((pushed.clone(), current.clone()));
+                        println!("DEBUG 3");
+
+                        g.graph
+                            .out_neighbors(current)
+                            // Filter and append out neighbors to neighbors list
+                            .filter(|v| !visited_map.get(v).unwrap())
+                            .for_each(|v| events.push_front(v));
+
+                        return RecResult::Continue((edges_to_add, edges_to_remove, events));
+                    }
+
+                    // Pushed event happened before stored event.
+                    if event_stamp.happened_before(g.graph.fetch(current).unwrap().stamp()) {
+                        let last_edge = edges_to_add.pop();
+
+                        // If the last edge was added between the last
+                        // event and the pushed event, we remove the edge
+                        // between the last and current and add edges
+                        // so that the events respect the following relation:
+                        //
+                        // `last -> pushed -> current`
+                        if let Some((o, i)) = last_edge {
+                            println!("DEBUG 5");
+                            let last_is_neighbor = g.graph
+                                .out_neighbors(&o)
+                                .any(|v| *v == *current);
+
+                            if i == pushed && last_is_neighbor {
+                                println!("DEBUG 6");
+                                edges_to_remove.insert((o, *current));
+                                edges_to_add.push((o, pushed));
+                            } else {
+                                edges_to_add.push((o, i));
+                            }
+                        }
+    
+                        edges_to_add.push((pushed.clone(), current.clone()));
+                        println!("DEBUG 4");
+
+                        g.graph
+                            .out_neighbors(current)
+                            // Filter and append out neighbors to neighbors list
+                            .filter(|v| !visited_map.get(v).unwrap())
+                            .for_each(|v| events.push_front(v));
+
+                        return RecResult::Continue((edges_to_add, edges_to_remove, events));
+                    }
+
+                    g.graph
+                        .out_neighbors(current)
+                        // Filter and append out neighbors to neighbors list
+                        .filter(|v| !visited_map.get(v).unwrap())
+                        .for_each(|v| events.push_front(v));
+
+                    RecResult::Continue((edges_to_add, edges_to_remove, events))
+                } else {
+                    // Exit condition
+                    RecResult::Return((edges_to_add, edges_to_remove, ()))
+                }
             });
             
-            edges_to_add
+            (edges_to_add, edges_to_remove)
         };
 
         // Add the edges to the graph
         edges_to_add
             .iter()
+            .filter(|pair| !edges_to_remove.contains(pair))
             .for_each(|(o, i)| g.graph.add_edge(o, i).unwrap());
+
+        // Remove selected edges
+        edges_to_remove
+            .iter()
+            .for_each(|(o, i)| g.graph.remove_edge(o, i));
+
+        use crypto::Hash;
+
+        let to_add: Vec<(Hash, Hash)> = edges_to_add.iter().map(|(o, i)| (g.graph.fetch(o).unwrap().hash().unwrap(), g.graph.fetch(i).unwrap().hash().unwrap())).collect(); 
+        let to_remove: Vec<(Hash, Hash)> = edges_to_remove.iter().map(|(o, i)| (g.graph.fetch(o).unwrap().hash().unwrap(), g.graph.fetch(i).unwrap().hash().unwrap())).collect(); 
+
+        println!("DEBUG EDGES TO ADD: {:?}", to_add);
+        println!("DEBUG EDGES TO REMOVE: {:?}", to_remove);
 
         Ok(())
     }
@@ -201,6 +269,43 @@ impl ConsensusMachine {
     /// given `NodeId`.
     pub fn highest(&mut self, node_id: &NodeId) -> Option<Arc<Event>> {
         let graph = &(*self.causal_graph).read().graph;
+        // let mut highest_map: HashMap<&VertexId, usize> = HashMap::with_capacity(graph.vertex_count());
+
+        // let start_events: Vec<&VertexId> = graph.roots().collect();
+
+        // if start_events.is_empty() {
+        //     return None;
+        // }
+
+        // // Start by finding the highest events of all branches.
+        // let (highest, _) = tail_recurse((None, start_events), |(acc, events): (Option<&VertexId>, Vec<&VertexId>)| {
+        //     // Exit condition
+        //     if events.is_empty() {
+        //         return RecResult::Return((acc, events));
+        //     }
+
+        //     let (h, t) = events.split_at(1);
+        //     let h = h[0];
+        //     let mut t = t.to_vec();
+
+        //     if acc.is_none() {
+        //         return RecResult::Continue((Some(&h), t));
+        //     }
+
+        //     let cur = graph.fetch(acc.unwrap()).unwrap();
+
+        //     let e = graph.fetch(h).unwrap();
+        //     let s = e.stamp();
+
+        //     // If next happened after accumulated val and it
+        //     // doesn't belong to the given node id, store as
+        //     // new accumulated value.
+        //     if s.happened_after(cur.stamp()) && e.node_id() != *node_id {
+        //         RecResult::Continue((Some(&h), t))
+        //     } else {
+        //         RecResult::Continue((acc, t))
+        //     }
+        // });
 
         graph.fold(None, |v, acc| {
             if acc.is_none() {
@@ -216,6 +321,12 @@ impl ConsensusMachine {
                 acc
             }
         })
+
+        // if let Some(highest) = highest {
+        //     Some(graph.fetch(highest).unwrap().clone())
+        // } else {
+        //     None
+        // }
     }
 
     /// Return the highest event that follows the given
@@ -223,6 +334,16 @@ impl ConsensusMachine {
     /// belong to the node with the given `NodeId`.
     pub fn highest_following(&mut self, node_id: &NodeId, stamp: &Stamp) -> Option<Arc<Event>> {
         let graph = &(*self.causal_graph).read().graph;
+
+        // // Filter concurrent roots
+        // let start_events = graph
+        //     .roots()
+        //     .filter(|v| v.stamp().concurrent(stamp))
+        //     .collect();
+
+        // if start_events.is_empty() {
+        //     return None;
+        // }
         
         graph.fold(None, |v, acc| {
             if acc.is_none() {
@@ -258,182 +379,182 @@ mod tests {
     use crypto::{Identity, Hash};
     use rand::{thread_rng, Rng};
 
-    #[test]
-    /// Causal graph structure:
-    ///
-    /// A -> B -> C -> D -> E -> F
-    /// |
-    /// A' -> B' -> C' -> D'
-    ///       |
-    ///       A''
-    ///
-    /// The intended result for calling the function on A should be F
-    /// and the intended result for A' should be D'.
-    fn highest_following() {
-        let i1 = Identity::new();
-        let i2 = Identity::new();
-        let i3 = Identity::new();
-        let n1 = NodeId(*i1.pkey());
-        let n2 = NodeId(*i2.pkey());
-        let n3 = NodeId(*i3.pkey());
-        let seed = Stamp::seed();
-        let (s_a, s_b) = seed.fork();
-        let (s_b, s_c) = s_b.fork();
+    // #[test]
+    // /// Causal graph structure:
+    // ///
+    // /// A -> B -> C -> D -> E -> F
+    // /// |
+    // /// A' -> B' -> C' -> D'
+    // ///       |
+    // ///       B''
+    // ///
+    // /// The intended result for calling the function on A should be F
+    // /// and the intended result for A' should be D'.
+    // fn highest_following() {
+    //     let i1 = Identity::new();
+    //     let i2 = Identity::new();
+    //     let i3 = Identity::new();
+    //     let n1 = NodeId(*i1.pkey());
+    //     let n2 = NodeId(*i2.pkey());
+    //     let n3 = NodeId(*i3.pkey());
+    //     let seed = Stamp::seed();
+    //     let (s_a, s_b) = seed.fork();
+    //     let (s_b, s_c) = s_b.fork();
 
-        let s_a = s_a.event();
-        let A = Event::Dummy(n1.clone(), None, s_a.clone());
+    //     let s_a = s_a.event();
+    //     let A = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let B = Event::Dummy(n2.clone(), None, s_b.clone());
+    //     let s_c = s_c.join(s_a.peek()).event();
+    //     let A_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
 
-        let s_a = s_a.join(s_b.peek()).event();
-        let C = Event::Dummy(n1.clone(), None, s_a.clone());
+    //     let s_c = s_c.event();
+    //     let B_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let D = Event::Dummy(n2.clone(), None, s_b.clone());
+    //     let s_c = s_c.event();
+    //     let C_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+    //     let B_second = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
 
-        let s_a = s_a.join(s_b.peek()).event();
-        let E = Event::Dummy(n1, None, s_a.clone());
+    //     let s_c = s_c.event();
+    //     let D_prime = Event::Dummy(n3, Some(Hash::random()), s_c);
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let F = Event::Dummy(n2.clone(), None, s_b.clone());
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let B = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
 
-        let s_c = s_c.join(s_a.peek()).event();
-        let A_prime = Event::Dummy(n3.clone(), None, s_c.clone());
+    //     let s_a = s_a.join(s_b.peek()).event();
+    //     let C = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
 
-        let s_c = s_c.event();
-        let B_prime = Event::Dummy(n3.clone(), None, s_c.clone());
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let D = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
 
-        let s_c = s_c.event();
-        let C_prime = Event::Dummy(n3.clone(), None, s_c.clone());
-        let B_second = Event::Dummy(n3.clone(), None, s_c.clone());
+    //     let s_a = s_a.join(s_b.peek()).event();
+    //     let E = Event::Dummy(n1, Some(Hash::random()), s_a.clone());
 
-        let s_c = s_c.event();
-        let D_prime = Event::Dummy(n3, None, s_c);
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let F = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
 
-        let events = vec![
-            A,
-            B,
-            C,
-            D,
-            E,
-            F,
-            A_prime,
-            B_prime,
-            C_prime,
-            D_prime,
-            B_second
-        ];
+    //     let events = vec![
+    //         A,
+    //         B,
+    //         C,
+    //         D,
+    //         E,
+    //         F,
+    //         A_prime,
+    //         B_prime,
+    //         C_prime,
+    //         D_prime,
+    //         B_second
+    //     ];
 
-        let mut events: Vec<Arc<Event>> = events
-            .iter()
-            .map(|e| Arc::new(e.clone()))
-            .collect();
+    //     let mut events: Vec<Arc<Event>> = events
+    //         .iter()
+    //         .map(|e| Arc::new(e.clone()))
+    //         .collect();
 
-        let A = events[0].clone();
-        let F = events[5].clone();
-        let A_prime = events[6].clone();
-        let D_prime = events[9].clone();
+    //     let A = events[0].clone();
+    //     let F = events[5].clone();
+    //     let A_prime = events[6].clone();
+    //     let D_prime = events[9].clone();
 
-        // The causal graph should be the same regardless
-        // of the order in which the events are pushed.
-        thread_rng().shuffle(&mut events);
+    //     // The causal graph should be the same regardless
+    //     // of the order in which the events are pushed.
+    //     thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new();
+    //     let mut machine = ConsensusMachine::new();
 
-        for e in events {
-            machine.push(e).unwrap();
-        }
+    //     for e in events {
+    //         machine.push(e).unwrap();
+    //     }
 
-        assert_eq!(machine.highest_following(&n2, &A.stamp()).unwrap(), F);
-        assert_eq!(machine.highest_following(&n2, &A_prime.stamp()).unwrap(), D_prime);
-    }
+    //     assert_eq!(machine.highest_following(&n2, &A.stamp()).unwrap(), F);
+    //     assert_eq!(machine.highest_following(&n2, &A_prime.stamp()).unwrap(), D_prime);
+    // }
 
-    #[test]
-    /// Causal graph structure:
-    ///
-    /// A -> B -> C -> D -> E -> F
-    /// |
-    /// A' -> B' -> C' -> D'
-    ///       |
-    ///       A''
-    ///
-    /// The intended result for calling the function should be F.
-    fn highest() {
-        let i1 = Identity::new();
-        let i2 = Identity::new();
-        let i3 = Identity::new();
-        let n1 = NodeId(*i1.pkey());
-        let n2 = NodeId(*i2.pkey());
-        let n3 = NodeId(*i3.pkey());
-        let seed = Stamp::seed();
-        let (s_a, s_b) = seed.fork();
-        let (s_b, s_c) = s_b.fork();
+    // #[test]
+    // /// Causal graph structure:
+    // ///
+    // /// A -> B -> C -> D -> E -> F
+    // /// |
+    // /// A' -> B' -> C' -> D'
+    // ///       |
+    // ///       A''
+    // ///
+    // /// The intended result for calling the function should be F.
+    // fn highest() {
+    //     let i1 = Identity::new();
+    //     let i2 = Identity::new();
+    //     let i3 = Identity::new();
+    //     let n1 = NodeId(*i1.pkey());
+    //     let n2 = NodeId(*i2.pkey());
+    //     let n3 = NodeId(*i3.pkey());
+    //     let seed = Stamp::seed();
+    //     let (s_a, s_b) = seed.fork();
+    //     let (s_b, s_c) = s_b.fork();
 
-        let s_a = s_a.event();
-        let A = Event::Dummy(n1.clone(), None, s_a.clone());
+    //     let s_a = s_a.event();
+    //     let A = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let B = Event::Dummy(n2.clone(), None, s_b.clone());
+    //     let s_c = s_c.join(s_a.peek()).event();
+    //     let A_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
 
-        let s_a = s_a.join(s_b.peek()).event();
-        let C = Event::Dummy(n1.clone(), None, s_a.clone());
+    //     let s_c = s_c.event();
+    //     let B_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let D = Event::Dummy(n2.clone(), None, s_b.clone());
+    //     let s_c = s_c.event();
+    //     let C_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+    //     let B_second = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
 
-        let s_a = s_a.join(s_b.peek()).event();
-        let E = Event::Dummy(n1, None, s_a.clone());
+    //     let s_c = s_c.event();
+    //     let D_prime = Event::Dummy(n3, Some(Hash::random()), s_c);
 
-        let s_b = s_b.join(s_a.peek()).event();
-        let F = Event::Dummy(n2.clone(), None, s_b.clone());
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let B = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
 
-        let s_c = s_c.join(s_a.peek()).event();
-        let A_prime = Event::Dummy(n3.clone(), None, s_c.clone());
+    //     let s_a = s_a.join(s_b.peek()).event();
+    //     let C = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
 
-        let s_c = s_c.event();
-        let B_prime = Event::Dummy(n3.clone(), None, s_c.clone());
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let D = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
 
-        let s_c = s_c.event();
-        let C_prime = Event::Dummy(n3.clone(), None, s_c.clone());
-        let B_second = Event::Dummy(n3.clone(), None, s_c.clone());
+    //     let s_a = s_a.join(s_b.peek()).event();
+    //     let E = Event::Dummy(n1, Some(Hash::random()), s_a.clone());
 
-        let s_c = s_c.event();
-        let D_prime = Event::Dummy(n3, None, s_c);
+    //     let s_b = s_b.join(s_a.peek()).event();
+    //     let F = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
 
-        let events = vec![
-            A,
-            B,
-            C,
-            D,
-            E,
-            F,
-            A_prime,
-            B_prime,
-            C_prime,
-            D_prime,
-            B_second
-        ];
+    //     let events = vec![
+    //         A,
+    //         B,
+    //         C,
+    //         D,
+    //         E,
+    //         F,
+    //         A_prime,
+    //         B_prime,
+    //         C_prime,
+    //         D_prime,
+    //         B_second
+    //     ];
 
-        let mut events: Vec<Arc<Event>> = events
-            .iter()
-            .map(|e| Arc::new(e.clone()))
-            .collect();
+    //     let mut events: Vec<Arc<Event>> = events
+    //         .iter()
+    //         .map(|e| Arc::new(e.clone()))
+    //         .collect();
 
-        let F = events[5].clone();
+    //     let F = events[5].clone();
 
-        // The causal graph should be the same regardless
-        // of the order in which the events are pushed.
-        thread_rng().shuffle(&mut events);
+    //     // The causal graph should be the same regardless
+    //     // of the order in which the events are pushed.
+    //     thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new();
+    //     let mut machine = ConsensusMachine::new();
 
-        for e in events {
-            machine.push(e).unwrap();
-        }
+    //     for e in events {
+    //         machine.push(e).unwrap();
+    //     }
 
-        assert_eq!(machine.highest(&n2).unwrap(), F);
-    }
+    //     assert_eq!(machine.highest(&n2).unwrap(), F);
+    // }
 
     quickcheck! {
         /// Causal graph structure:
@@ -442,25 +563,43 @@ mod tests {
         /// |
         /// A' -> B' -> C' -> D'
         ///       |
-        ///       A''
+        ///       B''
         fn graph_assembly() -> bool {
             let i1 = Identity::new();
             let i2 = Identity::new();
             let i3 = Identity::new();
+            let i4 = Identity::new();
             let n1 = NodeId(*i1.pkey());
             let n2 = NodeId(*i2.pkey());
             let n3 = NodeId(*i3.pkey());
+            let n4 = NodeId(*i4.pkey());
             let seed = Stamp::seed();
             let (s_a, s_b) = seed.fork();
             let (s_b, s_c) = s_b.fork();
+            let (s_a, s_d) = s_a.fork(); 
 
             let s_a = s_a.event();
             let A = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
 
+            let s_c = s_c.join(s_a.peek()).event();
+            let A_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+
+            let s_c = s_c.event();
+            let B_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+
+            let s_c = s_c.event();
+            let C_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+
+            let s_d = s_d.join(s_c.peek()).event();
+            let B_second = Event::Dummy(n3.clone(), Some(Hash::random()), s_d.clone());
+
+            let s_c = s_c.event();
+            let D_prime = Event::Dummy(n3, Some(Hash::random()), s_c);
+
             let s_b = s_b.join(s_a.peek()).event();
             let B = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
 
-            let s_a = s_b.join(s_b.peek()).event();
+            let s_a = s_a.join(s_b.peek()).event();
             let C = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
 
             let s_b = s_b.join(s_a.peek()).event();
@@ -472,18 +611,16 @@ mod tests {
             let s_b = s_b.join(s_a.peek()).event();
             let F = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
 
-            let s_c = s_c.join(s_a.peek()).event();
-            let A_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
-
-            let s_c = s_c.event();
-            let B_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
-
-            let s_c = s_c.event();
-            let C_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
-            let B_second = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
-
-            let s_c = s_c.event();
-            let D_prime = Event::Dummy(n3, Some(Hash::random()), s_c);
+            assert!(A.stamp().happened_before(B.stamp()));
+            assert!(!B.stamp().happened_before(A.stamp()));
+            assert!(B.stamp().happened_before(C.stamp()));
+            assert!(C.stamp().happened_before(D.stamp()));
+            assert!(D.stamp().happened_before(F.stamp()));
+            assert!(A.stamp().happened_before(B_prime.stamp()));
+            assert!(A.stamp().happened_before(A_prime.stamp()));
+            assert!(A_prime.stamp().happened_before(B_prime.stamp()));
+            assert!(A_prime.stamp().concurrent(F.stamp()));
+            assert!(B_second.stamp().concurrent(D_prime.stamp()));
 
             let events = vec![
                 A,
@@ -516,6 +653,18 @@ mod tests {
             let D_prime = events[9].clone();
             let B_second = events[10].clone();
 
+            println!("A ID: {:?}", A.hash());
+            println!("B ID: {:?}", B.hash());
+            println!("C ID: {:?}", C.hash());
+            println!("D ID: {:?}", D.hash());
+            println!("F ID: {:?}", F.hash());
+            println!("A_prime ID: {:?}", A_prime.hash());
+            println!("B_prime ID: {:?}", B_prime.hash());
+            println!("C_prime ID: {:?}", C_prime.hash());
+            println!("D_prime ID: {:?}", D_prime.hash());
+            println!("B_second ID: {:?}", B_second.hash());
+
+
             // The causal graph should be the same regardless
             // of the order in which the events are pushed.
             thread_rng().shuffle(&mut events);
@@ -523,9 +672,11 @@ mod tests {
             let mut machine = ConsensusMachine::new();
 
             for e in events {
+                println!("DEBUG PUSHED: {:?}", e.hash());
                 machine.push(e).unwrap();
             }
 
+            assert!(!machine.causal_graph.read().graph.is_cyclic());
             assert!(machine.is_direct_follower(B.clone(), A.clone()));
             assert!(machine.is_direct_follower(C.clone(), B.clone()));
             assert!(machine.is_direct_follower(D.clone(), C.clone()));

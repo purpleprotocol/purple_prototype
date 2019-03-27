@@ -51,13 +51,15 @@ impl CausalGraph {
         false
     }
 
-    pub fn add_vertex(&mut self, event: Arc<Event>) {
+    pub fn add_vertex(&mut self, event: Arc<Event>) -> VertexId {
         let id = self.graph.add_vertex(event.clone());
-        self.lookup_table.insert(event.hash().unwrap(), id);
+        self.lookup_table.insert(event.hash().unwrap(), id.clone());
+
+        id
     }
 
     /// Returns true if the second event happened exactly after the first event.
-    pub fn is_direct_follower(&self, event1: Arc<Event>, event2: Arc<Event>) -> bool {
+    pub(crate) fn is_direct_follower(&self, event1: Arc<Event>, event2: Arc<Event>) -> bool {
         let id1 = self.lookup_table.get(&event1.hash().unwrap());
         let id2 = self.lookup_table.get(&event2.hash().unwrap());
 
@@ -71,5 +73,34 @@ impl CausalGraph {
 
     pub fn empty(&self) -> bool {
         self.graph.vertex_count() == 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crypto::{Identity, Hash};
+    use causality::Stamp;
+    use network::NodeId;
+
+    #[test]
+    fn is_direct_follower() {
+        let i = Identity::new();
+        let n = NodeId(*i.pkey());
+        let A = Arc::new(Event::Dummy(n.clone(), Some(Hash::random()), Stamp::seed()));
+        let B = Arc::new(Event::Dummy(n.clone(), Some(Hash::random()), Stamp::seed()));
+        let C = Arc::new(Event::Dummy(n.clone(), Some(Hash::random()), Stamp::seed()));
+        let mut cg = CausalGraph::new();
+
+        let A_id = cg.add_vertex(A.clone());
+        let B_id = cg.add_vertex(B.clone());
+        let _ = cg.add_vertex(C.clone());
+
+        cg.graph.add_edge(&A_id, &B_id);
+
+        assert!(cg.is_direct_follower(B.clone(), A.clone()));
+        assert!(!cg.is_direct_follower(A.clone(), B.clone()));
+        assert!(!cg.is_direct_follower(A.clone(), C.clone()));
+        assert!(!cg.is_direct_follower(C, A));
     }
 }
