@@ -29,6 +29,10 @@ use std::sync::Arc;
 use recursive::*;
 use std::collections::VecDeque;
 
+
+use crypto::Hash;
+static mut NODE_LOOKUP: Option<HashMap<Hash, String>> = None;
+
 #[derive(Clone, Debug)]
 pub enum CGError {
     AlreadyInCG,
@@ -139,16 +143,16 @@ impl ConsensusMachine {
                     // Mark as visited
                     visited_map.insert(current, true);
 
+                    g.graph
+                        .out_neighbors(current)
+                        // Filter and append out neighbors to neighbors list
+                        .filter(|v| !visited_map.get(v).unwrap())
+                        .for_each(|v| events.push_front(v));
+
                     // Pushed event happened after stored event with 0 edge count.
                     if event_stamp.happened_after(g.graph.fetch(current).unwrap().stamp()) && edge_count == 0 {
                         edges_to_add.push((current.clone(), pushed.clone()));
                         println!("DEBUG 1");
-
-                        g.graph
-                            .out_neighbors(current)
-                            // Filter and append out neighbors to neighbors list
-                            .filter(|v| !visited_map.get(v).unwrap())
-                            .for_each(|v| events.push_front(v));
 
                         return RecResult::Continue((edges_to_add, edges_to_remove, events));
                     }
@@ -164,13 +168,7 @@ impl ConsensusMachine {
 
                         edges_to_remove.extend(&to_remove);
                         edges_to_add.push((current.clone(), pushed.clone()));
-                        println!("DEBUG 2: {:?}", to_remove);
-
-                        g.graph
-                            .out_neighbors(current)
-                            // Filter and append out neighbors to neighbors list
-                            .filter(|v| !visited_map.get(v).unwrap())
-                            .for_each(|v| events.push_front(v));
+                        println!("DEBUG 2");
 
                         return RecResult::Continue((edges_to_add, edges_to_remove, events));
                     }
@@ -179,12 +177,6 @@ impl ConsensusMachine {
                     if event_stamp.happened_before(g.graph.fetch(current).unwrap().stamp()) && edge_count == 0 {
                         edges_to_add.push((pushed.clone(), current.clone()));
                         println!("DEBUG 3");
-
-                        g.graph
-                            .out_neighbors(current)
-                            // Filter and append out neighbors to neighbors list
-                            .filter(|v| !visited_map.get(v).unwrap())
-                            .for_each(|v| events.push_front(v));
 
                         return RecResult::Continue((edges_to_add, edges_to_remove, events));
                     }
@@ -217,20 +209,8 @@ impl ConsensusMachine {
                         edges_to_add.push((pushed.clone(), current.clone()));
                         println!("DEBUG 4");
 
-                        g.graph
-                            .out_neighbors(current)
-                            // Filter and append out neighbors to neighbors list
-                            .filter(|v| !visited_map.get(v).unwrap())
-                            .for_each(|v| events.push_front(v));
-
                         return RecResult::Continue((edges_to_add, edges_to_remove, events));
                     }
-
-                    g.graph
-                        .out_neighbors(current)
-                        // Filter and append out neighbors to neighbors list
-                        .filter(|v| !visited_map.get(v).unwrap())
-                        .for_each(|v| events.push_front(v));
 
                     RecResult::Continue((edges_to_add, edges_to_remove, events))
                 } else {
@@ -253,13 +233,13 @@ impl ConsensusMachine {
             .iter()
             .for_each(|(o, i)| g.graph.remove_edge(o, i));
 
-        use crypto::Hash;
-
-        let to_add: Vec<(Hash, Hash)> = edges_to_add.iter().map(|(o, i)| (g.graph.fetch(o).unwrap().hash().unwrap(), g.graph.fetch(i).unwrap().hash().unwrap())).collect(); 
-        let to_remove: Vec<(Hash, Hash)> = edges_to_remove.iter().map(|(o, i)| (g.graph.fetch(o).unwrap().hash().unwrap(), g.graph.fetch(i).unwrap().hash().unwrap())).collect(); 
-
-        println!("DEBUG EDGES TO ADD: {:?}", to_add);
-        println!("DEBUG EDGES TO REMOVE: {:?}", to_remove);
+        unsafe {
+            let to_add: Vec<(&String, &String)> = edges_to_add.iter().map(|(o, i)| (NODE_LOOKUP.as_ref().unwrap().get(&g.graph.fetch(o).unwrap().hash().unwrap()).unwrap(), NODE_LOOKUP.as_ref().unwrap().get(&g.graph.fetch(i).unwrap().hash().unwrap()).unwrap())).collect(); 
+            let to_remove: Vec<(&String, &String)> = edges_to_remove.iter().map(|(o, i)| (NODE_LOOKUP.as_ref().unwrap().get(&g.graph.fetch(o).unwrap().hash().unwrap()).unwrap(), NODE_LOOKUP.as_ref().unwrap().get(&g.graph.fetch(i).unwrap().hash().unwrap()).unwrap())).collect(); 
+        
+            println!("DEBUG EDGES TO ADD: {:?}", to_add);
+            println!("DEBUG EDGES TO REMOVE: {:?}", to_remove);
+        }    
 
         Ok(())
     }
@@ -653,17 +633,21 @@ mod tests {
             let D_prime = events[9].clone();
             let B_second = events[10].clone();
 
-            println!("A ID: {:?}", A.hash());
-            println!("B ID: {:?}", B.hash());
-            println!("C ID: {:?}", C.hash());
-            println!("D ID: {:?}", D.hash());
-            println!("F ID: {:?}", F.hash());
-            println!("A_prime ID: {:?}", A_prime.hash());
-            println!("B_prime ID: {:?}", B_prime.hash());
-            println!("C_prime ID: {:?}", C_prime.hash());
-            println!("D_prime ID: {:?}", D_prime.hash());
-            println!("B_second ID: {:?}", B_second.hash());
+            unsafe {
+                NODE_LOOKUP = Some(HashMap::new());
 
+                NODE_LOOKUP.as_mut().unwrap().insert(A.hash().unwrap(), "A".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(B.hash().unwrap(), "B".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(C.hash().unwrap(), "C".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(D.hash().unwrap(), "D".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(E.hash().unwrap(), "E".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(F.hash().unwrap(), "F".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(A_prime.hash().unwrap(), "A'".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(B_prime.hash().unwrap(), "B'".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(C_prime.hash().unwrap(), "C'".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(D_prime.hash().unwrap(), "D'".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(B_second.hash().unwrap(), "B''".to_string());
+            }
 
             // The causal graph should be the same regardless
             // of the order in which the events are pushed.
@@ -672,7 +656,10 @@ mod tests {
             let mut machine = ConsensusMachine::new();
 
             for e in events {
-                println!("DEBUG PUSHED: {:?}", e.hash());
+                unsafe {
+                    println!("DEBUG PUSHED: {}", NODE_LOOKUP.as_ref().unwrap().get(&e.hash().unwrap()).unwrap());
+                }
+                
                 machine.push(e).unwrap();
             }
 
