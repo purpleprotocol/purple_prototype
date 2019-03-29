@@ -46,6 +46,9 @@ pub struct Heartbeat {
     /// The hash of the event
     pub hash: Option<Hash>,
 
+    /// The hash of the parent event in the causal graph.
+    pub parent_hash: Hash,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     /// The signature of the sender
     pub signature: Option<Signature>,
@@ -103,10 +106,11 @@ impl Heartbeat {
     /// 3) Txs length    - 32bits
     /// 4) Node id       - 32byte binary
     /// 5) Root hash     - 32byte binary
-    /// 6) Hash          - 32byte binary
-    /// 7) Signature     - 64byte binary
-    /// 8) Stamp         - Binary of stamp length
-    /// 9) Transactions  - Binary of txs length
+    /// 6) Parent hash   - 32byte binary
+    /// 7) Hash          - 32byte binary
+    /// 8) Signature     - 64byte binary
+    /// 9) Stamp         - Binary of stamp length
+    /// 10) Transactions - Binary of txs length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let event_type: u8 = Self::EVENT_TYPE;
@@ -144,6 +148,7 @@ impl Heartbeat {
         }
 
         let node_id = &(&&self.node_id.0).0;
+        let parent_hash = &self.parent_hash.0;
         let mut transactions: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&transactions.unwrap());
         let mut stamp: Vec<u8> = self.stamp.to_bytes();
 
@@ -156,6 +161,7 @@ impl Heartbeat {
 
         buffer.append(&mut node_id.to_vec());
         buffer.append(&mut root_hash.to_vec());
+        buffer.append(&mut parent_hash.to_vec());
         buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature.inner_bytes());
         buffer.append(&mut stamp);
@@ -209,6 +215,17 @@ impl Heartbeat {
         };
 
         let root_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the root hash");
+        };
+
+        let parent_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
@@ -360,12 +377,13 @@ impl Heartbeat {
         };
 
         let heartbeat = Heartbeat {
-            node_id: node_id,
+            node_id,
+            stamp,
+            transactions,
+            parent_hash,
             root_hash: Some(root_hash),
             hash: Some(hash),
             signature: Some(signature),
-            stamp: stamp,
-            transactions: transactions,
         };
 
         Ok(heartbeat)
@@ -396,6 +414,7 @@ impl Arbitrary for Heartbeat {
 
         Heartbeat {
             node_id: Arbitrary::arbitrary(g),
+            parent_hash: Arbitrary::arbitrary(g),
             root_hash: Some(Arbitrary::arbitrary(g)),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),

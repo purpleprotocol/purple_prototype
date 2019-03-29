@@ -24,10 +24,18 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Leave {
+    /// The `NodeId` of the event issuer
     pub node_id: NodeId,
+
+    /// The stamp of the `Leave` event
     pub stamp: Stamp,
+
+    /// The hash of the parent event in the causal graph.
+    pub parent_hash: Hash,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<Hash>,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<Signature>,
 }
@@ -63,6 +71,7 @@ impl Leave {
         };
 
         let node_id = &(&&self.node_id.0).0;
+        let parent_hash = &self.parent_hash.0;
         let mut stamp: Vec<u8> = self.stamp.to_bytes();
 
         let stamp_len = stamp.len();
@@ -71,6 +80,7 @@ impl Leave {
         buffer.write_u16::<BigEndian>(stamp_len as u16).unwrap();
 
         buffer.append(&mut node_id.to_vec());
+        buffer.append(&mut parent_hash.to_vec());
         buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature.inner_bytes());
         buffer.append(&mut stamp);
@@ -113,6 +123,17 @@ impl Leave {
             return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the node id");
         };
 
+        let parent_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the hash");
+        };
+
         let hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
@@ -145,8 +166,9 @@ impl Leave {
         };
 
         let leave = Leave {
-            node_id: node_id,
-            stamp: stamp,
+            node_id,
+            stamp,
+            parent_hash,
             hash: Some(hash),
             signature: Some(signature),
         };
@@ -164,6 +186,7 @@ impl Arbitrary for Leave {
         Leave {
             node_id: Arbitrary::arbitrary(g),
             stamp: Arbitrary::arbitrary(g),
+            parent_hash: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }

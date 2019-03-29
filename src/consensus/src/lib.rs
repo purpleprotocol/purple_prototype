@@ -17,7 +17,6 @@
 */
 
 #![allow(non_snake_case)]
-#![feature(const_fn)]
 
 mod candidate_set;
 mod causal_graph;

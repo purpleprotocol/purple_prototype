@@ -35,6 +35,7 @@ extern crate persistence;
 extern crate rayon;
 extern crate rlp;
 extern crate serde;
+extern crate bitvec;
 extern crate transactions;
 
 #[macro_use]
@@ -58,7 +59,7 @@ pub enum Event {
     Leave(Leave),
 
     /// Dummy event used for testing
-    Dummy(NodeId, Option<Hash>, Stamp),
+    Dummy(NodeId, Hash, Hash, Stamp),
 }
 
 impl Event {
@@ -67,16 +68,16 @@ impl Event {
             Event::Heartbeat(ref event) => event.stamp.clone(),
             Event::Join(ref event) => event.stamp.clone(),
             Event::Leave(ref event) => event.stamp.clone(),
-            Event::Dummy(_, _, ref stamp) => stamp.clone(),
+            Event::Dummy(_, _, _, ref stamp) => stamp.clone(),
         }
     }
-
+    
     pub fn node_id(&self) -> NodeId {
         match *self {
             Event::Heartbeat(ref event) => event.node_id.clone(),
             Event::Join(ref event) => event.node_id.clone(),
             Event::Leave(ref event) => event.node_id.clone(),
-            Event::Dummy(ref node_id, _, _) => node_id.clone(),
+            Event::Dummy(ref node_id, _, _, _) => node_id.clone(),
         }
     }
 
@@ -85,7 +86,16 @@ impl Event {
             Event::Heartbeat(ref event) => event.hash.clone(),
             Event::Join(ref event) => event.hash.clone(),
             Event::Leave(ref event) => event.hash.clone(),
-            Event::Dummy(ref node_id, ref hash, _) => hash.clone(),
+            Event::Dummy(ref node_id, ref hash, _, _) => Some(hash.clone()),
+        }
+    }
+
+    pub fn parent_hash(&self) -> Option<Hash> {
+        match *self {
+            Event::Heartbeat(ref event) => Some(event.parent_hash.clone()),
+            Event::Join(ref event) => event.parent_cg_hash.clone(),
+            Event::Leave(ref event) => Some(event.parent_hash.clone()),
+            Event::Dummy(ref node_id, _, ref parent_hash, _) => Some(parent_hash.clone()),
         }
     }
 }

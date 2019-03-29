@@ -29,8 +29,10 @@ use std::sync::Arc;
 use recursive::*;
 use std::collections::VecDeque;
 
-
+#[cfg(test)]
 use crypto::Hash;
+
+#[cfg(test)]
 static mut NODE_LOOKUP: Option<HashMap<Hash, String>> = None;
 
 #[derive(Clone, Debug)]
@@ -63,7 +65,7 @@ impl ConsensusMachine {
     }
 
     /// Returns true if the second event happened exactly after the first event.
-    pub fn is_direct_follower(&self, event1: Arc<Event>, event2: Arc<Event>) -> bool {
+    pub(crate) fn is_direct_follower(&self, event1: Arc<Event>, event2: Arc<Event>) -> bool {
         self.causal_graph.read().is_direct_follower(event1, event2)
     }
 
@@ -118,9 +120,8 @@ impl ConsensusMachine {
             //
             // `last < pushed < current`
             // 
-            // If there is no event between the last and the
-            // pushed event, we just add an edge between pushed and
-            // current.
+            // If there is no event between the last and the pushed 
+            // event, we just add an edge between pushed and the current.
             let start_events: VecDeque<&VertexId> = g.graph.roots().collect();
 
             let (edges_to_add, edges_to_remove, _)  = tail_recurse((vec![], HashSet::new(), start_events), |(mut edges_to_add, mut edges_to_remove, mut events): (Vec<(VertexId, VertexId)>, HashSet<(VertexId, VertexId)>, VecDeque<&VertexId>)| {
@@ -129,6 +130,11 @@ impl ConsensusMachine {
                 
                 if let Some(current) = front {
                     let is_visited = visited_map.get(current).unwrap();
+
+                    #[cfg(test)]
+                    unsafe {
+                        println!("DEBUG CURRENT: {}", NODE_LOOKUP.as_ref().unwrap().get(&g.graph.fetch(current).unwrap().hash().unwrap()).unwrap());
+                    }
                     
                     // Skip visited vertices
                     if *is_visited {
@@ -154,7 +160,11 @@ impl ConsensusMachine {
                         edges_to_add.push((current.clone(), pushed.clone()));
                         println!("DEBUG 1");
 
-                        return RecResult::Continue((edges_to_add, edges_to_remove, events));
+                        if g.graph.vertex_count() > 2 {
+                            return RecResult::Continue((edges_to_add, edges_to_remove, events));
+                        } else {
+                            return RecResult::Return((edges_to_add, edges_to_remove, ()));
+                        }
                     }
 
                     // Pushed event happened after stored event.
@@ -178,38 +188,29 @@ impl ConsensusMachine {
                         edges_to_add.push((pushed.clone(), current.clone()));
                         println!("DEBUG 3");
 
-                        return RecResult::Continue((edges_to_add, edges_to_remove, events));
+                        if g.graph.vertex_count() > 2 {
+                            return RecResult::Continue((edges_to_add, edges_to_remove, events));
+                        } else {
+                            return RecResult::Return((edges_to_add, edges_to_remove, ()));
+                        }
                     }
 
                     // Pushed event happened before stored event.
                     if event_stamp.happened_before(g.graph.fetch(current).unwrap().stamp()) {
-                        let last_edge = edges_to_add.pop();
-
-                        // If the last edge was added between the last
-                        // event and the pushed event, we remove the edge
-                        // between the last and current and add edges
-                        // so that the events respect the following relation:
-                        //
-                        // `last -> pushed -> current`
-                        if let Some((o, i)) = last_edge {
-                            println!("DEBUG 5");
-                            let last_is_neighbor = g.graph
-                                .out_neighbors(&o)
-                                .any(|v| *v == *current);
-
-                            if i == pushed && last_is_neighbor {
-                                println!("DEBUG 6");
-                                edges_to_remove.insert((o, *current));
-                                edges_to_add.push((o, pushed));
-                            } else {
-                                edges_to_add.push((o, i));
-                            }
-                        }
+                        // // In this case we remove any edges between the stored 
+                        // // event's inbound neighbors and the current event that
+                        // // have an edge between it and the pushed event.
+                        // let to_remove: Vec<(VertexId, VertexId)> = g.graph
+                        //     .in_neighbors(current)
+                        //     .filter(|n| g.graph.has_edge(n, &pushed) && g.graph.has_edge(n, &current))
+                        //     .map(|n| (n.clone(), current.clone()))
+                        //     .collect();
     
+                        // edges_to_remove.extend(&to_remove);
                         edges_to_add.push((pushed.clone(), current.clone()));
                         println!("DEBUG 4");
 
-                        return RecResult::Continue((edges_to_add, edges_to_remove, events));
+                        return RecResult::Return((edges_to_add, edges_to_remove, ()));
                     }
 
                     RecResult::Continue((edges_to_add, edges_to_remove, events))
@@ -225,7 +226,7 @@ impl ConsensusMachine {
         // Add the edges to the graph
         edges_to_add
             .iter()
-            .filter(|pair| !edges_to_remove.contains(pair))
+            .filter(|pair| !edges_to_remove.contains(pair) && pair.0 != pair.1)
             .for_each(|(o, i)| g.graph.add_edge(o, i).unwrap());
 
         // Remove selected edges
@@ -233,8 +234,9 @@ impl ConsensusMachine {
             .iter()
             .for_each(|(o, i)| g.graph.remove_edge(o, i));
 
+        #[cfg(test)]
         unsafe {
-            let to_add: Vec<(&String, &String)> = edges_to_add.iter().map(|(o, i)| (NODE_LOOKUP.as_ref().unwrap().get(&g.graph.fetch(o).unwrap().hash().unwrap()).unwrap(), NODE_LOOKUP.as_ref().unwrap().get(&g.graph.fetch(i).unwrap().hash().unwrap()).unwrap())).collect(); 
+            let to_add: Vec<(&String, &String)> = edges_to_add.iter().filter(|pair| !edges_to_remove.contains(pair) && pair.0 != pair.1).map(|(o, i)| (NODE_LOOKUP.as_ref().unwrap().get(&g.graph.fetch(o).unwrap().hash().unwrap()).unwrap(), NODE_LOOKUP.as_ref().unwrap().get(&g.graph.fetch(i).unwrap().hash().unwrap()).unwrap())).collect(); 
             let to_remove: Vec<(&String, &String)> = edges_to_remove.iter().map(|(o, i)| (NODE_LOOKUP.as_ref().unwrap().get(&g.graph.fetch(o).unwrap().hash().unwrap()).unwrap(), NODE_LOOKUP.as_ref().unwrap().get(&g.graph.fetch(i).unwrap().hash().unwrap()).unwrap())).collect(); 
         
             println!("DEBUG EDGES TO ADD: {:?}", to_add);
@@ -567,11 +569,11 @@ mod tests {
             let s_c = s_c.event();
             let B_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
 
-            let s_c = s_c.event();
-            let C_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
-
             let s_d = s_d.join(s_c.peek()).event();
             let B_second = Event::Dummy(n3.clone(), Some(Hash::random()), s_d.clone());
+
+            let s_c = s_c.event();
+            let C_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
 
             let s_c = s_c.event();
             let D_prime = Event::Dummy(n3, Some(Hash::random()), s_c);
@@ -642,11 +644,11 @@ mod tests {
                 NODE_LOOKUP.as_mut().unwrap().insert(D.hash().unwrap(), "D".to_string());
                 NODE_LOOKUP.as_mut().unwrap().insert(E.hash().unwrap(), "E".to_string());
                 NODE_LOOKUP.as_mut().unwrap().insert(F.hash().unwrap(), "F".to_string());
-                NODE_LOOKUP.as_mut().unwrap().insert(A_prime.hash().unwrap(), "A'".to_string());
-                NODE_LOOKUP.as_mut().unwrap().insert(B_prime.hash().unwrap(), "B'".to_string());
-                NODE_LOOKUP.as_mut().unwrap().insert(C_prime.hash().unwrap(), "C'".to_string());
-                NODE_LOOKUP.as_mut().unwrap().insert(D_prime.hash().unwrap(), "D'".to_string());
-                NODE_LOOKUP.as_mut().unwrap().insert(B_second.hash().unwrap(), "B''".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(A_prime.hash().unwrap(), "A prime".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(B_prime.hash().unwrap(), "B prime".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(C_prime.hash().unwrap(), "C prime".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(D_prime.hash().unwrap(), "D prime".to_string());
+                NODE_LOOKUP.as_mut().unwrap().insert(B_second.hash().unwrap(), "B second".to_string());
             }
 
             // The causal graph should be the same regardless

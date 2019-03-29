@@ -24,7 +24,17 @@ use hashbrown::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct CausalGraph {
+    /// Graph structure holding the causal graph
     pub graph: Graph<Arc<Event>>,
+
+    /// Events that do not yet directly follow
+    /// other events from the causal graph and
+    /// the number of events that have been 
+    /// added and follow another event since
+    /// the pending event has been pushed. 
+    pending: HashMap<Arc<Event>, usize>,
+
+    /// Mapping between event hashes and vertex ids.
     lookup_table: HashMap<Hash, VertexId>, 
 }
 
@@ -32,6 +42,7 @@ impl CausalGraph {
     pub fn new() -> CausalGraph {
         CausalGraph {
             graph: Graph::new(),
+            pending: HashMap::new(),
             lookup_table: HashMap::new()
         }
     }
@@ -90,17 +101,22 @@ mod tests {
         let A = Arc::new(Event::Dummy(n.clone(), Some(Hash::random()), Stamp::seed()));
         let B = Arc::new(Event::Dummy(n.clone(), Some(Hash::random()), Stamp::seed()));
         let C = Arc::new(Event::Dummy(n.clone(), Some(Hash::random()), Stamp::seed()));
+        let D = Arc::new(Event::Dummy(n.clone(), Some(Hash::random()), Stamp::seed()));
         let mut cg = CausalGraph::new();
 
         let A_id = cg.add_vertex(A.clone());
         let B_id = cg.add_vertex(B.clone());
-        let _ = cg.add_vertex(C.clone());
+        let C_id = cg.add_vertex(C.clone());
+        let D_id = cg.add_vertex(D.clone());
 
-        cg.graph.add_edge(&A_id, &B_id);
+        cg.graph.add_edge(&A_id, &B_id).unwrap();
+        cg.graph.add_edge(&B_id, &C_id).unwrap();
 
         assert!(cg.is_direct_follower(B.clone(), A.clone()));
+        assert!(cg.is_direct_follower(C.clone(), B.clone()));
         assert!(!cg.is_direct_follower(A.clone(), B.clone()));
         assert!(!cg.is_direct_follower(A.clone(), C.clone()));
+        assert!(!cg.is_direct_follower(D, A.clone()));
         assert!(!cg.is_direct_follower(C, A));
     }
 }

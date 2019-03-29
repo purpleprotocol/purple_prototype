@@ -268,7 +268,6 @@ dependencies = [
 name = "consensus"
 version = "0.1.0"
 dependencies = [
- "causality 0.1.0",
  "crypto 0.1.0",
  "events 0.1.0",
  "graphlib 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -585,6 +584,7 @@ name = "events"
 version = "0.1.0"
 dependencies = [
  "account 0.1.0",
+ "bitvec 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "causality 0.1.0",
  "criterion 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2227,7 +2227,6 @@ dependencies = [
  "account 0.1.0",
  "bin-tools 0.1.0",
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "causality 0.1.0",
  "crypto 0.1.0",
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.3.0 (git+https://github.com/paritytech/parity-common)",
