@@ -64,11 +64,6 @@ impl ConsensusMachine {
         }
     }
 
-    /// Returns true if the second event happened exactly after the first event.
-    pub(crate) fn is_direct_follower(&self, event1: Arc<Event>, event2: Arc<Event>) -> bool {
-        self.causal_graph.read().is_direct_follower(event1, event2)
-    }
-
     /// Attempts to push an atomic reference to an
     /// event to the causal graph. This function also
     /// validates the event in accordance with the rest
@@ -352,6 +347,11 @@ impl ConsensusMachine {
     pub fn fetch_cs(&self) -> Result<Vec<Arc<Mutex<CandidateSet>>>, CGError> {
         unimplemented!();
     }
+
+    /// Returns true if the second event happened exactly after the first event.
+    pub(crate) fn is_direct_follower(&self, event1: Arc<Event>, event2: Arc<Event>) -> bool {
+        self.causal_graph.read().is_direct_follower(event1, event2)
+    }
 }
 
 #[cfg(test)]
@@ -361,182 +361,206 @@ mod tests {
     use crypto::{Identity, Hash};
     use rand::{thread_rng, Rng};
 
-    // #[test]
-    // /// Causal graph structure:
-    // ///
-    // /// A -> B -> C -> D -> E -> F
-    // /// |
-    // /// A' -> B' -> C' -> D'
-    // ///       |
-    // ///       B''
-    // ///
-    // /// The intended result for calling the function on A should be F
-    // /// and the intended result for A' should be D'.
-    // fn highest_following() {
-    //     let i1 = Identity::new();
-    //     let i2 = Identity::new();
-    //     let i3 = Identity::new();
-    //     let n1 = NodeId(*i1.pkey());
-    //     let n2 = NodeId(*i2.pkey());
-    //     let n3 = NodeId(*i3.pkey());
-    //     let seed = Stamp::seed();
-    //     let (s_a, s_b) = seed.fork();
-    //     let (s_b, s_c) = s_b.fork();
+    #[test]
+    /// Causal graph structure:
+    ///
+    /// A -> B -> C -> D -> E -> F
+    /// |
+    /// A' -> B' -> C' -> D'
+    ///       |
+    ///       B''
+    ///
+    /// The intended result for calling the function on A should be F
+    /// and the intended result for A' should be D'.
+    fn highest_following() {
+        let i1 = Identity::new();
+        let i2 = Identity::new();
+        let i3 = Identity::new();
+        let n1 = NodeId(*i1.pkey());
+        let n2 = NodeId(*i2.pkey());
+        let n3 = NodeId(*i3.pkey());
+        let seed = Stamp::seed();
+        let (s_a, s_b) = seed.fork();
+        let (s_b, s_c) = s_b.fork();
+        let (s_a, s_d) = s_a.fork(); 
 
-    //     let s_a = s_a.event();
-    //     let A = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
+        let s_a = s_a.event();
+        let A_hash = Hash::random();
+        let A = Event::Dummy(n1.clone(), A_hash.clone(), None, s_a.clone());
 
-    //     let s_c = s_c.join(s_a.peek()).event();
-    //     let A_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+        let s_c = s_c.join(s_a.peek()).event();
+        let A_prime_hash = Hash::random();
+        let A_prime = Event::Dummy(n3.clone(), A_prime_hash.clone(), Some(A_hash.clone()), s_c.clone());
 
-    //     let s_c = s_c.event();
-    //     let B_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+        let s_c = s_c.event();
+        let B_prime_hash = Hash::random();
+        let B_prime = Event::Dummy(n3.clone(), B_prime_hash.clone(), Some(A_prime_hash), s_c.clone());
 
-    //     let s_c = s_c.event();
-    //     let C_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
-    //     let B_second = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+        let s_d = s_d.join(s_c.peek()).event();
+        let B_second = Event::Dummy(n3.clone(), Hash::random(), Some(B_prime_hash.clone()), s_d.clone());
 
-    //     let s_c = s_c.event();
-    //     let D_prime = Event::Dummy(n3, Some(Hash::random()), s_c);
+        let s_c = s_c.event();
+        let C_prime_hash = Hash::random();
+        let C_prime = Event::Dummy(n3.clone(), C_prime_hash.clone(), Some(B_prime_hash), s_c.clone());
 
-    //     let s_b = s_b.join(s_a.peek()).event();
-    //     let B = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+        let s_c = s_c.event();
+        let D_prime = Event::Dummy(n3, Hash::random(), Some(C_prime_hash.clone()), s_c);
 
-    //     let s_a = s_a.join(s_b.peek()).event();
-    //     let C = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
+        let s_b = s_b.join(s_a.peek()).event();
+        let B_hash = Hash::random(); 
+        let B = Event::Dummy(n2.clone(), B_hash.clone(), Some(A_hash), s_b.clone());
 
-    //     let s_b = s_b.join(s_a.peek()).event();
-    //     let D = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+        let s_a = s_a.join(s_b.peek()).event();
+        let C_hash = Hash::random();
+        let C = Event::Dummy(n1.clone(), C_hash.clone(), Some(B_hash), s_a.clone());
 
-    //     let s_a = s_a.join(s_b.peek()).event();
-    //     let E = Event::Dummy(n1, Some(Hash::random()), s_a.clone());
+        let s_b = s_b.join(s_a.peek()).event();
+        let D_hash = Hash::random();
+        let D = Event::Dummy(n2.clone(), D_hash.clone(), Some(C_hash), s_b.clone());
 
-    //     let s_b = s_b.join(s_a.peek()).event();
-    //     let F = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+        let s_a = s_a.join(s_b.peek()).event();
+        let E_hash = Hash::random();
+        let E = Event::Dummy(n1, E_hash.clone(), Some(D_hash), s_a.clone());
 
-    //     let events = vec![
-    //         A,
-    //         B,
-    //         C,
-    //         D,
-    //         E,
-    //         F,
-    //         A_prime,
-    //         B_prime,
-    //         C_prime,
-    //         D_prime,
-    //         B_second
-    //     ];
+        let s_b = s_b.join(s_a.peek()).event();
+        let F_hash = Hash::random();
+        let F = Event::Dummy(n2.clone(), F_hash, Some(E_hash), s_b.clone());
 
-    //     let mut events: Vec<Arc<Event>> = events
-    //         .iter()
-    //         .map(|e| Arc::new(e.clone()))
-    //         .collect();
+        let events = vec![
+            A,
+            B,
+            C,
+            D,
+            E,
+            F,
+            A_prime,
+            B_prime,
+            C_prime,
+            D_prime,
+            B_second
+        ];
 
-    //     let A = events[0].clone();
-    //     let F = events[5].clone();
-    //     let A_prime = events[6].clone();
-    //     let D_prime = events[9].clone();
+        let mut events: Vec<Arc<Event>> = events
+            .iter()
+            .map(|e| Arc::new(e.clone()))
+            .collect();
 
-    //     // The causal graph should be the same regardless
-    //     // of the order in which the events are pushed.
-    //     thread_rng().shuffle(&mut events);
+        let A = events[0].clone();
+        let F = events[5].clone();
+        let A_prime = events[6].clone();
+        let D_prime = events[9].clone();
 
-    //     let mut machine = ConsensusMachine::new();
+        // The causal graph should be the same regardless
+        // of the order in which the events are pushed.
+        thread_rng().shuffle(&mut events);
 
-    //     for e in events {
-    //         machine.push(e).unwrap();
-    //     }
+        let mut machine = ConsensusMachine::new();
 
-    //     assert_eq!(machine.highest_following(&n2, &A.stamp()).unwrap(), F);
-    //     assert_eq!(machine.highest_following(&n2, &A_prime.stamp()).unwrap(), D_prime);
-    // }
+        for e in events {
+            machine.push(e).unwrap();
+        }
 
-    // #[test]
-    // /// Causal graph structure:
-    // ///
-    // /// A -> B -> C -> D -> E -> F
-    // /// |
-    // /// A' -> B' -> C' -> D'
-    // ///       |
-    // ///       A''
-    // ///
-    // /// The intended result for calling the function should be F.
-    // fn highest() {
-    //     let i1 = Identity::new();
-    //     let i2 = Identity::new();
-    //     let i3 = Identity::new();
-    //     let n1 = NodeId(*i1.pkey());
-    //     let n2 = NodeId(*i2.pkey());
-    //     let n3 = NodeId(*i3.pkey());
-    //     let seed = Stamp::seed();
-    //     let (s_a, s_b) = seed.fork();
-    //     let (s_b, s_c) = s_b.fork();
+        assert_eq!(machine.highest_following(&n2, &A.stamp()).unwrap(), F);
+        assert_eq!(machine.highest_following(&n2, &A_prime.stamp()).unwrap(), D_prime);
+    }
 
-    //     let s_a = s_a.event();
-    //     let A = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
+    #[test]
+    /// Causal graph structure:
+    ///
+    /// A -> B -> C -> D -> E -> F
+    /// |
+    /// A' -> B' -> C' -> D'
+    ///       |
+    ///       A''
+    ///
+    /// The intended result for calling the function should be F.
+    fn highest() {
+        let i1 = Identity::new();
+        let i2 = Identity::new();
+        let i3 = Identity::new();
+        let n1 = NodeId(*i1.pkey());
+        let n2 = NodeId(*i2.pkey());
+        let n3 = NodeId(*i3.pkey());
+        let seed = Stamp::seed();
+        let (s_a, s_b) = seed.fork();
+        let (s_b, s_c) = s_b.fork();
+        let (s_a, s_d) = s_a.fork(); 
 
-    //     let s_c = s_c.join(s_a.peek()).event();
-    //     let A_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+        let s_a = s_a.event();
+        let A_hash = Hash::random();
+        let A = Event::Dummy(n1.clone(), A_hash.clone(), None, s_a.clone());
 
-    //     let s_c = s_c.event();
-    //     let B_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+        let s_c = s_c.join(s_a.peek()).event();
+        let A_prime_hash = Hash::random();
+        let A_prime = Event::Dummy(n3.clone(), A_prime_hash.clone(), Some(A_hash.clone()), s_c.clone());
 
-    //     let s_c = s_c.event();
-    //     let C_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
-    //     let B_second = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+        let s_c = s_c.event();
+        let B_prime_hash = Hash::random();
+        let B_prime = Event::Dummy(n3.clone(), B_prime_hash.clone(), Some(A_prime_hash), s_c.clone());
 
-    //     let s_c = s_c.event();
-    //     let D_prime = Event::Dummy(n3, Some(Hash::random()), s_c);
+        let s_d = s_d.join(s_c.peek()).event();
+        let B_second = Event::Dummy(n3.clone(), Hash::random(), Some(B_prime_hash.clone()), s_d.clone());
 
-    //     let s_b = s_b.join(s_a.peek()).event();
-    //     let B = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+        let s_c = s_c.event();
+        let C_prime_hash = Hash::random();
+        let C_prime = Event::Dummy(n3.clone(), C_prime_hash.clone(), Some(B_prime_hash), s_c.clone());
 
-    //     let s_a = s_a.join(s_b.peek()).event();
-    //     let C = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
+        let s_c = s_c.event();
+        let D_prime = Event::Dummy(n3, Hash::random(), Some(C_prime_hash.clone()), s_c);
 
-    //     let s_b = s_b.join(s_a.peek()).event();
-    //     let D = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+        let s_b = s_b.join(s_a.peek()).event();
+        let B_hash = Hash::random(); 
+        let B = Event::Dummy(n2.clone(), B_hash.clone(), Some(A_hash), s_b.clone());
 
-    //     let s_a = s_a.join(s_b.peek()).event();
-    //     let E = Event::Dummy(n1, Some(Hash::random()), s_a.clone());
+        let s_a = s_a.join(s_b.peek()).event();
+        let C_hash = Hash::random();
+        let C = Event::Dummy(n1.clone(), C_hash.clone(), Some(B_hash), s_a.clone());
 
-    //     let s_b = s_b.join(s_a.peek()).event();
-    //     let F = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+        let s_b = s_b.join(s_a.peek()).event();
+        let D_hash = Hash::random();
+        let D = Event::Dummy(n2.clone(), D_hash.clone(), Some(C_hash), s_b.clone());
 
-    //     let events = vec![
-    //         A,
-    //         B,
-    //         C,
-    //         D,
-    //         E,
-    //         F,
-    //         A_prime,
-    //         B_prime,
-    //         C_prime,
-    //         D_prime,
-    //         B_second
-    //     ];
+        let s_a = s_a.join(s_b.peek()).event();
+        let E_hash = Hash::random();
+        let E = Event::Dummy(n1, E_hash.clone(), Some(D_hash), s_a.clone());
 
-    //     let mut events: Vec<Arc<Event>> = events
-    //         .iter()
-    //         .map(|e| Arc::new(e.clone()))
-    //         .collect();
+        let s_b = s_b.join(s_a.peek()).event();
+        let F_hash = Hash::random();
+        let F = Event::Dummy(n2.clone(), F_hash, Some(E_hash), s_b.clone());
 
-    //     let F = events[5].clone();
+        let events = vec![
+            A,
+            B,
+            C,
+            D,
+            E,
+            F,
+            A_prime,
+            B_prime,
+            C_prime,
+            D_prime,
+            B_second
+        ];
 
-    //     // The causal graph should be the same regardless
-    //     // of the order in which the events are pushed.
-    //     thread_rng().shuffle(&mut events);
+        let mut events: Vec<Arc<Event>> = events
+            .iter()
+            .map(|e| Arc::new(e.clone()))
+            .collect();
 
-    //     let mut machine = ConsensusMachine::new();
+        let F = events[5].clone();
 
-    //     for e in events {
-    //         machine.push(e).unwrap();
-    //     }
+        // The causal graph should be the same regardless
+        // of the order in which the events are pushed.
+        thread_rng().shuffle(&mut events);
 
-    //     assert_eq!(machine.highest(&n2).unwrap(), F);
-    // }
+        let mut machine = ConsensusMachine::new();
+
+        for e in events {
+            machine.push(e).unwrap();
+        }
+
+        assert_eq!(machine.highest(&n2).unwrap(), F);
+    }
 
     quickcheck! {
         /// Causal graph structure:
@@ -561,37 +585,46 @@ mod tests {
             let (s_a, s_d) = s_a.fork(); 
 
             let s_a = s_a.event();
-            let A = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
+            let A_hash = Hash::random();
+            let A = Event::Dummy(n1.clone(), A_hash.clone(), None, s_a.clone());
 
             let s_c = s_c.join(s_a.peek()).event();
-            let A_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+            let A_prime_hash = Hash::random();
+            let A_prime = Event::Dummy(n3.clone(), A_prime_hash.clone(), Some(A_hash.clone()), s_c.clone());
 
             let s_c = s_c.event();
-            let B_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+            let B_prime_hash = Hash::random();
+            let B_prime = Event::Dummy(n3.clone(), B_prime_hash.clone(), Some(A_prime_hash), s_c.clone());
 
             let s_d = s_d.join(s_c.peek()).event();
-            let B_second = Event::Dummy(n3.clone(), Some(Hash::random()), s_d.clone());
+            let B_second = Event::Dummy(n3.clone(), Hash::random(), Some(B_prime_hash.clone()), s_d.clone());
 
             let s_c = s_c.event();
-            let C_prime = Event::Dummy(n3.clone(), Some(Hash::random()), s_c.clone());
+            let C_prime_hash = Hash::random();
+            let C_prime = Event::Dummy(n3.clone(), C_prime_hash.clone(), Some(B_prime_hash), s_c.clone());
 
             let s_c = s_c.event();
-            let D_prime = Event::Dummy(n3, Some(Hash::random()), s_c);
+            let D_prime = Event::Dummy(n3, Hash::random(), Some(C_prime_hash.clone()), s_c);
 
             let s_b = s_b.join(s_a.peek()).event();
-            let B = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+            let B_hash = Hash::random(); 
+            let B = Event::Dummy(n2.clone(), B_hash.clone(), Some(A_hash), s_b.clone());
 
             let s_a = s_a.join(s_b.peek()).event();
-            let C = Event::Dummy(n1.clone(), Some(Hash::random()), s_a.clone());
+            let C_hash = Hash::random();
+            let C = Event::Dummy(n1.clone(), C_hash.clone(), Some(B_hash), s_a.clone());
 
             let s_b = s_b.join(s_a.peek()).event();
-            let D = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+            let D_hash = Hash::random();
+            let D = Event::Dummy(n2.clone(), D_hash.clone(), Some(C_hash), s_b.clone());
 
             let s_a = s_a.join(s_b.peek()).event();
-            let E = Event::Dummy(n1, Some(Hash::random()), s_a.clone());
+            let E_hash = Hash::random();
+            let E = Event::Dummy(n1, E_hash.clone(), Some(D_hash), s_a.clone());
 
             let s_b = s_b.join(s_a.peek()).event();
-            let F = Event::Dummy(n2.clone(), Some(Hash::random()), s_b.clone());
+            let F_hash = Hash::random();
+            let F = Event::Dummy(n2.clone(), F_hash, Some(E_hash), s_b.clone());
 
             assert!(A.stamp().happened_before(B.stamp()));
             assert!(!B.stamp().happened_before(A.stamp()));

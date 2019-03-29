@@ -51,15 +51,35 @@ pub use leave::*;
 use causality::Stamp;
 use crypto::Hash;
 use network::NodeId;
+use std::hash::Hash as HashTrait;
+use std::hash::Hasher;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Event {
     Heartbeat(Heartbeat),
     Join(Join),
     Leave(Leave),
 
     /// Dummy event used for testing
-    Dummy(NodeId, Hash, Hash, Stamp),
+    Dummy(NodeId, Hash, Option<Hash>, Stamp),
+}
+
+impl PartialEq for Event {
+    fn eq(&self, other: &Event) -> bool {
+        // This only makes sense when the event is received
+        // when the node is a server i.e. when the event is 
+        // guaranteed to have a hash because it already passed
+        // the parsing stage.
+        self.hash().unwrap() == other.hash().unwrap()
+    }
+}
+
+impl Eq for Event { }
+
+impl HashTrait for Event {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.hash().unwrap().hash(state);
+    }
 }
 
 impl Event {
@@ -95,7 +115,7 @@ impl Event {
             Event::Heartbeat(ref event) => Some(event.parent_hash.clone()),
             Event::Join(ref event) => event.parent_cg_hash.clone(),
             Event::Leave(ref event) => Some(event.parent_hash.clone()),
-            Event::Dummy(ref node_id, _, ref parent_hash, _) => Some(parent_hash.clone()),
+            Event::Dummy(ref node_id, _, ref parent_hash, _) => parent_hash.clone(),
         }
     }
 }

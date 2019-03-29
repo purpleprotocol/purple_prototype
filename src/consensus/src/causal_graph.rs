@@ -98,10 +98,13 @@ mod tests {
     fn is_direct_follower() {
         let i = Identity::new();
         let n = NodeId(*i.pkey());
-        let A = Arc::new(Event::Dummy(n.clone(), Some(Hash::random()), Stamp::seed()));
-        let B = Arc::new(Event::Dummy(n.clone(), Some(Hash::random()), Stamp::seed()));
-        let C = Arc::new(Event::Dummy(n.clone(), Some(Hash::random()), Stamp::seed()));
-        let D = Arc::new(Event::Dummy(n.clone(), Some(Hash::random()), Stamp::seed()));
+        let A_hash = Hash::random();
+        let B_hash = Hash::random();
+        let C_hash = Hash::random();
+        let A = Arc::new(Event::Dummy(n.clone(), A_hash.clone(), None, Stamp::seed()));
+        let B = Arc::new(Event::Dummy(n.clone(), B_hash.clone(), Some(A_hash), Stamp::seed()));
+        let C = Arc::new(Event::Dummy(n.clone(), C_hash.clone(), Some(B_hash), Stamp::seed()));
+        let D = Arc::new(Event::Dummy(n.clone(), Hash::random(), Some(C_hash), Stamp::seed()));
         let mut cg = CausalGraph::new();
 
         let A_id = cg.add_vertex(A.clone());
