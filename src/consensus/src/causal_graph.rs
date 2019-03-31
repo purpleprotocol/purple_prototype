@@ -16,7 +16,6 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use causality::Stamp;
 use crypto::Hash;
 use events::Event;
 use graphlib::{Graph, VertexId};
@@ -95,8 +94,7 @@ impl CausalGraph {
             self.lookup_table.insert(event.hash().unwrap(), id.clone());
             self.pending.insert(id);
 
-            let mut ends: VecDeque<(VertexId, usize)> = self
-                .ends
+            let mut ends: VecDeque<(VertexId, usize)> = self.ends
                 .iter()
                 .map(|(v, c)| (v.clone(), c.clone()))
                 .collect();
@@ -169,11 +167,32 @@ impl CausalGraph {
         }
     }
 
-    pub(crate) fn highest(&self, node_id: &NodeId) -> Arc<Event> {
+    pub(crate) fn highest(&self) -> Arc<Event> {
         self.highest.0.clone()
     }
 
-    pub(crate) fn highest_following(&self, node_id: &NodeId, stamp: &Stamp) -> Option<Arc<Event>> {
+    pub(crate) fn highest_exclusive(&self, node_id: &NodeId) -> Option<Arc<Event>> {
+        let highest = self.highest.0.clone();
+
+        if highest.node_id() != *node_id {
+            return Some(highest);
+        }
+
+        if highest.parent_hash().is_none() {
+            None
+        } else {
+            let id = self.lookup_table.get(&highest.parent_hash().unwrap()).unwrap();
+            let event = self.graph.fetch(id).unwrap();
+
+            if event.node_id() == *node_id {
+                panic!("An event cannot follow another event that is owned by the same entity!");
+            }
+
+            Some(event.clone())
+        }
+    }
+
+    pub(crate) fn highest_following(&self, node_id: &NodeId, event: Arc<Event>) -> Option<Arc<Event>> {
         unimplemented!();
     }
 
@@ -202,6 +221,20 @@ mod tests {
     use crypto::{Hash, Identity};
     use network::NodeId;
     use rand::*;
+
+    #[test]
+    fn highest_exclusive()  {
+        let i1 = Identity::new();
+        let i2 = Identity::new();
+        let n1 = NodeId(*i1.pkey());
+        let n2 = NodeId(*i2.pkey());
+        let A_hash = Hash::random();
+        let A = Arc::new(Event::Dummy(n1.clone(), A_hash.clone(), None, Stamp::seed()));
+        let mut cg = CausalGraph::new(A.clone());
+
+        assert_eq!(cg.highest_exclusive(&n2), Some(A));
+        assert_eq!(cg.highest_exclusive(&n1), None);
+    }
 
     quickcheck! {
         fn is_direct_follower() -> bool {
@@ -234,8 +267,9 @@ mod tests {
             assert!(!cg.is_direct_follower(A.clone(), B.clone()));
             assert!(!cg.is_direct_follower(A.clone(), C.clone()));
             assert!(!cg.is_direct_follower(D.clone(), A.clone()));
-            assert!(!cg.is_direct_follower(C, A));
-            assert_eq!(cg.highest(&n1), D);
+            assert!(!cg.is_direct_follower(C.clone(), A));
+            assert_eq!(cg.highest(), D);
+            assert_eq!(cg.highest_exclusive(&n2), Some(C));
 
             true
         }

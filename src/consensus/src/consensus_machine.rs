@@ -19,13 +19,9 @@
 use crate::candidate_set::CandidateSet;
 use crate::causal_graph::CausalGraph;
 use crate::validator_state::ValidatorState;
-use causality::Stamp;
 use events::Event;
-use graphlib::VertexId;
-use hashbrown::HashMap;
 use network::NodeId;
 use parking_lot::{Mutex, RwLock};
-use recursive::*;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -75,20 +71,27 @@ impl ConsensusMachine {
         Ok(())
     }
 
+    /// Returns the highest event that is currently
+    /// residing in the causal graph.
+    pub fn highest(&self) -> Arc<Event> {
+        let graph = &(*self.causal_graph).read();
+        graph.highest()
+    }
+
     /// Returns the highest event in the causal graph
     /// that **does not** belong to the node with the
     /// given `NodeId`.
-    pub fn highest(&mut self, node_id: &NodeId) -> Arc<Event> {
+    pub fn highest_exclusive(&self, node_id: &NodeId) -> Option<Arc<Event>> {
         let graph = &(*self.causal_graph).read();
-        graph.highest(node_id)
+        graph.highest_exclusive(node_id)
     }
 
     /// Return the highest event that follows the given
-    /// given stamp in the causal graph that **does not**
+    /// given event in the causal graph that **does not**
     /// belong to the node with the given `NodeId`.
-    pub fn highest_following(&mut self, node_id: &NodeId, stamp: &Stamp) -> Option<Arc<Event>> {
+    pub fn highest_following(&mut self, node_id: &NodeId, event: Arc<Event>) -> Option<Arc<Event>> {
         let graph = &(*self.causal_graph).read();
-        graph.highest_following(node_id, stamp)
+        graph.highest_following(node_id, event)
     }
 
     /// Returns true if the second event happened exactly after the first event.
@@ -102,6 +105,7 @@ mod tests {
     #[macro_use]
     use quickcheck::*;
     use super::*;
+    use causality::Stamp;
     use crypto::{Hash, Identity};
     use rand::{thread_rng, Rng};
 
@@ -194,7 +198,7 @@ mod tests {
             A, B, C, D, E, F, A_prime, B_prime, C_prime, D_prime, B_second,
         ];
 
-        let mut events: Vec<Arc<Event>> = events.iter().map(|e| Arc::new(e.clone())).collect();
+        let events: Vec<Arc<Event>> = events.iter().map(|e| Arc::new(e.clone())).collect();
 
         let A = events[0].clone();
         let F = events[5].clone();
@@ -214,9 +218,9 @@ mod tests {
             machine.push(e).unwrap();
         }
 
-        assert_eq!(machine.highest_following(&n2, &A.stamp()).unwrap(), F);
+        assert_eq!(machine.highest_following(&n2, A.clone()).unwrap(), F);
         assert_eq!(
-            machine.highest_following(&n2, &A_prime.stamp()).unwrap(),
+            machine.highest_following(&n2, A_prime.clone()).unwrap(),
             D_prime
         );
     }
@@ -309,9 +313,10 @@ mod tests {
             A, B, C, D, E, F, A_prime, B_prime, C_prime, D_prime, B_second,
         ];
 
-        let mut events: Vec<Arc<Event>> = events.iter().map(|e| Arc::new(e.clone())).collect();
+        let events: Vec<Arc<Event>> = events.iter().map(|e| Arc::new(e.clone())).collect();
 
         let A = events[0].clone();
+        let E = events[4].clone();
         let F = events[5].clone();
 
         let (_, events) = events.split_at(1);
@@ -327,7 +332,8 @@ mod tests {
             machine.push(e).unwrap();
         }
 
-        assert_eq!(machine.highest(&n2), F);
+        assert_eq!(machine.highest(), F);
+        assert_eq!(machine.highest_exclusive(&n2), Some(E));
     }
 
     quickcheck! {
@@ -342,11 +348,9 @@ mod tests {
             let i1 = Identity::new();
             let i2 = Identity::new();
             let i3 = Identity::new();
-            let i4 = Identity::new();
             let n1 = NodeId(*i1.pkey());
             let n2 = NodeId(*i2.pkey());
             let n3 = NodeId(*i3.pkey());
-            let n4 = NodeId(*i4.pkey());
             let seed = Stamp::seed();
             let (s_a, s_b) = seed.fork();
             let (s_b, s_c) = s_b.fork();
