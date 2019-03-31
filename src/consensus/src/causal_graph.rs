@@ -102,6 +102,7 @@ impl CausalGraph {
                     let current_end = self.graph.fetch(&current_end_id).unwrap();
                     let mut to_remove = Vec::with_capacity(self.pending.len());
                     let mut to_add = Vec::with_capacity(self.pending.len());
+                    let mut added_any = false;
 
                     for e in self.pending.iter() {
                         let current = self.graph.fetch(e).unwrap();
@@ -113,7 +114,21 @@ impl CausalGraph {
                             self.ends.remove(&current_end_id);
                             to_add.push((current_end_id, e.clone()));
                             ends.push_front(*e);
+                            added_any = true;
                         }                    
+                    }
+
+                    // We begin traversing backwards starting from the current end
+                    if !added_any {
+                        let current_end_in_n: Vec<VertexId> = self.graph.in_neighbors(&current_end_id).cloned().collect();
+
+                        if current_end_in_n.len() > 1 {
+                            panic!("A vertex cannot have more than one parent!");
+                        }
+
+                        for n in current_end_in_n {
+                            ends.push_front(n);
+                        }
                     }
 
                     for e in to_remove.iter() {
@@ -179,7 +194,6 @@ mod tests {
             thread_rng().shuffle(&mut events);
 
             for e in events {
-                println!("DEBUG PUSHED: {:?}", e);
                 cg.push(e);
             }
 
@@ -191,7 +205,47 @@ mod tests {
             assert!(!cg.is_direct_follower(D, A.clone()));
             assert!(!cg.is_direct_follower(C, A));
 
-            println!("SUCCESS!");
+            true
+        }
+
+        fn is_direct_follower_mul_paths() -> bool {
+            let i = Identity::new();
+            let n = NodeId(*i.pkey());
+            let A_hash = Hash::random();
+            let B_hash = Hash::random();
+            let C_hash = Hash::random();
+            let D_hash = Hash::random();
+            let E_hash = Hash::random();
+            let F_hash = Hash::random();
+            let A = Arc::new(Event::Dummy(n.clone(), A_hash.clone(), None, Stamp::seed()));
+            let B = Arc::new(Event::Dummy(n.clone(), B_hash.clone(), Some(A_hash), Stamp::seed()));
+            let C = Arc::new(Event::Dummy(n.clone(), C_hash.clone(), Some(B_hash.clone()), Stamp::seed()));
+            let D = Arc::new(Event::Dummy(n.clone(), D_hash.clone(), Some(B_hash), Stamp::seed()));
+            let E = Arc::new(Event::Dummy(n.clone(), E_hash.clone(), Some(D_hash.clone()), Stamp::seed()));
+            let F = Arc::new(Event::Dummy(n.clone(), F_hash.clone(), Some(D_hash.clone()), Stamp::seed()));
+            let G = Arc::new(Event::Dummy(n.clone(), Hash::random(), Some(F_hash), Stamp::seed()));
+            let mut cg = CausalGraph::new(A.clone());
+
+            let mut events = vec![B.clone(), C.clone(), D.clone(), E.clone(), F.clone(), G.clone()];
+
+            // The causal graph should be the same regardless
+            // of the order in which the events are pushed.
+            thread_rng().shuffle(&mut events);
+
+            for e in events {
+                cg.push(e);
+            }
+
+            assert!(cg.is_direct_follower(B.clone(), A.clone()));
+            assert!(cg.is_direct_follower(C.clone(), B.clone()));
+            assert!(cg.is_direct_follower(D.clone(), B.clone()));
+            assert!(cg.is_direct_follower(E.clone(), D.clone()));
+            assert!(cg.is_direct_follower(F.clone(), D.clone()));
+            assert!(!cg.is_direct_follower(G.clone(), D.clone()));
+            assert!(!cg.is_direct_follower(A.clone(), B.clone()));
+            assert!(!cg.is_direct_follower(A.clone(), C.clone()));
+            assert!(!cg.is_direct_follower(D, A.clone()));
+            assert!(!cg.is_direct_follower(C, A));
 
             true
         }
