@@ -21,8 +21,11 @@ use crate::causal_graph::CausalGraph;
 use crate::validator_state::ValidatorState;
 use causality::Stamp;
 use events::Event;
+use graphlib::VertexId;
+use hashbrown::HashMap;
 use network::NodeId;
 use parking_lot::{Mutex, RwLock};
+use recursive::*;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -62,7 +65,7 @@ impl ConsensusMachine {
     /// is already situated in the `CausalGraph`.
     pub fn push(&mut self, event: Arc<Event>) -> Result<(), CGError> {
         let mut g = self.causal_graph.write();
-        
+
         if g.contains(event.clone()) {
             return Err(CGError::AlreadyInCG);
         }
@@ -75,108 +78,17 @@ impl ConsensusMachine {
     /// Returns the highest event in the causal graph
     /// that **does not** belong to the node with the
     /// given `NodeId`.
-    pub fn highest(&mut self, node_id: &NodeId) -> Option<Arc<Event>> {
-        let graph = &(*self.causal_graph).read().graph;
-        // let mut highest_map: HashMap<&VertexId, usize> = HashMap::with_capacity(graph.vertex_count());
-
-        // let start_events: Vec<&VertexId> = graph.roots().collect();
-
-        // if start_events.is_empty() {
-        //     return None;
-        // }
-
-        // // Start by finding the highest events of all branches.
-        // let (highest, _) = tail_recurse((None, start_events), |(acc, events): (Option<&VertexId>, Vec<&VertexId>)| {
-        //     // Exit condition
-        //     if events.is_empty() {
-        //         return RecResult::Return((acc, events));
-        //     }
-
-        //     let (h, t) = events.split_at(1);
-        //     let h = h[0];
-        //     let mut t = t.to_vec();
-
-        //     if acc.is_none() {
-        //         return RecResult::Continue((Some(&h), t));
-        //     }
-
-        //     let cur = graph.fetch(acc.unwrap()).unwrap();
-
-        //     let e = graph.fetch(h).unwrap();
-        //     let s = e.stamp();
-
-        //     // If next happened after accumulated val and it
-        //     // doesn't belong to the given node id, store as
-        //     // new accumulated value.
-        //     if s.happened_after(cur.stamp()) && e.node_id() != *node_id {
-        //         RecResult::Continue((Some(&h), t))
-        //     } else {
-        //         RecResult::Continue((acc, t))
-        //     }
-        // });
-
-        graph.fold(None, |v, acc| {
-            if acc.is_none() {
-                return Some(v.clone());
-            }
-
-            // If next happened after accumulated val and it
-            // doesn't belong to the given node id, store as
-            // new accumulated value.
-            if v.stamp().happened_after(acc.clone().unwrap().stamp()) && v.node_id() != *node_id {
-                Some(v.clone())
-            } else {
-                acc
-            }
-        })
-
-        // if let Some(highest) = highest {
-        //     Some(graph.fetch(highest).unwrap().clone())
-        // } else {
-        //     None
-        // }
+    pub fn highest(&mut self, node_id: &NodeId) -> Arc<Event> {
+        let graph = &(*self.causal_graph).read();
+        graph.highest(node_id)
     }
 
     /// Return the highest event that follows the given
     /// given stamp in the causal graph that **does not**
     /// belong to the node with the given `NodeId`.
     pub fn highest_following(&mut self, node_id: &NodeId, stamp: &Stamp) -> Option<Arc<Event>> {
-        let graph = &(*self.causal_graph).read().graph;
-
-        // // Filter concurrent roots
-        // let start_events = graph
-        //     .roots()
-        //     .filter(|v| v.stamp().concurrent(stamp))
-        //     .collect();
-
-        // if start_events.is_empty() {
-        //     return None;
-        // }
-        
-        graph.fold(None, |v, acc| {
-            if acc.is_none() {
-                if v.stamp().happened_after(stamp.clone()) && v.node_id() != *node_id {
-                    return Some(v.clone());
-                } else {
-                    return acc;
-                }
-            }
-
-            // If next happened after accumulated val and it
-            // doesn't belong to the given node id, store as
-            // new accumulated value.
-            if v.stamp().happened_after(acc.clone().unwrap().stamp()) && v.node_id() != *node_id {
-                Some(v.clone())
-            } else {
-                acc
-            }
-        })
-    }
-
-    /// Returns valid candidate sets that can be included
-    /// into the total order.
-    pub fn fetch_cs(&self) -> Result<Vec<Arc<Mutex<CandidateSet>>>, CGError> {
-        unimplemented!();
+        let graph = &(*self.causal_graph).read();
+        graph.highest_following(node_id, stamp)
     }
 
     /// Returns true if the second event happened exactly after the first event.
@@ -187,9 +99,10 @@ impl ConsensusMachine {
 
 #[cfg(test)]
 mod tests {
-    #[macro_use] use quickcheck::*;
+    #[macro_use]
+    use quickcheck::*;
     use super::*;
-    use crypto::{Identity, Hash};
+    use crypto::{Hash, Identity};
     use rand::{thread_rng, Rng};
 
     #[test]
@@ -213,7 +126,7 @@ mod tests {
         let seed = Stamp::seed();
         let (s_a, s_b) = seed.fork();
         let (s_b, s_c) = s_b.fork();
-        let (s_a, s_d) = s_a.fork(); 
+        let (s_a, s_d) = s_a.fork();
 
         let s_a = s_a.event();
         let A_hash = Hash::random();
@@ -221,24 +134,44 @@ mod tests {
 
         let s_c = s_c.join(s_a.peek()).event();
         let A_prime_hash = Hash::random();
-        let A_prime = Event::Dummy(n3.clone(), A_prime_hash.clone(), Some(A_hash.clone()), s_c.clone());
+        let A_prime = Event::Dummy(
+            n3.clone(),
+            A_prime_hash.clone(),
+            Some(A_hash.clone()),
+            s_c.clone(),
+        );
 
         let s_c = s_c.event();
         let B_prime_hash = Hash::random();
-        let B_prime = Event::Dummy(n3.clone(), B_prime_hash.clone(), Some(A_prime_hash), s_c.clone());
+        let B_prime = Event::Dummy(
+            n3.clone(),
+            B_prime_hash.clone(),
+            Some(A_prime_hash),
+            s_c.clone(),
+        );
 
         let s_d = s_d.join(s_c.peek()).event();
-        let B_second = Event::Dummy(n3.clone(), Hash::random(), Some(B_prime_hash.clone()), s_d.clone());
+        let B_second = Event::Dummy(
+            n3.clone(),
+            Hash::random(),
+            Some(B_prime_hash.clone()),
+            s_d.clone(),
+        );
 
         let s_c = s_c.event();
         let C_prime_hash = Hash::random();
-        let C_prime = Event::Dummy(n3.clone(), C_prime_hash.clone(), Some(B_prime_hash), s_c.clone());
+        let C_prime = Event::Dummy(
+            n3.clone(),
+            C_prime_hash.clone(),
+            Some(B_prime_hash),
+            s_c.clone(),
+        );
 
         let s_c = s_c.event();
         let D_prime = Event::Dummy(n3, Hash::random(), Some(C_prime_hash.clone()), s_c);
 
         let s_b = s_b.join(s_a.peek()).event();
-        let B_hash = Hash::random(); 
+        let B_hash = Hash::random();
         let B = Event::Dummy(n2.clone(), B_hash.clone(), Some(A_hash), s_b.clone());
 
         let s_a = s_a.join(s_b.peek()).event();
@@ -258,23 +191,10 @@ mod tests {
         let F = Event::Dummy(n2.clone(), F_hash, Some(E_hash), s_b.clone());
 
         let events = vec![
-            A,
-            B,
-            C,
-            D,
-            E,
-            F,
-            A_prime,
-            B_prime,
-            C_prime,
-            D_prime,
-            B_second
+            A, B, C, D, E, F, A_prime, B_prime, C_prime, D_prime, B_second,
         ];
 
-        let mut events: Vec<Arc<Event>> = events
-            .iter()
-            .map(|e| Arc::new(e.clone()))
-            .collect();
+        let mut events: Vec<Arc<Event>> = events.iter().map(|e| Arc::new(e.clone())).collect();
 
         let A = events[0].clone();
         let F = events[5].clone();
@@ -295,7 +215,10 @@ mod tests {
         }
 
         assert_eq!(machine.highest_following(&n2, &A.stamp()).unwrap(), F);
-        assert_eq!(machine.highest_following(&n2, &A_prime.stamp()).unwrap(), D_prime);
+        assert_eq!(
+            machine.highest_following(&n2, &A_prime.stamp()).unwrap(),
+            D_prime
+        );
     }
 
     #[test]
@@ -318,7 +241,7 @@ mod tests {
         let seed = Stamp::seed();
         let (s_a, s_b) = seed.fork();
         let (s_b, s_c) = s_b.fork();
-        let (s_a, s_d) = s_a.fork(); 
+        let (s_a, s_d) = s_a.fork();
 
         let s_a = s_a.event();
         let A_hash = Hash::random();
@@ -326,24 +249,44 @@ mod tests {
 
         let s_c = s_c.join(s_a.peek()).event();
         let A_prime_hash = Hash::random();
-        let A_prime = Event::Dummy(n3.clone(), A_prime_hash.clone(), Some(A_hash.clone()), s_c.clone());
+        let A_prime = Event::Dummy(
+            n3.clone(),
+            A_prime_hash.clone(),
+            Some(A_hash.clone()),
+            s_c.clone(),
+        );
 
         let s_c = s_c.event();
         let B_prime_hash = Hash::random();
-        let B_prime = Event::Dummy(n3.clone(), B_prime_hash.clone(), Some(A_prime_hash), s_c.clone());
+        let B_prime = Event::Dummy(
+            n3.clone(),
+            B_prime_hash.clone(),
+            Some(A_prime_hash),
+            s_c.clone(),
+        );
 
         let s_d = s_d.join(s_c.peek()).event();
-        let B_second = Event::Dummy(n3.clone(), Hash::random(), Some(B_prime_hash.clone()), s_d.clone());
+        let B_second = Event::Dummy(
+            n3.clone(),
+            Hash::random(),
+            Some(B_prime_hash.clone()),
+            s_d.clone(),
+        );
 
         let s_c = s_c.event();
         let C_prime_hash = Hash::random();
-        let C_prime = Event::Dummy(n3.clone(), C_prime_hash.clone(), Some(B_prime_hash), s_c.clone());
+        let C_prime = Event::Dummy(
+            n3.clone(),
+            C_prime_hash.clone(),
+            Some(B_prime_hash),
+            s_c.clone(),
+        );
 
         let s_c = s_c.event();
         let D_prime = Event::Dummy(n3, Hash::random(), Some(C_prime_hash.clone()), s_c);
 
         let s_b = s_b.join(s_a.peek()).event();
-        let B_hash = Hash::random(); 
+        let B_hash = Hash::random();
         let B = Event::Dummy(n2.clone(), B_hash.clone(), Some(A_hash), s_b.clone());
 
         let s_a = s_a.join(s_b.peek()).event();
@@ -363,23 +306,10 @@ mod tests {
         let F = Event::Dummy(n2.clone(), F_hash, Some(E_hash), s_b.clone());
 
         let events = vec![
-            A,
-            B,
-            C,
-            D,
-            E,
-            F,
-            A_prime,
-            B_prime,
-            C_prime,
-            D_prime,
-            B_second
+            A, B, C, D, E, F, A_prime, B_prime, C_prime, D_prime, B_second,
         ];
 
-        let mut events: Vec<Arc<Event>> = events
-            .iter()
-            .map(|e| Arc::new(e.clone()))
-            .collect();
+        let mut events: Vec<Arc<Event>> = events.iter().map(|e| Arc::new(e.clone())).collect();
 
         let A = events[0].clone();
         let F = events[5].clone();
@@ -397,7 +327,7 @@ mod tests {
             machine.push(e).unwrap();
         }
 
-        assert_eq!(machine.highest(&n2).unwrap(), F);
+        assert_eq!(machine.highest(&n2), F);
     }
 
     quickcheck! {
@@ -420,7 +350,7 @@ mod tests {
             let seed = Stamp::seed();
             let (s_a, s_b) = seed.fork();
             let (s_b, s_c) = s_b.fork();
-            let (s_a, s_d) = s_a.fork(); 
+            let (s_a, s_d) = s_a.fork();
 
             let s_a = s_a.event();
             let A_hash = Hash::random();
@@ -445,7 +375,7 @@ mod tests {
             let D_prime = Event::Dummy(n3, Hash::random(), Some(C_prime_hash.clone()), s_c);
 
             let s_b = s_b.join(s_a.peek()).event();
-            let B_hash = Hash::random(); 
+            let B_hash = Hash::random();
             let B = Event::Dummy(n2.clone(), B_hash.clone(), Some(A_hash), s_b.clone());
 
             let s_a = s_a.join(s_b.peek()).event();
