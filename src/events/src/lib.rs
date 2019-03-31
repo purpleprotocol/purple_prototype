@@ -24,6 +24,7 @@ extern crate quickcheck;
 extern crate serde_derive;
 
 extern crate account;
+extern crate bitvec;
 extern crate byteorder;
 extern crate causality;
 extern crate crypto;
@@ -35,7 +36,6 @@ extern crate persistence;
 extern crate rayon;
 extern crate rlp;
 extern crate serde;
-extern crate bitvec;
 extern crate transactions;
 
 #[macro_use]
@@ -67,14 +67,14 @@ pub enum Event {
 impl PartialEq for Event {
     fn eq(&self, other: &Event) -> bool {
         // This only makes sense when the event is received
-        // when the node is a server i.e. when the event is 
+        // when the node is a server i.e. when the event is
         // guaranteed to have a hash because it already passed
         // the parsing stage.
         self.hash().unwrap() == other.hash().unwrap()
     }
 }
 
-impl Eq for Event { }
+impl Eq for Event {}
 
 impl HashTrait for Event {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -91,7 +91,7 @@ impl Event {
             Event::Dummy(_, _, _, ref stamp) => stamp.clone(),
         }
     }
-    
+
     pub fn node_id(&self) -> NodeId {
         match *self {
             Event::Heartbeat(ref event) => event.node_id.clone(),

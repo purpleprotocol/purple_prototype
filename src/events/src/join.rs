@@ -17,12 +17,12 @@
 */
 
 use account::NormalAddress;
+use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use causality::Stamp;
 use crypto::{Hash, PublicKey, Signature};
 use network::NodeId;
 use std::io::Cursor;
-use bitvec::Bits;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Join {

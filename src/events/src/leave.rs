@@ -35,7 +35,7 @@ pub struct Leave {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<Hash>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<Signature>,
 }

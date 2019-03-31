@@ -50,15 +50,10 @@ pub struct ConsensusMachine {
     validators: Vec<Arc<Mutex<ValidatorState>>>,
 }
 
-enum Direction {
-    Incoming,
-    Outgoing
-}
-
 impl ConsensusMachine {
-    pub fn new() -> ConsensusMachine {
+    pub fn new(root_event: Arc<Event>) -> ConsensusMachine {
         ConsensusMachine {
-            causal_graph: Arc::new(RwLock::new(CausalGraph::new())),
+            causal_graph: Arc::new(RwLock::new(CausalGraph::new(root_event))),
             candidate_sets: Vec::new(),
             validators: Vec::new(),
         }
@@ -119,7 +114,7 @@ impl ConsensusMachine {
             // event, we just add an edge between pushed and the current.
             let start_events: VecDeque<&VertexId> = g.graph.roots().collect();
 
-            let (edges_to_add, edges_to_remove, _)  = tail_recurse((vec![], HashSet::new(), start_events), |(mut edges_to_add, mut edges_to_remove, mut events): (Vec<(VertexId, VertexId)>, HashSet<(VertexId, VertexId)>, VecDeque<&VertexId>)| {
+            let (edges_to_add, edges_to_remove, _) = tail_recurse((vec![], HashSet::new(), start_events), |(mut edges_to_add, mut edges_to_remove, mut events): (Vec<(VertexId, VertexId)>, HashSet<(VertexId, VertexId)>, VecDeque<&VertexId>)| {
                 let edge_count = edges_to_add.len() + g.graph.edge_count();
                 let front = events.pop_front();
                 
@@ -427,7 +422,6 @@ mod tests {
         let F = Event::Dummy(n2.clone(), F_hash, Some(E_hash), s_b.clone());
 
         let events = vec![
-            A,
             B,
             C,
             D,
@@ -454,7 +448,7 @@ mod tests {
         // of the order in which the events are pushed.
         thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new();
+        let mut machine = ConsensusMachine::new(A.clone());
 
         for e in events {
             machine.push(e).unwrap();
@@ -529,7 +523,6 @@ mod tests {
         let F = Event::Dummy(n2.clone(), F_hash, Some(E_hash), s_b.clone());
 
         let events = vec![
-            A,
             B,
             C,
             D,
@@ -547,13 +540,14 @@ mod tests {
             .map(|e| Arc::new(e.clone()))
             .collect();
 
+        let A = events[0].clone();
         let F = events[5].clone();
 
         // The causal graph should be the same regardless
         // of the order in which the events are pushed.
         thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new();
+        let mut machine = ConsensusMachine::new(A.clone());
 
         for e in events {
             machine.push(e).unwrap();
@@ -638,7 +632,6 @@ mod tests {
             assert!(B_second.stamp().concurrent(D_prime.stamp()));
 
             let events = vec![
-                A,
                 B,
                 C,
                 D,
@@ -688,7 +681,7 @@ mod tests {
             // of the order in which the events are pushed.
             thread_rng().shuffle(&mut events);
 
-            let mut machine = ConsensusMachine::new();
+            let mut machine = ConsensusMachine::new(A.clone());
 
             for e in events {
                 unsafe {
