@@ -43,7 +43,7 @@ pub struct CausalGraph {
 
     /// The current highest event in the graph and
     /// the number of followed events.
-    highest: (Arc<Event>, usize),
+    highest: (Vec<Arc<Event>>, usize),
 }
 
 impl CausalGraph {
@@ -61,7 +61,7 @@ impl CausalGraph {
             ends,
             lookup_table,
             pending: HashSet::new(),
-            highest: (root_event, 0),
+            highest: (vec![root_event], 0),
         }
     }
 
@@ -129,7 +129,11 @@ impl CausalGraph {
 
                             // Cache new highest event if this is the case
                             if new_following > self.highest.1 {
-                                self.highest = (current.clone(), new_following);
+                                self.highest = (vec![current.clone()], new_following);
+                            } else if new_following == self.highest.1 {
+                                let (mut highest, _) = self.highest.clone();
+                                highest.push(current.clone());
+                                self.highest = (highest, new_following);
                             }
 
                             found_match = true;
@@ -168,11 +172,30 @@ impl CausalGraph {
     }
 
     pub(crate) fn highest(&self) -> Arc<Event> {
-        self.highest.0.clone()
+        let (highest, _) = &self.highest;
+
+        if highest.len() == 1 {
+            highest[0].clone()
+        } else {
+            // Pick one of the highest events at random
+            // TODO: Use a deterministic random function here:
+            // drf(&highest)
+
+            highest[0].clone()
+        }
     }
 
     pub(crate) fn highest_exclusive(&self, node_id: &NodeId) -> Option<Arc<Event>> {
-        let highest = self.highest.0.clone();
+        let (highest, _) = &self.highest;
+
+        let highest = if highest.len() == 1 {
+            highest[0].clone()
+        } else {
+            // Pick one of the highest events at random
+            // TODO: Use a deterministic random function here:
+            // drf(&highest)
+            highest[0].clone()
+        };
 
         if highest.node_id() != *node_id {
             return Some(highest);
@@ -230,7 +253,7 @@ mod tests {
         let n2 = NodeId(*i2.pkey());
         let A_hash = Hash::random();
         let A = Arc::new(Event::Dummy(n1.clone(), A_hash.clone(), None, Stamp::seed()));
-        let mut cg = CausalGraph::new(A.clone());
+        let cg = CausalGraph::new(A.clone());
 
         assert_eq!(cg.highest_exclusive(&n2), Some(A));
         assert_eq!(cg.highest_exclusive(&n1), None);
