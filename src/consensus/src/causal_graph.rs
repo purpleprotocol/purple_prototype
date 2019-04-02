@@ -29,6 +29,9 @@ pub struct CausalGraph {
     /// Graph structure holding the causal graph
     pub graph: Graph<Arc<Event>>,
 
+    /// Our node's id
+    node_id: NodeId,
+
     /// Events that do not yet directly follow
     /// other events from the causal graph.
     pending: HashSet<VertexId>,
@@ -41,13 +44,18 @@ pub struct CausalGraph {
     /// Mapping between event hashes and vertex ids.
     lookup_table: HashMap<Hash, VertexId>,
 
-    /// The current highest event in the graph and
-    /// the number of followed events.
+    /// The current highest events in the graph and
+    /// the number of events that it follows.
     highest: (Vec<Arc<Event>>, usize),
+
+    /// The current highest following events of our latest
+    /// event in the graph and the number of events that it 
+    /// follows.
+    highest_following: (Vec<Arc<Event>>, usize),
 }
 
 impl CausalGraph {
-    pub fn new(root_event: Arc<Event>) -> CausalGraph {
+    pub fn new(node_id: NodeId, root_event: Arc<Event>) -> CausalGraph {
         let mut graph = Graph::new();
         let mut lookup_table = HashMap::new();
         let mut ends = HashMap::new();
@@ -59,9 +67,11 @@ impl CausalGraph {
         CausalGraph {
             graph,
             ends,
+            node_id,
             lookup_table,
             pending: HashSet::new(),
             highest: (vec![root_event], 0),
+            highest_following: (vec![], 0),
         }
     }
 
@@ -134,6 +144,15 @@ impl CausalGraph {
                                 let (mut highest, _) = self.highest.clone();
                                 highest.push(current.clone());
                                 self.highest = (highest, new_following);
+                            }
+
+                            // Cache new highest following if this is the case
+                            if new_following > self.highest_following.1 && current.node_id() != self.node_id {
+                                self.highest_following = (vec![current.clone()], new_following);
+                            } else if new_following == self.highest_following.1 && current.node_id() != self.node_id {
+                                let (mut highest, _) = self.highest_following.clone();
+                                highest.push(current.clone());
+                                self.highest_following = (highest, new_following);
                             }
 
                             found_match = true;
@@ -215,8 +234,80 @@ impl CausalGraph {
         }
     }
 
-    pub(crate) fn highest_following(&self, node_id: &NodeId, event: Arc<Event>) -> Option<Arc<Event>> {
-        unimplemented!();
+    pub(crate) fn highest_following(&self) -> Option<Arc<Event>> {
+        let (highest_following, _) = &self.highest_following;
+
+        if highest_following.is_empty() {
+            None
+        } else if highest_following.len() == 1 {
+            Some(highest_following[0].clone())
+        } else {
+            // Pick one of the highest following events at random
+            // TODO: Use a deterministic random function here:
+            // Some(drf(&highest_following))
+
+            Some(highest_following[0].clone())
+        }
+    }
+
+    pub(crate) fn compute_highest_following(&self, node_id: &NodeId, event: Arc<Event>) -> Option<Arc<Event>> {
+        let v_id = self.lookup_table.get(&event.hash().unwrap());
+        
+        if let Some(v_id) = v_id {
+            // The event does not have any followers
+            if self.graph.out_neighbors_count(v_id) == 0 {
+                return None;
+            }
+
+            let mut completed: Vec<(VertexId, usize)> = vec![];
+            let mut to_traverse: VecDeque<(VertexId, usize)> = self.graph
+                .out_neighbors(v_id)
+                .map(|n| (n.clone(), 1))
+                .collect();
+            
+            // Find highest followers of all branches
+            while let Some((current, following)) = to_traverse.pop_back() {
+                if self.graph.out_neighbors_count(&current) == 0 {
+                    completed.push((current, following));
+                } else {
+                    for n in self.graph.out_neighbors(&current) {
+                        //to_traverse.push_front((n.clone(), following + 1));
+
+                        let cur = self.graph.fetch(&current).unwrap();
+                        let neighbor = self.graph.fetch(n).unwrap();
+                        let traversed_count = self.graph.out_neighbors_count(n);
+
+                        // In case the next vertex is terminal and belongs to the
+                        // given node id, mark current as completed and continue.
+                        if traversed_count == 0 && neighbor.node_id() == *node_id  {
+                            completed.push((current, following));
+                            continue;
+                        } 
+
+                        // In case the next vertex is terminal and the current
+                        // belongs to the given node id, mark next as completed.
+                        if traversed_count == 0 && cur.node_id() == *node_id {
+                            completed.push((n.clone(), following + 1));
+                            continue;
+                        }
+
+                        to_traverse.push_front((n.clone(), following + 1));
+                    }
+                }
+            } 
+
+            // Sort by followed events
+            completed.sort_by(|a, b| a.1.cmp(&b.1));
+            
+            if let Some((result, _)) = completed.pop() {
+                Some(self.graph.fetch(&result).unwrap().clone())
+            } else {
+                None
+            }
+        } else {
+            // The event does not exist in the graph
+            return None;
+        }
     }
 
     /// Returns true if the second event happened exactly after the first event.
@@ -253,10 +344,55 @@ mod tests {
         let n2 = NodeId(*i2.pkey());
         let A_hash = Hash::random();
         let A = Arc::new(Event::Dummy(n1.clone(), A_hash.clone(), None, Stamp::seed()));
-        let cg = CausalGraph::new(A.clone());
+        let cg = CausalGraph::new(n1.clone(), A.clone());
 
         assert_eq!(cg.highest_exclusive(&n2), Some(A));
         assert_eq!(cg.highest_exclusive(&n1), None);
+    }
+
+    #[test]
+    fn highest_following_with_byzantine_events()  {
+        let i1 = Identity::new();
+        let i2 = Identity::new();
+        let n1 = NodeId(*i1.pkey());
+        let n2 = NodeId(*i2.pkey());
+        let A_hash = Hash::random();
+        let B_hash = Hash::random();
+        let C1_hash = Hash::random();
+        let C2_hash = Hash::random();
+        let C3_hash = Hash::random();
+        let (s_a, s_b) = Stamp::seed().fork();
+
+        let s_a = s_a.event();
+        let A = Arc::new(Event::Dummy(n1.clone(), A_hash.clone(), None, s_a.clone()));
+        let s_b = s_b.join(s_a.peek()).event();
+        let B = Arc::new(Event::Dummy(n2.clone(), B_hash.clone(), Some(A_hash), s_b.clone()));
+        assert!(s_b.happened_after(s_a.clone()));
+        let s_a = s_a.join(s_b.peek()).event();
+        let C1 = Arc::new(Event::Dummy(n1.clone(), C1_hash.clone(), Some(B_hash), s_a.clone()));
+        let C2 = Arc::new(Event::Dummy(n1.clone(), C2_hash.clone(), Some(B_hash), s_a.clone()));
+        let C3 = Arc::new(Event::Dummy(n1.clone(), C3_hash.clone(), Some(B_hash), s_a.clone()));
+        assert!(s_a.happened_after(s_b.clone()));
+        let s_b = s_b.join(s_a.peek()).event();
+        let D = Arc::new(Event::Dummy(n2.clone(), Hash::random(), Some(C1_hash), s_b.clone()));
+        assert!(s_b.happened_after(s_a));
+
+        let mut cg = CausalGraph::new(n1.clone(), A.clone());
+
+        let mut events = vec![B.clone(), C1.clone(), C2.clone(), C3.clone(), D.clone()];
+
+        let D = events[4].clone();
+
+        // The causal graph should be the same regardless
+        // of the order in which the events are pushed.
+        thread_rng().shuffle(&mut events);
+
+        for e in events {
+            cg.push(e);
+        }
+
+        assert_eq!(cg.highest_following(), Some(D.clone()));
+        assert_eq!(cg.compute_highest_following(&n1, A), Some(D));
     }
 
     quickcheck! {
@@ -268,13 +404,26 @@ mod tests {
             let A_hash = Hash::random();
             let B_hash = Hash::random();
             let C_hash = Hash::random();
-            let A = Arc::new(Event::Dummy(n1.clone(), A_hash.clone(), None, Stamp::seed()));
-            let B = Arc::new(Event::Dummy(n2.clone(), B_hash.clone(), Some(A_hash), Stamp::seed()));
-            let C = Arc::new(Event::Dummy(n1.clone(), C_hash.clone(), Some(B_hash), Stamp::seed()));
-            let D = Arc::new(Event::Dummy(n2.clone(), Hash::random(), Some(C_hash), Stamp::seed()));
-            let mut cg = CausalGraph::new(A.clone());
+            let (s_a, s_b) = Stamp::seed().fork();
+
+            let s_a = s_a.event();
+            let A = Arc::new(Event::Dummy(n1.clone(), A_hash.clone(), None, s_a.clone()));
+            let s_b = s_b.join(s_a.peek()).event();
+            let B = Arc::new(Event::Dummy(n2.clone(), B_hash.clone(), Some(A_hash), s_b.clone()));
+            assert!(s_b.happened_after(s_a.clone()));
+            let s_a = s_a.join(s_b.peek()).event();
+            let C = Arc::new(Event::Dummy(n1.clone(), C_hash.clone(), Some(B_hash), s_a.clone()));
+            assert!(s_a.happened_after(s_b.clone()));
+            let s_b = s_b.join(s_a.peek()).event();
+            let D = Arc::new(Event::Dummy(n2.clone(), Hash::random(), Some(C_hash), s_b.clone()));
+            assert!(s_b.happened_after(s_a));
+            let mut cg = CausalGraph::new(n1.clone(), A.clone());
 
             let mut events = vec![B.clone(), C.clone(), D.clone()];
+
+            let B = events[0].clone();
+            let C = events[1].clone();
+            let D = events[2].clone();
 
             // The causal graph should be the same regardless
             // of the order in which the events are pushed.
@@ -290,9 +439,12 @@ mod tests {
             assert!(!cg.is_direct_follower(A.clone(), B.clone()));
             assert!(!cg.is_direct_follower(A.clone(), C.clone()));
             assert!(!cg.is_direct_follower(D.clone(), A.clone()));
-            assert!(!cg.is_direct_follower(C.clone(), A));
-            assert_eq!(cg.highest(), D);
-            assert_eq!(cg.highest_exclusive(&n2), Some(C));
+            assert!(!cg.is_direct_follower(C.clone(), A.clone()));
+            assert_eq!(cg.highest(), D.clone());
+            assert_eq!(cg.highest_exclusive(&n2), Some(C.clone()));
+            assert_eq!(cg.highest_following(), Some(D.clone())); 
+            assert_eq!(cg.compute_highest_following(&n1, A.clone()), Some(D));
+            assert_eq!(cg.compute_highest_following(&n2, A), Some(C));
 
             true
         }
@@ -313,7 +465,7 @@ mod tests {
             let E = Arc::new(Event::Dummy(n.clone(), E_hash.clone(), Some(D_hash.clone()), Stamp::seed()));
             let F = Arc::new(Event::Dummy(n.clone(), F_hash.clone(), Some(D_hash.clone()), Stamp::seed()));
             let G = Arc::new(Event::Dummy(n.clone(), Hash::random(), Some(F_hash), Stamp::seed()));
-            let mut cg = CausalGraph::new(A.clone());
+            let mut cg = CausalGraph::new(n, A.clone());
 
             let mut events = vec![B.clone(), C.clone(), D.clone(), E.clone(), F.clone(), G.clone()];
 

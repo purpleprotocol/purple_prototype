@@ -40,9 +40,9 @@ pub struct ConsensusMachine {
 }
 
 impl ConsensusMachine {
-    pub fn new(root_event: Arc<Event>) -> ConsensusMachine {
+    pub fn new(node_id: NodeId, root_event: Arc<Event>) -> ConsensusMachine {
         ConsensusMachine {
-            causal_graph: Arc::new(RwLock::new(CausalGraph::new(root_event))),
+            causal_graph: Arc::new(RwLock::new(CausalGraph::new(node_id, root_event))),
             candidate_sets: Vec::new(),
             validators: Vec::new(),
         }
@@ -86,12 +86,20 @@ impl ConsensusMachine {
         graph.highest_exclusive(node_id)
     }
 
+    /// Return the highest event that follows the our latest
+    /// sent event in the causal graph that **does not**
+    /// belong to ourselves.
+    pub fn highest_following(&mut self) -> Option<Arc<Event>> {
+        let graph = &(*self.causal_graph).read();
+        graph.highest_following()
+    }
+
     /// Return the highest event that follows the given
     /// given event in the causal graph that **does not**
     /// belong to the node with the given `NodeId`.
-    pub fn highest_following(&mut self, node_id: &NodeId, event: Arc<Event>) -> Option<Arc<Event>> {
+    pub fn compute_highest_following(&mut self, node_id: &NodeId, event: Arc<Event>) -> Option<Arc<Event>> {
         let graph = &(*self.causal_graph).read();
-        graph.highest_following(node_id, event)
+        graph.compute_highest_following(node_id, event)
     }
 
     /// Returns true if the second event happened exactly after the first event.
@@ -188,7 +196,7 @@ mod tests {
 
         let s_a = s_a.join(s_b.peek()).event();
         let E_hash = Hash::random();
-        let E = Event::Dummy(n1, E_hash.clone(), Some(D_hash), s_a.clone());
+        let E = Event::Dummy(n1.clone(), E_hash.clone(), Some(D_hash), s_a.clone());
 
         let s_b = s_b.join(s_a.peek()).event();
         let F_hash = Hash::random();
@@ -212,15 +220,16 @@ mod tests {
         // of the order in which the events are pushed.
         thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new(A.clone());
+        let mut machine = ConsensusMachine::new(n1.clone(), A.clone());
 
         for e in events {
             machine.push(e).unwrap();
         }
 
-        assert_eq!(machine.highest_following(&n2, A.clone()).unwrap(), F);
+        assert_eq!(machine.highest_following().unwrap(), F.clone());
+        assert_eq!(machine.compute_highest_following(&n1, A.clone()).unwrap(), F);
         assert_eq!(
-            machine.highest_following(&n2, A_prime.clone()).unwrap(),
+            machine.compute_highest_following(&n2, A_prime.clone()).unwrap(),
             D_prime
         );
     }
@@ -303,7 +312,7 @@ mod tests {
 
         let s_a = s_a.join(s_b.peek()).event();
         let E_hash = Hash::random();
-        let E = Event::Dummy(n1, E_hash.clone(), Some(D_hash), s_a.clone());
+        let E = Event::Dummy(n1.clone(), E_hash.clone(), Some(D_hash), s_a.clone());
 
         let s_b = s_b.join(s_a.peek()).event();
         let F_hash = Hash::random();
@@ -326,7 +335,7 @@ mod tests {
         // of the order in which the events are pushed.
         thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new(A.clone());
+        let mut machine = ConsensusMachine::new(n1, A.clone());
 
         for e in events {
             machine.push(e).unwrap();
@@ -392,7 +401,7 @@ mod tests {
 
             let s_a = s_a.join(s_b.peek()).event();
             let E_hash = Hash::random();
-            let E = Event::Dummy(n1, E_hash.clone(), Some(D_hash), s_a.clone());
+            let E = Event::Dummy(n1.clone(), E_hash.clone(), Some(D_hash), s_a.clone());
 
             let s_b = s_b.join(s_a.peek()).event();
             let F_hash = Hash::random();
@@ -423,7 +432,7 @@ mod tests {
                 B_second
             ];
 
-            let mut events: Vec<Arc<Event>> = events
+            let events: Vec<Arc<Event>> = events
                 .iter()
                 .map(|e| Arc::new(e.clone()))
                 .collect();
@@ -447,7 +456,7 @@ mod tests {
             // of the order in which the events are pushed.
             thread_rng().shuffle(&mut events);
 
-            let mut machine = ConsensusMachine::new(A.clone());
+            let mut machine = ConsensusMachine::new(n1, A.clone());
 
             for e in events {
                 machine.push(e).unwrap();
