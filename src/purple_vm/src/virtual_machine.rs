@@ -289,8 +289,8 @@ impl Vm {
                                 }
 
                                 ip.increment();
-                            },
-                            Err(err) => return Err(err)
+                            }
+                            Err(err) => return Err(err),
                         }
                     }
                     Some(Instruction::PushLocal) => {
@@ -328,8 +328,8 @@ impl Vm {
                                 }
 
                                 ip.increment();
-                            },
-                            Err(err) => return Err(err)
+                            }
+                            Err(err) => return Err(err),
                         }
                     }
                     Some(Instruction::PopOperand) => {
@@ -530,7 +530,7 @@ impl Vm {
 
                         // Fetch stored item
                         let elem = self.operand_stack.pop();
-                        
+
                         if let VmValue::I32(inner) = elem {
                             if inner > std::u8::MAX as i32 || inner < std::i8::MIN as i32 {
                                 return Err(VmError::Overflow);
@@ -559,7 +559,7 @@ impl Vm {
 
                         // Fetch stored item
                         let elem = self.operand_stack.pop();
-                        
+
                         if let VmValue::I32(inner) = elem {
                             if inner > std::u16::MAX as i32 || inner < std::i16::MIN as i32 {
                                 return Err(VmError::Overflow);
@@ -588,7 +588,7 @@ impl Vm {
 
                         // Fetch stored item
                         let elem = self.operand_stack.pop();
-                        
+
                         if let VmValue::I64(inner) = elem {
                             if inner > std::u32::MAX as i64 || inner < std::i32::MIN as i64 {
                                 return Err(VmError::Overflow);
@@ -4224,7 +4224,7 @@ mod tests {
         assert_eq!(result, Err(VmError::Overflow));
     }
 
-     #[test]
+    #[test]
     #[rustfmt::skip]
     fn it_returns_correctly_on_overflow_2() {
         let mut vm = Vm::new();

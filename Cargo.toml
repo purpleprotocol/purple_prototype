@@ -28,6 +28,7 @@ purple_vm = { path = "src/purple_vm" }
 crypto = { path = "src/crypto" } 
 jump = { path = "src/jump" }
 events = { path = "src/events" }
+consensus = { path = "src/consensus" }
 persistence = { path = "src/persistence" }
 network = { path = "src/network" }
 transactions = { path = "src/transactions" }

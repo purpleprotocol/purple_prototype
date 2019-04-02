@@ -13,3 +13,4 @@ patricia-trie = { git = "https://github.com/paritytech/parity-common" }
 account = { path = "../../account" }
 persistence = { path = "../../persistence" }
 crypto = { path = "../../crypto" }
+quicksort = { path = "../quicksort" }

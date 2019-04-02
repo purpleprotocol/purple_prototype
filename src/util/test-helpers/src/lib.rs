@@ -22,6 +22,7 @@ extern crate hex;
 extern crate kvdb_rocksdb;
 extern crate patricia_trie;
 extern crate persistence;
+extern crate quicksort;
 extern crate rlp;
 extern crate tempfile;
 
@@ -30,8 +31,11 @@ use crypto::Hash;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec, PersistentDb};
+use quicksort::*;
 use std::sync::Arc;
 use tempfile::tempdir;
+
+pub use quicksort::*;
 
 pub fn init_tempdb() -> PersistentDb {
     let config = DatabaseConfig::with_columns(None);
@@ -40,23 +44,6 @@ pub fn init_tempdb() -> PersistentDb {
     let db_ref = Arc::new(db);
 
     PersistentDb::new(db_ref, None)
-}
-
-pub fn qs<E: Ord>(arr: &mut [E]) {
-    if 1 < arr.len() {
-        let (mut pivot, mut hi) = (0, arr.len() - 1);
-        for _ in 0..arr.len() - 1 {
-            if arr[pivot] < arr[pivot + 1] {
-                arr.swap(pivot + 1, hi);
-                hi -= 1;
-            } else {
-                arr.swap(pivot, pivot + 1);
-                pivot += 1;
-            }
-        }
-        qs(&mut arr[..pivot]);
-        qs(&mut arr[pivot + 1..]);
-    }
 }
 
 pub fn init_balance(

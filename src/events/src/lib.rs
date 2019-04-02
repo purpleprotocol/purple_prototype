@@ -24,6 +24,7 @@ extern crate quickcheck;
 extern crate serde_derive;
 
 extern crate account;
+extern crate bitvec;
 extern crate byteorder;
 extern crate causality;
 extern crate crypto;
@@ -46,3 +47,75 @@ mod leave;
 pub use heartbeat::*;
 pub use join::*;
 pub use leave::*;
+
+use causality::Stamp;
+use crypto::Hash;
+use network::NodeId;
+use std::hash::Hash as HashTrait;
+use std::hash::Hasher;
+
+#[derive(Clone, Debug)]
+pub enum Event {
+    Heartbeat(Heartbeat),
+    Join(Join),
+    Leave(Leave),
+
+    /// Dummy event used for testing
+    Dummy(NodeId, Hash, Option<Hash>, Stamp),
+}
+
+impl PartialEq for Event {
+    fn eq(&self, other: &Event) -> bool {
+        // This only makes sense when the event is received
+        // when the node is a server i.e. when the event is
+        // guaranteed to have a hash because it already passed
+        // the parsing stage.
+        self.hash().unwrap() == other.hash().unwrap()
+    }
+}
+
+impl Eq for Event {}
+
+impl HashTrait for Event {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.hash().unwrap().hash(state);
+    }
+}
+
+impl Event {
+    pub fn stamp(&self) -> Stamp {
+        match *self {
+            Event::Heartbeat(ref event) => event.stamp.clone(),
+            Event::Join(ref event) => event.stamp.clone(),
+            Event::Leave(ref event) => event.stamp.clone(),
+            Event::Dummy(_, _, _, ref stamp) => stamp.clone(),
+        }
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        match *self {
+            Event::Heartbeat(ref event) => event.node_id.clone(),
+            Event::Join(ref event) => event.node_id.clone(),
+            Event::Leave(ref event) => event.node_id.clone(),
+            Event::Dummy(ref node_id, _, _, _) => node_id.clone(),
+        }
+    }
+
+    pub fn hash(&self) -> Option<Hash> {
+        match *self {
+            Event::Heartbeat(ref event) => event.hash.clone(),
+            Event::Join(ref event) => event.hash.clone(),
+            Event::Leave(ref event) => event.hash.clone(),
+            Event::Dummy(ref node_id, ref hash, _, _) => Some(hash.clone()),
+        }
+    }
+
+    pub fn parent_hash(&self) -> Option<Hash> {
+        match *self {
+            Event::Heartbeat(ref event) => Some(event.parent_hash.clone()),
+            Event::Join(ref event) => event.parent_cg_hash.clone(),
+            Event::Leave(ref event) => Some(event.parent_hash.clone()),
+            Event::Dummy(ref node_id, _, ref parent_hash, _) => parent_hash.clone(),
+        }
+    }
+}

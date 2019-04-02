@@ -50,6 +50,11 @@ impl Hash {
 
         result
     }
+
+    pub fn random() -> Hash {
+        let random_bytes = rand::thread_rng().gen::<[u8; HASH_BYTES]>();
+        Hash(random_bytes)
+    }
 }
 
 impl Default for Hash {

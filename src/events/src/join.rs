@@ -17,6 +17,7 @@
 */
 
 use account::NormalAddress;
+use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use causality::Stamp;
 use crypto::{Hash, PublicKey, Signature};
@@ -25,16 +26,31 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Join {
-    node_id: NodeId,
-    stamp: Stamp,
-    collector_address: NormalAddress,
-    nonce: u64,
-    proof: Vec<u32>,
-    parent_hash: Hash,
+    /// The joined `NodeId`
+    pub node_id: NodeId,
+
+    /// The stamp of the join event
+    pub stamp: Stamp,
+
+    /// The address which will collect the funds
+    /// accumulated by the validator.
+    pub collector_address: NormalAddress,
+
+    /// The proof of work
+    pub proof: Vec<u32>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<Hash>,
+    /// The hash of the parent event in the causal graph.
+    pub parent_cg_hash: Option<Hash>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
+    /// The hash of the parent `Join` event.
+    pub parent_join_hash: Option<Hash>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<Hash>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<Signature>,
 }
 
 impl Join {
@@ -46,18 +62,20 @@ impl Join {
     ///
     /// Fields:
     /// 1) Event type(1)      - 8bits
-    /// 2) Stamp length       - 16bits
-    /// 3) Proof length       - 16bits
-    /// 4) Nonce              - 32bits
+    /// 2) Bitmask            - 8bits
+    /// 3) Stamp length       - 16bits
+    /// 4) Proof length       - 16bits
     /// 5) Node id            - 32byte binary
     /// 6) Collector address  - 32byte binary
-    /// 7) Parent hash        - 32byte binary
-    /// 8) Hash               - 32byte binary
-    /// 9) Signature          - 64byte binary
-    /// 10) Stamp             - Binary of stamp length
-    /// 11) Proof             - Binary of proof length
+    /// 7) Parent cg hash     - 32byte binary
+    /// 8) Parent hash        - 32byte binary
+    /// 9) Hash               - 32byte binary
+    /// 10) Signature         - 64byte binary
+    /// 11) Stamp             - Binary of stamp length
+    /// 12) Proof             - Binary of proof length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
+        let mut bitmask: u8 = 0;
         let event_type: u8 = Self::EVENT_TYPE;
 
         let hash = if let Some(hash) = &self.hash {
@@ -75,21 +93,51 @@ impl Join {
         let node_id = &(&&self.node_id.0).0;
         let mut proof: Vec<u8> = rlp::encode_list::<u32, _>(&self.proof);
         let mut stamp: Vec<u8> = self.stamp.to_bytes();
-        let nonce = &self.nonce;
         let collector_address = &self.collector_address.to_bytes();
-        let parent_hash = &(&self.parent_hash).0;
+        let parent_join_hash = if let Some(parent_join_hash) = &self.parent_join_hash {
+            Some(&parent_join_hash.0)
+        } else {
+            None
+        };
+
+        let parent_cg_hash = if let Some(parent_cg_hash) = &self.parent_cg_hash {
+            Some(&parent_cg_hash.0)
+        } else {
+            None
+        };
 
         let proof_len = proof.len();
         let stamp_len = stamp.len();
 
         buffer.write_u8(event_type).unwrap();
+
+        if let Some(_) = parent_cg_hash {
+            bitmask.set(0, true);
+        } else {
+            bitmask.set(0, false);
+        }
+
+        if let Some(_) = parent_join_hash {
+            bitmask.set(1, true);
+        } else {
+            bitmask.set(1, false);
+        }
+
+        buffer.write_u8(bitmask).unwrap();
         buffer.write_u16::<BigEndian>(stamp_len as u16).unwrap();
         buffer.write_u16::<BigEndian>(proof_len as u16).unwrap();
-        buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
         buffer.append(&mut node_id.to_vec());
         buffer.append(&mut collector_address.to_vec());
-        buffer.append(&mut parent_hash.to_vec());
+
+        if let Some(parent_cg_hash) = parent_cg_hash {
+            buffer.append(&mut parent_cg_hash.to_vec());
+        }
+
+        if let Some(parent_join_hash) = parent_join_hash {
+            buffer.append(&mut parent_join_hash.to_vec());
+        }
+
         buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature.inner_bytes());
         buffer.append(&mut stamp);
@@ -112,13 +160,21 @@ impl Join {
 
         rdr.set_position(1);
 
+        let bitmask = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad event type");
+        };
+
+        rdr.set_position(2);
+
         let stamp_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
         } else {
             return Err("Bad stamp len");
         };
 
-        rdr.set_position(3);
+        rdr.set_position(4);
 
         let proof_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
@@ -126,17 +182,9 @@ impl Join {
             return Err("Bad proof len");
         };
 
-        rdr.set_position(5);
-
-        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad nonce");
-        };
-
         // Consume cursor
         let mut buf = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..13).collect();
+        let _: Vec<u8> = buf.drain(..6).collect();
 
         let node_id = if buf.len() > 32 as usize {
             let mut node_id = [0; 32];
@@ -160,15 +208,34 @@ impl Join {
             return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the collector address");
         };
 
-        let parent_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+        let parent_cg_hash = if bitmask.get(0) {
+            if buf.len() > 32 as usize {
+                let mut hash = [0; 32];
+                let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
-            hash.copy_from_slice(&hash_vec);
+                hash.copy_from_slice(&hash_vec);
 
-            Hash(hash)
+                Some(Hash(hash))
+            } else {
+                return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the parent hash");
+            }
         } else {
-            return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the parent hash");
+            None
+        };
+
+        let parent_join_hash = if bitmask.get(1) {
+            if buf.len() > 32 as usize {
+                let mut hash = [0; 32];
+                let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+                hash.copy_from_slice(&hash_vec);
+
+                Some(Hash(hash))
+            } else {
+                return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the parent hash");
+            }
+        } else {
+            None
         };
 
         let hash = if buf.len() > 32 as usize {
@@ -210,14 +277,14 @@ impl Join {
         };
 
         let join = Join {
-            node_id: node_id,
-            collector_address: collector_address,
-            nonce: nonce,
-            proof: proof,
-            parent_hash: parent_hash,
+            node_id,
+            collector_address,
+            proof,
+            parent_join_hash,
+            parent_cg_hash,
             hash: Some(hash),
             signature: Some(signature),
-            stamp: stamp,
+            stamp,
         };
 
         Ok(join)
@@ -234,9 +301,9 @@ impl Arbitrary for Join {
             node_id: Arbitrary::arbitrary(g),
             stamp: Arbitrary::arbitrary(g),
             collector_address: Arbitrary::arbitrary(g),
-            nonce: Arbitrary::arbitrary(g),
             proof: Arbitrary::arbitrary(g),
-            parent_hash: Arbitrary::arbitrary(g),
+            parent_join_hash: Arbitrary::arbitrary(g),
+            parent_cg_hash: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }

@@ -18,7 +18,7 @@ SSPoW maintains the same scheme of choosing a node by it requiring to provide a 
 
 In fact, in SSPoW, multiple nodes can do this at the same time by forming a validation pool and executing a second consensus algorithm which is inherently **asynchronous** and is thus much faster.
 
-The trick is that if too many corrupt nodes enter the validation pool, the asynchronous algorithm will blow up. But in combination with the first step, the entry rate to the pool can be adjusted by lowering or raising the block time interval.
+If too many corrupt nodes enter the validation pool, the asynchronous algorithm will blow up. The trick is that in combination with the first step, the entry rate to the pool can be adjusted by lowering or raising the block time interval.
 
 At the same time, the amount of sets a node is allowed to validate while being in the pool can also be adjusted. In this way, with the right parameters, the system can in theory achieve equilibrium and thus remain operational even in case of attacks such as the dreaded 51% attack.   
 

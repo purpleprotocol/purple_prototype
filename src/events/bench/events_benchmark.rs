@@ -3,7 +3,6 @@
 #[macro_use]
 extern crate criterion;
 
-extern crate causality;
 extern crate crypto;
 extern crate events;
 extern crate network;
@@ -13,7 +12,6 @@ extern crate test;
 extern crate test_helpers;
 extern crate transactions;
 
-use causality::Stamp;
 use criterion::Criterion;
 use crypto::{Hash, Identity};
 use events::Heartbeat;

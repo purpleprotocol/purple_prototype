@@ -33,7 +33,6 @@ extern crate bin_tools;
 
 extern crate account;
 extern crate byteorder;
-extern crate causality;
 extern crate crypto;
 extern crate elastic_array;
 extern crate hashdb;
