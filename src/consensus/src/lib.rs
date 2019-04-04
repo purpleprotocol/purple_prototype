@@ -18,12 +18,12 @@
 
 #![allow(non_snake_case)]
 
-mod candidate_set;
+mod candidate;
 mod causal_graph;
 mod consensus_machine;
 pub mod parameters;
 mod validator_state;
 
-pub use candidate_set::*;
+pub use candidate::*;
 pub use consensus_machine::*;
 pub use validator_state::*;

@@ -16,12 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::candidate_set::CandidateSet;
 use crate::causal_graph::CausalGraph;
-use crate::validator_state::ValidatorState;
 use events::Event;
 use network::NodeId;
-use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -34,17 +31,13 @@ pub enum CGError {
 
 #[derive(Debug)]
 pub struct ConsensusMachine {
-    causal_graph: Arc<RwLock<CausalGraph>>,
-    candidate_sets: Vec<Arc<Mutex<CandidateSet>>>,
-    validators: Vec<Arc<Mutex<ValidatorState>>>,
+    causal_graph: CausalGraph
 }
 
 impl ConsensusMachine {
     pub fn new(node_id: NodeId, root_event: Arc<Event>) -> ConsensusMachine {
         ConsensusMachine {
-            causal_graph: Arc::new(RwLock::new(CausalGraph::new(node_id, root_event))),
-            candidate_sets: Vec::new(),
-            validators: Vec::new(),
+            causal_graph: CausalGraph::new(node_id, root_event)
         }
     }
 
@@ -60,13 +53,11 @@ impl ConsensusMachine {
     /// This will return `Err(CGError::AlreadyInCG)` if the event
     /// is already situated in the `CausalGraph`.
     pub fn push(&mut self, event: Arc<Event>) -> Result<(), CGError> {
-        let mut g = self.causal_graph.write();
-
-        if g.contains(event.clone()) {
+        if self.causal_graph.contains(event.clone()) {
             return Err(CGError::AlreadyInCG);
         }
 
-        g.push(event);
+        self.causal_graph.push(event);
 
         Ok(())
     }
@@ -74,43 +65,38 @@ impl ConsensusMachine {
     /// Returns the highest event that is currently
     /// residing in the causal graph.
     pub fn highest(&self) -> Arc<Event> {
-        let graph = &(*self.causal_graph).read();
-        graph.highest()
+        self.causal_graph.highest()
     }
 
     /// Returns the highest event in the causal graph
     /// that **does not** belong to the node with the
     /// given `NodeId`.
     pub fn highest_exclusive(&self, node_id: &NodeId) -> Option<Arc<Event>> {
-        let graph = &(*self.causal_graph).read();
-        graph.highest_exclusive(node_id)
+        self.causal_graph.highest_exclusive(node_id)
     }
 
     /// Return the highest event that follows the our latest
     /// sent event in the causal graph that **does not**
     /// belong to ourselves.
     pub fn highest_following(&mut self) -> Option<Arc<Event>> {
-        let graph = &(*self.causal_graph).read();
-        graph.highest_following()
+        self.causal_graph.highest_following()
     }
 
     /// Return the highest event that follows the given
     /// given event in the causal graph that **does not**
     /// belong to the node with the given `NodeId`.
     pub fn compute_highest_following(&mut self, node_id: &NodeId, event: Arc<Event>) -> Option<Arc<Event>> {
-        let graph = &(*self.causal_graph).read();
-        graph.compute_highest_following(node_id, event)
+        self.causal_graph.compute_highest_following(node_id, event)
     }
 
     /// Returns true if the second event happened exactly after the first event.
     pub(crate) fn is_direct_follower(&self, event1: Arc<Event>, event2: Arc<Event>) -> bool {
-        self.causal_graph.read().is_direct_follower(event1, event2)
+        self.causal_graph.is_direct_follower(event1, event2)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #[macro_use]
     use quickcheck::*;
     use super::*;
     use causality::Stamp;
@@ -462,7 +448,7 @@ mod tests {
                 machine.push(e).unwrap();
             }
 
-            assert!(!machine.causal_graph.read().graph.is_cyclic());
+            assert!(!machine.causal_graph.graph.is_cyclic());
             assert!(machine.is_direct_follower(B.clone(), A.clone()));
             assert!(machine.is_direct_follower(C.clone(), B.clone()));
             assert!(machine.is_direct_follower(D.clone(), C.clone()));

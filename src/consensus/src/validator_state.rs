@@ -20,14 +20,17 @@ use network::NodeId;
 
 #[derive(Clone, Debug)]
 pub struct ValidatorState {
-    /// The node id of the validator
-    node_id: NodeId, // TODO: Add more relevant fields
+    /// Whether or not the validator is allowed
+    /// to send an event.
+    allowed_to_send: bool,
+
+    
 }
 
 impl ValidatorState {
-    pub fn new(node_id: &NodeId) -> ValidatorState {
+    pub fn new() -> ValidatorState {
         ValidatorState {
-            node_id: node_id.clone(),
+            allowed_to_send: true
         }
     }
 }

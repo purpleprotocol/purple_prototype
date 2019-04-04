@@ -32,7 +32,7 @@ pub fn heartbeat_requirement(node_count: u16) -> u16 {
 
 /// The number of other events from distinct nodes
 /// that a voting event must be followed by in order
-/// to propose for a `CanidateSet`.
+/// to propose for a `CandidateSet`.
 pub fn proposal_requirement(node_count: u16) -> u16 {
     ((node_count as f32 + 1.0) / 2.0).trunc() as u16
 }

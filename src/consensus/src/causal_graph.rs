@@ -16,6 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::candidate::Candidate;
+use crate::validator_state::ValidatorState;
+use crate::parameters::*;
 use crypto::Hash;
 use events::Event;
 use graphlib::{Graph, VertexId};
@@ -52,6 +55,17 @@ pub struct CausalGraph {
     /// event in the graph and the number of events that it 
     /// follows.
     highest_following: (Vec<Arc<Event>>, usize),
+
+    /// The root event in the causal graph. Note that
+    /// the root will always be an event that has 
+    /// already been ordered by all participants.
+    root: Arc<Event>,
+
+    /// Mapping between validator nodes ids and their state.
+    validators: HashMap<NodeId, ValidatorState>,
+
+    // Current candidates
+    pub(crate) candidates: Vec<Candidate>,
 }
 
 impl CausalGraph {
@@ -70,6 +84,9 @@ impl CausalGraph {
             node_id,
             lookup_table,
             pending: HashSet::new(),
+            candidates: vec![],
+            validators: HashMap::new(),
+            root: root_event.clone(),
             highest: (vec![root_event], 0),
             highest_following: (vec![], 0),
         }
@@ -101,6 +118,7 @@ impl CausalGraph {
 
         if !self.contains(event.clone()) {
             let id = self.graph.add_vertex(event.clone());
+            
             self.lookup_table.insert(event.hash().unwrap(), id.clone());
             self.pending.insert(id);
 
@@ -180,6 +198,34 @@ impl CausalGraph {
 
                     for e in to_add.iter() {
                         self.graph.add_edge(&e.0, &e.1).unwrap();
+
+                        let event = self.graph.fetch(&e.1).unwrap();
+
+                        // Mark as candidate if the event directly
+                        // follows the current root event in the graph.
+                        if event.parent_hash() == self.root.hash() {
+                            self.candidates.push(Candidate::new(event.clone()));
+                        } else {
+                            // Otherwise, we find the candidate which the
+                            // event follows and then we update its vote count.
+                            for c in self.candidates.iter_mut() {
+                                // If the candidate is not in the proposal stage,
+                                // we add it to the voters set.
+                                if !c.proposal_stage && c.event.stamp().happened_before(event.stamp()) {
+                                    c.votes += 1;
+                                    c.voters.push(event.clone());
+
+                                    if c.votes >= proposal_requirement(self.validators.len() as u16) {
+                                        // Enter proposal stage
+                                        c.proposal_stage = true;
+                                    }
+
+                                    break;
+                                } else if c.proposal_stage && c.event.stamp().happened_before(event.stamp()) {
+                                    unimplemented!();
+                                }
+                            }
+                        }
                     }
                 } else {
                     return;
@@ -271,9 +317,6 @@ impl CausalGraph {
                     completed.push((current, following));
                 } else {
                     for n in self.graph.out_neighbors(&current) {
-                        //to_traverse.push_front((n.clone(), following + 1));
-
-                        let cur = self.graph.fetch(&current).unwrap();
                         let neighbor = self.graph.fetch(n).unwrap();
                         let traversed_count = self.graph.out_neighbors_count(n);
 
@@ -283,13 +326,6 @@ impl CausalGraph {
                             completed.push((current, following));
                             continue;
                         } 
-
-                        // In case the next vertex is terminal and the current
-                        // belongs to the given node id, mark next as completed.
-                        if traversed_count == 0 && cur.node_id() == *node_id {
-                            completed.push((n.clone(), following + 1));
-                            continue;
-                        }
 
                         to_traverse.push_front((n.clone(), following + 1));
                     }
@@ -328,7 +364,6 @@ impl CausalGraph {
 
 #[cfg(test)]
 mod tests {
-    #[macro_use]
     use quickcheck::*;
     use super::*;
     use causality::Stamp;
