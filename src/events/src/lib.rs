@@ -70,7 +70,7 @@ impl PartialEq for Event {
         // when the node is a server i.e. when the event is
         // guaranteed to have a hash because it already passed
         // the parsing stage.
-        self.hash().unwrap() == other.hash().unwrap()
+        self.event_hash().unwrap() == other.event_hash().unwrap()
     }
 }
 
@@ -78,7 +78,7 @@ impl Eq for Event {}
 
 impl HashTrait for Event {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.hash().unwrap().hash(state);
+        self.event_hash().unwrap().hash(state);
     }
 }
 
@@ -101,7 +101,7 @@ impl Event {
         }
     }
 
-    pub fn hash(&self) -> Option<Hash> {
+    pub fn event_hash(&self) -> Option<Hash> {
         match *self {
             Event::Heartbeat(ref event) => event.hash.clone(),
             Event::Join(ref event) => event.hash.clone(),

@@ -17,8 +17,8 @@
 */
 
 use crate::candidate::Candidate;
-use crate::validator_state::ValidatorState;
 use crate::parameters::*;
+use crate::validator_state::ValidatorState;
 use crypto::Hash;
 use events::Event;
 use graphlib::{Graph, VertexId};
@@ -52,12 +52,12 @@ pub struct CausalGraph {
     highest: (Vec<Arc<Event>>, usize),
 
     /// The current highest following events of our latest
-    /// event in the graph and the number of events that it 
+    /// event in the graph and the number of events that it
     /// follows.
     highest_following: (Vec<Arc<Event>>, usize),
 
     /// The root event in the causal graph. Note that
-    /// the root will always be an event that has 
+    /// the root will always be an event that has
     /// already been ordered by all participants.
     root: Arc<Event>,
 
@@ -65,7 +65,7 @@ pub struct CausalGraph {
     validators: HashMap<NodeId, ValidatorState>,
 
     // Current candidates
-    pub(crate) candidates: Vec<Candidate>,
+    pub(crate) candidates: HashSet<Candidate>,
 }
 
 impl CausalGraph {
@@ -75,7 +75,7 @@ impl CausalGraph {
         let mut ends = HashMap::new();
         let id = graph.add_vertex(root_event.clone());
 
-        lookup_table.insert(root_event.hash().unwrap(), id.clone());
+        lookup_table.insert(root_event.event_hash().unwrap(), id.clone());
         ends.insert(id, 0);
 
         CausalGraph {
@@ -84,7 +84,7 @@ impl CausalGraph {
             node_id,
             lookup_table,
             pending: HashSet::new(),
-            candidates: vec![],
+            candidates: HashSet::new(),
             validators: HashMap::new(),
             root: root_event.clone(),
             highest: (vec![root_event], 0),
@@ -108,21 +108,24 @@ impl CausalGraph {
     }
 
     pub fn contains(&self, event: Arc<Event>) -> bool {
-        self.lookup_table.get(&event.hash().unwrap()).is_some()
+        self.lookup_table.get(&event.event_hash().unwrap()).is_some()
     }
 
-    pub fn push(&mut self, event: Arc<Event>) {
+    pub fn push(&mut self, event: Arc<Event>) -> Vec<Arc<Event>> {
         if event.parent_hash().is_none() {
             panic!("Pushing an event without a parent hash is illegal!");
         }
 
         if !self.contains(event.clone()) {
             let id = self.graph.add_vertex(event.clone());
-            
-            self.lookup_table.insert(event.hash().unwrap(), id.clone());
+            let mut to_advance: Vec<Candidate> = vec![]; 
+            let mut ordered: Vec<Arc<Event>> = vec![];
+
+            self.lookup_table.insert(event.event_hash().unwrap(), id.clone());
             self.pending.insert(id);
 
-            let mut ends: VecDeque<(VertexId, usize)> = self.ends
+            let mut ends: VecDeque<(VertexId, usize)> = self
+                .ends
                 .iter()
                 .map(|(v, c)| (v.clone(), c.clone()))
                 .collect();
@@ -133,7 +136,7 @@ impl CausalGraph {
             // traversed each end vertex.
             loop {
                 if self.pending.is_empty() {
-                    return;
+                    return ordered; 
                 }
 
                 if let Some((current_end_id, current_following)) = ends.pop_back() {
@@ -146,7 +149,7 @@ impl CausalGraph {
                         let current = self.graph.fetch(e).unwrap();
 
                         // Add edge if matching child is found
-                        if current.parent_hash() == current_end.hash() {
+                        if current.parent_hash() == current_end.event_hash() {
                             let new_following = current_following + 1;
 
                             to_remove.push(e.clone());
@@ -165,9 +168,13 @@ impl CausalGraph {
                             }
 
                             // Cache new highest following if this is the case
-                            if new_following > self.highest_following.1 && current.node_id() != self.node_id {
+                            if new_following > self.highest_following.1
+                                && current.node_id() != self.node_id
+                            {
                                 self.highest_following = (vec![current.clone()], new_following);
-                            } else if new_following == self.highest_following.1 && current.node_id() != self.node_id {
+                            } else if new_following == self.highest_following.1
+                                && current.node_id() != self.node_id
+                            {
                                 let (mut highest, _) = self.highest_following.clone();
                                 highest.push(current.clone());
                                 self.highest_following = (highest, new_following);
@@ -203,32 +210,122 @@ impl CausalGraph {
 
                         // Mark as candidate if the event directly
                         // follows the current root event in the graph.
-                        if event.parent_hash() == self.root.hash() {
-                            self.candidates.push(Candidate::new(event.clone()));
+                        if event.parent_hash() == self.root.event_hash() {
+                            self.candidates.insert(Candidate::new(event.clone()));
                         } else {
+                            // Mapping between candidate refs and their replacements
+                            let mut replacements: HashMap<Candidate, Candidate> = HashMap::with_capacity(self.candidates.len());
+
                             // Otherwise, we find the candidate which the
                             // event follows and then we update its vote count.
-                            for c in self.candidates.iter_mut() {
+                            for c in self.candidates.iter() {
+                                let not_in_proposal_stage = !c.proposal_stage
+                                    && c.event.stamp().happened_before(event.stamp())
+                                    && !c.voters_ids.contains(&event.node_id());
+
+                                let is_in_proposal_stage = c.proposal_stage
+                                    && c.event.stamp().happened_before(event.stamp())
+                                    && !c.voters_ids.contains(&event.node_id());
+
                                 // If the candidate is not in the proposal stage,
                                 // we add it to the voters set.
-                                if !c.proposal_stage && c.event.stamp().happened_before(event.stamp()) {
-                                    c.votes += 1;
-                                    c.voters.push(event.clone());
+                                if not_in_proposal_stage {
+                                    let candidate_ref = self.candidates.get(&c).unwrap();
+                                    let mut candidate = if let Some(replacement) = replacements.get(candidate_ref) {
+                                        replacement.clone()
+                                    } else {
+                                        candidate_ref.clone()
+                                    };
+                                    
+                                    candidate.votes += 1;
+                                    candidate.voters.insert(event.clone(), (0, HashSet::with_capacity(self.validators.len())));
+                                    candidate.voters_ids.insert(event.node_id());
 
-                                    if c.votes >= proposal_requirement(self.validators.len() as u16) {
+                                    if candidate.votes >= proposal_requirement(self.validators.len() as u16)
+                                    {
                                         // Enter proposal stage
-                                        c.proposal_stage = true;
+                                        candidate.proposal_stage = true;
                                     }
 
+                                    replacements.insert(candidate_ref.clone(), candidate);
                                     break;
-                                } else if c.proposal_stage && c.event.stamp().happened_before(event.stamp()) {
-                                    unimplemented!();
+                                } else if is_in_proposal_stage {
+                                    let mut to_remove: Vec<Arc<Event>> = vec![];
+                                    let candidate_ref = self.candidates.get(&c).unwrap();
+                                    let mut candidate = if let Some(replacement) = replacements.get(candidate_ref) {
+                                        replacement.clone()
+                                    } else {
+                                        candidate_ref.clone()
+                                    };
+
+                                    // Traverse voters and check if the event votes for any.
+                                    for (e, (vote_count, voters)) in candidate.voters.iter_mut() {
+                                        if e.stamp().happened_before(event.stamp()) && !voters.contains(&event.node_id()) {
+                                            *vote_count += 1;
+                                            voters.insert(event.node_id());
+
+                                            // If the event can propose, we increment the proposal count
+                                            // and remove it from the voters set.
+                                            if *vote_count >= proposal_requirement(self.validators.len() as u16) {
+                                                candidate.proposals += 1;
+                                                to_remove.push(event.clone());
+                                            }
+
+                                            break;
+                                        }
+                                    }
+
+                                    for e in to_remove.iter() {
+                                        candidate.voters.remove(e);
+                                    }
+
+                                    replacements.insert(candidate_ref.clone(), candidate);
+
+                                    // The candidate can be advanced into the total order
+                                    if c.proposals >= required_proposals(self.validators.len() as u16) {
+                                        to_advance.push(c.clone());
+                                    }
                                 }
+                            }
+
+                            // Apply replacements
+                            for (old, new) in replacements {
+                                self.candidates.remove(&old);
+                                self.candidates.insert(new);
                             }
                         }
                     }
+
+                    // Remove candidates which have been chosen for advancement
+                    for c in to_advance.iter() {
+                        self.candidates.remove(c);
+                        ordered.push(c.event.clone());
+
+                        let candidate_id = self.lookup_table.get(&c.event.event_hash().unwrap()).unwrap();
+
+                        // Update graph
+                        self.graph.remove(&candidate_id);
+                        
+                        // Retain only events that happened after the ordered event
+                        let mut ids_to_remove = HashSet::with_capacity(self.pending.len());
+
+                        for p in self.pending.iter() {
+                            let pending = self.graph.fetch(p).unwrap();
+
+                            if !pending.stamp().happened_after(c.event.stamp()) {
+                                ids_to_remove.insert(p.clone());
+                            }
+                        }
+
+                        self.pending.retain(|e| !ids_to_remove.contains(e));
+                        self.graph.retain(|e| e.stamp().happened_after(c.event.stamp()));
+                        self.ends.retain(|id, _| !ids_to_remove.contains(id));
+
+                        // Set new root as being the ordered event
+                        self.root = c.event.clone();
+                    }
                 } else {
-                    return;
+                    return ordered;
                 }
             }
         } else {
@@ -269,7 +366,11 @@ impl CausalGraph {
         if highest.parent_hash().is_none() {
             None
         } else {
-            let id = self.lookup_table.get(&highest.parent_hash().unwrap()).unwrap();
+            let id = self
+                .lookup_table
+                .get(&highest.parent_hash().unwrap())
+                .unwrap();
+
             let event = self.graph.fetch(id).unwrap();
 
             if event.node_id() == *node_id {
@@ -296,9 +397,13 @@ impl CausalGraph {
         }
     }
 
-    pub(crate) fn compute_highest_following(&self, node_id: &NodeId, event: Arc<Event>) -> Option<Arc<Event>> {
-        let v_id = self.lookup_table.get(&event.hash().unwrap());
-        
+    pub(crate) fn compute_highest_following(
+        &self,
+        node_id: &NodeId,
+        event: Arc<Event>,
+    ) -> Option<Arc<Event>> {
+        let v_id = self.lookup_table.get(&event.event_hash().unwrap());
+
         if let Some(v_id) = v_id {
             // The event does not have any followers
             if self.graph.out_neighbors_count(v_id) == 0 {
@@ -306,11 +411,12 @@ impl CausalGraph {
             }
 
             let mut completed: Vec<(VertexId, usize)> = vec![];
-            let mut to_traverse: VecDeque<(VertexId, usize)> = self.graph
+            let mut to_traverse: VecDeque<(VertexId, usize)> = self
+                .graph
                 .out_neighbors(v_id)
                 .map(|n| (n.clone(), 1))
                 .collect();
-            
+
             // Find highest followers of all branches
             while let Some((current, following)) = to_traverse.pop_back() {
                 if self.graph.out_neighbors_count(&current) == 0 {
@@ -322,19 +428,19 @@ impl CausalGraph {
 
                         // In case the next vertex is terminal and belongs to the
                         // given node id, mark current as completed and continue.
-                        if traversed_count == 0 && neighbor.node_id() == *node_id  {
+                        if traversed_count == 0 && neighbor.node_id() == *node_id {
                             completed.push((current, following));
                             continue;
-                        } 
+                        }
 
                         to_traverse.push_front((n.clone(), following + 1));
                     }
                 }
-            } 
+            }
 
             // Sort by followed events
             completed.sort_by(|a, b| a.1.cmp(&b.1));
-            
+
             if let Some((result, _)) = completed.pop() {
                 Some(self.graph.fetch(&result).unwrap().clone())
             } else {
@@ -348,13 +454,18 @@ impl CausalGraph {
 
     /// Returns true if the second event happened exactly after the first event.
     pub(crate) fn is_direct_follower(&self, event1: Arc<Event>, event2: Arc<Event>) -> bool {
-        let id1 = self.lookup_table.get(&event1.hash().unwrap());
-        let id2 = self.lookup_table.get(&event2.hash().unwrap());
+        let id1 = self.lookup_table.get(&event1.event_hash().unwrap());
+        let id2 = self.lookup_table.get(&event2.event_hash().unwrap());
 
         match (id1, id2) {
             (Some(id1), Some(id2)) => self.graph.has_edge(id2, id1),
             _ => false,
         }
+    }
+
+    /// Test only method for adding a new validator
+    pub(crate) fn add_validator(&mut self, id: NodeId) {
+        self.validators.insert(id, ValidatorState::new());
     }
 
     pub fn empty(&self) -> bool {
@@ -364,21 +475,26 @@ impl CausalGraph {
 
 #[cfg(test)]
 mod tests {
-    use quickcheck::*;
     use super::*;
     use causality::Stamp;
     use crypto::{Hash, Identity};
     use network::NodeId;
+    use quickcheck::*;
     use rand::*;
 
     #[test]
-    fn highest_exclusive()  {
+    fn highest_exclusive() {
         let i1 = Identity::new();
         let i2 = Identity::new();
         let n1 = NodeId(*i1.pkey());
         let n2 = NodeId(*i2.pkey());
         let A_hash = Hash::random();
-        let A = Arc::new(Event::Dummy(n1.clone(), A_hash.clone(), None, Stamp::seed()));
+        let A = Arc::new(Event::Dummy(
+            n1.clone(),
+            A_hash.clone(),
+            None,
+            Stamp::seed(),
+        ));
         let cg = CausalGraph::new(n1.clone(), A.clone());
 
         assert_eq!(cg.highest_exclusive(&n2), Some(A));
@@ -386,7 +502,7 @@ mod tests {
     }
 
     #[test]
-    fn highest_following_with_byzantine_events()  {
+    fn highest_following_with_byzantine_events() {
         let i1 = Identity::new();
         let i2 = Identity::new();
         let n1 = NodeId(*i1.pkey());
@@ -401,18 +517,50 @@ mod tests {
         let s_a = s_a.event();
         let A = Arc::new(Event::Dummy(n1.clone(), A_hash.clone(), None, s_a.clone()));
         let s_b = s_b.join(s_a.peek()).event();
-        let B = Arc::new(Event::Dummy(n2.clone(), B_hash.clone(), Some(A_hash), s_b.clone()));
+        let B = Arc::new(Event::Dummy(
+            n2.clone(),
+            B_hash.clone(),
+            Some(A_hash),
+            s_b.clone(),
+        ));
         assert!(s_b.happened_after(s_a.clone()));
         let s_a = s_a.join(s_b.peek()).event();
-        let C1 = Arc::new(Event::Dummy(n1.clone(), C1_hash.clone(), Some(B_hash), s_a.clone()));
-        let C2 = Arc::new(Event::Dummy(n1.clone(), C2_hash.clone(), Some(B_hash), s_a.clone()));
-        let C3 = Arc::new(Event::Dummy(n1.clone(), C3_hash.clone(), Some(B_hash), s_a.clone()));
+        let C1 = Arc::new(Event::Dummy(
+            n1.clone(),
+            C1_hash.clone(),
+            Some(B_hash),
+            s_a.clone(),
+        ));
+        let C2 = Arc::new(Event::Dummy(
+            n1.clone(),
+            C2_hash.clone(),
+            Some(B_hash),
+            s_a.clone(),
+        ));
+        let C3 = Arc::new(Event::Dummy(
+            n1.clone(),
+            C3_hash.clone(),
+            Some(B_hash),
+            s_a.clone(),
+        ));
         assert!(s_a.happened_after(s_b.clone()));
         let s_b = s_b.join(s_a.peek()).event();
-        let D = Arc::new(Event::Dummy(n2.clone(), Hash::random(), Some(C1_hash), s_b.clone()));
+        let D = Arc::new(Event::Dummy(
+            n2.clone(),
+            Hash::random(),
+            Some(C1_hash),
+            s_b.clone(),
+        ));
         assert!(s_b.happened_after(s_a));
 
         let mut cg = CausalGraph::new(n1.clone(), A.clone());
+
+        // Populate validator set so the tests pass when param checks are made
+        for _ in 0..100 {
+            let i = Identity::new();
+            let n = NodeId(*i.pkey());
+            cg.add_validator(n);
+        }
 
         let mut events = vec![B.clone(), C1.clone(), C2.clone(), C3.clone(), D.clone()];
 
@@ -454,6 +602,13 @@ mod tests {
             assert!(s_b.happened_after(s_a));
             let mut cg = CausalGraph::new(n1.clone(), A.clone());
 
+            // Populate validator set so the tests pass when param checks are made
+            for _ in 0..100 {
+                let i = Identity::new();
+                let n = NodeId(*i.pkey());
+                cg.add_validator(n);
+            }
+
             let mut events = vec![B.clone(), C.clone(), D.clone()];
 
             let B = events[0].clone();
@@ -477,7 +632,7 @@ mod tests {
             assert!(!cg.is_direct_follower(C.clone(), A.clone()));
             assert_eq!(cg.highest(), D.clone());
             assert_eq!(cg.highest_exclusive(&n2), Some(C.clone()));
-            assert_eq!(cg.highest_following(), Some(D.clone())); 
+            assert_eq!(cg.highest_following(), Some(D.clone()));
             assert_eq!(cg.compute_highest_following(&n1, A.clone()), Some(D));
             assert_eq!(cg.compute_highest_following(&n2, A), Some(C));
 
@@ -501,6 +656,13 @@ mod tests {
             let F = Arc::new(Event::Dummy(n.clone(), F_hash.clone(), Some(D_hash.clone()), Stamp::seed()));
             let G = Arc::new(Event::Dummy(n.clone(), Hash::random(), Some(F_hash), Stamp::seed()));
             let mut cg = CausalGraph::new(n, A.clone());
+
+            // Populate validator set so the tests pass when param checks are made
+            for _ in 0..100 {
+                let i = Identity::new();
+                let n = NodeId(*i.pkey());
+                cg.add_validator(n);
+            }
 
             let mut events = vec![B.clone(), C.clone(), D.clone(), E.clone(), F.clone(), G.clone()];
 

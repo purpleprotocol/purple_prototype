@@ -23,14 +23,12 @@ pub struct ValidatorState {
     /// Whether or not the validator is allowed
     /// to send an event.
     allowed_to_send: bool,
-
-    
 }
 
 impl ValidatorState {
     pub fn new() -> ValidatorState {
         ValidatorState {
-            allowed_to_send: true
+            allowed_to_send: true,
         }
     }
 }

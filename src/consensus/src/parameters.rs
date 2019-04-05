@@ -40,7 +40,7 @@ pub fn proposal_requirement(node_count: u16) -> u16 {
 /// The number of required proposals for a `CandidateSet`
 /// in order to be considered valid for inclusion into
 /// the total order.
-pub fn required_proposal(node_count: u16) -> u16 {
+pub fn required_proposals(node_count: u16) -> u16 {
     node_count + 1
 }
 

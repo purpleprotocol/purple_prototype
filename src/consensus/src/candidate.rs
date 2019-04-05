@@ -18,16 +18,25 @@
 
 use crate::parameters::*;
 use events::Event;
+use hashbrown::{HashMap, HashSet};
+use network::NodeId;
 use std::sync::Arc;
+use std::hash::Hash;
+use std::hash::Hasher;
 
 #[derive(Clone, Debug)]
 pub struct Candidate {
     /// Candidate event
     pub event: Arc<Event>,
 
-    /// Atomic references to events that vote
-    /// for the `Candidate`.
-    pub voters: Vec<Arc<Event>>,
+    /// Mapping between references to events that vote
+    /// for the `Candidate`, the number of voters and
+    /// the ids of the nodes that voted.
+    pub voters: HashMap<Arc<Event>, (u16, HashSet<NodeId>)>,
+
+    /// The ids of the nodes that have sent an
+    /// event that votes for this candidate.
+    pub voters_ids: HashSet<NodeId>,
 
     /// Total number of votes.
     pub votes: u16,
@@ -36,17 +45,32 @@ pub struct Candidate {
     pub proposals: u16,
 
     /// Whether or not the event is in the proposal stage
-    pub proposal_stage: bool
+    pub proposal_stage: bool,
+}
+
+impl PartialEq for Candidate {
+    fn eq(&self, other: &Candidate) -> bool {
+        self.event.event_hash().unwrap() == other.event.event_hash().unwrap()
+    }
+}
+
+impl Eq for Candidate {}
+
+impl Hash for Candidate {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.event.event_hash().unwrap().hash(state);
+    }
 }
 
 impl Candidate {
     pub fn new(event: Arc<Event>) -> Candidate {
         Candidate {
             event,
-            voters: Vec::new(),
+            voters: HashMap::new(),
+            voters_ids: HashSet::new(),
             votes: 0,
             proposals: 0,
-            proposal_stage: false
+            proposal_stage: false,
         }
     }
 

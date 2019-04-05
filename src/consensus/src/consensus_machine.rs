@@ -31,13 +31,13 @@ pub enum CGError {
 
 #[derive(Debug)]
 pub struct ConsensusMachine {
-    causal_graph: CausalGraph
+    pub(crate) causal_graph: CausalGraph,
 }
 
 impl ConsensusMachine {
     pub fn new(node_id: NodeId, root_event: Arc<Event>) -> ConsensusMachine {
         ConsensusMachine {
-            causal_graph: CausalGraph::new(node_id, root_event)
+            causal_graph: CausalGraph::new(node_id, root_event),
         }
     }
 
@@ -46,20 +46,18 @@ impl ConsensusMachine {
     }
 
     /// Attempts to push an atomic reference to an
-    /// event to the causal graph. This function also
-    /// validates the event in accordance with the rest
-    /// of the causal graph.
+    /// event to the causal graph. This function will
+    /// return any events that have been totally ordered
+    /// if successful.
     ///
     /// This will return `Err(CGError::AlreadyInCG)` if the event
     /// is already situated in the `CausalGraph`.
-    pub fn push(&mut self, event: Arc<Event>) -> Result<(), CGError> {
+    pub fn push(&mut self, event: Arc<Event>) -> Result<Vec<Arc<Event>>, CGError> {
         if self.causal_graph.contains(event.clone()) {
             return Err(CGError::AlreadyInCG);
         }
 
-        self.causal_graph.push(event);
-
-        Ok(())
+        Ok(self.causal_graph.push(event))
     }
 
     /// Returns the highest event that is currently
@@ -78,14 +76,18 @@ impl ConsensusMachine {
     /// Return the highest event that follows the our latest
     /// sent event in the causal graph that **does not**
     /// belong to ourselves.
-    pub fn highest_following(&mut self) -> Option<Arc<Event>> {
+    pub fn highest_following(&self) -> Option<Arc<Event>> {
         self.causal_graph.highest_following()
     }
 
     /// Return the highest event that follows the given
     /// given event in the causal graph that **does not**
     /// belong to the node with the given `NodeId`.
-    pub fn compute_highest_following(&mut self, node_id: &NodeId, event: Arc<Event>) -> Option<Arc<Event>> {
+    pub fn compute_highest_following(
+        &self,
+        node_id: &NodeId,
+        event: Arc<Event>,
+    ) -> Option<Arc<Event>> {
         self.causal_graph.compute_highest_following(node_id, event)
     }
 
@@ -97,10 +99,10 @@ impl ConsensusMachine {
 
 #[cfg(test)]
 mod tests {
-    use quickcheck::*;
     use super::*;
     use causality::Stamp;
     use crypto::{Hash, Identity};
+    use quickcheck::*;
     use rand::{thread_rng, Rng};
 
     #[test]
@@ -208,14 +210,26 @@ mod tests {
 
         let mut machine = ConsensusMachine::new(n1.clone(), A.clone());
 
+        // Populate validator set so the tests pass when param checks are made
+        for _ in 0..100 {
+            let i = Identity::new();
+            let n = NodeId(*i.pkey());
+            machine.causal_graph.add_validator(n);
+        }
+
         for e in events {
             machine.push(e).unwrap();
         }
 
         assert_eq!(machine.highest_following().unwrap(), F.clone());
-        assert_eq!(machine.compute_highest_following(&n1, A.clone()).unwrap(), F);
         assert_eq!(
-            machine.compute_highest_following(&n2, A_prime.clone()).unwrap(),
+            machine.compute_highest_following(&n1, A.clone()).unwrap(),
+            F
+        );
+        assert_eq!(
+            machine
+                .compute_highest_following(&n2, A_prime.clone())
+                .unwrap(),
             D_prime
         );
     }
@@ -322,6 +336,13 @@ mod tests {
         thread_rng().shuffle(&mut events);
 
         let mut machine = ConsensusMachine::new(n1, A.clone());
+
+        // Populate validator set so the tests pass when param checks are made
+        for _ in 0..100 {
+            let i = Identity::new();
+            let n = NodeId(*i.pkey());
+            machine.causal_graph.add_validator(n);
+        }
 
         for e in events {
             machine.push(e).unwrap();
@@ -443,6 +464,13 @@ mod tests {
             thread_rng().shuffle(&mut events);
 
             let mut machine = ConsensusMachine::new(n1, A.clone());
+
+            // Populate validator set so the tests pass when param checks are made
+            for _ in 0..100 {
+                let i = Identity::new();
+                let n = NodeId(*i.pkey());
+                machine.causal_graph.add_validator(n);
+            }
 
             for e in events {
                 machine.push(e).unwrap();

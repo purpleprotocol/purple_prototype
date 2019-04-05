@@ -3,6 +3,7 @@
 #[macro_use]
 extern crate criterion;
 
+extern crate causality;
 extern crate crypto;
 extern crate events;
 extern crate network;
@@ -12,6 +13,7 @@ extern crate test;
 extern crate test_helpers;
 extern crate transactions;
 
+use causality::Stamp;
 use criterion::Criterion;
 use crypto::{Hash, Identity};
 use events::Heartbeat;
@@ -37,6 +39,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let mut hb = Heartbeat {
             node_id: NodeId::from_pkey(*id.pkey()),
             stamp: Stamp::seed(),
+            parent_hash: Hash::random(),
             transactions: txs,
             root_hash: None,
             signature: None,
@@ -60,6 +63,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         let mut hb = Heartbeat {
             node_id: NodeId::from_pkey(*id.pkey()),
+            parent_hash: Hash::random(),
             stamp: Stamp::seed(),
             transactions: txs,
             root_hash: None,
