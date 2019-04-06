@@ -16,19 +16,24 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use network::NodeId;
+use causality::Stamp;
 
 #[derive(Clone, Debug)]
 pub struct ValidatorState {
     /// Whether or not the validator is allowed
     /// to send an event.
-    allowed_to_send: bool,
+    pub(crate) allowed_to_send: bool,
+
+    /// The stamp of the latest event that
+    /// has been send by the validator.
+    pub(crate) latest_stamp: Stamp,
 }
 
 impl ValidatorState {
-    pub fn new() -> ValidatorState {
+    pub fn new(allowed_to_send: bool, init_stamp: Stamp) -> ValidatorState {
         ValidatorState {
-            allowed_to_send: true,
+            allowed_to_send,
+            latest_stamp: init_stamp,
         }
     }
 }

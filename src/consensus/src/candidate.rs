@@ -20,9 +20,9 @@ use crate::parameters::*;
 use events::Event;
 use hashbrown::{HashMap, HashSet};
 use network::NodeId;
-use std::sync::Arc;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct Candidate {

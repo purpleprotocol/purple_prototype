@@ -16,16 +16,21 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(non_snake_case)]
+#[derive(Clone, Debug, PartialEq)]
+pub enum ValidationResp {
+    /// The event is valid.
+    Valid,
 
-mod candidate;
-mod causal_graph;
-mod consensus_machine;
-pub mod parameters;
-mod validation;
-mod validator_state;
+    /// The node id of the pushed event does not
+    /// belong to an active validator.
+    NotValidator,
 
-pub use candidate::*;
-pub use consensus_machine::*;
-pub use validation::*;
-pub use validator_state::*;
+    /// The validator is not allowed to send an event.
+    NotAllowedToSend,
+
+    /// The stamp of the event is not valid.
+    InvalidStamp,
+
+    /// The validity of the event cannot be determined.
+    CannotDetermineValidity,
+}

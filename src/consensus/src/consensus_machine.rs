@@ -17,6 +17,7 @@
 */
 
 use crate::causal_graph::CausalGraph;
+use crate::validation::ValidationResp;
 use events::Event;
 use network::NodeId;
 use std::sync::Arc;
@@ -41,9 +42,22 @@ impl ConsensusMachine {
         }
     }
 
-    pub fn is_valid(&self, event: Arc<Event>) -> bool {
-        unimplemented!();
+    #[cfg(test)]
+    pub fn new_with_test_mode(node_id: NodeId, root_event: Arc<Event>) -> ConsensusMachine {
+        ConsensusMachine {
+            causal_graph: CausalGraph::new_with_test_mode(node_id, root_event),
+        }
     }
+
+    pub fn is_valid(&self, event: Arc<Event>) -> ValidationResp {
+        self.causal_graph.is_valid(event)
+    }
+
+    /// Joins a new validator to the consensus pool.
+    ///
+    /// This will fork the stamp with the biggest interval
+    /// from the left on the [0, 1) interval.
+    pub fn add_validator(&mut self, node_id: &NodeId) {}
 
     /// Attempts to push an atomic reference to an
     /// event to the causal graph. This function will
@@ -208,14 +222,7 @@ mod tests {
         // of the order in which the events are pushed.
         thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new(n1.clone(), A.clone());
-
-        // Populate validator set so the tests pass when param checks are made
-        for _ in 0..100 {
-            let i = Identity::new();
-            let n = NodeId(*i.pkey());
-            machine.causal_graph.add_validator(n);
-        }
+        let mut machine = ConsensusMachine::new_with_test_mode(n1.clone(), A.clone());
 
         for e in events {
             machine.push(e).unwrap();
@@ -335,14 +342,7 @@ mod tests {
         // of the order in which the events are pushed.
         thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new(n1, A.clone());
-
-        // Populate validator set so the tests pass when param checks are made
-        for _ in 0..100 {
-            let i = Identity::new();
-            let n = NodeId(*i.pkey());
-            machine.causal_graph.add_validator(n);
-        }
+        let mut machine = ConsensusMachine::new_with_test_mode(n1, A.clone());
 
         for e in events {
             machine.push(e).unwrap();
@@ -353,6 +353,15 @@ mod tests {
     }
 
     quickcheck! {
+        // fn it_achieves_consensus() -> bool {
+        //     let i1 = Identity::new();
+        //     let i2 = Identity::new();
+        //     let i3 = Identity::new();
+        //     let n1 = NodeId(*i1.pkey());
+        //     let n2 = NodeId(*i2.pkey());
+        //     let n3 = NodeId(*i3.pkey());
+        // }
+
         /// Causal graph structure:
         ///
         /// A -> B -> C -> D -> E -> F
@@ -463,14 +472,7 @@ mod tests {
             // of the order in which the events are pushed.
             thread_rng().shuffle(&mut events);
 
-            let mut machine = ConsensusMachine::new(n1, A.clone());
-
-            // Populate validator set so the tests pass when param checks are made
-            for _ in 0..100 {
-                let i = Identity::new();
-                let n = NodeId(*i.pkey());
-                machine.causal_graph.add_validator(n);
-            }
+            let mut machine = ConsensusMachine::new_with_test_mode(n1, A.clone());
 
             for e in events {
                 machine.push(e).unwrap();
