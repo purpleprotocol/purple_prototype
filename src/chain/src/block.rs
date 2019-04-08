@@ -22,7 +22,7 @@ use crypto::Hash;
 /// Generic block interface
 pub trait Block {
     /// Returns the hash of the block.
-    fn hash(&self) -> Option<Hash>;
+    fn block_hash(&self) -> Option<Hash>;
 
     /// Returns the merkle root hash of the block.
     fn merkle_root(&self) -> Option<Hash>; 

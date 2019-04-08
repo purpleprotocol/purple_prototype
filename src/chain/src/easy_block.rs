@@ -37,8 +37,27 @@ pub struct EasyBlock {
 }
 
 impl Block for EasyBlock {
-    fn hash(&self) -> Option<Hash> { self.hash.clone() }
+    fn block_hash(&self) -> Option<Hash> { self.hash.clone() }
     fn parent_hash(&self) -> Option<Hash> { self.parent_hash.clone() }
     fn merkle_root(&self) -> Option<Hash> { self.merkle_root.clone() }
     fn timestamp(&self) -> DateTime<Utc> { self.timestamp.clone() }
+}
+
+impl EasyBlock {
+    pub fn new(parent_hash: Option<Hash>) -> EasyBlock {
+        EasyBlock {
+            parent_hash,
+            merkle_root: None,
+            hash: None,
+            timestamp: Utc::now()
+        }
+    } 
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        unimplemented!();
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<EasyBlock, &'static str> {
+        unimplemented!();
+    }
 }

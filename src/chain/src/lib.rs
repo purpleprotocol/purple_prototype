@@ -25,7 +25,7 @@ mod easy_block;
 mod hard_block;
 
 pub use block::*;
-pub use chain::*;
+pub use crate::chain::*;
 pub use easy_chain::*;
 pub use hard_chain::*;
 pub use easy_block::*;

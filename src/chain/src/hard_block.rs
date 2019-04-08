@@ -40,8 +40,28 @@ pub struct HardBlock {
 }
 
 impl Block for HardBlock {
-    fn hash(&self) -> Option<Hash> { self.hash.clone() }
+    fn block_hash(&self) -> Option<Hash> { self.hash.clone() }
     fn parent_hash(&self) -> Option<Hash> { self.parent_hash.clone() }
     fn merkle_root(&self) -> Option<Hash> { self.merkle_root.clone() }
     fn timestamp(&self) -> DateTime<Utc> { self.timestamp.clone() }
+}
+
+impl HardBlock {
+    pub fn new(parent_hash: Option<Hash>, easy_block_hash: Hash) -> HardBlock {
+        HardBlock {
+            parent_hash,
+            easy_block_hash,
+            merkle_root: None,
+            hash: None,
+            timestamp: Utc::now()
+        }
+    } 
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        unimplemented!();
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<HardBlock, &'static str> {
+        unimplemented!();
+    }
 }

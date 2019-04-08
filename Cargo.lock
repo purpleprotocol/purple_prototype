@@ -228,8 +228,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "chain"
 version = "0.1.0"
 dependencies = [
+ "bin-tools 0.1.0",
+ "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "crypto 0.1.0",
+ "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hashdb 0.3.0 (git+https://github.com/paritytech/parity-common)",
+ "persistence 0.1.0",
 ]
 
 [[package]]

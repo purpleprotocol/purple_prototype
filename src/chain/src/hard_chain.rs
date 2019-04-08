@@ -16,6 +16,17 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub struct HardChain {
+use crate::hard_block::HardBlock;
+use persistence::PersistentDb;
+use std::sync::Arc;
 
+#[derive(Clone)]
+/// The hard chain stores blocks that represent state
+/// changes in the validator pool. Nodes have 
+pub struct HardChain {
+    /// Reference to the database storing the `HardChain`.
+    db: PersistentDb,
+
+    /// The topmost block in the chain.
+    top: Arc<HardBlock>
 }
