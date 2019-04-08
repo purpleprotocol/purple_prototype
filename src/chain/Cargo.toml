@@ -1,0 +1,9 @@
+[package]
+name = "chain"
+version = "0.1.0"
+authors = ["Octavian Oncescu <octavonce@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+chrono = "0.4.6"
+crypto = { path = "../crypto" }

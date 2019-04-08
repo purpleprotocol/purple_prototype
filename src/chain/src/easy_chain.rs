@@ -16,24 +16,6 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use causality::Stamp;
+pub struct EasyChain {
 
-#[derive(Clone, Debug)]
-pub struct ValidatorState {
-    /// Whether or not the validator is allowed
-    /// to send an event.
-    pub(crate) allowed_to_send: bool,
-
-    /// The stamp of the latest event that
-    /// has been sent by the validator.
-    pub(crate) latest_stamp: Stamp,
-}
-
-impl ValidatorState {
-    pub fn new(allowed_to_send: bool, init_stamp: Stamp) -> ValidatorState {
-        ValidatorState {
-            allowed_to_send,
-            latest_stamp: init_stamp,
-        }
-    }
 }

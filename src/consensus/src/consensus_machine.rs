@@ -21,10 +21,12 @@ use crate::validation::ValidationResp;
 use events::Event;
 use network::NodeId;
 use std::sync::Arc;
+use causality::Stamp;
 
 #[derive(Clone, Debug)]
 pub enum CGError {
     AlreadyInCG,
+    AlreadyJoined,
     NoEventFound,
     NoCandidateSetFound,
     InvalidEvent,
@@ -53,11 +55,36 @@ impl ConsensusMachine {
         self.causal_graph.is_valid(event)
     }
 
-    /// Joins a new validator to the consensus pool.
-    ///
-    /// This will fork the stamp with the biggest interval
-    /// from the left on the [0, 1) interval.
-    pub fn add_validator(&mut self, node_id: &NodeId) {}
+    /// Joins a new validator to the consensus pool. The first
+    /// node that is allowed to send an event is the first
+    /// node that has been joined. 
+    /// 
+    /// This function will return `Err(CGError::AlreadyJoined)` if
+    /// the node with the given `NodeId` is already joined
+    /// in the consensus pool.
+    pub fn add_validator(&mut self, node_id: &NodeId) -> Result<(), CGError> {
+        if self.causal_graph.validators.get(node_id).is_some() {
+            return Err(CGError::AlreadyJoined);
+        }
+        
+        // Join the first validator
+        if self.causal_graph.validators_count() == 0 {
+            let (stamp, _) = Stamp::seed().fork();
+            self.causal_graph.add_validator(node_id.clone(), true, stamp);
+        } else if self.causal_graph.validators_count() == 1 {
+            // Join the second validator
+            let (_, stamp) = Stamp::seed().fork();
+            self.causal_graph.add_validator(node_id.clone(), false, stamp);
+        } else {
+            // Otherwise, fork the stamp of the node
+            // that satisfies the binary mapping of
+            // the `NodeId` + The event hash to the 
+            // index of the node in the validators stack.
+
+        }
+
+        Ok(())
+    }
 
     /// Attempts to push an atomic reference to an
     /// event to the causal graph. This function will
@@ -114,7 +141,6 @@ impl ConsensusMachine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use causality::Stamp;
     use crypto::{Hash, Identity};
     use quickcheck::*;
     use rand::{thread_rng, Rng};

@@ -10,6 +10,7 @@ crypto = { path = "../crypto" }
 events = { path = "../events" }
 network = { path = "../network" }
 causality = { path = "../causality" }
+chain = { path = "../chain" }
 recursive = { path = "../util/recursive" }
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
 

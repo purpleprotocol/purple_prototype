@@ -39,6 +39,7 @@ extern crate network;
 extern crate parking_lot;
 extern crate persistence;
 extern crate tokio;
+extern crate chain;
 
 use clap::{App, Arg};
 use crypto::Identity;

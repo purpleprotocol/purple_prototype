@@ -16,24 +16,20 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use causality::Stamp;
+use chrono::prelude::*;
+use crypto::Hash;
 
-#[derive(Clone, Debug)]
-pub struct ValidatorState {
-    /// Whether or not the validator is allowed
-    /// to send an event.
-    pub(crate) allowed_to_send: bool,
+/// Generic block interface
+pub trait Block {
+    /// Returns the hash of the block.
+    fn hash(&self) -> Option<Hash>;
 
-    /// The stamp of the latest event that
-    /// has been sent by the validator.
-    pub(crate) latest_stamp: Stamp,
-}
+    /// Returns the merkle root hash of the block.
+    fn merkle_root(&self) -> Option<Hash>; 
 
-impl ValidatorState {
-    pub fn new(allowed_to_send: bool, init_stamp: Stamp) -> ValidatorState {
-        ValidatorState {
-            allowed_to_send,
-            latest_stamp: init_stamp,
-        }
-    }
+    /// Returns the parent hash of the block.
+    fn parent_hash(&self) -> Option<Hash>;
+
+    /// Returns the timestamp of the block.
+    fn timestamp(&self) -> DateTime<Utc>;
 }

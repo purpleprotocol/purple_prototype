@@ -225,6 +225,14 @@ version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "chain"
+version = "0.1.0"
+dependencies = [
+ "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crypto 0.1.0",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -269,6 +277,7 @@ name = "consensus"
 version = "0.1.0"
 dependencies = [
  "causality 0.1.0",
+ "chain 0.1.0",
  "crypto 0.1.0",
  "events 0.1.0",
  "graphlib 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1422,6 +1431,7 @@ name = "purple"
 version = "0.0.1"
 dependencies = [
  "account 0.1.0",
+ "chain 0.1.0",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "consensus 0.1.0",
  "crypto 0.1.0",

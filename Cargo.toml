@@ -32,6 +32,7 @@ consensus = { path = "src/consensus" }
 persistence = { path = "src/persistence" }
 network = { path = "src/network" }
 transactions = { path = "src/transactions" }
+chain = { path = "src/chain" }
 
 [[bin]]
 path = "src/purple/main.rs"

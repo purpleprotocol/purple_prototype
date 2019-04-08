@@ -16,24 +16,17 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use causality::Stamp;
+use crate::block::Block;
+use std::sync::Arc;
 
-#[derive(Clone, Debug)]
-pub struct ValidatorState {
-    /// Whether or not the validator is allowed
-    /// to send an event.
-    pub(crate) allowed_to_send: bool,
+/// Generic chain interface
+pub trait Chain<B> where B: Block {
+    /// Returns the current height of the chain
+    fn height(&self) -> usize;
 
-    /// The stamp of the latest event that
-    /// has been sent by the validator.
-    pub(crate) latest_stamp: Stamp,
-}
+    /// Returns an atomic reference to the topmost block in the chain. 
+    fn top(&self) -> Arc<B>; 
 
-impl ValidatorState {
-    pub fn new(allowed_to_send: bool, init_stamp: Stamp) -> ValidatorState {
-        ValidatorState {
-            allowed_to_send,
-            latest_stamp: init_stamp,
-        }
-    }
+    /// Attempts to append a new block to the chain.
+    fn append_block(&mut self, block: Arc<B>) -> Result<(), ()>; 
 }

@@ -16,24 +16,29 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use causality::Stamp;
+use crate::block::Block;
+use chrono::prelude::*;
+use crypto::Hash;
 
-#[derive(Clone, Debug)]
-pub struct ValidatorState {
-    /// Whether or not the validator is allowed
-    /// to send an event.
-    pub(crate) allowed_to_send: bool,
+#[derive(Debug)]
+/// A block belonging to the `EasyChain`.
+pub struct EasyBlock {
+    /// The hash of the parent block.
+    parent_hash: Option<Hash>,
 
-    /// The stamp of the latest event that
-    /// has been sent by the validator.
-    pub(crate) latest_stamp: Stamp,
+    /// The merkle root hash of the block.
+    merkle_root: Option<Hash>,
+
+    /// The hash of the block.
+    hash: Option<Hash>,
+
+    /// The timestamp of the block.
+    timestamp: DateTime<Utc>,
 }
 
-impl ValidatorState {
-    pub fn new(allowed_to_send: bool, init_stamp: Stamp) -> ValidatorState {
-        ValidatorState {
-            allowed_to_send,
-            latest_stamp: init_stamp,
-        }
-    }
+impl Block for EasyBlock {
+    fn hash(&self) -> Option<Hash> { self.hash.clone() }
+    fn parent_hash(&self) -> Option<Hash> { self.parent_hash.clone() }
+    fn merkle_root(&self) -> Option<Hash> { self.merkle_root.clone() }
+    fn timestamp(&self) -> DateTime<Utc> { self.timestamp.clone() }
 }
