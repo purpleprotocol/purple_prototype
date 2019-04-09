@@ -17,6 +17,7 @@
 */
 
 use crate::block::Block;
+use crate::block_iterator::BlockIterator;
 use crypto::Hash;
 use std::sync::Arc;
 
@@ -31,11 +32,11 @@ pub enum ChainErr {
 
 /// Generic chain interface
 pub trait Chain<B> where B: Block {
-    /// Returns the current height of the chain
+    /// Returns the current height of the canonical chain.
     fn height(&self) -> usize;
 
-    /// Returns an atomic reference to the topmost block in the chain. 
-    fn top(&self) -> Arc<B>; 
+    /// Returns an atomic reference to the topmost block in the canonical chain. 
+    fn canonical_top(&self) -> Arc<B>; 
 
     /// Returns an atomic reference to the genesis block in the chain.
     fn genesis(&self) -> Arc<B>;
@@ -46,9 +47,23 @@ pub trait Chain<B> where B: Block {
     /// Queries for a block by its hash.
     fn query(&self, hash: &Hash) -> Option<Arc<B>>;
 
-    /// Queries for a block by its height.
+    /// Queries for a block by its height. This function can only
+    /// return blocks from the canonical chain.
     fn query_by_height(&self, height: usize) -> Option<Arc<B>>;
 
     /// Returns the block height of the block with the given hash, if any.
     fn block_height(&self, hash: &Hash) -> Option<usize>;
+
+    /// Returns an iterator over all top blocks of non-canonical chains that 
+    /// descend from the canonical chain. The top block of the canonical chain
+    /// will **NOT** be included.
+    /// 
+    /// Note that this does not include blocks that are disconnected in any way
+    /// from the canonical chain i.e. blocks written that we haven't received 
+    /// the parent of.
+    fn iter_canonical_tops(&self) -> BlockIterator<'_>;
+
+    /// Returns an iterator over all of top blocks of chains that are 
+    /// completely disconnected from the canonical chain.
+    fn iter_pending_tops(&self) -> BlockIterator<'_>;
 }

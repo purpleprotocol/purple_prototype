@@ -18,6 +18,7 @@
 
 use crate::hard_block::HardBlock;
 use crate::easy_chain::EasyChain;
+use crate::block_iterator::BlockIterator;
 use crate::chain::{Chain, ChainErr};
 use crate::block::Block;
 use bin_tools::*;
@@ -66,8 +67,8 @@ pub struct HardChain {
     /// The current height of the chain.
     height: usize,
 
-    /// The topmost block in the chain.
-    top: Arc<HardBlock>,
+    /// The topmost block in the canonical chain.
+    canonical_top: Arc<HardBlock>,
 
     /// Block lookup cache
     block_cache: RefCell<LruCache<Hash, Arc<HardBlock>>>,
@@ -78,7 +79,7 @@ impl HardChain {
         // TODO: Handle different branches
         let top_key = crypto::hash_slice(b"top");
         let top_db_res = db_ref.get(&top_key);
-        let top = match top_db_res.clone() {
+        let canonical_top = match top_db_res.clone() {
             Some(top) => {
                 let mut buf = [0; 32];
                 buf.copy_from_slice(&top);
@@ -113,7 +114,7 @@ impl HardChain {
         let height = height as usize;
 
         HardChain {
-            top,
+            canonical_top,
             height,
             easy_chain,
             db: db_ref,
@@ -152,7 +153,7 @@ impl Chain<HardBlock> for HardChain {
     }
 
     fn append_block(&mut self, block: Arc<HardBlock>) -> Result<(), ChainErr> {
-        let top = &self.top;
+        let top = &self.canonical_top;
 
         // The block must have a parent hash and the parent
         // hash must be equal to that of the current top
@@ -163,7 +164,7 @@ impl Chain<HardBlock> for HardChain {
                 self.db.emplace(block.block_hash().unwrap().clone(), ElasticArray128::<u8>::from_slice(&block.to_bytes()));
                 
                 // Set new top block
-                self.top = block;
+                self.canonical_top = block;
 
                 // TODO: Handle different branches with different heights
                 let height_key = crypto::hash_slice(b"height");
@@ -189,5 +190,13 @@ impl Chain<HardBlock> for HardChain {
     }
 
     fn height(&self) -> usize { self.height }
-    fn top(&self) -> Arc<HardBlock> { self.top.clone() }
+    fn canonical_top(&self) -> Arc<HardBlock> { self.canonical_top.clone() }
+
+    fn iter_canonical_tops(&self) -> BlockIterator<'_> {
+        unimplemented!();
+    } 
+
+    fn iter_pending_tops(&self) -> BlockIterator<'_> {
+        unimplemented!();
+    } 
 }

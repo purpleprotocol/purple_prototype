@@ -16,19 +16,22 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::block::Block;
+use std::fmt::Debug;
 
-mod block;
-mod chain;
-mod easy_chain;
-mod hard_chain;
-mod easy_block;
-mod hard_block;
-mod block_iterator;
+pub(crate) trait MergedTrait<'a>: Iterator<Item = &'a Block> + Debug {}
 
-pub use block::*;
-pub use block_iterator::*;
-pub use crate::chain::*;
-pub use easy_chain::*;
-pub use hard_chain::*;
-pub use easy_block::*;
-pub use hard_block::*;
+impl<'a, T> MergedTrait<'a> for T where T: Iterator<Item = &'a Block> + Debug {}
+
+#[derive(Debug)]
+/// Generic block iterator.
+pub struct BlockIterator<'a>(pub(crate) Box<dyn 'a + MergedTrait<'a>>);
+
+impl<'a> Iterator for BlockIterator<'a> {
+    type Item = &'a Block;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}

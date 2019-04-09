@@ -17,6 +17,7 @@
 */
 
 use crate::easy_block::EasyBlock;
+use crate::block_iterator::BlockIterator;
 use crate::chain::{Chain, ChainErr};
 use crate::block::Block;
 use bin_tools::*;
@@ -36,13 +37,17 @@ const BLOCK_CACHE_SIZE: usize = 20;
 /// a validator, it will mine on the easy chain (which has lower
 /// difficulty in order to populate the pool more effectively).
 /// 
+/// The difficulty of the easy chain grows asimptotically with
+/// the number of mined blocks since the last mined block on the
+/// hard-chain so that the buffer is rate-limited.
+/// 
 /// When a block is mined on the hard chain, all of the miners
 /// that have succesfuly mined a block on the easy chain (along
 /// with the miner that succesfuly mined a hard block) since
 /// the last mined block on the hard one are joined to the pool
 /// in one operation. 
 /// 
-/// Miner rewards on the easy chain are substantially less than the
+/// Miner rewards on the easy chain are substantialy less than the
 /// ones on the hard chain, however, miners from the easy chain receive
 /// transaction fees as additional reward because they participate in the
 /// validator pool.
@@ -50,11 +55,11 @@ pub struct EasyChain {
     /// Reference to the database storing the `EasyChain`.
     db: PersistentDb,
 
-    /// The current height of the chain.
+    /// The current height of the canonical chain.
     height: usize,
 
-    /// The topmost block in the chain.
-    top: Arc<EasyBlock>,
+    /// The topmost block in the canonical chain.
+    canonical_top: Arc<EasyBlock>,
 
     /// Block lookup cache
     block_cache: RefCell<LruCache<Hash, Arc<EasyBlock>>>,
@@ -63,9 +68,9 @@ pub struct EasyChain {
 impl EasyChain {
     pub fn new(mut db_ref: PersistentDb) -> EasyChain {
         // TODO: Handle different branches
-        let top_key = crypto::hash_slice(b"top");
+        let top_key = crypto::hash_slice(b"canonical_top");
         let top_db_res = db_ref.get(&top_key);
-        let top = match top_db_res.clone() {
+        let canonical_top = match top_db_res.clone() {
             Some(top) => {
                 let mut buf = [0; 32];
                 buf.copy_from_slice(&top);
@@ -79,8 +84,16 @@ impl EasyChain {
             }
         };
 
-        // TODO: Handle different branches with different heights
-        let height_key = crypto::hash_slice(b"height");
+        let canonical_tops_key = crypto::hash_slice(b"canonical_tops");
+        
+        // Insert new canonical tops entry if non-existent.
+        if db_ref.get(&canonical_tops_key).is_none() {
+            let mut b: Vec<Arc<EasyBlock>> = vec![canonical_top.clone()];
+
+        }
+
+
+        let height_key = crypto::hash_slice(b"canonical_height");
         let height = match db_ref.get(&height_key) {
             Some(height) => {
                 decode_be_u64!(&height).unwrap()
@@ -98,7 +111,7 @@ impl EasyChain {
         let height = height as usize;
 
         EasyChain {
-            top,
+            canonical_top,
             height,
             db: db_ref,
             block_cache: RefCell::new(LruCache::new(BLOCK_CACHE_SIZE))
@@ -136,7 +149,7 @@ impl Chain<EasyBlock> for EasyChain {
     }
 
     fn append_block(&mut self, block: Arc<EasyBlock>) -> Result<(), ChainErr> {
-        let top = &self.top;
+        let top = &self.canonical_top;
 
         // The block must have a parent hash and the parent
         // hash must be equal to that of the current top
@@ -147,7 +160,7 @@ impl Chain<EasyBlock> for EasyChain {
                 self.db.emplace(block.block_hash().unwrap().clone(), ElasticArray128::<u8>::from_slice(&block.to_bytes()));
                 
                 // Set new top block
-                self.top = block;
+                self.canonical_top = block;
 
                 // TODO: Handle different branches with different heights
                 let height_key = crypto::hash_slice(b"height");
@@ -173,5 +186,13 @@ impl Chain<EasyBlock> for EasyChain {
     }
 
     fn height(&self) -> usize { self.height }
-    fn top(&self) -> Arc<EasyBlock> { self.top.clone() }
+    fn canonical_top(&self) -> Arc<EasyBlock> { self.canonical_top.clone() }
+
+    fn iter_canonical_tops(&self) -> BlockIterator<'_> {
+        unimplemented!();
+    } 
+
+    fn iter_pending_tops(&self) -> BlockIterator<'_> {
+        unimplemented!();
+    } 
 }

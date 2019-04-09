@@ -237,6 +237,7 @@ dependencies = [
  "lru 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "persistence 0.1.0",
+ "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
