@@ -234,6 +234,8 @@ dependencies = [
  "crypto 0.1.0",
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.3.0 (git+https://github.com/paritytech/parity-common)",
+ "lru 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "persistence 0.1.0",
 ]
 
@@ -998,6 +1000,14 @@ version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "cfg-if 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "lru"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "hashbrown 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2531,6 +2541,7 @@ dependencies = [
 "checksum lock_api 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "62ebf1391f6acad60e5c8b43706dde4582df75c06698ab44511d15016bc2442c"
 "checksum log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
 "checksum log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)" = "c84ec4b527950aa83a329754b01dbe3f58361d1c5efacd1f6d68c494d08a17c6"
+"checksum lru 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)" = "a9767e6fd0d14d9ceb18d48e0fe2d0f6ceca2ec346575ae632e1dbcc6dd3d837"
 "checksum memchr 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "db4c41318937f6e76648f42826b1d9ade5c09cafb5aef7e351240a70f39206e9"
 "checksum memoffset 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0f9dc261e2b62d7a622bf416ea3c5245cdd5d9a7fcc428c0d06804dfce1775b3"
 "checksum merkle_light 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "2522fe9e6a71447b7acc0841bced2517976f982e7ea8d494870eb71464ebc269"

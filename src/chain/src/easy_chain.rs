@@ -22,11 +22,15 @@ use crate::block::Block;
 use bin_tools::*;
 use persistence::PersistentDb;
 use elastic_array::ElasticArray128;
+use lru::LruCache;
 use std::sync::Arc;
+use std::cell::RefCell;
 use hashdb::HashDB;
 use crypto::Hash;
 
-#[derive(Clone)]
+/// Size of the block cache.
+const BLOCK_CACHE_SIZE: usize = 20;
+
 /// The easy chain stores blocks that represent buffered
 /// validator pool join requests. If a miner wishes to become
 /// a validator, it will mine on the easy chain (which has lower
@@ -50,7 +54,10 @@ pub struct EasyChain {
     height: usize,
 
     /// The topmost block in the chain.
-    top: Arc<EasyBlock>
+    top: Arc<EasyBlock>,
+
+    /// Block lookup cache
+    block_cache: RefCell<LruCache<Hash, Arc<EasyBlock>>>,
 }
 
 impl EasyChain {
@@ -94,6 +101,7 @@ impl EasyChain {
             top,
             height,
             db: db_ref,
+            block_cache: RefCell::new(LruCache::new(BLOCK_CACHE_SIZE))
         }
     }
 }
@@ -104,7 +112,19 @@ impl Chain<EasyBlock> for EasyChain {
     }
 
     fn query(&self, hash: &Hash) -> Option<Arc<EasyBlock>> {
-        unimplemented!();
+        if let Some(cached) = self.block_cache.borrow_mut().get(hash) {
+            Some(cached.clone())
+        } else {
+            if let Some(stored) = self.db.get(hash) {
+                // Store to heap and cache result
+                let heap_stored = Arc::new(EasyBlock::from_bytes(&stored).unwrap());
+                self.block_cache.borrow_mut().put(hash.clone(), heap_stored.clone());
+                
+                Some(heap_stored)
+            } else {
+                None
+            }
+        }
     }
 
     fn query_by_height(&self, height: usize) -> Option<Arc<EasyBlock>> {
