@@ -17,7 +17,7 @@
 */
 
 use crate::easy_block::EasyBlock;
-use crate::chain::Chain;
+use crate::chain::{Chain, ChainErr};
 use crate::block::Block;
 use bin_tools::*;
 use persistence::PersistentDb;
@@ -99,7 +99,23 @@ impl EasyChain {
 }
 
 impl Chain<EasyBlock> for EasyChain {
-    fn append_block(&mut self, block: Arc<EasyBlock>) -> Result<(), ()> {
+    fn genesis(&self) -> Arc<EasyBlock> {
+        unimplemented!();
+    }
+
+    fn query(&self, hash: &Hash) -> Option<Arc<EasyBlock>> {
+        unimplemented!();
+    }
+
+    fn query_by_height(&self, height: usize) -> Option<Arc<EasyBlock>> {
+        unimplemented!();
+    }
+
+    fn block_height(&self, hash: &Hash) -> Option<usize> {
+        unimplemented!();
+    }
+
+    fn append_block(&mut self, block: Arc<EasyBlock>) -> Result<(), ChainErr> {
         let top = &self.top;
 
         // The block must have a parent hash and the parent
@@ -129,10 +145,10 @@ impl Chain<EasyBlock> for EasyChain {
 
                 Ok(())
             } else {
-                Err(())
+                Err(ChainErr::InvalidParent)
             }
         } else {
-            Err(())
+            Err(ChainErr::NoParentHash)
         }
     }
 

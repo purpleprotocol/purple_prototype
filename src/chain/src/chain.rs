@@ -17,7 +17,17 @@
 */
 
 use crate::block::Block;
+use crypto::Hash;
 use std::sync::Arc;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ChainErr {
+    /// The parent of the given block is invalid
+    InvalidParent,
+
+    /// The given event does not have a parent hash
+    NoParentHash,
+}
 
 /// Generic chain interface
 pub trait Chain<B> where B: Block {
@@ -27,6 +37,18 @@ pub trait Chain<B> where B: Block {
     /// Returns an atomic reference to the topmost block in the chain. 
     fn top(&self) -> Arc<B>; 
 
+    /// Returns an atomic reference to the genesis block in the chain.
+    fn genesis(&self) -> Arc<B>;
+
     /// Attempts to append a new block to the chain.
-    fn append_block(&mut self, block: Arc<B>) -> Result<(), ()>; 
+    fn append_block(&mut self, block: Arc<B>) -> Result<(), ChainErr>; 
+
+    /// Queries for a block by its hash.
+    fn query(&self, hash: &Hash) -> Option<Arc<B>>;
+
+    /// Queries for a block by its height.
+    fn query_by_height(&self, height: usize) -> Option<Arc<B>>;
+
+    /// Returns the block height of the block with the given hash, if any.
+    fn block_height(&self, hash: &Hash) -> Option<usize>;
 }
