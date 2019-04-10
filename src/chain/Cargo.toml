@@ -15,3 +15,4 @@ crypto = { path = "../crypto" }
 persistence = { path = "../persistence" }
 bin-tools = { path = "../util/bin-tools/" }
 hashdb = { git = "https://github.com/paritytech/parity-common" }
+hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }

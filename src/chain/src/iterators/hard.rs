@@ -16,20 +16,21 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use chrono::prelude::*;
-use crypto::Hash;
+use crate::hard_block::HardBlock;
+use std::fmt::Debug;
 
-/// Generic block interface
-pub trait Block {
-    /// Returns the hash of the block.
-    fn block_hash(&self) -> Option<Hash>;
+pub(crate) trait MergedTrait<'a>: Iterator<Item = &'a HardBlock> + Debug {}
 
-    /// Returns the merkle root hash of the block.
-    fn merkle_root(&self) -> Option<Hash>;
+impl<'a, T> MergedTrait<'a> for T where T: Iterator<Item = &'a HardBlock> + Debug {}
 
-    /// Returns the parent hash of the block.
-    fn parent_hash(&self) -> Option<Hash>;
+#[derive(Debug)]
+pub struct HardBlockIterator<'a>(pub(crate) Box<'a + MergedTrait<'a>>);
 
-    /// Returns the timestamp of the block.
-    fn timestamp(&self) -> DateTime<Utc>;
+impl<'a> Iterator for HardBlockIterator<'a> {
+    type Item = &'a HardBlock;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
 }

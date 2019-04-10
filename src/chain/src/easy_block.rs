@@ -19,6 +19,8 @@
 use crate::block::Block;
 use chrono::prelude::*;
 use crypto::Hash;
+use std::hash::Hash as HashTrait;
+use std::hash::Hasher;
 
 #[derive(Debug)]
 /// A block belonging to the `EasyChain`.
@@ -36,11 +38,37 @@ pub struct EasyBlock {
     timestamp: DateTime<Utc>,
 }
 
+impl PartialEq for EasyBlock {
+    fn eq(&self, other: &EasyBlock) -> bool {
+        // This only makes sense when the block is received
+        // when the node is a server i.e. when the block is
+        // guaranteed to have a hash because it already passed
+        // the parsing stage.
+        self.block_hash().unwrap() == other.block_hash().unwrap()
+    }
+}
+
+impl Eq for EasyBlock {}
+
+impl HashTrait for EasyBlock {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.block_hash().unwrap().hash(state);
+    }
+}
+
 impl Block for EasyBlock {
-    fn block_hash(&self) -> Option<Hash> { self.hash.clone() }
-    fn parent_hash(&self) -> Option<Hash> { self.parent_hash.clone() }
-    fn merkle_root(&self) -> Option<Hash> { self.merkle_root.clone() }
-    fn timestamp(&self) -> DateTime<Utc> { self.timestamp.clone() }
+    fn block_hash(&self) -> Option<Hash> {
+        self.hash.clone()
+    }
+    fn parent_hash(&self) -> Option<Hash> {
+        self.parent_hash.clone()
+    }
+    fn merkle_root(&self) -> Option<Hash> {
+        self.merkle_root.clone()
+    }
+    fn timestamp(&self) -> DateTime<Utc> {
+        self.timestamp.clone()
+    }
 }
 
 impl EasyBlock {
@@ -49,9 +77,9 @@ impl EasyBlock {
             parent_hash,
             merkle_root: None,
             hash: None,
-            timestamp: Utc::now()
+            timestamp: Utc::now(),
         }
-    } 
+    }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         unimplemented!();

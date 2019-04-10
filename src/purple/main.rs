@@ -23,6 +23,7 @@ extern crate unwrap;
 #[macro_use]
 extern crate jsonrpc_macros;
 
+extern crate chain;
 extern crate clap;
 extern crate crypto;
 extern crate dirs;
@@ -39,7 +40,6 @@ extern crate network;
 extern crate parking_lot;
 extern crate persistence;
 extern crate tokio;
-extern crate chain;
 
 use clap::{App, Arg};
 use crypto::Identity;

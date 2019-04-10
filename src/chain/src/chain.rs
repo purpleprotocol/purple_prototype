@@ -17,8 +17,8 @@
 */
 
 use crate::block::Block;
-use crate::block_iterator::BlockIterator;
 use crypto::Hash;
+use std::hash::Hash as HashTrait;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -31,18 +31,22 @@ pub enum ChainErr {
 }
 
 /// Generic chain interface
-pub trait Chain<B> where B: Block {
+pub trait Chain<'a, B, I>
+where
+    B: 'a + Block + PartialEq + Eq + HashTrait,
+    I: Iterator<Item = &'a B>,
+{
     /// Returns the current height of the canonical chain.
     fn height(&self) -> usize;
 
-    /// Returns an atomic reference to the topmost block in the canonical chain. 
-    fn canonical_top(&self) -> Arc<B>; 
+    /// Returns an atomic reference to the topmost block in the canonical chain.
+    fn canonical_top(&self) -> Arc<B>;
 
     /// Returns an atomic reference to the genesis block in the chain.
     fn genesis(&self) -> Arc<B>;
 
     /// Attempts to append a new block to the chain.
-    fn append_block(&mut self, block: Arc<B>) -> Result<(), ChainErr>; 
+    fn append_block(&mut self, block: Arc<B>) -> Result<(), ChainErr>;
 
     /// Queries for a block by its hash.
     fn query(&self, hash: &Hash) -> Option<Arc<B>>;
@@ -54,16 +58,16 @@ pub trait Chain<B> where B: Block {
     /// Returns the block height of the block with the given hash, if any.
     fn block_height(&self, hash: &Hash) -> Option<usize>;
 
-    /// Returns an iterator over all top blocks of non-canonical chains that 
+    /// Returns an iterator over all top blocks of non-canonical chains that
     /// descend from the canonical chain. The top block of the canonical chain
     /// will **NOT** be included.
-    /// 
+    ///
     /// Note that this does not include blocks that are disconnected in any way
-    /// from the canonical chain i.e. blocks written that we haven't received 
+    /// from the canonical chain i.e. blocks written that we haven't received
     /// the parent of.
-    fn iter_canonical_tops(&self) -> BlockIterator<'_>;
+    fn iter_canonical_tops(&'a self) -> I;
 
-    /// Returns an iterator over all of top blocks of chains that are 
+    /// Returns an iterator over all of top blocks of chains that are
     /// completely disconnected from the canonical chain.
-    fn iter_pending_tops(&self) -> BlockIterator<'_>;
+    fn iter_pending_tops(&'a self) -> I;
 }

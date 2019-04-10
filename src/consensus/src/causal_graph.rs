@@ -69,7 +69,7 @@ pub struct CausalGraph {
     /// The id of the node that is next in line to be forked
     /// when a node joins the pool. It should always be one
     /// of the nodes with the largest share interval (assuming
-    /// there are multiple equal largest shares). 
+    /// there are multiple equal largest shares).
     pub(crate) next_largest: NodeId,
 
     /// Current candidates
@@ -586,12 +586,7 @@ impl CausalGraph {
         }
     }
 
-    pub(crate) fn add_validator(
-        &mut self, 
-        id: NodeId, 
-        can_send: bool, 
-        stamp: Stamp
-    ) {
+    pub(crate) fn add_validator(&mut self, id: NodeId, can_send: bool, stamp: Stamp) {
         self.validators
             .insert(id, ValidatorState::new(can_send, stamp));
     }

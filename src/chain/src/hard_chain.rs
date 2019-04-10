@@ -16,45 +16,46 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::hard_block::HardBlock;
-use crate::easy_chain::EasyChain;
-use crate::block_iterator::BlockIterator;
-use crate::chain::{Chain, ChainErr};
 use crate::block::Block;
+use crate::chain::{Chain, ChainErr};
+use crate::easy_chain::EasyChain;
+use crate::hard_block::HardBlock;
+use crate::iterators::hard::HardBlockIterator;
 use bin_tools::*;
-use persistence::PersistentDb;
-use parking_lot::RwLock;
-use elastic_array::ElasticArray128;
-use lru::LruCache;
-use std::sync::Arc;
-use std::cell::RefCell;
-use hashdb::HashDB;
 use crypto::Hash;
+use elastic_array::ElasticArray128;
+use hashbrown::HashSet;
+use hashdb::HashDB;
+use lru::LruCache;
+use parking_lot::RwLock;
+use persistence::PersistentDb;
+use std::cell::RefCell;
+use std::sync::Arc;
 
 /// Size of the block cache.
 const BLOCK_CACHE_SIZE: usize = 20;
 
-/// The hard chain stores blocks that represent state can be 
-/// changes in the validator pool. A block from the hard chain 
-/// can be thought of as a function which changes the state of 
+/// The hard chain stores blocks that represent state can be
+/// changes in the validator pool. A block from the hard chain
+/// can be thought of as a function which changes the state of
 /// the validator pool.
-/// 
-/// From the point of view of the validator pool a 
-/// block mined on the hard chain represents an 
-/// injection of: 
-/// 
-/// 1. An additional amount of events that the whole pool can order. 
+///
+/// From the point of view of the validator pool a
+/// block mined on the hard chain represents an
+/// injection of:
+///
+/// 1. An additional amount of events that the whole pool can order.
 /// 2. Additional validators.
-/// 
+///
 /// The pool cannot start ordering events without a block
-/// being mined in the hard chain which states the new 
+/// being mined in the hard chain which states the new
 /// validators that will be added (miners of the latest
 /// easy chain blocks since that last mined hard block),
 /// how many events the pool can order in the next round,
 /// and what nodes to retire from the pool.
-/// 
+///
 /// At the same time, the next hard block cannot be applied
-/// to the pool until the pool has either consumed all of 
+/// to the pool until the pool has either consumed all of
 /// their allocated events or until the pool is deemed to be
 /// corrupt.
 pub struct HardChain {
@@ -69,6 +70,11 @@ pub struct HardChain {
 
     /// The topmost block in the canonical chain.
     canonical_top: Arc<HardBlock>,
+
+    /// Cache storing the top blocks descended from the
+    /// canonical chain and excluding the actual canonical
+    /// top block.
+    canonical_tops_cache: HashSet<Arc<HardBlock>>,
 
     /// Block lookup cache
     block_cache: RefCell<LruCache<Hash, Arc<HardBlock>>>,
@@ -95,16 +101,39 @@ impl HardChain {
             }
         };
 
+        let canonical_tops_key = crypto::hash_slice(b"canonical_tops");
+
+        let canonical_tops = match db_ref.get(&canonical_tops_key) {
+            Some(encoded) => {
+                unimplemented!();
+            }
+            None => {
+                let b: Vec<Vec<u8>> = vec![canonical_top.block_hash().unwrap().to_vec()];
+                let encoded: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&b);
+
+                db_ref.emplace(
+                    canonical_tops_key,
+                    ElasticArray128::<u8>::from_slice(&encoded),
+                );
+
+                let mut b: HashSet<Arc<HardBlock>> = HashSet::new();
+                b.insert(canonical_top.clone());
+
+                b
+            }
+        };
+
         // TODO: Handle different branches with different heights
         let height_key = crypto::hash_slice(b"height");
         let height = match db_ref.get(&height_key) {
-            Some(height) => {
-                decode_be_u64!(&height).unwrap()
-            }, 
+            Some(height) => decode_be_u64!(&height).unwrap(),
             None => {
                 if top_db_res.is_none() {
                     // Set 0 height
-                    db_ref.emplace(height_key, ElasticArray128::<u8>::from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]));
+                    db_ref.emplace(
+                        height_key,
+                        ElasticArray128::<u8>::from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]),
+                    );
                 }
 
                 0
@@ -115,15 +144,16 @@ impl HardChain {
 
         HardChain {
             canonical_top,
+            canonical_tops_cache: canonical_tops,
             height,
             easy_chain,
             db: db_ref,
-            block_cache: RefCell::new(LruCache::new(BLOCK_CACHE_SIZE))
+            block_cache: RefCell::new(LruCache::new(BLOCK_CACHE_SIZE)),
         }
     }
 }
 
-impl Chain<HardBlock> for HardChain {
+impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
     fn genesis(&self) -> Arc<HardBlock> {
         unimplemented!();
     }
@@ -135,8 +165,10 @@ impl Chain<HardBlock> for HardChain {
             if let Some(stored) = self.db.get(hash) {
                 // Store to heap and cache result
                 let heap_stored = Arc::new(HardBlock::from_bytes(&stored).unwrap());
-                self.block_cache.borrow_mut().put(hash.clone(), heap_stored.clone());
-                
+                self.block_cache
+                    .borrow_mut()
+                    .put(hash.clone(), heap_stored.clone());
+
                 Some(heap_stored)
             } else {
                 None
@@ -161,15 +193,18 @@ impl Chain<HardBlock> for HardChain {
         if let Some(parent_hash) = block.parent_hash() {
             if parent_hash == top.block_hash().unwrap() {
                 // Place block in the ledger
-                self.db.emplace(block.block_hash().unwrap().clone(), ElasticArray128::<u8>::from_slice(&block.to_bytes()));
-                
+                self.db.emplace(
+                    block.block_hash().unwrap().clone(),
+                    ElasticArray128::<u8>::from_slice(&block.to_bytes()),
+                );
+
                 // Set new top block
                 self.canonical_top = block;
 
                 // TODO: Handle different branches with different heights
                 let height_key = crypto::hash_slice(b"height");
                 let mut height = decode_be_u64!(self.db.get(&height_key).unwrap()).unwrap();
-                
+
                 // Increment height
                 height += 1;
 
@@ -178,7 +213,10 @@ impl Chain<HardBlock> for HardChain {
 
                 // Write new height
                 let encoded_height = encode_be_u64!(height);
-                self.db.emplace(height_key, ElasticArray128::<u8>::from_slice(&encoded_height));
+                self.db.emplace(
+                    height_key,
+                    ElasticArray128::<u8>::from_slice(&encoded_height),
+                );
 
                 Ok(())
             } else {
@@ -189,14 +227,20 @@ impl Chain<HardBlock> for HardChain {
         }
     }
 
-    fn height(&self) -> usize { self.height }
-    fn canonical_top(&self) -> Arc<HardBlock> { self.canonical_top.clone() }
+    fn height(&self) -> usize {
+        self.height
+    }
+    fn canonical_top(&self) -> Arc<HardBlock> {
+        self.canonical_top.clone()
+    }
 
-    fn iter_canonical_tops(&self) -> BlockIterator<'_> {
-        unimplemented!();
-    } 
+    fn iter_canonical_tops(&'a self) -> HardBlockIterator<'a> {
+        HardBlockIterator(Box::new(
+            self.canonical_tops_cache.iter().map(AsRef::as_ref),
+        ))
+    }
 
-    fn iter_pending_tops(&self) -> BlockIterator<'_> {
+    fn iter_pending_tops(&'a self) -> HardBlockIterator<'a> {
         unimplemented!();
-    } 
+    }
 }

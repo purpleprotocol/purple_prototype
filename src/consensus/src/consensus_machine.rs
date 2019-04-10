@@ -18,10 +18,10 @@
 
 use crate::causal_graph::CausalGraph;
 use crate::validation::ValidationResp;
+use causality::Stamp;
 use events::Event;
 use network::NodeId;
 use std::sync::Arc;
-use causality::Stamp;
 
 #[derive(Clone, Debug)]
 pub enum CGError {
@@ -57,8 +57,8 @@ impl ConsensusMachine {
 
     /// Joins a new validator to the consensus pool. The first
     /// node that is allowed to send an event is the first
-    /// node that has been joined. 
-    /// 
+    /// node that has been joined.
+    ///
     /// This function will return `Err(CGError::AlreadyJoined)` if
     /// the node with the given `NodeId` is already joined
     /// in the consensus pool.
@@ -66,19 +66,21 @@ impl ConsensusMachine {
         if self.causal_graph.validators.get(node_id).is_some() {
             return Err(CGError::AlreadyJoined);
         }
-        
+
         // Join the first validator
         if self.causal_graph.validators_count() == 0 {
             let (stamp, _) = Stamp::seed().fork();
-            self.causal_graph.add_validator(node_id.clone(), true, stamp);
+            self.causal_graph
+                .add_validator(node_id.clone(), true, stamp);
         } else if self.causal_graph.validators_count() == 1 {
             // Join the second validator
             let (_, stamp) = Stamp::seed().fork();
-            self.causal_graph.add_validator(node_id.clone(), false, stamp);
+            self.causal_graph
+                .add_validator(node_id.clone(), false, stamp);
         } else {
             // Otherwise, fork the stamp of the node
             // that satisfies the binary mapping of
-            // the `NodeId` + The event hash to the 
+            // the `NodeId` + The event hash to the
             // index of the node in the validators stack.
 
         }

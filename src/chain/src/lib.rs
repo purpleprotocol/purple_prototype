@@ -16,19 +16,17 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 mod block;
 mod chain;
-mod easy_chain;
-mod hard_chain;
 mod easy_block;
+mod easy_chain;
 mod hard_block;
-mod block_iterator;
+mod hard_chain;
+mod iterators;
 
-pub use block::*;
-pub use block_iterator::*;
 pub use crate::chain::*;
-pub use easy_chain::*;
-pub use hard_chain::*;
+pub use block::*;
 pub use easy_block::*;
+pub use easy_chain::*;
 pub use hard_block::*;
+pub use hard_chain::*;
