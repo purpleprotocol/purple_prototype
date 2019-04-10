@@ -31,6 +31,7 @@ use parking_lot::RwLock;
 use persistence::PersistentDb;
 use std::cell::RefCell;
 use std::sync::Arc;
+use rlp::Rlp;
 
 /// Size of the block cache.
 const BLOCK_CACHE_SIZE: usize = 20;
@@ -76,6 +77,10 @@ pub struct HardChain {
     /// top block.
     canonical_tops_cache: HashSet<Arc<HardBlock>>,
 
+    /// Cache storing the top blocks of chains that are
+    /// disconnected from the canonical chain.
+    pending_tops_cache: HashSet<Arc<HardBlock>>,
+
     /// Block lookup cache
     block_cache: RefCell<LruCache<Hash, Arc<HardBlock>>>,
 }
@@ -102,10 +107,9 @@ impl HardChain {
         };
 
         let canonical_tops_key = crypto::hash_slice(b"canonical_tops");
-
         let canonical_tops = match db_ref.get(&canonical_tops_key) {
             Some(encoded) => {
-                unimplemented!();
+                parse_encoded_blocks(&encoded)
             }
             None => {
                 let b: Vec<Vec<u8>> = vec![canonical_top.block_hash().unwrap().to_vec()];
@@ -120,6 +124,18 @@ impl HardChain {
                 b.insert(canonical_top.clone());
 
                 b
+            }
+        };
+
+        let pending_tops_key = crypto::hash_slice(b"pending_tops");
+
+        // Cache pending tops, if any
+        let pending_tops = match db_ref.get(&pending_tops_key) {
+            Some(encoded) => {
+                parse_encoded_blocks(&encoded)
+            }
+            None => {
+                HashSet::new()
             }
         };
 
@@ -145,12 +161,24 @@ impl HardChain {
         HardChain {
             canonical_top,
             canonical_tops_cache: canonical_tops,
+            pending_tops_cache: pending_tops,
             height,
             easy_chain,
             db: db_ref,
             block_cache: RefCell::new(LruCache::new(BLOCK_CACHE_SIZE)),
         }
     }
+}
+
+fn parse_encoded_blocks(bytes: &[u8]) -> HashSet<Arc<HardBlock>> {
+    let mut b = HashSet::new();
+    let rlp = Rlp::new(bytes);
+
+    for slice in rlp.iter() {
+        b.insert(Arc::new(HardBlock::from_bytes(slice.as_raw()).unwrap()));
+    }
+
+    b
 }
 
 impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
@@ -230,6 +258,7 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
     fn height(&self) -> usize {
         self.height
     }
+
     fn canonical_top(&self) -> Arc<HardBlock> {
         self.canonical_top.clone()
     }
@@ -241,6 +270,8 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
     }
 
     fn iter_pending_tops(&'a self) -> HardBlockIterator<'a> {
-        unimplemented!();
+        HardBlockIterator(Box::new(
+            self.pending_tops_cache.iter().map(AsRef::as_ref),
+        ))
     }
 }

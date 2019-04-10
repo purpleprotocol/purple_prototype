@@ -29,14 +29,16 @@ use lru::LruCache;
 use persistence::PersistentDb;
 use std::cell::RefCell;
 use std::sync::Arc;
+use rlp::Rlp;
 
 /// Size of the block cache.
 const BLOCK_CACHE_SIZE: usize = 20;
 
 /// The easy chain stores blocks that represent buffered
 /// validator pool join requests. If a miner wishes to become
-/// a validator, it will mine on the easy chain (which has lower
-/// difficulty in order to populate the pool more effectively).
+/// a validator, it will most probably mine on the easy chain 
+/// (which has lower difficulty in order to populate the pool
+/// more effectively).
 ///
 /// The difficulty of the easy chain grows asimptotically with
 /// the number of mined blocks since the last mined block on the
@@ -67,6 +69,10 @@ pub struct EasyChain {
     /// top block.
     canonical_tops_cache: HashSet<Arc<EasyBlock>>,
 
+    /// Cache storing the top blocks of chains that are
+    /// disconnected from the canonical chain.
+    pending_tops_cache: HashSet<Arc<EasyBlock>>,
+
     /// Block lookup cache
     block_cache: RefCell<LruCache<Hash, Arc<EasyBlock>>>,
 }
@@ -95,7 +101,7 @@ impl EasyChain {
         // Insert new canonical tops entry if non-existent.
         let canonical_tops = match db_ref.get(&canonical_tops_key) {
             Some(encoded) => {
-                unimplemented!();
+                parse_encoded_blocks(&encoded)
             }
             None => {
                 let b: Vec<Vec<u8>> = vec![canonical_top.block_hash().unwrap().to_vec()];
@@ -110,6 +116,18 @@ impl EasyChain {
                 b.insert(canonical_top.clone());
 
                 b
+            }
+        };
+
+        let pending_tops_key = crypto::hash_slice(b"pending_tops");
+
+        // Cache pending tops, if any
+        let pending_tops = match db_ref.get(&pending_tops_key) {
+            Some(encoded) => {
+                parse_encoded_blocks(&encoded)
+            }
+            None => {
+                HashSet::new()
             }
         };
 
@@ -134,11 +152,23 @@ impl EasyChain {
         EasyChain {
             canonical_top,
             canonical_tops_cache: canonical_tops,
+            pending_tops_cache: pending_tops,
             height,
             db: db_ref,
             block_cache: RefCell::new(LruCache::new(BLOCK_CACHE_SIZE)),
         }
     }
+}
+
+fn parse_encoded_blocks(bytes: &[u8]) -> HashSet<Arc<EasyBlock>> {
+    let mut b = HashSet::new();
+    let rlp = Rlp::new(bytes);
+
+    for slice in rlp.iter() {
+        b.insert(Arc::new(EasyBlock::from_bytes(slice.as_raw()).unwrap()));
+    }
+
+    b
 }
 
 impl<'a> Chain<'a, EasyBlock, EasyBlockIterator<'a>> for EasyChain {
@@ -218,6 +248,7 @@ impl<'a> Chain<'a, EasyBlock, EasyBlockIterator<'a>> for EasyChain {
     fn height(&self) -> usize {
         self.height
     }
+
     fn canonical_top(&self) -> Arc<EasyBlock> {
         self.canonical_top.clone()
     }
@@ -229,6 +260,8 @@ impl<'a> Chain<'a, EasyBlock, EasyBlockIterator<'a>> for EasyChain {
     }
 
     fn iter_pending_tops(&'a self) -> EasyBlockIterator<'a> {
-        unimplemented!();
+        EasyBlockIterator(Box::new(
+            self.pending_tops_cache.iter().map(AsRef::as_ref),
+        ))
     }
 }
