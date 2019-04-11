@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::easy_block::EasyBlock;
+use crate::easy_chain::block::EasyBlock;
 use std::fmt::Debug;
 
 pub(crate) trait MergedTrait<'a>: Iterator<Item = &'a EasyBlock> + Debug {}

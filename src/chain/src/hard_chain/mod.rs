@@ -16,23 +16,5 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use chrono::prelude::*;
-use crypto::Hash;
-
-/// Generic block interface
-pub trait Block {
-    /// Returns the genesis block.
-    fn genesis() -> Self;
-
-    /// Returns the hash of the block.
-    fn block_hash(&self) -> Option<Hash>;
-
-    /// Returns the merkle root hash of the block.
-    fn merkle_root(&self) -> Option<Hash>;
-
-    /// Returns the parent hash of the block.
-    fn parent_hash(&self) -> Option<Hash>;
-
-    /// Returns the timestamp of the block.
-    fn timestamp(&self) -> DateTime<Utc>;
-}
+pub mod block;
+pub mod chain;

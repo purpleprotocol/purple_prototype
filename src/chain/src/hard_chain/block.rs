@@ -17,10 +17,14 @@
 */
 
 use crate::block::Block;
+use crate::easy_chain::block::EasyBlock;
 use chrono::prelude::*;
 use crypto::Hash;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
+
+/// The size of the hard block proof
+pub const HARD_PROOF_SIZE: usize = 42;
 
 #[derive(Debug)]
 /// A block belonging to the `HardChain`.
@@ -60,15 +64,31 @@ impl HashTrait for HardBlock {
 }
 
 impl Block for HardBlock {
+    fn genesis() -> HardBlock {
+        let easy_block_hash = EasyBlock::genesis().block_hash().unwrap();
+        let hash = Hash::random();
+
+        HardBlock {
+            easy_block_hash,
+            parent_hash: None,
+            merkle_root: None,
+            hash: Some(hash),
+            timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
+        }
+    }
+
     fn block_hash(&self) -> Option<Hash> {
         self.hash.clone()
     }
+
     fn parent_hash(&self) -> Option<Hash> {
         self.parent_hash.clone()
     }
+    
     fn merkle_root(&self) -> Option<Hash> {
         self.merkle_root.clone()
     }
+    
     fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp.clone()
     }

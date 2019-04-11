@@ -57,15 +57,29 @@ impl HashTrait for EasyBlock {
 }
 
 impl Block for EasyBlock {
+    fn genesis() -> EasyBlock {
+        let hash = Hash::random();
+
+        EasyBlock {
+            parent_hash: None,
+            merkle_root: None,
+            hash: Some(hash),
+            timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
+        }
+    }
+
     fn block_hash(&self) -> Option<Hash> {
         self.hash.clone()
     }
+    
     fn parent_hash(&self) -> Option<Hash> {
         self.parent_hash.clone()
     }
+    
     fn merkle_root(&self) -> Option<Hash> {
         self.merkle_root.clone()
     }
+    
     fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp.clone()
     }

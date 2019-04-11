@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::hard_block::HardBlock;
+use crate::hard_chain::block::HardBlock;
 use std::fmt::Debug;
 
 pub(crate) trait MergedTrait<'a>: Iterator<Item = &'a HardBlock> + Debug {}

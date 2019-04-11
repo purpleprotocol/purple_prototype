@@ -18,15 +18,13 @@
 
 mod block;
 mod chain;
-mod easy_block;
 mod easy_chain;
-mod hard_block;
 mod hard_chain;
 mod iterators;
 
 pub use crate::chain::*;
 pub use block::*;
-pub use easy_block::*;
-pub use easy_chain::*;
-pub use hard_block::*;
-pub use hard_chain::*;
+pub use easy_chain::chain::*;
+pub use easy_chain::block::*;
+pub use hard_chain::chain::*;
+pub use hard_chain::block::*;
