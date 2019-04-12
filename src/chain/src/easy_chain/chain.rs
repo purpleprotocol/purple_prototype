@@ -27,8 +27,8 @@ use elastic_array::ElasticArray128;
 use hashbrown::HashSet;
 use hashdb::HashDB;
 use lru::LruCache;
+use parking_lot::{RwLock, Mutex};
 use persistence::PersistentDb;
-use std::cell::RefCell;
 use std::sync::Arc;
 use rlp::Rlp;
 use lazy_static::*;
@@ -55,6 +55,65 @@ lazy_static! {
     /// Key to the top blocks in the chains that are
     /// disconnected from the canonical chain.
     static ref PENDING_TOPS_KEY: Hash = { crypto::hash_slice(b"pending_tops") };
+}
+
+#[derive(Clone)]
+/// Thread-safe reference to an easy chain and its block cache.
+pub struct EasyChainRef {
+    /// Reference to easy chain.
+    pub chain: Arc<RwLock<EasyChain>>,
+
+    /// Block lookup cache.
+    block_cache: Arc<Mutex<LruCache<Hash, Arc<EasyBlock>>>>
+}
+
+impl EasyChainRef {
+    pub fn new(chain: Arc<RwLock<EasyChain>>) -> EasyChainRef {
+        EasyChainRef {
+            chain,
+            block_cache: Arc::new(Mutex::new(LruCache::new(BLOCK_CACHE_SIZE)))
+        }
+    }
+
+    /// Attempts to fetch a block by its hash from the cache
+    /// and if it doesn't succeed it then attempts to retrieve
+    /// it from the database.
+    pub fn query(&self, hash: &Hash) -> Option<Arc<EasyBlock>> {
+        let cache_result = {
+            let mut cache = self.block_cache.lock();
+
+            if let Some(result) = cache.get(hash) {
+                Some(result.clone())
+            } else {
+                None
+            }
+        };
+
+        if let Some(result) = cache_result {
+            Some(result)
+        } else {
+            let chain_result = {
+                let chain = self.chain.read();
+            
+                if let Some(result) = chain.query(hash) {
+                    Some(result)
+                } else {
+                    None
+                }
+            };
+
+            if let Some(result) = chain_result {
+                let mut cache = self.block_cache.lock();
+
+                // Cache result and then return it
+                cache.put(hash.clone(), result.clone());
+
+                Some(result)
+            } else {
+                None
+            }
+        }
+    }
 }
 
 /// The easy chain stores blocks that represent buffered
@@ -98,9 +157,6 @@ pub struct EasyChain {
     /// Cache storing the top blocks of chains that are
     /// disconnected from the canonical chain.
     pending_tops_cache: HashSet<Arc<EasyBlock>>,
-
-    /// Block lookup cache
-    block_cache: RefCell<LruCache<Hash, Arc<EasyBlock>>>,
 }
 
 impl EasyChain {
@@ -186,14 +242,17 @@ impl EasyChain {
             pending_tops_cache: pending_tops,
             height,
             db: db_ref,
-            block_cache: RefCell::new(LruCache::new(BLOCK_CACHE_SIZE)),
         }
     }
 
     /// Lists the given hash as the new canonical top in the 
-    /// hard chain. This can potentially change the canonical
-    /// ordering in the easy chain since they are cross-referenced.
-    pub fn set_new_hard_canonical_top(&mut self, new: &Hash) -> Result<(), ()> {
+    /// hard chain. 
+    /// 
+    /// This can potentially change the canonical ordering in the 
+    /// easy chain since they are cross-referenced and the ordering 
+    /// on the easy chain is entirely dependent on the ordering of 
+    /// the hard chain.
+    pub fn set_hard_canonical_top(&mut self, new: &Hash) -> Result<(), ()> {
         unimplemented!();
     }
 }
@@ -215,20 +274,12 @@ impl<'a> Chain<'a, EasyBlock, EasyBlockIterator<'a>> for EasyChain {
     }
 
     fn query(&self, hash: &Hash) -> Option<Arc<EasyBlock>> {
-        if let Some(cached) = self.block_cache.borrow_mut().get(hash) {
-            Some(cached.clone())
+        if let Some(stored) = self.db.get(hash) {
+            // Store to heap
+            let heap_stored = Arc::new(EasyBlock::from_bytes(&stored).unwrap());
+            Some(heap_stored)
         } else {
-            if let Some(stored) = self.db.get(hash) {
-                // Store to heap and cache result
-                let heap_stored = Arc::new(EasyBlock::from_bytes(&stored).unwrap());
-                self.block_cache
-                    .borrow_mut()
-                    .put(hash.clone(), heap_stored.clone());
-
-                Some(heap_stored)
-            } else {
-                None
-            }
+            None
         }
     }
 
