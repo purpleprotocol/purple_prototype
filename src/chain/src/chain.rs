@@ -43,9 +43,7 @@ where
     fn canonical_top(&self) -> Arc<B>;
 
     /// Returns an atomic reference to the genesis block in the chain.
-    fn genesis() -> Arc<B> {
-        Arc::new(B::genesis())
-    }
+    fn genesis() -> Arc<B>;
 
     /// Attempts to append a new block to the chain.
     fn append_block(&mut self, block: Arc<B>) -> Result<(), ChainErr>;

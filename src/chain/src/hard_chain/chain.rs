@@ -32,9 +32,28 @@ use persistence::PersistentDb;
 use std::cell::RefCell;
 use std::sync::Arc;
 use rlp::Rlp;
+use lazy_static::*;
 
 /// Size of the block cache.
 const BLOCK_CACHE_SIZE: usize = 20;
+
+lazy_static! {
+    /// Atomic reference count to hard chain genesis block
+    static ref GENESIS_RC: Arc<HardBlock> = { Arc::new(HardBlock::genesis()) };
+
+    /// Canonical tops key
+    static ref CANONICAL_TOPS_KEY: Hash = { crypto::hash_slice(b"canonical_tops") };
+    
+    /// Canonical top block key
+    static ref TOP_KEY: Hash = { crypto::hash_slice(b"canonical_top") };
+
+    /// The key to the canonical height of the chain
+    static ref CANONICAL_HEIGHT_KEY: Hash = { crypto::hash_slice(b"canonical_height") };
+
+    /// Key to the top blocks in the chains that are
+    /// disconnected from the canonical chain.
+    static ref PENDING_TOPS_KEY: Hash = { crypto::hash_slice(b"pending_tops") };
+}
 
 /// The hard chain stores blocks that represent state can be
 /// changes in the validator pool. A block from the hard chain
@@ -87,9 +106,7 @@ pub struct HardChain {
 
 impl HardChain {
     pub fn new(mut db_ref: PersistentDb, easy_chain: Arc<RwLock<EasyChain>>) -> HardChain {
-        // TODO: Handle different branches
-        let top_key = crypto::hash_slice(b"top");
-        let top_db_res = db_ref.get(&top_key);
+        let top_db_res = db_ref.get(&TOP_KEY);
         let canonical_top = match top_db_res.clone() {
             Some(top) => {
                 let mut buf = [0; 32];
@@ -103,8 +120,7 @@ impl HardChain {
             }
         };
 
-        let canonical_tops_key = crypto::hash_slice(b"canonical_tops");
-        let canonical_tops = match db_ref.get(&canonical_tops_key) {
+        let canonical_tops = match db_ref.get(&CANONICAL_TOPS_KEY) {
             Some(encoded) => {
                 parse_encoded_blocks(&encoded)
             }
@@ -113,7 +129,7 @@ impl HardChain {
                 let encoded: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&b);
 
                 db_ref.emplace(
-                    canonical_tops_key,
+                    CANONICAL_TOPS_KEY.clone(),
                     ElasticArray128::<u8>::from_slice(&encoded),
                 );
 
@@ -124,10 +140,8 @@ impl HardChain {
             }
         };
 
-        let pending_tops_key = crypto::hash_slice(b"pending_tops");
-
         // Cache pending tops, if any
-        let pending_tops = match db_ref.get(&pending_tops_key) {
+        let pending_tops = match db_ref.get(&PENDING_TOPS_KEY) {
             Some(encoded) => {
                 parse_encoded_blocks(&encoded)
             }
@@ -136,15 +150,13 @@ impl HardChain {
             }
         };
 
-        // TODO: Handle different branches with different heights
-        let height_key = crypto::hash_slice(b"height");
-        let height = match db_ref.get(&height_key) {
+        let height = match db_ref.get(&CANONICAL_HEIGHT_KEY) {
             Some(height) => decode_be_u64!(&height).unwrap(),
             None => {
                 if top_db_res.is_none() {
                     // Set 0 height
                     db_ref.emplace(
-                        height_key,
+                        CANONICAL_HEIGHT_KEY.clone(),
                         ElasticArray128::<u8>::from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]),
                     );
                 }
@@ -179,6 +191,10 @@ fn parse_encoded_blocks(bytes: &[u8]) -> HashSet<Arc<HardBlock>> {
 }
 
 impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
+    fn genesis() -> Arc<HardBlock> {
+        GENESIS_RC.clone()
+    }
+
     fn query(&self, hash: &Hash) -> Option<Arc<HardBlock>> {
         if let Some(cached) = self.block_cache.borrow_mut().get(hash) {
             Some(cached.clone())
@@ -221,10 +237,7 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
 
                 // Set new top block
                 self.canonical_top = block;
-
-                // TODO: Handle different branches with different heights
-                let height_key = crypto::hash_slice(b"height");
-                let mut height = decode_be_u64!(self.db.get(&height_key).unwrap()).unwrap();
+                let mut height = decode_be_u64!(self.db.get(&CANONICAL_HEIGHT_KEY).unwrap()).unwrap();
 
                 // Increment height
                 height += 1;
@@ -235,7 +248,7 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                 // Write new height
                 let encoded_height = encode_be_u64!(height);
                 self.db.emplace(
-                    height_key,
+                    CANONICAL_HEIGHT_KEY.clone(),
                     ElasticArray128::<u8>::from_slice(&encoded_height),
                 );
 
