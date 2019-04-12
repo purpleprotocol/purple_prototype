@@ -58,16 +58,16 @@ where
     /// Returns the block height of the block with the given hash, if any.
     fn block_height(&self, hash: &Hash) -> Option<usize>;
 
-    /// Returns an iterator over all top blocks of non-canonical chains that
-    /// descend from the canonical chain. The top block of the canonical chain
-    /// will **NOT** be included.
-    ///
-    /// Note that this does not include blocks that are disconnected in any way
-    /// from the canonical chain i.e. blocks written that we haven't received
-    /// the parent of.
-    fn iter_canonical_tops(&'a self) -> I;
+    // /// Returns an iterator over all top blocks of non-canonical chains that
+    // /// descend from the canonical chain. The top block of the canonical chain
+    // /// will **NOT** be included.
+    // ///
+    // /// Note that this does not include blocks that are disconnected in any way
+    // /// from the canonical chain i.e. blocks written that we haven't received
+    // /// the parent of.
+    // fn iter_canonical_tops(&'a self) -> I;
 
-    /// Returns an iterator over all of top blocks of chains that are
-    /// completely disconnected from the canonical chain.
-    fn iter_pending_tops(&'a self) -> I;
+    // /// Returns an iterator over all of top blocks of chains that are
+    // /// completely disconnected from the canonical chain.
+    // fn iter_pending_tops(&'a self) -> I;
 }

@@ -18,7 +18,7 @@
 
 use crate::block::Block;
 use crate::chain::{Chain, ChainErr};
-use crate::easy_chain::chain::EasyChain;
+use crate::easy_chain::chain::EasyChainRef;
 use crate::hard_chain::block::HardBlock;
 use crate::iterators::hard::HardBlockIterator;
 use bin_tools::*;
@@ -30,7 +30,7 @@ use lru::LruCache;
 use parking_lot::{RwLock, Mutex};
 use persistence::PersistentDb;
 use std::sync::Arc;
-use rlp::Rlp;
+use rlp::*;
 use lazy_static::*;
 
 /// Size of the block cache.
@@ -102,8 +102,10 @@ impl HardChainRef {
             if let Some(result) = chain_result {
                 let mut cache = self.block_cache.lock();
 
-                // Cache result and then return it
-                cache.put(hash.clone(), result.clone());
+                if cache.get(hash).is_none() {
+                    // Cache result and then return it
+                    cache.put(hash.clone(), result.clone());
+                }
 
                 Some(result)
             } else {
@@ -141,7 +143,7 @@ pub struct HardChain {
     db: PersistentDb,
 
     /// Reference to associated easy chain.
-    easy_chain: Arc<RwLock<EasyChain>>,
+    easy_chain: EasyChainRef,
 
     /// The current height of the chain.
     height: usize,
@@ -152,15 +154,15 @@ pub struct HardChain {
     /// Cache storing the top blocks descended from the
     /// canonical chain and excluding the actual canonical
     /// top block.
-    canonical_tops_cache: HashSet<Arc<HardBlock>>,
+    canonical_tops_cache: HashSet<Hash>,
 
     /// Cache storing the top blocks of chains that are
     /// disconnected from the canonical chain.
-    pending_tops_cache: HashSet<Arc<HardBlock>>,
+    pending_tops_cache: HashSet<Hash>,
 }
 
 impl HardChain {
-    pub fn new(mut db_ref: PersistentDb, easy_chain: Arc<RwLock<EasyChain>>) -> HardChain {
+    pub fn new(mut db_ref: PersistentDb, easy_chain: EasyChainRef) -> HardChain {
         let top_db_res = db_ref.get(&TOP_KEY);
         let canonical_top = match top_db_res.clone() {
             Some(top) => {
@@ -177,7 +179,7 @@ impl HardChain {
 
         let canonical_tops = match db_ref.get(&CANONICAL_TOPS_KEY) {
             Some(encoded) => {
-                parse_encoded_blocks(&encoded)
+                parse_hash_list(&encoded)
             }
             None => {
                 let b: Vec<Vec<u8>> = vec![canonical_top.block_hash().unwrap().to_vec()];
@@ -188,8 +190,8 @@ impl HardChain {
                     ElasticArray128::<u8>::from_slice(&encoded),
                 );
 
-                let mut b: HashSet<Arc<HardBlock>> = HashSet::new();
-                b.insert(canonical_top.clone());
+                let mut b: HashSet<Hash> = HashSet::new();
+                b.insert(canonical_top.block_hash().unwrap().clone());
 
                 b
             }
@@ -198,7 +200,7 @@ impl HardChain {
         // Cache pending tops, if any
         let pending_tops = match db_ref.get(&PENDING_TOPS_KEY) {
             Some(encoded) => {
-                parse_encoded_blocks(&encoded)
+                parse_hash_list(&encoded)
             }
             None => {
                 HashSet::new()
@@ -233,12 +235,15 @@ impl HardChain {
     }
 }
 
-fn parse_encoded_blocks(bytes: &[u8]) -> HashSet<Arc<HardBlock>> {
+fn parse_hash_list(bytes: &[u8]) -> HashSet<Hash> {
     let mut b = HashSet::new();
     let rlp = Rlp::new(bytes);
 
     for slice in rlp.iter() {
-        b.insert(Arc::new(HardBlock::from_bytes(slice.as_raw()).unwrap()));
+        let mut bb: [u8; 32] = [0; 32];
+        bb.copy_from_slice(slice.as_raw());
+
+        b.insert(Hash(bb));
     }
 
     b
@@ -274,6 +279,8 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
         // hash must be equal to that of the current top
         // in order for it to be considered valid.
         if let Some(parent_hash) = block.parent_hash() {
+            // First attempt to place the block after the 
+            // top canonical block.
             if parent_hash == top.block_hash().unwrap() {
                 // Place block in the ledger
                 self.db.emplace(
@@ -282,7 +289,7 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                 );
 
                 // Set new top block
-                self.canonical_top = block;
+                self.canonical_top = block.clone();
                 let mut height = decode_be_u64!(self.db.get(&CANONICAL_HEIGHT_KEY).unwrap()).unwrap();
 
                 // Increment height
@@ -298,9 +305,66 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                     ElasticArray128::<u8>::from_slice(&encoded_height),
                 );
 
+                // Mark new hard chain top block in easy chain
+                let mut easy_chain = self.easy_chain.chain.write();
+                easy_chain.set_hard_canonical_top(&block.block_hash().unwrap()).unwrap();
+
                 Ok(())
             } else {
-                Err(ChainErr::InvalidParent)
+                // Attempt to first add the block after an already placed block.
+                if self.canonical_tops_cache.contains(&parent_hash) {
+                    // Remove parent block from disk stored canonical tops entry
+                    let encoded = self.db.get(&CANONICAL_TOPS_KEY).unwrap();
+                    let mut cache = parse_hash_list(&encoded);
+
+                    // TODO: Attempt to connect disconnected chain to appended block
+
+                    // Remove parent block from cache
+                    cache.remove(&parent_hash);
+
+                    // Insert new block in cache
+                    cache.insert(block.block_hash().unwrap());
+
+                    // Encode and write new entry to disk
+                    let mut rlp = RlpStream::new_list(cache.len());
+
+                    for h in cache.iter() {
+                        rlp.append(&h.to_vec());
+                    }
+
+                    self.db.emplace(CANONICAL_TOPS_KEY.clone(), ElasticArray128::<u8>::from_slice(&rlp.out()));
+
+                    // Set as new cache
+                    self.canonical_tops_cache = cache;
+
+                    Ok(())
+                } else if self.pending_tops_cache.contains(&parent_hash) {
+                    // Remove parent block from disk stored canonical tops entry
+                    let encoded = self.db.get(&PENDING_TOPS_KEY).unwrap();
+                    let mut cache = parse_hash_list(&encoded);
+
+                    // Remove parent block from cache
+                    cache.remove(&parent_hash);
+
+                    // Insert new block in cache
+                    cache.insert(block.block_hash().unwrap());
+
+                    // Encode and write new entry to disk
+                    let mut rlp = RlpStream::new_list(cache.len());
+
+                    for h in cache.iter() {
+                        rlp.append(&h.to_vec());
+                    }
+
+                    self.db.emplace(PENDING_TOPS_KEY.clone(), ElasticArray128::<u8>::from_slice(&rlp.out()));
+
+                    // Set as new cache
+                    self.pending_tops_cache = cache;
+
+                    Ok(())
+                } else {
+                    unimplemented!();   
+                }
             }
         } else {
             Err(ChainErr::NoParentHash)
@@ -315,15 +379,15 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
         self.canonical_top.clone()
     }
 
-    fn iter_canonical_tops(&'a self) -> HardBlockIterator<'a> {
-        HardBlockIterator(Box::new(
-            self.canonical_tops_cache.iter().map(AsRef::as_ref),
-        ))
-    }
+    // fn iter_canonical_tops(&'a self) -> HardBlockIterator<'a> {
+    //     HardBlockIterator(Box::new(
+    //         self.canonical_tops_cache.iter().map(|t| self.query(t).unwrap()).map(AsRef::as_ref),
+    //     ))
+    // }
 
-    fn iter_pending_tops(&'a self) -> HardBlockIterator<'a> {
-        HardBlockIterator(Box::new(
-            self.pending_tops_cache.iter().map(AsRef::as_ref),
-        ))
-    }
+    // fn iter_pending_tops(&'a self) -> HardBlockIterator<'a> {
+    //     HardBlockIterator(Box::new(
+    //         self.pending_tops_cache.iter().map(|t| self.query(t).unwrap()).map(AsRef::as_ref),
+    //     ))
+    // }
 }

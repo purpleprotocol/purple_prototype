@@ -105,8 +105,10 @@ impl EasyChainRef {
             if let Some(result) = chain_result {
                 let mut cache = self.block_cache.lock();
 
-                // Cache result and then return it
-                cache.put(hash.clone(), result.clone());
+                if cache.get(hash).is_none() {
+                    // Cache result and then return it
+                    cache.put(hash.clone(), result.clone());
+                }
 
                 Some(result)
             } else {
@@ -340,15 +342,15 @@ impl<'a> Chain<'a, EasyBlock, EasyBlockIterator<'a>> for EasyChain {
         self.canonical_top.clone()
     }
 
-    fn iter_canonical_tops(&'a self) -> EasyBlockIterator<'a> {
-        EasyBlockIterator(Box::new(
-            self.canonical_tops_cache.iter().map(AsRef::as_ref),
-        ))
-    }
+    // fn iter_canonical_tops(&'a self) -> EasyBlockIterator<'a> {
+    //     EasyBlockIterator(Box::new(
+    //         self.canonical_tops_cache.iter().map(AsRef::as_ref),
+    //     ))
+    // }
 
-    fn iter_pending_tops(&'a self) -> EasyBlockIterator<'a> {
-        EasyBlockIterator(Box::new(
-            self.pending_tops_cache.iter().map(AsRef::as_ref),
-        ))
-    }
+    // fn iter_pending_tops(&'a self) -> EasyBlockIterator<'a> {
+    //     EasyBlockIterator(Box::new(
+    //         self.pending_tops_cache.iter().map(AsRef::as_ref),
+    //     ))
+    // }
 }
