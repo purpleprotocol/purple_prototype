@@ -40,21 +40,21 @@ lazy_static! {
     /// Atomic reference count to easy chain genesis block
     static ref GENESIS_RC: Arc<EasyBlock> = { Arc::new(EasyBlock::genesis()) };
 
-    /// Canonical tops key
-    static ref CANONICAL_TOPS_KEY: Hash = { crypto::hash_slice(b"canonical_tops") };
+    /// Canonical tips key
+    static ref CANONICAL_TIPS_KEY: Hash = { crypto::hash_slice(b"canonical_tips") };
     
-    /// Canonical top block key
-    static ref TOP_KEY: Hash = { crypto::hash_slice(b"canonical_top") };
+    /// Canonical tip block key
+    static ref TIP_KEY: Hash = { crypto::hash_slice(b"canonical_tip") };
 
-    /// Key to the hash of the canonical top block in the hard chain.
-    static ref HARD_TOP_KEY: Hash = { crypto::hash_slice(b"hard_canonical_top") };
+    /// Key to the hash of the canonical tip block in the hard chain.
+    static ref HARD_TIP_KEY: Hash = { crypto::hash_slice(b"hard_canonical_tip") };
 
     /// The key to the canonical height of the chain
     static ref CANONICAL_HEIGHT_KEY: Hash = { crypto::hash_slice(b"canonical_height") };
 
-    /// Key to the top blocks in the chains that are
+    /// Key to the tip blocks in the chains that are
     /// disconnected from the canonical chain.
-    static ref PENDING_TOPS_KEY: Hash = { crypto::hash_slice(b"pending_tops") };
+    static ref PENDING_TIPS_KEY: Hash = { crypto::hash_slice(b"pending_tips") };
 }
 
 #[derive(Clone)]
@@ -143,31 +143,31 @@ pub struct EasyChain {
     db: PersistentDb,
 
     /// The current height of the canonical chain.
-    height: usize,
+    height: u64,
 
-    /// The topmost block in the canonical chain.
-    canonical_top: Arc<EasyBlock>,
+    /// The tipmost block in the canonical chain.
+    canonical_tip: Arc<EasyBlock>,
 
-    /// The hash of the top canonical block in the hard chain.
-    hard_canonical_top: Hash,
+    /// The hash of the tip canonical block in the hard chain.
+    hard_canonical_tip: Hash,
 
-    /// Cache storing the top blocks descended from the
+    /// Cache storing the tip blocks descended from the
     /// canonical chain and excluding the actual canonical
-    /// top block.
-    canonical_tops_cache: HashSet<Arc<EasyBlock>>,
+    /// tip block.
+    canonical_tips_cache: HashSet<Arc<EasyBlock>>,
 
-    /// Cache storing the top blocks of chains that are
+    /// Cache storing the tip blocks of chains that are
     /// disconnected from the canonical chain.
-    pending_tops_cache: HashSet<Arc<EasyBlock>>,
+    pending_tips_cache: HashSet<Arc<EasyBlock>>,
 }
 
 impl EasyChain {
     pub fn new(mut db_ref: PersistentDb) -> EasyChain {
-        let top_db_res = db_ref.get(&TOP_KEY);
-        let canonical_top = match top_db_res.clone() {
-            Some(top) => {
+        let tip_db_res = db_ref.get(&TIP_KEY);
+        let canonical_tip = match tip_db_res.clone() {
+            Some(tip) => {
                 let mut buf = [0; 32];
-                buf.copy_from_slice(&top);
+                buf.copy_from_slice(&tip);
 
                 let block_bytes = db_ref.get(&Hash(buf)).unwrap();
                 Arc::new(EasyBlock::from_bytes(&block_bytes).unwrap())
@@ -177,10 +177,10 @@ impl EasyChain {
             }
         };
 
-        let hard_canonical_top = match db_ref.get(&HARD_TOP_KEY) {
-            Some(hard_top) => {
+        let hard_canonical_tip = match db_ref.get(&HARD_TIP_KEY) {
+            Some(hard_tip) => {
                 let mut buf = [0; 32];
-                buf.copy_from_slice(&hard_top);
+                buf.copy_from_slice(&hard_tip);
 
                 Hash(buf)
             }
@@ -189,29 +189,29 @@ impl EasyChain {
             }
         };
 
-        // Insert new canonical tops entry if non-existent.
-        let canonical_tops = match db_ref.get(&CANONICAL_TOPS_KEY) {
+        // Insert new canonical tips entry if non-existent.
+        let canonical_tips = match db_ref.get(&CANONICAL_TIPS_KEY) {
             Some(encoded) => {
                 parse_encoded_blocks(&encoded)
             }
             None => {
-                let b: Vec<Vec<u8>> = vec![canonical_top.block_hash().unwrap().to_vec()];
+                let b: Vec<Vec<u8>> = vec![canonical_tip.block_hash().unwrap().to_vec()];
                 let encoded: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&b);
 
                 db_ref.emplace(
-                    CANONICAL_TOPS_KEY.clone(),
+                    CANONICAL_TIPS_KEY.clone(),
                     ElasticArray128::<u8>::from_slice(&encoded),
                 );
 
                 let mut b: HashSet<Arc<EasyBlock>> = HashSet::new();
-                b.insert(canonical_top.clone());
+                b.insert(canonical_tip.clone());
 
                 b
             }
         };
 
-        // Cache pending tops, if any
-        let pending_tops = match db_ref.get(&PENDING_TOPS_KEY) {
+        // Cache pending tips, if any
+        let pending_tips = match db_ref.get(&PENDING_TIPS_KEY) {
             Some(encoded) => {
                 parse_encoded_blocks(&encoded)
             }
@@ -223,7 +223,7 @@ impl EasyChain {
         let height = match db_ref.get(&CANONICAL_HEIGHT_KEY) {
             Some(height) => decode_be_u64!(&height).unwrap(),
             None => {
-                if top_db_res.is_none() {
+                if tip_db_res.is_none() {
                     // Set 0 height
                     db_ref.emplace(
                         CANONICAL_HEIGHT_KEY.clone(),
@@ -235,26 +235,24 @@ impl EasyChain {
             }
         };
 
-        let height = height as usize;
-
         EasyChain {
-            canonical_top,
-            hard_canonical_top,
-            canonical_tops_cache: canonical_tops,
-            pending_tops_cache: pending_tops,
+            canonical_tip,
+            hard_canonical_tip,
+            canonical_tips_cache: canonical_tips,
+            pending_tips_cache: pending_tips,
             height,
             db: db_ref,
         }
     }
 
-    /// Lists the given hash as the new canonical top in the 
+    /// Lists the given hash as the new canonical tip in the 
     /// hard chain. 
     /// 
     /// This can potentially change the canonical ordering in the 
     /// easy chain since they are cross-referenced and the ordering 
     /// on the easy chain is entirely dependent on the ordering of 
     /// the hard chain.
-    pub fn set_hard_canonical_top(&mut self, new: &Hash) -> Result<(), ()> {
+    pub fn set_hard_canonical_tip(&mut self, new: &Hash) -> Result<(), ()> {
         unimplemented!();
     }
 }
@@ -285,30 +283,30 @@ impl<'a> Chain<'a, EasyBlock, EasyBlockIterator<'a>> for EasyChain {
         }
     }
 
-    fn query_by_height(&self, height: usize) -> Option<Arc<EasyBlock>> {
+    fn query_by_height(&self, height: u64) -> Option<Arc<EasyBlock>> {
         unimplemented!();
     }
 
-    fn block_height(&self, hash: &Hash) -> Option<usize> {
+    fn block_height(&self, hash: &Hash) -> Option<u64> {
         unimplemented!();
     }
 
     fn append_block(&mut self, block: Arc<EasyBlock>) -> Result<(), ChainErr> {
-        let top = &self.canonical_top;
+        let tip = &self.canonical_tip;
 
         // The block must have a parent hash and the parent
-        // hash must be equal to that of the current top
+        // hash must be equal to that of the current tip
         // in order for it to be considered valid.
         if let Some(parent_hash) = block.parent_hash() {
-            if parent_hash == top.block_hash().unwrap() {
+            if parent_hash == tip.block_hash().unwrap() {
                 // Place block in the ledger
                 self.db.emplace(
                     block.block_hash().unwrap().clone(),
                     ElasticArray128::<u8>::from_slice(&block.to_bytes()),
                 );
 
-                // Set new canonical top block
-                self.canonical_top = block;
+                // Set new canonical tip block
+                self.canonical_tip = block;
 
                 let mut height = decode_be_u64!(self.db.get(&CANONICAL_HEIGHT_KEY).unwrap()).unwrap();
 
@@ -316,7 +314,7 @@ impl<'a> Chain<'a, EasyBlock, EasyBlockIterator<'a>> for EasyChain {
                 height += 1;
 
                 // Set new height
-                self.height = height as usize;
+                self.height = height;
 
                 // Write new height
                 let encoded_height = encode_be_u64!(height);
@@ -334,23 +332,23 @@ impl<'a> Chain<'a, EasyBlock, EasyBlockIterator<'a>> for EasyChain {
         }
     }
 
-    fn height(&self) -> usize {
+    fn height(&self) -> u64 {
         self.height
     }
 
-    fn canonical_top(&self) -> Arc<EasyBlock> {
-        self.canonical_top.clone()
+    fn canonical_tip(&self) -> Arc<EasyBlock> {
+        self.canonical_tip.clone()
     }
 
-    // fn iter_canonical_tops(&'a self) -> EasyBlockIterator<'a> {
+    // fn iter_canonical_tips(&'a self) -> EasyBlockIterator<'a> {
     //     EasyBlockIterator(Box::new(
-    //         self.canonical_tops_cache.iter().map(AsRef::as_ref),
+    //         self.canonical_tips_cache.iter().map(AsRef::as_ref),
     //     ))
     // }
 
-    // fn iter_pending_tops(&'a self) -> EasyBlockIterator<'a> {
+    // fn iter_pending_tips(&'a self) -> EasyBlockIterator<'a> {
     //     EasyBlockIterator(Box::new(
-    //         self.pending_tops_cache.iter().map(AsRef::as_ref),
+    //         self.pending_tips_cache.iter().map(AsRef::as_ref),
     //     ))
     // }
 }

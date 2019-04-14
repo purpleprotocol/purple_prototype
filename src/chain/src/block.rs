@@ -35,4 +35,7 @@ pub trait Block {
 
     /// Returns the timestamp of the block.
     fn timestamp(&self) -> DateTime<Utc>;
+
+    /// Returns the height of the block.
+    fn height(&self) -> u64;
 }

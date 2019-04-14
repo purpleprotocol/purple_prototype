@@ -18,7 +18,7 @@ env_logger = "0.6.0"
 log = "0.4.0"
 parking_lot = "0.6"
 hex = "0.3.2"
-hashdb = { git = "https://github.com/paritytech/parity-common" }
+hashdb = "0.3.0"
 crypto = { path = "../crypto" }
 persistence = { path = "../persistence" }
 quickcheck = "0.7.2"

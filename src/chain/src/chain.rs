@@ -28,6 +28,9 @@ pub enum ChainErr {
 
     /// The given event does not have a parent hash
     NoParentHash,
+
+    // Bad block height
+    BadHeight,
 }
 
 /// Generic chain interface
@@ -37,10 +40,10 @@ where
     I: Iterator<Item = &'a B>,
 {
     /// Returns the current height of the canonical chain.
-    fn height(&self) -> usize;
+    fn height(&self) -> u64;
 
-    /// Returns an atomic reference to the topmost block in the canonical chain.
-    fn canonical_top(&self) -> Arc<B>;
+    /// Returns an atomic reference to the block at the tip of the canonical chain.
+    fn canonical_tip(&self) -> Arc<B>;
 
     /// Returns an atomic reference to the genesis block in the chain.
     fn genesis() -> Arc<B>;
@@ -53,21 +56,21 @@ where
 
     /// Queries for a block by its height. This function can only
     /// return blocks from the canonical chain.
-    fn query_by_height(&self, height: usize) -> Option<Arc<B>>;
+    fn query_by_height(&self, height: u64) -> Option<Arc<B>>;
 
     /// Returns the block height of the block with the given hash, if any.
-    fn block_height(&self, hash: &Hash) -> Option<usize>;
+    fn block_height(&self, hash: &Hash) -> Option<u64>;
 
-    // /// Returns an iterator over all top blocks of non-canonical chains that
-    // /// descend from the canonical chain. The top block of the canonical chain
+    // /// Returns an iterator over all tip blocks of non-canonical chains that
+    // /// descend from the canonical chain. The tip block of the canonical chain
     // /// will **NOT** be included.
     // ///
     // /// Note that this does not include blocks that are disconnected in any way
     // /// from the canonical chain i.e. blocks written that we haven't received
     // /// the parent of.
-    // fn iter_canonical_tops(&'a self) -> I;
+    // fn iter_canonical_tips(&'a self) -> I;
 
-    // /// Returns an iterator over all of top blocks of chains that are
+    // /// Returns an iterator over all of tip blocks of chains that are
     // /// completely disconnected from the canonical chain.
-    // fn iter_pending_tops(&'a self) -> I;
+    // fn iter_pending_tips(&'a self) -> I;
 }

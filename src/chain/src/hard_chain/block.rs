@@ -32,6 +32,9 @@ pub struct HardBlock {
     /// A reference to a block in the `EasyChain`.
     easy_block_hash: Hash,
 
+    /// The height of the block.
+    height: u64,
+
     /// The hash of the parent block.
     parent_hash: Option<Hash>,
 
@@ -72,9 +75,14 @@ impl Block for HardBlock {
             easy_block_hash,
             parent_hash: None,
             merkle_root: None,
+            height: 0,
             hash: Some(hash),
             timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
         }
+    }
+
+    fn height(&self) -> u64 {
+        self.height
     }
 
     fn block_hash(&self) -> Option<Hash> {
@@ -95,11 +103,12 @@ impl Block for HardBlock {
 }
 
 impl HardBlock {
-    pub fn new(parent_hash: Option<Hash>, easy_block_hash: Hash) -> HardBlock {
+    pub fn new(parent_hash: Option<Hash>, height: u64, easy_block_hash: Hash) -> HardBlock {
         HardBlock {
             parent_hash,
             easy_block_hash,
             merkle_root: None,
+            height,
             hash: None,
             timestamp: Utc::now(),
         }

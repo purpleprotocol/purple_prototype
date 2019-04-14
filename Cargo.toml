@@ -20,9 +20,9 @@ dirs = "1.0.4"
 elastic-array = "0.10.0"
 jsonrpc-core = "9.0.0"
 jsonrpc-macros = "9.0.0"
-hashdb = { git = "https://github.com/paritytech/parity-common" }
-kvdb = { git = "https://github.com/paritytech/parity-common" }
-kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
+hashdb = "0.3.0"
+kvdb = "0.1.0"
+kvdb-rocksdb = "0.1.0"
 account = { path = "src/account" }
 purple_vm = { path = "src/purple_vm" }
 crypto = { path = "src/crypto" } 

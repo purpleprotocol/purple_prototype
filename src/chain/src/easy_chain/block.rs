@@ -25,6 +25,9 @@ use std::hash::Hasher;
 #[derive(Debug)]
 /// A block belonging to the `EasyChain`.
 pub struct EasyBlock {
+    /// The height of the block.
+    height: u64,
+
     /// The hash of the parent block.
     parent_hash: Option<Hash>,
 
@@ -63,9 +66,14 @@ impl Block for EasyBlock {
         EasyBlock {
             parent_hash: None,
             merkle_root: None,
+            height: 0,
             hash: Some(hash),
             timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
         }
+    }
+
+    fn height(&self) -> u64 {
+        self.height
     }
 
     fn block_hash(&self) -> Option<Hash> {
@@ -86,9 +94,10 @@ impl Block for EasyBlock {
 }
 
 impl EasyBlock {
-    pub fn new(parent_hash: Option<Hash>) -> EasyBlock {
+    pub fn new(parent_hash: Option<Hash>, height: u64) -> EasyBlock {
         EasyBlock {
             parent_hash,
+            height,
             merkle_root: None,
             hash: None,
             timestamp: Utc::now(),

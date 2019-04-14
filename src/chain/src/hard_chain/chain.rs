@@ -36,22 +36,34 @@ use lazy_static::*;
 /// Size of the block cache.
 const BLOCK_CACHE_SIZE: usize = 20;
 
+/// Blocks with height below the canonical height minus 
+/// this number will be rejected.
+const MIN_HEIGHT: u64 = 10;
+
+/// Blocks with height below the canonical height minus
+/// this number will be rejected.
+const MAX_HEIGHT: u64 = 10;
+
 lazy_static! {
     /// Atomic reference count to hard chain genesis block
     static ref GENESIS_RC: Arc<HardBlock> = { Arc::new(HardBlock::genesis()) };
 
-    /// Canonical tops key
-    static ref CANONICAL_TOPS_KEY: Hash = { crypto::hash_slice(b"canonical_tops") };
+    /// Canonical tips key
+    static ref CANONICAL_TIPS_KEY: Hash = { crypto::hash_slice(b"canonical_tips") };
     
-    /// Canonical top block key
-    static ref TOP_KEY: Hash = { crypto::hash_slice(b"canonical_top") };
+    /// Canonical tip block key
+    static ref TIP_KEY: Hash = { crypto::hash_slice(b"canonical_tip") };
 
     /// The key to the canonical height of the chain
     static ref CANONICAL_HEIGHT_KEY: Hash = { crypto::hash_slice(b"canonical_height") };
 
-    /// Key to the top blocks in the chains that are
+    /// Key to the tip blocks in the chains that are
     /// disconnected from the canonical chain.
-    static ref PENDING_TOPS_KEY: Hash = { crypto::hash_slice(b"pending_tops") };
+    static ref PENDING_TIPS_KEY: Hash = { crypto::hash_slice(b"pending_tips") };
+
+    /// Key to the head blocks in the chains that are
+    /// disconnected from the canonical chain.
+    static ref PENDING_HEADS_KEY: Hash = { crypto::hash_slice(b"pending_heads") };
 }
 
 #[derive(Clone)]
@@ -146,28 +158,32 @@ pub struct HardChain {
     easy_chain: EasyChainRef,
 
     /// The current height of the chain.
-    height: usize,
+    height: u64,
 
-    /// The topmost block in the canonical chain.
-    canonical_top: Arc<HardBlock>,
+    /// The tipmost block in the canonical chain.
+    canonical_tip: Arc<HardBlock>,
 
-    /// Cache storing the top blocks descended from the
+    /// Cache storing the tip blocks descended from the
     /// canonical chain and excluding the actual canonical
-    /// top block.
-    canonical_tops_cache: HashSet<Hash>,
+    /// tip block.
+    canonical_tips_cache: HashSet<Hash>,
 
-    /// Cache storing the top blocks of chains that are
+    /// Cache storing the tip blocks of chains that are
     /// disconnected from the canonical chain.
-    pending_tops_cache: HashSet<Hash>,
+    pending_tips_cache: HashSet<Hash>,
+
+    /// Cache storing the head blocks of chains that
+    /// are disconnected from the canonical chain.
+    pending_heads_parents: HashSet<Hash>,
 }
 
 impl HardChain {
     pub fn new(mut db_ref: PersistentDb, easy_chain: EasyChainRef) -> HardChain {
-        let top_db_res = db_ref.get(&TOP_KEY);
-        let canonical_top = match top_db_res.clone() {
-            Some(top) => {
+        let tip_db_res = db_ref.get(&TIP_KEY);
+        let canonical_tip = match tip_db_res.clone() {
+            Some(tip) => {
                 let mut buf = [0; 32];
-                buf.copy_from_slice(&top);
+                buf.copy_from_slice(&tip);
 
                 let block_bytes = db_ref.get(&Hash(buf)).unwrap();
                 Arc::new(HardBlock::from_bytes(&block_bytes).unwrap())
@@ -177,28 +193,38 @@ impl HardChain {
             }
         };
 
-        let canonical_tops = match db_ref.get(&CANONICAL_TOPS_KEY) {
+        let canonical_tips = match db_ref.get(&CANONICAL_TIPS_KEY) {
             Some(encoded) => {
                 parse_hash_list(&encoded)
             }
             None => {
-                let b: Vec<Vec<u8>> = vec![canonical_top.block_hash().unwrap().to_vec()];
+                let b: Vec<Vec<u8>> = vec![canonical_tip.block_hash().unwrap().to_vec()];
                 let encoded: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&b);
 
                 db_ref.emplace(
-                    CANONICAL_TOPS_KEY.clone(),
+                    CANONICAL_TIPS_KEY.clone(),
                     ElasticArray128::<u8>::from_slice(&encoded),
                 );
 
                 let mut b: HashSet<Hash> = HashSet::new();
-                b.insert(canonical_top.block_hash().unwrap().clone());
+                b.insert(canonical_tip.block_hash().unwrap().clone());
 
                 b
             }
         };
 
-        // Cache pending tops, if any
-        let pending_tops = match db_ref.get(&PENDING_TOPS_KEY) {
+        // Cache pending tips, if any
+        let pending_tips = match db_ref.get(&PENDING_TIPS_KEY) {
+            Some(encoded) => {
+                parse_hash_list(&encoded)
+            }
+            None => {
+                HashSet::new()
+            }
+        };
+
+        // Cache pending heads, if any
+        let pending_heads = match db_ref.get(&PENDING_HEADS_KEY) {
             Some(encoded) => {
                 parse_hash_list(&encoded)
             }
@@ -210,7 +236,7 @@ impl HardChain {
         let height = match db_ref.get(&CANONICAL_HEIGHT_KEY) {
             Some(height) => decode_be_u64!(&height).unwrap(),
             None => {
-                if top_db_res.is_none() {
+                if tip_db_res.is_none() {
                     // Set 0 height
                     db_ref.emplace(
                         CANONICAL_HEIGHT_KEY.clone(),
@@ -222,12 +248,13 @@ impl HardChain {
             }
         };
 
-        let height = height as usize;
+        let height = height;
 
         HardChain {
-            canonical_top,
-            canonical_tops_cache: canonical_tops,
-            pending_tops_cache: pending_tops,
+            canonical_tip,
+            canonical_tips_cache: canonical_tips,
+            pending_heads_parents: pending_heads,
+            pending_tips_cache: pending_tips,
             height,
             easy_chain,
             db: db_ref,
@@ -264,39 +291,51 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
         }
     }
 
-    fn query_by_height(&self, height: usize) -> Option<Arc<HardBlock>> {
+    fn query_by_height(&self, height: u64) -> Option<Arc<HardBlock>> {
         unimplemented!();
     }
 
-    fn block_height(&self, hash: &Hash) -> Option<usize> {
+    fn block_height(&self, hash: &Hash) -> Option<u64> {
         unimplemented!();
     }
 
     fn append_block(&mut self, block: Arc<HardBlock>) -> Result<(), ChainErr> {
-        let top = &self.canonical_top;
+        let min_height = if self.height > MIN_HEIGHT {
+            self.height - MIN_HEIGHT
+        } else {
+            1
+        };
+
+        if block.height() > self.height + MAX_HEIGHT || block.height() < min_height {
+            return Err(ChainErr::BadHeight);
+        }
+
+        let tip = &self.canonical_tip;
 
         // The block must have a parent hash and the parent
-        // hash must be equal to that of the current top
+        // hash must be equal to that of the current tip
         // in order for it to be considered valid.
         if let Some(parent_hash) = block.parent_hash() {
             // First attempt to place the block after the 
-            // top canonical block.
-            if parent_hash == top.block_hash().unwrap() {
+            // tip canonical block.
+            if parent_hash == tip.block_hash().unwrap() {
+                let block_hash = block.block_hash().unwrap();
+
                 // Place block in the ledger
                 self.db.emplace(
-                    block.block_hash().unwrap().clone(),
+                    block_hash.clone(),
                     ElasticArray128::<u8>::from_slice(&block.to_bytes()),
                 );
 
-                // Set new top block
-                self.canonical_top = block.clone();
+                // Set new tip block
+                self.canonical_tip = block.clone();
                 let mut height = decode_be_u64!(self.db.get(&CANONICAL_HEIGHT_KEY).unwrap()).unwrap();
 
                 // Increment height
                 height += 1;
 
                 // Set new height
-                self.height = height as usize;
+                self.height = height;
 
                 // Write new height
                 let encoded_height = encode_be_u64!(height);
@@ -305,19 +344,37 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                     ElasticArray128::<u8>::from_slice(&encoded_height),
                 );
 
-                // Mark new hard chain top block in easy chain
+                // Write block height
+                let block_height_key = format!("{}.height", hex::encode(block_hash.to_vec()));
+                let block_height_key = crypto::hash_slice(block_height_key.as_bytes());
+
+                self.db.emplace(
+                    block_height_key,
+                    ElasticArray128::<u8>::from_slice(&encoded_height)
+                );
+
+                // Mark new hard chain tip block in easy chain
                 let mut easy_chain = self.easy_chain.chain.write();
-                easy_chain.set_hard_canonical_top(&block.block_hash().unwrap()).unwrap();
+                easy_chain.set_hard_canonical_tip(&block.block_hash().unwrap()).unwrap();
 
                 Ok(())
             } else {
                 // Attempt to first add the block after an already placed block.
-                if self.canonical_tops_cache.contains(&parent_hash) {
-                    // Remove parent block from disk stored canonical tops entry
-                    let encoded = self.db.get(&CANONICAL_TOPS_KEY).unwrap();
+                if self.canonical_tips_cache.contains(&parent_hash) {
+                    let block_hash = block.block_hash().unwrap();
+
+                    // Place block in the ledger
+                    self.db.emplace(
+                        block_hash.clone(),
+                        ElasticArray128::<u8>::from_slice(&block.to_bytes()),
+                    );
+
+                    // Remove parent block from disk stored canonical tips entry
+                    let encoded = self.db.get(&CANONICAL_TIPS_KEY).unwrap();
                     let mut cache = parse_hash_list(&encoded);
 
-                    // TODO: Attempt to connect disconnected chain to appended block
+                    // Attempt to connect disconnected chains to 
+                    // the newely appended block.
 
                     // Remove parent block from cache
                     cache.remove(&parent_hash);
@@ -332,15 +389,40 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                         rlp.append(&h.to_vec());
                     }
 
-                    self.db.emplace(CANONICAL_TOPS_KEY.clone(), ElasticArray128::<u8>::from_slice(&rlp.out()));
+                    self.db.emplace(CANONICAL_TIPS_KEY.clone(), ElasticArray128::<u8>::from_slice(&rlp.out()));
 
                     // Set as new cache
-                    self.canonical_tops_cache = cache;
+                    self.canonical_tips_cache = cache;
+
+                    // Fetch parent height
+                    let parent_height_key = format!("{}.height", hex::encode(parent_hash.to_vec()));
+                    let parent_height_key = crypto::hash_slice(parent_height_key.as_bytes());
+
+                    let parent_height = self.db.get(&parent_height_key).unwrap();
+                    let parent_height = decode_be_u64!(parent_height).unwrap() + 1;
+                    let encoded_height = encode_be_u64!(parent_height);
+
+                    // Write block height
+                    let block_height_key = format!("{}.height", hex::encode(block_hash.to_vec()));
+                    let block_height_key = crypto::hash_slice(block_height_key.as_bytes());
+
+                    self.db.emplace(
+                        block_height_key,
+                        ElasticArray128::<u8>::from_slice(&encoded_height)
+                    );
 
                     Ok(())
-                } else if self.pending_tops_cache.contains(&parent_hash) {
-                    // Remove parent block from disk stored canonical tops entry
-                    let encoded = self.db.get(&PENDING_TOPS_KEY).unwrap();
+                } else if self.pending_tips_cache.contains(&parent_hash) {
+                    let block_hash = block.block_hash().unwrap();
+
+                    // Place block in the ledger
+                    self.db.emplace(
+                        block_hash.clone(),
+                        ElasticArray128::<u8>::from_slice(&block.to_bytes()),
+                    );
+
+                    // Remove parent block from disk stored canonical tips entry
+                    let encoded = self.db.get(&PENDING_TIPS_KEY).unwrap();
                     let mut cache = parse_hash_list(&encoded);
 
                     // Remove parent block from cache
@@ -356,14 +438,40 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                         rlp.append(&h.to_vec());
                     }
 
-                    self.db.emplace(PENDING_TOPS_KEY.clone(), ElasticArray128::<u8>::from_slice(&rlp.out()));
+                    self.db.emplace(PENDING_TIPS_KEY.clone(), ElasticArray128::<u8>::from_slice(&rlp.out()));
 
                     // Set as new cache
-                    self.pending_tops_cache = cache;
+                    self.pending_tips_cache = cache;
+
+                    // Fetch parent height
+                    let parent_height_key = format!("{}.height", hex::encode(parent_hash.to_vec()));
+                    let parent_height_key = crypto::hash_slice(parent_height_key.as_bytes());
+
+                    let parent_height = self.db.get(&parent_height_key).unwrap();
+                    let parent_height = decode_be_u64!(parent_height).unwrap() + 1;
+                    let encoded_height = encode_be_u64!(parent_height);
+
+                    // Write block height
+                    let block_height_key = format!("{}.height", hex::encode(block_hash.to_vec()));
+                    let block_height_key = crypto::hash_slice(block_height_key.as_bytes());
+
+                    self.db.emplace(
+                        block_height_key,
+                        ElasticArray128::<u8>::from_slice(&encoded_height)
+                    );
 
                     Ok(())
                 } else {
-                    unimplemented!();   
+                    // First attempt to place the block after an existing block
+                    match self.db.get(&parent_hash) {
+                        Some(encoded) => {
+                            unimplemented!();
+                        }
+                        None => {
+                            // Create a new non-canonical chain
+                            unimplemented!();
+                        }
+                    }
                 }
             }
         } else {
@@ -371,23 +479,23 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
         }
     }
 
-    fn height(&self) -> usize {
+    fn height(&self) -> u64 {
         self.height
     }
 
-    fn canonical_top(&self) -> Arc<HardBlock> {
-        self.canonical_top.clone()
+    fn canonical_tip(&self) -> Arc<HardBlock> {
+        self.canonical_tip.clone()
     }
 
-    // fn iter_canonical_tops(&'a self) -> HardBlockIterator<'a> {
+    // fn iter_canonical_tips(&'a self) -> HardBlockIterator<'a> {
     //     HardBlockIterator(Box::new(
-    //         self.canonical_tops_cache.iter().map(|t| self.query(t).unwrap()).map(AsRef::as_ref),
+    //         self.canonical_tips_cache.iter().map(|t| self.query(t).unwrap()).map(AsRef::as_ref),
     //     ))
     // }
 
-    // fn iter_pending_tops(&'a self) -> HardBlockIterator<'a> {
+    // fn iter_pending_tips(&'a self) -> HardBlockIterator<'a> {
     //     HardBlockIterator(Box::new(
-    //         self.pending_tops_cache.iter().map(|t| self.query(t).unwrap()).map(AsRef::as_ref),
+    //         self.pending_tips_cache.iter().map(|t| self.query(t).unwrap()).map(AsRef::as_ref),
     //     ))
     // }
 }

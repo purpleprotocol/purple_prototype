@@ -11,8 +11,8 @@ byteorder = "1.2.7"
 unwrap = "1.2.0"
 hex = "0.3.2"
 rlp = "0.3.0"
-hashdb = { git = "https://github.com/paritytech/parity-common" }
-patricia-trie = { git = "https://github.com/paritytech/parity-common" }
+hashdb = "0.3.0"
+patricia-trie = "0.3.0"
 elastic-array = "0.10.0"
 rand = "0.6.0"
 persistence = { path = "../persistence" }
@@ -26,5 +26,5 @@ bin-tools = { path = "../util/bin-tools/" }
 
 [dev-dependencies]
 tempfile = "3.0.5"
-kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
+kvdb-rocksdb = "0.1.0"
 test-helpers = { path = "../util/test-helpers" }
