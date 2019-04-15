@@ -18,3 +18,8 @@ persistence = { path = "../persistence" }
 bin-tools = { path = "../util/bin-tools/" }
 hashdb = "0.3.0"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
+
+[dev-dependencies]
+rand = "^0.6.0"
+quickcheck = "0.7.2"
+test-helpers = { path = "../util/test-helpers" }

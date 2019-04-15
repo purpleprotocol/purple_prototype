@@ -16,6 +16,8 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#![allow(non_snake_case)]
+
 mod block;
 mod chain;
 mod easy_chain;

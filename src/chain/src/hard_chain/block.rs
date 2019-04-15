@@ -114,6 +114,10 @@ impl HardBlock {
         }
     }
 
+    pub fn compute_hash(&mut self) {
+        unimplemented!();
+    }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         unimplemented!();
     }
