@@ -38,7 +38,12 @@ const BLOCK_CACHE_SIZE: usize = 20;
 
 lazy_static! {
     /// Atomic reference count to easy chain genesis block
-    static ref GENESIS_RC: Arc<EasyBlock> = { Arc::new(EasyBlock::genesis()) };
+    static ref GENESIS_RC: Arc<EasyBlock> = { 
+        let mut block = EasyBlock::genesis();
+        block.compute_hash();
+
+        Arc::new(block) 
+    };
 
     /// Canonical tips key
     static ref CANONICAL_TIPS_KEY: Hash = { crypto::hash_slice(b"canonical_tips") };

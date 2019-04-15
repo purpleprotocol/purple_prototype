@@ -22,6 +22,7 @@ use chrono::prelude::*;
 use crypto::Hash;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
+use bin_tools::*;
 
 /// The size of the hard block proof
 pub const HARD_PROOF_SIZE: usize = 42;
@@ -69,14 +70,13 @@ impl HashTrait for HardBlock {
 impl Block for HardBlock {
     fn genesis() -> HardBlock {
         let easy_block_hash = EasyBlock::genesis().block_hash().unwrap();
-        let hash = Hash::random();
 
         HardBlock {
             easy_block_hash,
             parent_hash: None,
-            merkle_root: None,
+            merkle_root: Some(Hash::NULL),
             height: 0,
-            hash: Some(hash),
+            hash: None,
             timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
         }
     }
@@ -115,7 +115,33 @@ impl HardBlock {
     }
 
     pub fn compute_hash(&mut self) {
-        unimplemented!();
+        let message = self.compute_hash_message();
+        let hash = crypto::hash_slice(&message);
+
+        self.hash = Some(hash);
+    }
+
+    pub fn verify_hash(&self) -> bool {
+        let message = self.compute_hash_message();
+        let oracle = crypto::hash_slice(&message);
+    
+        self.hash.unwrap() == oracle
+    }
+
+    fn compute_hash_message(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+        let encoded_height = encode_be_u64!(self.height);
+
+        buf.extend_from_slice(&encoded_height);
+
+        if let Some(parent_hash) = self.parent_hash {
+            buf.extend_from_slice(&parent_hash.0.to_vec());
+        }
+
+        buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
+        buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
+
+        buf
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -124,5 +150,18 @@ impl HardBlock {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<HardBlock, &'static str> {
         unimplemented!();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_verifies_hashes() {
+        let mut block = HardBlock::genesis();
+        block.compute_hash();
+
+        assert!(block.verify_hash());
     }
 }

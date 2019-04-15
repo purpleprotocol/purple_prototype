@@ -49,7 +49,12 @@ const MAX_HEIGHT: u64 = 10;
 
 lazy_static! {
     /// Atomic reference count to hard chain genesis block
-    static ref GENESIS_RC: Arc<HardBlock> = { Arc::new(HardBlock::genesis()) };
+    static ref GENESIS_RC: Arc<HardBlock> = { 
+        let mut block = HardBlock::genesis();
+        block.compute_hash();
+
+        Arc::new(block) 
+    };
     
     /// Canonical tip block key
     static ref TIP_KEY: Hash = { crypto::hash_slice(b"canonical_tip") };
