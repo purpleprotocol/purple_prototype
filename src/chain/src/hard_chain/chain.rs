@@ -357,7 +357,7 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                     self.pending_tips_cache.insert(block.block_hash().unwrap());
 
                     Ok(())
-                } else if let Some(pending_head) = self.pending_heads_parents.get(&block_hash) {
+                } else if let Some(_) = self.pending_heads_parents.get(&block_hash) {
                     // Write block to orphan pool
                     self.orphan_pool.insert(block_hash.clone(), block.clone());
                     

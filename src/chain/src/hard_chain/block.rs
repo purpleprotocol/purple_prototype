@@ -18,16 +18,19 @@
 
 use crate::block::Block;
 use crate::easy_chain::block::EasyBlock;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
 use crypto::Hash;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
+use std::io::Cursor;
+use std::str::FromStr;
 use bin_tools::*;
 
 /// The size of the hard block proof
 pub const HARD_PROOF_SIZE: usize = 42;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 /// A block belonging to the `HardChain`.
 pub struct HardBlock {
     /// A reference to a block in the `EasyChain`.
@@ -103,6 +106,8 @@ impl Block for HardBlock {
 }
 
 impl HardBlock {
+    pub const BLOCK_TYPE: u8 = 0;
+
     pub fn new(parent_hash: Option<Hash>, height: u64, easy_block_hash: Hash) -> HardBlock {
         HardBlock {
             parent_hash,
@@ -150,11 +155,119 @@ impl HardBlock {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        unimplemented!();
+        let mut buf: Vec<u8> = Vec::new();
+
+        buf.write_u8(Self::BLOCK_TYPE).unwrap();
+        buf.write_u64::<BigEndian>(self.height).unwrap();
+        buf.extend_from_slice(&self.hash.unwrap().0.to_vec());
+        buf.extend_from_slice(&self.easy_block_hash.0.to_vec());
+        buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
+        buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
+        buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
+        buf
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<HardBlock, &'static str> {
-        unimplemented!();
+        let mut rdr = Cursor::new(bytes.to_vec());
+        let block_type = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad transaction type");
+        };
+
+        if block_type != Self::BLOCK_TYPE {
+            return Err("Bad block type");
+        }
+
+        rdr.set_position(1);
+
+        let height = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad height");
+        };
+
+        // Consume cursor
+        let mut buf: Vec<u8> = rdr.into_inner();
+        buf.drain(..9);
+    
+        let hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure 1");
+        };
+
+        let easy_block_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure 2");
+        };
+
+        let parent_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure 3");
+        };
+
+        let merkle_root = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure 4");
+        };
+
+        let timestamp = match std::str::from_utf8(&buf) {
+            Ok(utf8) => match DateTime::<Utc>::from_str(utf8) {
+                Ok(timestamp) => timestamp,
+                Err(_)        => return Err("Invalid block timestamp")
+            }, 
+            Err(_) => return Err("Invalid block timestamp")
+        };
+
+        Ok(HardBlock {
+            merkle_root: Some(merkle_root),
+            timestamp,
+            easy_block_hash,
+            hash: Some(hash),
+            parent_hash: Some(parent_hash),
+            height,
+        })
+    }
+}
+
+#[cfg(test)]
+use quickcheck::*;
+
+#[cfg(test)]
+impl Arbitrary for HardBlock {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> HardBlock {
+        HardBlock {
+            easy_block_hash: Arbitrary::arbitrary(g),
+            height: Arbitrary::arbitrary(g),
+            parent_hash: Some(Arbitrary::arbitrary(g)),
+            merkle_root: Some(Arbitrary::arbitrary(g)),
+            hash: Some(Arbitrary::arbitrary(g)),
+            timestamp: Utc::now(),
+        }
     }
 }
 
@@ -162,11 +275,20 @@ impl HardBlock {
 mod tests {
     use super::*;
 
-    #[test]
-    fn it_verifies_hashes() {
-        let mut block = HardBlock::genesis();
-        block.compute_hash();
+    quickcheck! {
+        fn it_verifies_hashes(block: HardBlock) -> bool {
+            let mut block = block.clone();
 
-        assert!(block.verify_hash());
+            assert!(!block.verify_hash());
+
+            block.compute_hash();
+            block.verify_hash()
+        }
+
+        fn serialize_deserialize(block: HardBlock) -> bool {
+            HardBlock::from_bytes(&HardBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
+
+            true
+        }
     }
 }
