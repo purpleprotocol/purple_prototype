@@ -30,7 +30,6 @@ use lru::LruCache;
 use parking_lot::{RwLock, Mutex};
 use persistence::PersistentDb;
 use std::sync::Arc;
-use rlp::*;
 use lazy_static::*;
 
 /// Size of the block cache.
@@ -124,7 +123,7 @@ impl HardChainRef {
     }
 }
 
-/// The hard chain stores blocks that represent state can be
+/// The hard chain stores blocks that represent state 
 /// changes in the validator pool. A block from the hard chain
 /// can be thought of as a function which changes the state of
 /// the validator pool.
@@ -221,6 +220,47 @@ impl HardChain {
             db: db_ref,
         }
     }
+
+    // TODO: Make writes atomic
+    fn write_block(&mut self, block: Arc<HardBlock>) {
+        let block_hash = block.block_hash().unwrap();
+
+        // Place block in the ledger
+        self.db.emplace(
+            block_hash.clone(),
+            ElasticArray128::<u8>::from_slice(&block.to_bytes()),
+        );
+
+        // Set new tip block
+        self.canonical_tip = block.clone();
+        let mut height = decode_be_u64!(self.db.get(&CANONICAL_HEIGHT_KEY).unwrap()).unwrap();
+
+        // Increment height
+        height += 1;
+
+        // Set new height
+        self.height = height;
+
+        // Write new height
+        let encoded_height = encode_be_u64!(height);
+        self.db.emplace(
+            CANONICAL_HEIGHT_KEY.clone(),
+            ElasticArray128::<u8>::from_slice(&encoded_height),
+        );
+
+        // Write block height
+        let block_height_key = format!("{}.height", hex::encode(block_hash.to_vec()));
+        let block_height_key = crypto::hash_slice(block_height_key.as_bytes());
+
+        self.db.emplace(
+            block_height_key,
+            ElasticArray128::<u8>::from_slice(&encoded_height)
+        );
+
+        // Mark new hard chain tip block in easy chain
+        let mut easy_chain = self.easy_chain.chain.write();
+        easy_chain.set_hard_canonical_tip(&block.block_hash().unwrap()).unwrap();
+    }
 }
 
 impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
@@ -258,10 +298,8 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
         }
 
         let tip = &self.canonical_tip;
+        let block_hash = block.block_hash().unwrap();
 
-        // The block must have a parent hash and the parent
-        // hash must be equal to that of the current tip
-        // in order for it to be considered valid.
         if let Some(parent_hash) = block.parent_hash() {
             // First attempt to place the block after the 
             // tip canonical block.
@@ -271,43 +309,8 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                     return Err(ChainErr::BadHeight);
                 }
 
-                let block_hash = block.block_hash().unwrap();
-
-                // Place block in the ledger
-                self.db.emplace(
-                    block_hash.clone(),
-                    ElasticArray128::<u8>::from_slice(&block.to_bytes()),
-                );
-
-                // Set new tip block
-                self.canonical_tip = block.clone();
-                let mut height = decode_be_u64!(self.db.get(&CANONICAL_HEIGHT_KEY).unwrap()).unwrap();
-
-                // Increment height
-                height += 1;
-
-                // Set new height
-                self.height = height;
-
-                // Write new height
-                let encoded_height = encode_be_u64!(height);
-                self.db.emplace(
-                    CANONICAL_HEIGHT_KEY.clone(),
-                    ElasticArray128::<u8>::from_slice(&encoded_height),
-                );
-
-                // Write block height
-                let block_height_key = format!("{}.height", hex::encode(block_hash.to_vec()));
-                let block_height_key = crypto::hash_slice(block_height_key.as_bytes());
-
-                self.db.emplace(
-                    block_height_key,
-                    ElasticArray128::<u8>::from_slice(&encoded_height)
-                );
-
-                // Mark new hard chain tip block in easy chain
-                let mut easy_chain = self.easy_chain.chain.write();
-                easy_chain.set_hard_canonical_tip(&block.block_hash().unwrap()).unwrap();
+                // Write block to the chain
+                self.write_block(block);
 
                 Ok(())
             } else {
@@ -319,22 +322,21 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                         return Err(ChainErr::BadHeight);
                     }
 
-                    let block_hash = block.block_hash().unwrap();
-
                     // Place block in the orphan pool
                     self.orphan_pool.insert(block_hash.clone(), block.clone());
 
                     // Attempt to connect disconnected chains to 
                     // the newely appended block.
-
+                    unimplemented!();
 
                     // Check if the new chain can become canonical
+                    unimplemented!();
 
                     // Remove parent block from cache
                     self.canonical_tips_cache.remove(&parent_hash);
 
                     // Insert new block in cache
-                    self.canonical_tips_cache.insert(block.block_hash().unwrap());
+                    self.canonical_tips_cache.insert(block_hash);
 
                     Ok(())
                 } else if self.pending_tips_cache.contains(&parent_hash) {
@@ -344,8 +346,6 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                     if block.height() != parent_height + 1 {
                         return Err(ChainErr::BadHeight);
                     }
-
-                    let block_hash = block.block_hash().unwrap();
 
                     // Place block in the orphan pool
                     self.orphan_pool.insert(block_hash.clone(), block.clone());
@@ -357,17 +357,51 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                     self.pending_tips_cache.insert(block.block_hash().unwrap());
 
                     Ok(())
-                } else if self.pending_heads_parents.get(&block.block_hash().unwrap()).is_some() {
-                    unimplemented!();
+                } else if let Some(pending_head) = self.pending_heads_parents.get(&block_hash) {
+                    // Write block to orphan pool
+                    self.orphan_pool.insert(block_hash.clone(), block.clone());
+                    
+                    // Replace current pending head with the
+                    // pushed block
+                    self.pending_heads_parents.remove(&block_hash);
+                    self.pending_heads_parents.insert(block.parent_hash().unwrap(), block_hash);
+
+                    Ok(())
                 } else {
-                    // First attempt to place the block after an existing block
+                    // If the parent exists and it is not the canonical
+                    // tip this means that this block is represents a 
+                    // potential fork in the chain so we add it to the
+                    // orphan pool and the canonical tips cache.
                     match self.db.get(&parent_hash) {
-                        Some(encoded) => {
-                            unimplemented!();
+                        Some(_) => {
+                            let block_hash = block.block_hash().unwrap();
+
+                            // Write to orphan pool
+                            self.orphan_pool.insert(block_hash.clone(), block);
+
+                            // Write to canonical tips cache
+                            self.canonical_tips_cache.insert(block_hash);
+
+                            Ok(())
                         }
                         None => {
-                            // Create a new non-canonical chain
-                            unimplemented!();
+                            if self.orphan_pool.get(&parent_hash).is_some() {
+                                unimplemented!();
+                            } else {
+                                // Create a new non-canonical chain
+                                let parent_hash = block.parent_hash().unwrap();
+
+                                // Write to orphan pool
+                                self.orphan_pool.insert(block_hash.clone(), block);
+                            
+                                // Write as pending tip
+                                self.pending_tips_cache.insert(block_hash.clone());
+
+                                // And as pending head
+                                self.pending_heads_parents.insert(parent_hash, block_hash);
+
+                                Ok(())
+                            }
                         }
                     }
                 }
@@ -409,6 +443,7 @@ mod tests {
         /// Stress test of chain append.
         /// 
         /// We have blocks of the following structure:
+        /// ```
         /// GEN -> A -> B -> C -> D -> E -> F -> G
         ///        |
         ///         -> B' -> C' -> D' -> E'
@@ -416,10 +451,11 @@ mod tests {
         ///            |     -> D'''
         ///            |
         ///            -> C'' -> D'' -> E'' -> F''
-        ///
-        /// The tip of the block must always be G, regardless
+        /// ```
+        /// 
+        /// The tip of the block must always be `G`, regardless
         /// of the order in which the blocks are received. And 
-        /// the height of the chain must be that of G which is 7.
+        /// the height of the chain must be that of `G` which is 7.
         fn append_stress_test() -> bool {
             let db = test_helpers::init_tempdb();
             let easy_chain = Arc::new(RwLock::new(EasyChain::new(db.clone())));
@@ -427,66 +463,82 @@ mod tests {
             let mut hard_chain = HardChain::new(db, easy_ref);
 
             let mut A = HardBlock::new(Some(HardChain::genesis().block_hash().unwrap()), 1, EasyChain::genesis().block_hash().unwrap());
+            A.calculate_merkle_root();
             A.compute_hash();
             let A = Arc::new(A);
 
             let mut B = HardBlock::new(Some(A.block_hash().unwrap()), 2, EasyChain::genesis().block_hash().unwrap());
+            B.calculate_merkle_root();
             B.compute_hash();
             let B = Arc::new(B);
 
             let mut C = HardBlock::new(Some(B.block_hash().unwrap()), 3, EasyChain::genesis().block_hash().unwrap());
+            C.calculate_merkle_root();
             C.compute_hash();
             let C = Arc::new(C);
 
             let mut D = HardBlock::new(Some(C.block_hash().unwrap()), 4, EasyChain::genesis().block_hash().unwrap());
+            D.calculate_merkle_root();
             D.compute_hash();
             let D = Arc::new(D);
 
             let mut E = HardBlock::new(Some(D.block_hash().unwrap()), 5, EasyChain::genesis().block_hash().unwrap());
+            E.calculate_merkle_root();
             E.compute_hash();
             let E = Arc::new(E);
 
             let mut F = HardBlock::new(Some(E.block_hash().unwrap()), 6, EasyChain::genesis().block_hash().unwrap());
+            F.calculate_merkle_root();
             F.compute_hash();
             let F = Arc::new(F);
 
             let mut G = HardBlock::new(Some(F.block_hash().unwrap()), 7, EasyChain::genesis().block_hash().unwrap());
+            G.calculate_merkle_root();
             G.compute_hash();
             let G = Arc::new(G);
 
             let mut B_prime = HardBlock::new(Some(A.block_hash().unwrap()), 2, EasyChain::genesis().block_hash().unwrap());
+            B_prime.calculate_merkle_root();
             B_prime.compute_hash();
             let B_prime = Arc::new(B_prime);
 
             let mut C_prime = HardBlock::new(Some(B_prime.block_hash().unwrap()), 3, EasyChain::genesis().block_hash().unwrap());
+            C_prime.calculate_merkle_root();
             C_prime.compute_hash();
             let C_prime = Arc::new(C_prime);
 
             let mut D_prime = HardBlock::new(Some(C_prime.block_hash().unwrap()), 4, EasyChain::genesis().block_hash().unwrap());
+            D_prime.calculate_merkle_root();
             D_prime.compute_hash();
             let D_prime = Arc::new(D_prime);
 
             let mut E_prime = HardBlock::new(Some(D_prime.block_hash().unwrap()), 5, EasyChain::genesis().block_hash().unwrap());
+            E_prime.calculate_merkle_root();
             E_prime.compute_hash();
             let E_prime = Arc::new(E_prime);
 
             let mut C_second = HardBlock::new(Some(B_prime.block_hash().unwrap()), 3, EasyChain::genesis().block_hash().unwrap());
+            C_second.calculate_merkle_root();
             C_second.compute_hash();
             let C_second = Arc::new(C_second);
 
             let mut D_second = HardBlock::new(Some(C_second.block_hash().unwrap()), 4, EasyChain::genesis().block_hash().unwrap());
+            D_second.calculate_merkle_root();
             D_second.compute_hash();
             let D_second = Arc::new(D_second);
 
             let mut E_second = HardBlock::new(Some(D_second.block_hash().unwrap()), 5, EasyChain::genesis().block_hash().unwrap());
+            E_second.calculate_merkle_root();
             E_second.compute_hash();
             let E_second = Arc::new(E_second);
 
             let mut F_second = HardBlock::new(Some(E_second.block_hash().unwrap()), 6, EasyChain::genesis().block_hash().unwrap());
+            F_second.calculate_merkle_root();
             F_second.compute_hash();
             let F_second = Arc::new(F_second);
 
             let mut D_tertiary = HardBlock::new(Some(C_prime.block_hash().unwrap()), 4, EasyChain::genesis().block_hash().unwrap());
+            D_tertiary.calculate_merkle_root();
             D_tertiary.compute_hash();
             let D_tertiary = Arc::new(D_tertiary);
 

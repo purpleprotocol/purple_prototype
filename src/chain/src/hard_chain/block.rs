@@ -114,6 +114,11 @@ impl HardBlock {
         }
     }
 
+    pub fn calculate_merkle_root(&mut self) {
+        // TODO: Replace this
+        self.merkle_root = Some(Hash::NULL);
+    }  
+
     pub fn compute_hash(&mut self) {
         let message = self.compute_hash_message();
         let hash = crypto::hash_slice(&message);
