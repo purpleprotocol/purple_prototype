@@ -258,7 +258,8 @@ impl EasyChain {
     /// on the easy chain is entirely dependent on the ordering of 
     /// the hard chain.
     pub fn set_hard_canonical_tip(&mut self, new: &Hash) -> Result<(), ()> {
-        unimplemented!();
+        self.hard_canonical_tip = new.clone();
+        Ok(())
     }
 }
 

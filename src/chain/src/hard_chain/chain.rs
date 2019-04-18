@@ -17,6 +17,7 @@
 */
 
 use crate::block::Block;
+use crate::orphan_state::{OrphanState, OrphanType};
 use crate::chain::{Chain, ChainErr};
 use crate::easy_chain::chain::EasyChainRef;
 use crate::hard_chain::block::HardBlock;
@@ -173,7 +174,7 @@ pub struct HardChain {
     pending_heads_parents: HashMap<Hash, Hash>,
 
     /// Memory pool of blocks that are not in the canonical chain.
-    orphan_pool: HashMap<Hash, Arc<HardBlock>>,
+    orphan_pool: HashMap<Hash, OrphanState<HardBlock>>,
 }
 
 impl HardChain {
@@ -315,15 +316,12 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                 Ok(())
             } else {
                 if self.canonical_tips_cache.contains(&parent_hash) {
-                    let parent_height = self.orphan_pool.get(&parent_hash).unwrap().height();
+                    let parent_height = self.orphan_pool.get(&parent_hash).unwrap().inner().height();
 
                     // The block height must be equal to that of the parent plus one
                     if block.height() != parent_height + 1 {
                         return Err(ChainErr::BadHeight);
                     }
-
-                    // Place block in the orphan pool
-                    self.orphan_pool.insert(block_hash.clone(), block.clone());
 
                     // Attempt to connect disconnected chains to 
                     // the newely appended block.
@@ -331,6 +329,9 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
 
                     // Check if the new chain can become canonical
                     unimplemented!();
+
+                    // Place block in the orphan pool
+                    self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block.clone(), OrphanType::CanonicalTip));
 
                     // Remove parent block from cache
                     self.canonical_tips_cache.remove(&parent_hash);
@@ -340,7 +341,7 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
 
                     Ok(())
                 } else if self.pending_tips_cache.contains(&parent_hash) {
-                    let parent_height = self.orphan_pool.get(&parent_hash).unwrap().height();
+                    let parent_height = self.orphan_pool.get(&parent_hash).unwrap().inner().height();
 
                     // The block height must be equal to that of the parent plus one
                     if block.height() != parent_height + 1 {
@@ -348,7 +349,21 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                     }
 
                     // Place block in the orphan pool
-                    self.orphan_pool.insert(block_hash.clone(), block.clone());
+                    self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block.clone(), OrphanType::PendingTip));
+
+                    // Update parent
+                    let parent_entry = self.orphan_pool.get_mut(&parent_hash).unwrap();
+
+                    // Update parent type
+                    match parent_entry.orphan_type() {
+                        OrphanType::PendingTipHead => {
+                            // Make tip in this case
+                            parent_entry.set_type(OrphanType::PendingHead);
+                        }
+                        _ => {
+                            parent_entry.set_type(OrphanType::PendingNonTip);
+                        }
+                    };
 
                     // Remove parent block from cache
                     self.pending_tips_cache.remove(&parent_hash);
@@ -357,9 +372,23 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                     self.pending_tips_cache.insert(block.block_hash().unwrap());
 
                     Ok(())
-                } else if let Some(_) = self.pending_heads_parents.get(&block_hash) {
+                } else if let Some(child) = self.pending_heads_parents.get(&block_hash) {
                     // Write block to orphan pool
-                    self.orphan_pool.insert(block_hash.clone(), block.clone());
+                    self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block.clone(), OrphanType::PendingHead));
+
+                    // Update child
+                    let child_entry = self.orphan_pool.get_mut(child).unwrap();
+
+                    // Update child type
+                    match child_entry.orphan_type() {
+                        OrphanType::PendingTipHead => {
+                            // Make tip in this case
+                            child_entry.set_type(OrphanType::PendingTip);
+                        }
+                        _ => {
+                            child_entry.set_type(OrphanType::PendingNonTip);
+                        }
+                    };
                     
                     // Replace current pending head with the
                     // pushed block
@@ -377,7 +406,7 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                             let block_hash = block.block_hash().unwrap();
 
                             // Write to orphan pool
-                            self.orphan_pool.insert(block_hash.clone(), block);
+                            self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block, OrphanType::CanonicalTip));
 
                             // Write to canonical tips cache
                             self.canonical_tips_cache.insert(block_hash);
@@ -385,14 +414,44 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                             Ok(())
                         }
                         None => {
-                            if self.orphan_pool.get(&parent_hash).is_some() {
-                                unimplemented!();
+                            // The parent is an orphan
+                            if let Some(orphan) = self.orphan_pool.get(&parent_hash) {
+                                let block_hash = block.block_hash().unwrap();
+
+                                match orphan.orphan_type() {
+                                    OrphanType::PendingTip => {
+                                        panic!("The parent cannot be a pending tip at this point!");
+                                    }
+                                    OrphanType::CanonicalTip => {
+                                        panic!("Te parent cannot be a canonical tip at this point");
+                                    }
+                                    OrphanType::PendingTipHead => {
+                                        panic!("Te parent cannot be a pending tip and head at this point");
+                                    }
+                                    OrphanType::PendingNonTip 
+                                    | OrphanType::PendingHead => {
+                                        // Write to orphan pool
+                                        self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block, OrphanType::PendingTip));
+
+                                        // Write to pending tips cache
+                                        self.pending_tips_cache.insert(block_hash);
+                                    }
+                                    OrphanType::CanonicalNonTip => {
+                                        // Write to orphan pool
+                                        self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block, OrphanType::CanonicalTip));
+
+                                        // Write to canonical tips cache
+                                        self.canonical_tips_cache.insert(block_hash);
+                                    }
+                                };
+
+                                Ok(())
                             } else {
                                 // Create a new non-canonical chain
                                 let parent_hash = block.parent_hash().unwrap();
 
                                 // Write to orphan pool
-                                self.orphan_pool.insert(block_hash.clone(), block);
+                                self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block, OrphanType::PendingTipHead));
                             
                                 // Write as pending tip
                                 self.pending_tips_cache.insert(block_hash.clone());
