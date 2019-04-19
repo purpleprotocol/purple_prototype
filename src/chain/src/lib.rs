@@ -24,6 +24,7 @@ mod easy_chain;
 mod hard_chain;
 mod iterators;
 mod orphan_state;
+mod pending_state;
 
 pub use crate::chain::*;
 pub use block::*;

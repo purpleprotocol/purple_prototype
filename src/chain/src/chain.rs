@@ -23,6 +23,9 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ChainErr {
+    /// The block already exists in the chain.
+    AlreadyInChain,
+
     /// The parent of the given block is invalid
     InvalidParent,
 
