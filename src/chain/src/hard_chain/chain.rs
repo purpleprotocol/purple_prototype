@@ -17,16 +17,13 @@
 */
 
 use crate::block::Block;
-use crate::pending_state::{Branches, PendingState};
-use crate::orphan_state::{OrphanState, OrphanType};
 use crate::chain::{Chain, ChainErr};
 use crate::easy_chain::chain::EasyChainRef;
 use crate::hard_chain::block::HardBlock;
-use crate::iterators::hard::HardBlockIterator;
 use bin_tools::*;
 use crypto::Hash;
 use elastic_array::ElasticArray128;
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use hashdb::HashDB;
 use lru::LruCache;
 use parking_lot::{RwLock, Mutex};
@@ -38,7 +35,7 @@ use lazy_static::*;
 const BLOCK_CACHE_SIZE: usize = 20;
 
 /// Maximum orphans allowed.
-const MAX_ORPHANS: usize = 10;
+const MAX_ORPHANS: usize = 100;
 
 /// Blocks with height below the canonical height minus 
 /// this number will be rejected.
@@ -161,24 +158,11 @@ pub struct HardChain {
     /// The tipmost block in the canonical chain.
     canonical_tip: Arc<HardBlock>,
 
-    /// Cache storing the tip blocks descended from the
-    /// canonical chain and excluding the actual canonical
-    /// tip block.
-    canonical_tips_cache: HashSet<Hash>,
-
-    /// Cache storing the tip blocks of chains that are
-    /// disconnected from the canonical chain.
-    pending_tips_cache: HashSet<Hash>,
-
-    /// Mapping between disconnected chain head
-    /// blocks parent hashes and their own hashes
-    /// along with the hashes of the top blocks
-    /// from disconnected chains that descend
-    /// from the respective head block.
-    pending_heads_parents: HashMap<Hash, Branches>,
-
     /// Memory pool of blocks that are not in the canonical chain.
-    orphan_pool: HashMap<Hash, OrphanState<HardBlock>>,
+    orphan_pool: HashMap<Hash, Arc<HardBlock>>,
+
+    /// Mapping between heights and orphans
+    heights_mapping: HashMap<u64, Vec<Hash>>
 }
 
 impl HardChain {
@@ -216,10 +200,8 @@ impl HardChain {
 
         HardChain {
             canonical_tip,
-            canonical_tips_cache: HashSet::with_capacity(MAX_ORPHANS),
-            pending_heads_parents: HashMap::with_capacity(MAX_ORPHANS),
-            pending_tips_cache: HashSet::with_capacity(MAX_ORPHANS),
             orphan_pool: HashMap::with_capacity(MAX_ORPHANS),
+            heights_mapping: HashMap::with_capacity(MAX_ORPHANS),
             height,
             easy_chain,
             db: db_ref,
@@ -266,9 +248,28 @@ impl HardChain {
         let mut easy_chain = self.easy_chain.chain.write();
         easy_chain.set_hard_canonical_tip(&block.block_hash().unwrap()).unwrap();
     }
+
+    fn write_orphan(&mut self, orphan: Arc<HardBlock>) {
+        let orphan_hash = orphan.block_hash().unwrap();
+        let height = orphan.height();
+
+        // Write height mapping
+        if let Some(height_entry) = self.heights_mapping.get_mut(&height) {
+            height_entry.push(orphan_hash.clone())
+        } else {
+            self.heights_mapping.insert(height, vec![orphan_hash.clone()]);
+        }
+
+        // Write to orphan pool
+        self.orphan_pool.insert(orphan_hash, orphan);
+    }
+
+    fn process_orphans(&mut self) {
+        unimplemented!();
+    }
 }
 
-impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
+impl Chain<HardBlock> for HardChain {
     fn genesis() -> Arc<HardBlock> {
         GENESIS_RC.clone()
     }
@@ -303,7 +304,6 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
         }
 
         let tip = &self.canonical_tip;
-        let block_hash = block.block_hash().unwrap();
 
         if let Some(parent_hash) = block.parent_hash() {
             // First attempt to place the block after the 
@@ -314,242 +314,30 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
                     return Err(ChainErr::BadHeight);
                 }
 
-                // Attempt to connect the new canonical tip to pending chains
-                let mut block_match = None;
+                // Write block to the chain
+                self.write_block(block);
 
-                for (parent, block) in self.pending_heads_parents.iter() {
-                    if *parent == block_hash {
-                        block_match = Some(block.clone());
-                        break;
-                    } 
-                }
-
-                if let Some(block_match) = block_match {
-                    // We need to connect another chain as 
-                    // the canonical extension.
-                    unimplemented!();
-                } else {
-                    // Write block to the chain
-                    self.write_block(block);
-                }
+                // Process orphans
+                self.process_orphans();
 
                 Ok(())
             } else {
-                if self.canonical_tips_cache.contains(&parent_hash) {
-                    let parent_height = self.orphan_pool.get(&parent_hash).unwrap().inner().height();
+                // If the parent exists and it is not the canonical
+                // tip this means that this block is represents a 
+                // potential fork in the chain so we add it to the
+                // orphan pool.
+                match self.db.get(&parent_hash) {
+                    Some(_) => {
+                        self.write_orphan(block);
 
-                    // The block height must be equal to that of the parent plus one
-                    if block.height() != parent_height + 1 {
-                        return Err(ChainErr::BadHeight);
+                        // Process orphans
+                        self.process_orphans();
+
+                        Ok(())
                     }
-
-                    // Attempt to connect disconnected chains to 
-                    // the newely appended block.
-                    unimplemented!();
-
-                    // Check if the new chain can become canonical
-                    unimplemented!();
-
-                    // Place block in the orphan pool
-                    self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block.clone(), OrphanType::CanonicalTip));
-
-                    // Remove parent block from cache
-                    self.canonical_tips_cache.remove(&parent_hash);
-
-                    // Insert new block in cache
-                    self.canonical_tips_cache.insert(block_hash);
-
-                    Ok(())
-                } else if self.pending_tips_cache.contains(&parent_hash) {
-                    let parent_height = self.orphan_pool.get(&parent_hash).unwrap().inner().height();
-
-                    // The block height must be equal to that of the parent plus one
-                    if block.height() != parent_height + 1 {
-                        return Err(ChainErr::BadHeight);
-                    }
-
-                    // Update parent
-                    let parent_entry = self.orphan_pool.get_mut(&parent_hash).unwrap();
-
-                    // Update parent type
-                    match parent_entry.orphan_type() {
-                        OrphanType::PendingTipHead => {
-                            // Make tip in this case
-                            parent_entry.set_type(OrphanType::PendingHead);
-                        }
-                        _ => {
-                            parent_entry.set_type(OrphanType::PendingNonTip);
-                        }
-                    };
-
-                    let mut block_match = None;
-
-                    // Attempt to connect to other pending chains
-                    for (parent, state) in self.pending_heads_parents.iter() {
-                        if *parent == block_hash {
-                            block_match = Some((parent, state.clone()));
-                            break;
-                        } 
-                    }
-
-                    // Connect to chain if we have a match
-                    if let Some((block_match, state)) = block_match {
-                        // Place block in the orphan pool
-                        self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block.clone(), OrphanType::PendingNonTip));
-
-                        let block_match = self.orphan_pool.get_mut(&block_match).unwrap();
-
-                        // Mark as pending non tip
-                        block_match.set_type(OrphanType::PendingNonTip);
-
-                        // Merge states
-                        unimplemented!();
-                    } else {
-                        // Insert new block in cache
-                        self.pending_tips_cache.insert(block.block_hash().unwrap());
-
-                        // Place block in the orphan pool
-                        self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block.clone(), OrphanType::PendingTip));
-                    }
-
-                    // Remove parent block from cache
-                    self.pending_tips_cache.remove(&parent_hash);
-
-                    Ok(())
-                } else if self.pending_heads_parents.get(&block_hash).is_some() {
-                    let mut replace_state = false;
-
-                    {
-                        let entry = self.pending_heads_parents.get_mut(&block_hash).unwrap();
-
-                        for (child, state) in entry.iter_mut() {
-                            // Update child
-                            let child_entry = self.orphan_pool.get_mut(child).unwrap();
-
-                            // Update child type
-                            match child_entry.orphan_type() {
-                                OrphanType::PendingTipHead => {
-                                    // Mark as tip in this case
-                                    child_entry.set_type(OrphanType::PendingTip);
-                                }
-                                _ => {
-                                    state.remove_tip(child);
-                                    child_entry.set_type(OrphanType::PendingNonTip);
-                                }
-                            };
-
-                            let mut found_match = false;
-
-                            // Attempt to connect to other pending chains
-                            for tip_hash in self.pending_tips_cache.iter() {
-                                let tip = self.orphan_pool.get_mut(tip_hash).unwrap();
-
-                                if *tip_hash == parent_hash {
-                                    // Mark old tip as non tip
-                                    tip.set_type(OrphanType::PendingNonTip);
-                                    state.remove_tip(tip_hash);
-                                    
-                                    found_match = true;
-                                    break;
-                                } 
-                            }
-                        
-                            // Do not cache as head if we connected the 
-                            // chain to another tip.
-                            if !found_match {
-                                // Mark for replacement
-                                replace_state = true;
-
-                                // Write block to orphan pool
-                                self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block.clone(), OrphanType::PendingHead));
-                            } else {
-                                // Merge state from connected chain to our state
-                                unimplemented!();
-
-                                self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block, OrphanType::PendingNonTip));
-                            }
-                        }
-                    }
-
-                    if replace_state {
-                        // Replace current pending head with the
-                        // pushed block
-                        let val = self.pending_heads_parents.remove(&block_hash).unwrap();
-
-                        // Move old state to new key
-                        self.pending_heads_parents.insert(block.parent_hash().unwrap(), val);
-                    }
-
-                    Ok(())
-                } else {
-                    // If the parent exists and it is not the canonical
-                    // tip this means that this block is represents a 
-                    // potential fork in the chain so we add it to the
-                    // orphan pool and the canonical tips cache.
-                    match self.db.get(&parent_hash) {
-                        Some(_) => {
-                            let block_hash = block.block_hash().unwrap();
-
-                            // Write to orphan pool
-                            self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block, OrphanType::CanonicalTip));
-
-                            // Write to canonical tips cache
-                            self.canonical_tips_cache.insert(block_hash);
-
-                            Ok(())
-                        }
-                        None => {
-                            // The parent is an orphan
-                            if let Some(orphan) = self.orphan_pool.get(&parent_hash) {
-                                let block_hash = block.block_hash().unwrap();
-
-                                match orphan.orphan_type() {
-                                    OrphanType::PendingTip => {
-                                        panic!("The parent cannot be a pending tip at this point!");
-                                    }
-                                    OrphanType::CanonicalTip => {
-                                        panic!("The parent cannot be a canonical tip at this point!");
-                                    }
-                                    OrphanType::PendingTipHead => {
-                                        panic!("The parent cannot be a pending tip and head at this point!");
-                                    }
-                                    OrphanType::PendingNonTip 
-                                    | OrphanType::PendingHead => {
-                                        // Write to orphan pool
-                                        self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block, OrphanType::PendingTip));
-
-                                        // Write to pending tips cache
-                                        self.pending_tips_cache.insert(block_hash);
-                                    }
-                                    OrphanType::CanonicalNonTip => {
-                                        // Write to orphan pool
-                                        self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block, OrphanType::CanonicalTip));
-
-                                        // Write to canonical tips cache
-                                        self.canonical_tips_cache.insert(block_hash);
-                                    }
-                                };
-
-                                Ok(())
-                            } else {
-                                // Create a new non-canonical chain
-                                let parent_hash = block.parent_hash().unwrap();
-
-                                // Write to orphan pool
-                                self.orphan_pool.insert(block_hash.clone(), OrphanState::new(block, OrphanType::PendingTipHead));
-                            
-                                // Write as pending tip
-                                self.pending_tips_cache.insert(block_hash.clone());
-
-                                // And as pending head
-                                let mut branches = Branches::new();
-                                branches.insert(block_hash, &[], None);
-
-                                self.pending_heads_parents.insert(parent_hash, branches);
-
-                                Ok(())
-                            }
-                        }
+                    None => {
+                        self.write_orphan(block);
+                        Ok(())
                     }
                 }
             }
@@ -565,18 +353,6 @@ impl<'a> Chain<'a, HardBlock, HardBlockIterator<'a>> for HardChain {
     fn canonical_tip(&self) -> Arc<HardBlock> {
         self.canonical_tip.clone()
     }
-
-    // fn iter_canonical_tips(&'a self) -> HardBlockIterator<'a> {
-    //     HardBlockIterator(Box::new(
-    //         self.canonical_tips_cache.iter().map(|t| self.query(t).unwrap()).map(AsRef::as_ref),
-    //     ))
-    // }
-
-    // fn iter_pending_tips(&'a self) -> HardBlockIterator<'a> {
-    //     HardBlockIterator(Box::new(
-    //         self.pending_tips_cache.iter().map(|t| self.query(t).unwrap()).map(AsRef::as_ref),
-    //     ))
-    // }
 }
 
 #[cfg(test)]

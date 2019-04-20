@@ -20,7 +20,6 @@ use crate::block::Block;
 use crate::chain::{Chain, ChainErr};
 use crate::easy_chain::block::EasyBlock;
 use crate::hard_chain::chain::HardChain;
-use crate::iterators::easy::EasyBlockIterator;
 use bin_tools::*;
 use crypto::Hash;
 use elastic_array::ElasticArray128;
@@ -274,7 +273,7 @@ fn parse_encoded_blocks(bytes: &[u8]) -> HashSet<Arc<EasyBlock>> {
     b
 }
 
-impl<'a> Chain<'a, EasyBlock, EasyBlockIterator<'a>> for EasyChain {
+impl Chain<EasyBlock> for EasyChain {
     fn genesis() -> Arc<EasyBlock> {
         GENESIS_RC.clone()
     }
@@ -345,16 +344,4 @@ impl<'a> Chain<'a, EasyBlock, EasyBlockIterator<'a>> for EasyChain {
     fn canonical_tip(&self) -> Arc<EasyBlock> {
         self.canonical_tip.clone()
     }
-
-    // fn iter_canonical_tips(&'a self) -> EasyBlockIterator<'a> {
-    //     EasyBlockIterator(Box::new(
-    //         self.canonical_tips_cache.iter().map(AsRef::as_ref),
-    //     ))
-    // }
-
-    // fn iter_pending_tips(&'a self) -> EasyBlockIterator<'a> {
-    //     EasyBlockIterator(Box::new(
-    //         self.pending_tips_cache.iter().map(AsRef::as_ref),
-    //     ))
-    // }
 }

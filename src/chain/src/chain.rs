@@ -37,10 +37,9 @@ pub enum ChainErr {
 }
 
 /// Generic chain interface
-pub trait Chain<'a, B, I>
+pub trait Chain<B>
 where
-    B: 'a + Block + PartialEq + Eq + HashTrait,
-    I: Iterator<Item = &'a B>,
+    B: Block + PartialEq + Eq + HashTrait,
 {
     /// Returns the current height of the canonical chain.
     fn height(&self) -> u64;
@@ -63,17 +62,4 @@ where
 
     /// Returns the block height of the block with the given hash, if any.
     fn block_height(&self, hash: &Hash) -> Option<u64>;
-
-    // /// Returns an iterator over all tip blocks of non-canonical chains that
-    // /// descend from the canonical chain. The tip block of the canonical chain
-    // /// will **NOT** be included.
-    // ///
-    // /// Note that this does not include blocks that are disconnected in any way
-    // /// from the canonical chain i.e. blocks written that we haven't received
-    // /// the parent of.
-    // fn iter_canonical_tips(&'a self) -> I;
-
-    // /// Returns an iterator over all of tip blocks of chains that are
-    // /// completely disconnected from the canonical chain.
-    // fn iter_pending_tips(&'a self) -> I;
 }
