@@ -20,10 +20,11 @@ use crate::block::Block;
 use crate::chain::{Chain, ChainErr};
 use crate::easy_chain::chain::EasyChainRef;
 use crate::hard_chain::block::HardBlock;
+use crate::validation_status::ValidationStatus;
 use bin_tools::*;
 use crypto::Hash;
 use elastic_array::ElasticArray128;
-use hashbrown::HashMap;
+use hashbrown::{HashSet, HashMap};
 use hashdb::HashDB;
 use lru::LruCache;
 use parking_lot::{RwLock, Mutex};
@@ -161,8 +162,14 @@ pub struct HardChain {
     /// Memory pool of blocks that are not in the canonical chain.
     orphan_pool: HashMap<Hash, Arc<HardBlock>>,
 
+    /// The biggest height of all orphans
+    max_orphan_height: Option<u64>,
+
     /// Mapping between heights and orphans
-    heights_mapping: HashMap<u64, Vec<Hash>>
+    heights_mapping: HashMap<u64, HashSet<Hash>>,
+
+    /// Mapping between orphans and their validation statuses.
+    validations_mapping: HashMap<Hash, ValidationStatus>,
 }
 
 impl HardChain {
@@ -202,6 +209,8 @@ impl HardChain {
             canonical_tip,
             orphan_pool: HashMap::with_capacity(MAX_ORPHANS),
             heights_mapping: HashMap::with_capacity(MAX_ORPHANS),
+            validations_mapping: HashMap::with_capacity(MAX_ORPHANS),
+            max_orphan_height: None,
             height,
             easy_chain,
             db: db_ref,
@@ -244,28 +253,92 @@ impl HardChain {
             ElasticArray128::<u8>::from_slice(&encoded_height)
         );
 
+        // Remove block from orphan pool
+        self.orphan_pool.remove(&block_hash);
+
+        // Remove from height mappings
+        if let Some(orphans) = self.heights_mapping.get_mut(&block.height()) {
+            orphans.remove(&block_hash);
+        }
+
         // Mark new hard chain tip block in easy chain
         let mut easy_chain = self.easy_chain.chain.write();
         easy_chain.set_hard_canonical_tip(&block.block_hash().unwrap()).unwrap();
     }
 
-    fn write_orphan(&mut self, orphan: Arc<HardBlock>) {
+    fn write_orphan(&mut self, orphan: Arc<HardBlock>, validation_status: ValidationStatus) {
         let orphan_hash = orphan.block_hash().unwrap();
         let height = orphan.height();
 
         // Write height mapping
         if let Some(height_entry) = self.heights_mapping.get_mut(&height) {
-            height_entry.push(orphan_hash.clone())
+            height_entry.insert(orphan_hash.clone());
         } else {
-            self.heights_mapping.insert(height, vec![orphan_hash.clone()]);
+            let mut set = HashSet::new();
+            set.insert(orphan_hash.clone());
+
+            self.heights_mapping.insert(height, set);
         }
 
         // Write to orphan pool
-        self.orphan_pool.insert(orphan_hash, orphan);
+        self.orphan_pool.insert(orphan_hash.clone(), orphan);
+
+        // Set max orphan height if this is the case
+        if let Some(max_orphan_height) = self.max_orphan_height {
+            if height > max_orphan_height {
+                self.max_orphan_height = Some(height);
+            }
+        } else {
+            self.max_orphan_height = Some(height);
+        }
+        
+
+        // Write to validations mappings
+        self.validations_mapping.insert(orphan_hash, validation_status);
     }
 
-    fn process_orphans(&mut self) {
-        unimplemented!();
+    /// Attempts to attach orphans to the canonical chain
+    /// starting with the given height.
+    fn process_orphans(&mut self, start_height: u64) {
+        let mut h = start_height;
+
+        if let Some(max_orphan_height) = self.max_orphan_height {
+            loop {
+                if h > max_orphan_height {
+                    break;
+                }
+
+                if let Some(orphans) = self.heights_mapping.get(&h) {
+                    if orphans.len() == 1 {
+                        // HACK: Maybe we can find a better/faster way to get the only item of a set?
+                        let orphan_hash = orphans.iter().find(|_| true).unwrap();
+                        let orphan = self.orphan_pool.get(orphan_hash).unwrap();
+
+                        // If the orphan directly follows the canonical
+                        // tip, write it to the chain.
+                        if orphan.parent_hash().unwrap() == self.canonical_tip().block_hash().unwrap() {
+                            self.write_block(orphan.clone());
+                        }
+                    } else {
+                        unimplemented!();
+                    }
+                }
+
+                h += 1;
+            }
+        }
+    }
+
+    /// Attempts to switch the canonical chain to the valid chain
+    /// which has the given canidate tip. Do nothing if this is not
+    /// possible.
+    fn attempt_switch(&mut self, candidate_tip: Arc<HardBlock>) {
+        // TODO: Possibly add an offset here so we don't switch
+        // chains that often on many chains competing for being
+        // canonical.
+        if candidate_tip.height() > self.height {
+            unimplemented!();
+        }
     }
 }
 
@@ -303,6 +376,13 @@ impl Chain<HardBlock> for HardChain {
             return Err(ChainErr::BadHeight);
         }
 
+        let block_hash = block.block_hash().unwrap();
+
+        // Check for existence
+        if self.orphan_pool.get(&block_hash).is_some() || self.db.get(&block_hash).is_some() {
+            return Err(ChainErr::AlreadyInChain);
+        }
+
         let tip = &self.canonical_tip;
 
         if let Some(parent_hash) = block.parent_hash() {
@@ -314,11 +394,13 @@ impl Chain<HardBlock> for HardChain {
                     return Err(ChainErr::BadHeight);
                 }
 
+                let height = block.height();
+
                 // Write block to the chain
                 self.write_block(block);
 
                 // Process orphans
-                self.process_orphans();
+                self.process_orphans(height);
 
                 Ok(())
             } else {
@@ -327,17 +409,67 @@ impl Chain<HardBlock> for HardChain {
                 // potential fork in the chain so we add it to the
                 // orphan pool.
                 match self.db.get(&parent_hash) {
-                    Some(_) => {
-                        self.write_orphan(block);
+                    Some(parent_block) => {
+                        let height = block.height();
+                        let parent_height = HardBlock::from_bytes(&parent_block).unwrap().height();
+
+                        // The height must be equal to that of the parent plus one
+                        if height != parent_height + 1 {
+                            return Err(ChainErr::BadHeight);
+                        }
+
+                        self.write_orphan(block, ValidationStatus::ValidChainTip);
 
                         // Process orphans
-                        self.process_orphans();
+                        self.process_orphans(height);
 
                         Ok(())
                     }
                     None => {
-                        self.write_orphan(block);
-                        Ok(())
+                        // The parent is an orphan
+                        if let Some(parent_block) = self.orphan_pool.get(&parent_hash) {
+                            let height = block.height();
+
+                            // The height must be equal to that of the parent plus one
+                            if height != parent_block.height() + 1 {
+                                return Err(ChainErr::BadHeight);
+                            }
+
+                            let parent_status = self.validations_mapping.get_mut(&parent_hash).unwrap();
+
+                            match parent_status {
+                                ValidationStatus::Unknown
+                                | ValidationStatus::DisconnectedTip => {
+                                    // Change status of old tip
+                                    *parent_status = ValidationStatus::BelongsToDisconnected;
+
+                                    self.write_orphan(block, ValidationStatus::DisconnectedTip);
+                                }
+                                ValidationStatus::ValidChainTip => {
+                                    // Change status of old tip
+                                    *parent_status = ValidationStatus::BelongsToValidChain;
+
+                                    // Make orphan new tip
+                                    self.write_orphan(block.clone(), ValidationStatus::ValidChainTip);
+
+                                    // Check if the new tip's height is greater than
+                                    // the canonical chain, and if so, switch chains.
+                                    self.attempt_switch(block);
+                                }
+                                ValidationStatus::BelongsToDisconnected => {
+                                    self.write_orphan(block, ValidationStatus::BelongsToDisconnected);
+                                }
+                                ValidationStatus::BelongsToValidChain => {
+                                    self.write_orphan(block.clone(), ValidationStatus::ValidChainTip);
+                                    self.attempt_switch(block);
+                                }
+                            }
+
+                            Ok(())
+                        } else {
+                            self.write_orphan(block, ValidationStatus::Unknown);
+                            Ok(())
+                        }
                     }
                 }
             }

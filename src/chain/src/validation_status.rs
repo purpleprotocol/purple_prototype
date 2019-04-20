@@ -16,17 +16,23 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(non_snake_case)]
+#[derive(Clone, Debug, PartialEq)]
+pub enum ValidationStatus {
+    /// The orphan does not fit in any of the other categories.
+    Unknown,
 
-mod block;
-mod chain;
-mod easy_chain;
-mod hard_chain;
-mod validation_status;
+    /// The orphan has both a valid parent and/or children
+    /// but it belongs to a chain that is disconnected from
+    /// the caonical one.
+    BelongsToDisconnected,
 
-pub use crate::chain::*;
-pub use block::*;
-pub use easy_chain::chain::*;
-pub use easy_chain::block::*;
-pub use hard_chain::chain::*;
-pub use hard_chain::block::*;
+    /// The orphan belongs to a valid chain that is not canonical
+    BelongsToValidChain,
+
+    /// The orphan is the tip of a valid chain that is descended
+    /// from the canonical chain.
+    ValidChainTip,
+
+    /// The orphan is the tip of a disconnected chain
+    DisconnectedTip,
+}
