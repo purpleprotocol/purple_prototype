@@ -271,6 +271,9 @@ impl HardChain {
             orphans.remove(&block_hash);
         }
 
+        // Remove from validations mapping
+        self.validations_mapping.remove(&block_hash);
+
         // Mark new hard chain tip block in easy chain
         let mut easy_chain = self.easy_chain.chain.write();
         easy_chain.set_hard_canonical_tip(&block.block_hash().unwrap()).unwrap();
@@ -309,31 +312,6 @@ impl HardChain {
 
         // Write to validations mappings
         self.validations_mapping.insert(orphan_hash, validation_status);
-
-        if let Some(inverse_height) = inverse_height {
-            let mut cur_inverse = inverse_height;
-            let mut current = orphan;
-
-            // Recurse parents and update inverse height
-            // until we reach a missing block or the 
-            // canonical chain.
-            while let Some(parent) = self.orphan_pool.get(&current.parent_hash().unwrap()) {
-                let par_height = parent.height();
-                let orphans = self.heights_mapping.get_mut(&par_height).unwrap();
-                let inverse_h_entry = orphans.get_mut(&parent.block_hash().unwrap()).unwrap();
-
-                if let Some(entry) = inverse_h_entry {
-                    if *entry < cur_inverse + 1 {
-                        *entry = cur_inverse + 1;
-                    }
-                } else {
-                    *inverse_h_entry = Some(cur_inverse + 1);
-                }
-
-                current = parent.clone();
-                cur_inverse += 1;
-            }
-        }
     }
 
     /// Attempts to attach orphans to the canonical chain
@@ -407,8 +385,52 @@ impl HardChain {
 
     /// Attempts to attach a disconnected chain tip to other
     /// disconnected chains. Returns the final status of the tip.
-    fn attempt_attach(&mut self, tip_hash: &Hash) -> ValidationStatus {
-        unimplemented!();
+    fn attempt_attach(&mut self, tip_hash: &Hash, initial_status: ValidationStatus) -> ValidationStatus {
+        let mut status = initial_status;
+        let mut to_attach = Vec::with_capacity(MAX_ORPHANS);
+
+        for (head_hash, _) in self.disconnected_heads_mapping.iter() {
+            // Skip our tip
+            if let Some(tips) = self.disconnected_heads_mapping.get(head_hash) {
+                if tips.contains(tip_hash) {
+                    continue;
+                }
+            } 
+
+            let head = self.orphan_pool.get(head_hash).unwrap();
+        
+            // Attach chain to our tip
+            if head.parent_hash().unwrap() == *tip_hash {
+                to_attach.push(head_hash.clone());
+                status = ValidationStatus::BelongsToDisconnected;
+            }
+        }
+
+        let cur_head = if let ValidationStatus::Unknown = initial_status {
+            tip_hash.clone()  
+        } else {
+            self.disconnected_tips_mapping.get(tip_hash).unwrap().clone()
+        };
+
+        // Attach heads
+        for head in to_attach.iter() {
+            let tips = self.disconnected_heads_mapping.remove(head).unwrap();
+            
+            if let Some(cur_tips) = self.disconnected_heads_mapping.get_mut(&cur_head) {
+                // Merge tips
+                for tip in tips.iter() {
+                    if let Some(head_mapping) = self.disconnected_tips_mapping.get_mut(tip) {
+                        *head_mapping = cur_head.clone();
+                    } else {
+                        self.disconnected_tips_mapping.insert(tip.clone(), cur_head.clone());
+                    }
+                    
+                    cur_tips.insert(tip.clone());
+                }
+            }
+        }
+
+        status
     }
 
     /// Attempts to attach a canonical chain tip to other
@@ -416,6 +438,34 @@ impl HardChain {
     /// old tip, its inverse height and the new tip.
     fn attempt_attach_valid(&mut self, tip_hash: &Hash) -> (ValidationStatus, u64, Arc<HardBlock>) {
         unimplemented!();
+    }
+
+    /// Recurses the parents of the orphan and updates their
+    /// inverse heights according to the provided start height 
+    /// of the orphan.
+    fn recurse_inverse(&mut self, orphan: Arc<HardBlock>, start_height: u64) {
+        let mut cur_inverse = start_height;
+        let mut current = orphan;
+
+        // Recurse parents and update inverse height
+        // until we reach a missing block or the 
+        // canonical chain.
+        while let Some(parent) = self.orphan_pool.get(&current.parent_hash().unwrap()) {
+            let par_height = parent.height();
+            let orphans = self.heights_mapping.get_mut(&par_height).unwrap();
+            let inverse_h_entry = orphans.get_mut(&parent.block_hash().unwrap()).unwrap();
+
+            if let Some(entry) = inverse_h_entry {
+                if *entry < cur_inverse + 1 {
+                    *entry = cur_inverse + 1;
+                }
+            } else {
+                *inverse_h_entry = Some(cur_inverse + 1);
+            }
+
+            current = parent.clone();
+            cur_inverse += 1;
+        }
     }
 }
 
@@ -525,11 +575,16 @@ impl Chain<HardBlock> for HardChain {
                                     self.disconnected_heads_mapping.insert(parent_hash.clone(), set);
                                     self.disconnected_tips_mapping.insert(block_hash.clone(), parent_hash.clone());
 
-                                    let status = self.attempt_attach(&block_hash);
+                                    let status = self.attempt_attach(&block_hash, ValidationStatus::DisconnectedTip);
+                                    
+                                    if let ValidationStatus::DisconnectedTip = status {
+                                        self.disconnected_tips_mapping.insert(block_hash.clone(), parent_hash.clone());
+                                    }
+
                                     self.write_orphan(block, status, None);
                                 }
                                 ValidationStatus::DisconnectedTip => {
-                                    let head = self.disconnected_tips_mapping.get(&parent_hash).unwrap();
+                                    let head = self.disconnected_tips_mapping.get(&parent_hash).unwrap().clone();
                                     let tips = self.disconnected_heads_mapping.get_mut(&head).unwrap();
 
                                     // Change status of old tip
@@ -539,9 +594,10 @@ impl Chain<HardBlock> for HardChain {
                                     tips.remove(&parent_hash);
                                     tips.insert(block_hash.clone());
 
-                                    self.disconnected_tips_mapping.remove(&parent_hash);
+                                    self.disconnected_tips_mapping.insert(block_hash.clone(), head);
+                                    let status = self.attempt_attach(&block_hash, ValidationStatus::DisconnectedTip);
 
-                                    let status = self.attempt_attach(&block_hash);
+                                    self.disconnected_tips_mapping.remove(&parent_hash);
                                     self.write_orphan(block, status, None);
                                 }
                                 ValidationStatus::ValidChainTip => {
@@ -551,26 +607,60 @@ impl Chain<HardBlock> for HardChain {
                                     let (status, inverse_height, tip) = self.attempt_attach_valid(&block_hash);
 
                                     // Mark orphan as the new tip
-                                    self.write_orphan(block, status, Some(inverse_height));
+                                    self.write_orphan(block.clone(), status, Some(inverse_height));
+
+                                    // Recurse parents and modify their inverse heights
+                                    self.recurse_inverse(tip.clone(), inverse_height);
 
                                     // Check if the new tip's height is greater than
                                     // the canonical chain, and if so, switch chains.
                                     self.attempt_switch(tip);
                                 }
                                 ValidationStatus::BelongsToDisconnected => {
-                                    let status = self.attempt_attach(&block_hash);
+                                    let head = { 
+                                        // Recurse parents until we find the head block
+                                        let mut current = parent_hash.clone();
+                                        let mut result = None;
+
+                                        loop {
+                                            if self.disconnected_heads_mapping.get(&current).is_some() {
+                                                result = Some(current);
+                                                break;
+                                            } 
+
+                                            if let Some(orphan) = self.orphan_pool.get(&current) {
+                                                current = orphan.parent_hash().unwrap();
+                                            } else {
+                                                unreachable!();
+                                            }
+                                        }
+
+                                        result.unwrap()
+                                    };
+
+                                    // Add to disconnected mappings
+                                    self.disconnected_tips_mapping.insert(block_hash.clone(), head.clone());
+                                    
+                                    let status = self.attempt_attach(&block_hash, ValidationStatus::DisconnectedTip);
+
+                                    if let ValidationStatus::DisconnectedTip = status {
+                                        self.disconnected_tips_mapping.insert(block_hash.clone(), head);
+                                    }
+
                                     self.write_orphan(block, status, None);
                                 }
                                 ValidationStatus::BelongsToValidChain => {
                                     let (status, inverse_height, tip) = self.attempt_attach_valid(&block_hash);
+
                                     self.write_orphan(block, status, Some(inverse_height));
+                                    self.recurse_inverse(tip.clone(), inverse_height);
                                     self.attempt_switch(tip);
                                 }
                             }
 
                             Ok(())
                         } else {
-                            let status = self.attempt_attach(&block_hash);
+                            let status = self.attempt_attach(&block_hash, ValidationStatus::Unknown);
                             self.write_orphan(block, status, None);
                             Ok(())
                         }
@@ -724,11 +814,8 @@ mod tests {
             thread_rng().shuffle(&mut blocks);
 
             for b in blocks {
-                println!("DEBUG BLOCK: {:?}", b);
                 hard_chain.append_block(b).unwrap();
             }
-
-            println!("DEBUG CHAIN_CANONICAL_TIP: {:?}", hard_chain.canonical_tip);
 
             assert_eq!(hard_chain.height(), 7);
             assert_eq!(hard_chain.canonical_tip(), G);
