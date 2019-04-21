@@ -71,6 +71,12 @@ pub struct EasyChainRef {
     block_cache: Arc<Mutex<LruCache<Hash, Arc<EasyBlock>>>>
 }
 
+impl std::fmt::Debug for EasyChainRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "EasyChainRef {{ chain: {:?} }}", self.chain)
+    }
+}
+
 impl EasyChainRef {
     pub fn new(chain: Arc<RwLock<EasyChain>>) -> EasyChainRef {
         EasyChainRef {
@@ -122,6 +128,7 @@ impl EasyChainRef {
     }
 }
 
+#[derive(Debug)]
 /// The easy chain stores blocks that represent buffered
 /// validator pool join requests. If a miner wishes to become
 /// a validator, it will most probably mine on the easy chain 

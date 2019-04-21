@@ -28,7 +28,7 @@ use std::default::Default;
 
 pub const HASH_BYTES: usize = 32;
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Hash(pub [u8; HASH_BYTES]);
 
 impl Hash {
@@ -69,6 +69,12 @@ impl Default for Hash {
         result.copy_from_slice(&buf);
 
         Hash(result)
+    }
+}
+
+impl std::fmt::Debug for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Hash({})", hex::encode(self.0))
     }
 }
 
