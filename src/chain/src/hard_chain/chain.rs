@@ -242,7 +242,76 @@ impl HardChain {
     /// Returns `Err(ChainErr::NoSuchBlock)` if there is no block with
     /// the given hash in the canonical chain.
     pub fn rewind(&mut self, block_hash: &Hash) -> Result<(), ChainErr> {
-        unimplemented!();
+        if let Some(new_tip) = self.db.get(block_hash) {
+            let new_tip = Arc::new(HardBlock::from_bytes(&new_tip).unwrap());
+
+            // TODO: Make writes and deletes atomic
+            let mut current = self.canonical_tip.clone();
+            let mut inverse_height = 1;
+
+            // Remove canonical tip from the chain 
+            // and mark it as a valid chain tip.
+            self.db.remove(&current.block_hash().unwrap());
+
+            // Add the old tip to the orphan pool
+            self.orphan_pool.insert(current.block_hash().unwrap(), current.clone());
+
+            // Mark old tip as a valid chain tip
+            self.validations_mapping.insert(current.block_hash().unwrap(), ValidationStatus::ValidChainTip);
+
+            let cur_height = current.height();
+
+            // Insert to heights mapping
+            if let Some(entries) = self.heights_mapping.get_mut(&cur_height) {
+                entries.insert(current.block_hash().unwrap(), Some(0));
+            } else {
+                let mut hm = HashMap::new();
+                hm.insert(current.block_hash().unwrap(), Some(0));
+                self.heights_mapping.insert(cur_height, hm);
+            }
+
+            // Recurse parents and remove them until we
+            // reach the block with the given hash.
+            loop {
+                let parent_hash = current.parent_hash().unwrap();
+
+                if parent_hash == *block_hash {
+                    break;
+                } else {
+                    let parent = Arc::new(HardBlock::from_bytes(&self.db.get(&parent_hash).unwrap()).unwrap());
+                    let cur_height = parent.height();
+
+                    // Remove parent from db
+                    self.db.remove(&parent_hash);
+
+                    // Add the parent to the orphan pool
+                    self.orphan_pool.insert(parent.block_hash().unwrap(), parent.clone());
+
+                    // Mark parent as belonging to a valid chain
+                    self.validations_mapping.insert(parent.block_hash().unwrap(), ValidationStatus::BelongsToValidChain);
+
+                    // Insert to heights mapping
+                    if let Some(entries) = self.heights_mapping.get_mut(&cur_height) {
+                        entries.insert(parent.block_hash().unwrap(), Some(inverse_height));
+                    } else {
+                        let mut hm = HashMap::new();
+                        hm.insert(parent.block_hash().unwrap(), Some(inverse_height));
+                        self.heights_mapping.insert(cur_height, hm);
+                    }
+
+                    current = parent;
+                    inverse_height += 1;
+                }
+            }
+            
+            self.height = new_tip.height();
+            self.write_canonical_height(new_tip.height());
+            self.canonical_tip = new_tip;
+
+            Ok(())
+        } else {
+            Err(ChainErr::NoSuchBlock)
+        }
     }
 
     // TODO: Make writes atomic
@@ -265,12 +334,10 @@ impl HardChain {
         // Set new height
         self.height = height;
 
-        // Write new height
         let encoded_height = encode_be_u64!(height);
-        self.db.emplace(
-            CANONICAL_HEIGHT_KEY.clone(),
-            ElasticArray128::<u8>::from_slice(&encoded_height),
-        );
+
+        // Write new height
+        self.write_canonical_height(height);
 
         // Write block height
         let block_height_key = format!("{}.height", hex::encode(block_hash.to_vec()));
@@ -295,6 +362,14 @@ impl HardChain {
         // Mark new hard chain tip block in easy chain
         let mut easy_chain = self.easy_chain.chain.write();
         easy_chain.set_hard_canonical_tip(&block.block_hash().unwrap()).unwrap();
+    }
+
+    fn write_canonical_height(&mut self, height: u64) {
+        let encoded_height = encode_be_u64!(height);
+        self.db.emplace(
+            CANONICAL_HEIGHT_KEY.clone(),
+            ElasticArray128::<u8>::from_slice(&encoded_height),
+        );
     }
 
     fn write_orphan(
@@ -898,6 +973,71 @@ mod tests {
     use crate::easy_chain::chain::EasyChain;
     use rand::*;
     use quickcheck::*;
+
+    #[test]
+    fn it_rewinds_correctly() {
+        let db = test_helpers::init_tempdb();
+        let easy_chain = Arc::new(RwLock::new(EasyChain::new(db.clone())));
+        let easy_ref = EasyChainRef::new(easy_chain);
+        let mut hard_chain = HardChain::new(db, easy_ref);
+
+        let mut A = HardBlock::new(Some(HardChain::genesis().block_hash().unwrap()), 1, EasyChain::genesis().block_hash().unwrap());
+        A.calculate_merkle_root();
+        A.compute_hash();
+        let A = Arc::new(A);
+
+        let mut B = HardBlock::new(Some(A.block_hash().unwrap()), 2, EasyChain::genesis().block_hash().unwrap());
+        B.calculate_merkle_root();
+        B.compute_hash();
+        let B = Arc::new(B);
+
+        let mut C = HardBlock::new(Some(B.block_hash().unwrap()), 3, EasyChain::genesis().block_hash().unwrap());
+        C.calculate_merkle_root();
+        C.compute_hash();
+        let C = Arc::new(C);
+
+        let mut D = HardBlock::new(Some(C.block_hash().unwrap()), 4, EasyChain::genesis().block_hash().unwrap());
+        D.calculate_merkle_root();
+        D.compute_hash();
+        let D = Arc::new(D);
+
+        let mut E = HardBlock::new(Some(D.block_hash().unwrap()), 5, EasyChain::genesis().block_hash().unwrap());
+        E.calculate_merkle_root();
+        E.compute_hash();
+        let E = Arc::new(E);
+
+        let mut F = HardBlock::new(Some(E.block_hash().unwrap()), 6, EasyChain::genesis().block_hash().unwrap());
+        F.calculate_merkle_root();
+        F.compute_hash();
+        let F = Arc::new(F);
+
+        let mut G = HardBlock::new(Some(F.block_hash().unwrap()), 7, EasyChain::genesis().block_hash().unwrap());
+        G.calculate_merkle_root();
+        G.compute_hash();
+        let G = Arc::new(G);
+
+        let blocks = vec![
+            A,
+            B.clone(),
+            C,
+            D,
+            E,
+            F,
+            G.clone(),
+        ];
+
+        for b in blocks {
+            hard_chain.append_block(b).unwrap();
+        }
+
+        assert_eq!(hard_chain.height(), 7);
+        assert_eq!(hard_chain.canonical_tip(), G);
+
+        hard_chain.rewind(&B.block_hash().unwrap()).unwrap();
+
+        assert_eq!(hard_chain.height(), 2);
+        assert_eq!(hard_chain.canonical_tip(), B);
+    }
 
     quickcheck! {
         /// Stress test of chain append.
