@@ -29,11 +29,14 @@ pub enum ChainErr {
     /// The parent of the given block is invalid
     InvalidParent,
 
-    /// The given event does not have a parent hash
+    /// The given block does not have a parent hash
     NoParentHash,
 
     // Bad block height
     BadHeight,
+
+    // The block with the given hash is not written in the ledger
+    NoSuchBlock,
 }
 
 /// Generic chain interface
