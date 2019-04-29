@@ -18,9 +18,6 @@
 
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub enum ValidationStatus {
-    /// The orphan does not fit in any of the other categories.
-    Unknown,
-
     /// The orphan has both a valid parent and/or children
     /// but it belongs to a chain that is disconnected from
     /// the caonical one.
