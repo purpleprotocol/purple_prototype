@@ -20,7 +20,7 @@ use crate::block::Block;
 use crate::chain::{Chain, ChainErr};
 use crate::easy_chain::chain::EasyChainRef;
 use crate::hard_chain::block::HardBlock;
-use crate::validation_status::ValidationStatus;
+use crate::orphan_type::OrphanType;
 use bin_tools::*;
 use crypto::Hash;
 use elastic_array::ElasticArray128;
@@ -172,7 +172,7 @@ pub struct HardChain {
     heights_mapping: HashMap<u64, HashMap<Hash, u64>>,
 
     /// Mapping between orphans and their validation statuses.
-    validations_mapping: HashMap<Hash, ValidationStatus>,
+    validations_mapping: HashMap<Hash, OrphanType>,
 
     /// Mapping between disconnected chains heads and tips.
     disconnected_heads_mapping: HashMap<Hash, HashSet<Hash>>,
@@ -262,7 +262,7 @@ impl HardChain {
             self.orphan_pool.insert(current.block_hash().unwrap(), current.clone());
 
             // Mark old tip as a valid chain tip
-            self.validations_mapping.insert(current.block_hash().unwrap(), ValidationStatus::ValidChainTip);
+            self.validations_mapping.insert(current.block_hash().unwrap(), OrphanType::ValidChainTip);
             self.valid_tips.insert(current.block_hash().unwrap());
 
             let cur_height = current.height();
@@ -298,7 +298,7 @@ impl HardChain {
                     self.orphan_pool.insert(parent.block_hash().unwrap(), parent.clone());
 
                     // Mark parent as belonging to a valid chain
-                    self.validations_mapping.insert(parent.block_hash().unwrap(), ValidationStatus::BelongsToValidChain);
+                    self.validations_mapping.insert(parent.block_hash().unwrap(), OrphanType::BelongsToValidChain);
 
                     // Insert to heights mapping
                     if let Some(entries) = self.heights_mapping.get_mut(&cur_height) {
@@ -435,13 +435,13 @@ impl HardChain {
 
                 // Mark as valid chain tip in validations mapping
                 let status = self.validations_mapping.get_mut(tip_hash).unwrap();
-                *status = ValidationStatus::ValidChainTip;
+                *status = OrphanType::ValidChainTip;
 
                 // Loop parents until we can't find one 
                 while let Some(parent) = self.orphan_pool.get(&current) {
                     // Mark as belonging to valid chain
                     let status = self.validations_mapping.get_mut(&parent.block_hash().unwrap()).unwrap();
-                    *status = ValidationStatus::BelongsToValidChain;
+                    *status = OrphanType::BelongsToValidChain;
 
                     current = parent.parent_hash().unwrap();
                 }
@@ -467,14 +467,14 @@ impl HardChain {
     fn write_orphan(
         &mut self, 
         orphan: Arc<HardBlock>, 
-        validation_status: ValidationStatus,
+        orphan_type: OrphanType,
         inverse_height: u64,
     ) {
         let orphan_hash = orphan.block_hash().unwrap();
         let height = orphan.height();
 
-        match validation_status {
-            ValidationStatus::ValidChainTip => {
+        match orphan_type {
+            OrphanType::ValidChainTip => {
                 self.valid_tips.insert(orphan.block_hash().unwrap());
             }
             _ => {
@@ -501,7 +501,7 @@ impl HardChain {
         self.update_max_orphan_height(height);
 
         // Write to validations mappings
-        self.validations_mapping.insert(orphan_hash, validation_status);
+        self.validations_mapping.insert(orphan_hash, orphan_type);
     }
 
     /// Attempts to attach orphans to the canonical chain
@@ -561,11 +561,11 @@ impl HardChain {
                             } else if prev_valid_tips.contains(&orphan_parent) {
                                 // Mark old tip as belonging to valid chain
                                 let parent_status = self.validations_mapping.get_mut(&orphan_parent).unwrap();
-                                *parent_status = ValidationStatus::BelongsToValidChain;
+                                *parent_status = OrphanType::BelongsToValidChain;
 
                                 // Mark new tip
                                 let status = self.validations_mapping.get_mut(&o).unwrap();
-                                *status = ValidationStatus::ValidChainTip;
+                                *status = OrphanType::ValidChainTip;
 
                                 // Add to valid tips sets
                                 self.valid_tips.remove(&orphan_parent);
@@ -604,7 +604,7 @@ impl HardChain {
                         // and mark them as valid chain tips.
                         for (o, _) in buf {
                             let status = self.validations_mapping.get_mut(&o).unwrap();
-                            *status = ValidationStatus::ValidChainTip;
+                            *status = OrphanType::ValidChainTip;
                             prev_valid_tips.insert(o);
                             self.valid_tips.insert(o.clone());
                         }
@@ -667,7 +667,7 @@ impl HardChain {
 
     /// Attempts to attach a disconnected chain tip to other
     /// disconnected chains. Returns the final status of the tip.
-    fn attempt_attach(&mut self, tip_hash: &Hash, initial_status: ValidationStatus) -> ValidationStatus {
+    fn attempt_attach(&mut self, tip_hash: &Hash, initial_status: OrphanType) -> OrphanType {
         let mut status = initial_status;
         let mut to_attach = Vec::with_capacity(MAX_ORPHANS);
         let our_head_hash = self.disconnected_tips_mapping.get(tip_hash).unwrap();
@@ -684,7 +684,7 @@ impl HardChain {
             // Attach chain to our tip
             if head.parent_hash().unwrap() == *tip_hash {
                 to_attach.push(head_hash.clone());
-                status = ValidationStatus::BelongsToDisconnected;
+                status = OrphanType::BelongsToDisconnected;
             }
         }
 
@@ -735,7 +735,7 @@ impl HardChain {
         &mut self, 
         tip: &mut Arc<HardBlock>, 
         inverse_height: &mut u64, 
-        status: &mut ValidationStatus
+        status: &mut OrphanType
     ) {
         assert!(self.valid_tips.contains(&tip.block_hash().unwrap()));
 
@@ -771,7 +771,7 @@ impl HardChain {
             let largest_tip = self.orphan_pool.get(&largest_tip.unwrap()).unwrap().clone();
             let tip_height = tip.height();
 
-            *status = ValidationStatus::BelongsToValidChain;
+            *status = OrphanType::BelongsToValidChain;
             *inverse_height = largest_height - tip_height;
             *tip = largest_tip;
         
@@ -783,8 +783,8 @@ impl HardChain {
     }
 
     /// Recursively changes the validation status of the tips
-    /// of the given head to `ValidationStatus::ValidChainTip` 
-    /// and of their parents to `ValidationStatus::BelongsToValid`. 
+    /// of the given head to `OrphanType::ValidChainTip` 
+    /// and of their parents to `OrphanType::BelongsToValid`. 
     /// 
     /// Also removes all the disconnected mappings related to the head. 
     fn make_valid_tips(&mut self, head: &Hash) {
@@ -796,7 +796,7 @@ impl HardChain {
 
             // Update status
             let status = self.validations_mapping.get_mut(tip_hash).unwrap();
-            *status = ValidationStatus::ValidChainTip;
+            *status = OrphanType::ValidChainTip;
             
             // Update mappings
             self.disconnected_tips_mapping.remove(tip_hash);
@@ -813,11 +813,11 @@ impl HardChain {
                     let status = self.validations_mapping.get_mut(&parent.block_hash().unwrap()).unwrap();
                     
                     // Don't continue if we have already been here
-                    if let ValidationStatus::BelongsToValidChain = status {
+                    if let OrphanType::BelongsToValidChain = status {
                         break;
                     }
 
-                    *status = ValidationStatus::BelongsToValidChain;
+                    *status = OrphanType::BelongsToValidChain;
                     current = parent.parent_hash().unwrap();
                 } else {
                     break;
@@ -843,9 +843,9 @@ impl HardChain {
             let key = orphan.block_hash().unwrap();
 
             if let Some(validation) = self.validations_mapping.get_mut(&key) {
-                *validation = ValidationStatus::ValidChainTip;
+                *validation = OrphanType::ValidChainTip;
             } else {
-                self.validations_mapping.insert(key, ValidationStatus::ValidChainTip);
+                self.validations_mapping.insert(key, OrphanType::ValidChainTip);
             }
         }
 
@@ -866,9 +866,9 @@ impl HardChain {
                 let key = parent.block_hash().unwrap();
 
                 if let Some(validation) = self.validations_mapping.get_mut(&key) {
-                    *validation = ValidationStatus::BelongsToValidChain;
+                    *validation = OrphanType::BelongsToValidChain;
                 } else {
-                    self.validations_mapping.insert(key, ValidationStatus::BelongsToValidChain);
+                    self.validations_mapping.insert(key, OrphanType::BelongsToValidChain);
                 }
             }
 
@@ -954,14 +954,14 @@ impl Chain<HardBlock> for HardChain {
                             return Err(ChainErr::BadHeight);
                         }
 
-                        let mut status = ValidationStatus::ValidChainTip;
+                        let mut status = OrphanType::ValidChainTip;
                         let mut tip = block.clone();
                         let mut _inverse_height = 0;
 
-                        self.write_orphan(block, ValidationStatus::ValidChainTip, 0);
+                        self.write_orphan(block, OrphanType::ValidChainTip, 0);
                         self.attempt_attach_valid(&mut tip, &mut _inverse_height, &mut status);
 
-                        if let ValidationStatus::ValidChainTip = status {
+                        if let OrphanType::ValidChainTip = status {
                             // Do nothing
                         } else {
                             self.attempt_switch(tip);
@@ -982,13 +982,13 @@ impl Chain<HardBlock> for HardChain {
                             let parent_status = self.validations_mapping.get_mut(&parent_hash).unwrap();
 
                             match parent_status {
-                                ValidationStatus::DisconnectedTip => {
+                                OrphanType::DisconnectedTip => {
                                     let head = self.disconnected_tips_mapping.get(&parent_hash).unwrap().clone();
                                     let tips = self.disconnected_heads_mapping.get_mut(&head).unwrap();
                                     let (largest_height, _) = self.disconnected_heads_heights.get(&head).unwrap();
 
                                     // Change the status of the old tip
-                                    *parent_status = ValidationStatus::BelongsToDisconnected;
+                                    *parent_status = OrphanType::BelongsToDisconnected;
 
                                     // Replace old tip in mappings
                                     tips.remove(&parent_hash);
@@ -1000,9 +1000,9 @@ impl Chain<HardBlock> for HardChain {
                                     }
 
                                     self.disconnected_tips_mapping.insert(block_hash.clone(), head.clone());
-                                    let status = self.attempt_attach(&block_hash, ValidationStatus::DisconnectedTip);
+                                    let status = self.attempt_attach(&block_hash, OrphanType::DisconnectedTip);
 
-                                    if let ValidationStatus::DisconnectedTip = status {
+                                    if let OrphanType::DisconnectedTip = status {
                                         self.recurse_inverse(block.clone(), 0, false);
                                     } else {
                                         self.disconnected_tips_mapping.remove(&block_hash);
@@ -1011,11 +1011,11 @@ impl Chain<HardBlock> for HardChain {
                                     self.disconnected_tips_mapping.remove(&parent_hash);
                                     self.write_orphan(block, status, 0);
                                 }
-                                ValidationStatus::ValidChainTip => {
+                                OrphanType::ValidChainTip => {
                                     // Change status of old tip
-                                    *parent_status = ValidationStatus::BelongsToValidChain;
+                                    *parent_status = OrphanType::BelongsToValidChain;
 
-                                    let mut status = ValidationStatus::ValidChainTip;
+                                    let mut status = OrphanType::ValidChainTip;
                                     let mut tip = block.clone();
                                     let mut inverse_height = 0;
 
@@ -1036,7 +1036,7 @@ impl Chain<HardBlock> for HardChain {
                                     // the canonical chain, and if so, switch chains.
                                     self.attempt_switch(tip);
                                 }
-                                ValidationStatus::BelongsToDisconnected => {
+                                OrphanType::BelongsToDisconnected => {
                                     let head = { 
                                         // Recurse parents until we find the head block
                                         let mut current = parent_hash.clone();
@@ -1064,17 +1064,17 @@ impl Chain<HardBlock> for HardChain {
                                     tips.insert(block_hash.clone());
                                     self.disconnected_tips_mapping.insert(block_hash.clone(), head.clone());
                                     
-                                    let status = self.attempt_attach(&block_hash, ValidationStatus::DisconnectedTip);
+                                    let status = self.attempt_attach(&block_hash, OrphanType::DisconnectedTip);
 
-                                    if let ValidationStatus::DisconnectedTip = status {
+                                    if let OrphanType::DisconnectedTip = status {
                                         self.disconnected_tips_mapping.insert(block_hash.clone(), head);
                                         self.recurse_inverse(block.clone(), 0, false);
                                     }
 
                                     self.write_orphan(block, status, 0);
                                 }
-                                ValidationStatus::BelongsToValidChain => {
-                                    let mut status = ValidationStatus::ValidChainTip;
+                                OrphanType::BelongsToValidChain => {
+                                    let mut status = OrphanType::ValidChainTip;
                                     let mut tip = block.clone();
                                     let mut inverse_height = 0;
 
@@ -1117,7 +1117,7 @@ impl Chain<HardBlock> for HardChain {
                             // Add block to orphan pool
                             self.orphan_pool.insert(block_hash.clone(), block.clone());
 
-                            let status = self.attempt_attach(&block_hash, ValidationStatus::DisconnectedTip);
+                            let status = self.attempt_attach(&block_hash, OrphanType::DisconnectedTip);
                             let mut found_match = None;
 
                             // Attempt to attach the new disconnected 
@@ -1132,7 +1132,7 @@ impl Chain<HardBlock> for HardChain {
                             }
 
                             if let Some(tip) = found_match {
-                                let mut _status = ValidationStatus::ValidChainTip;
+                                let mut _status = OrphanType::ValidChainTip;
                                 let mut _tip = tip.clone();
                                 let mut _inverse_height = 0;
 
@@ -1413,18 +1413,18 @@ mod tests {
         assert_eq!(hard_chain.height(), 1);
         
         hard_chain.append_block(E_second.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
 
         hard_chain.append_block(D_second.clone()).unwrap();
 
-        assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
 
         hard_chain.append_block(F_second.clone()).unwrap();
 
-        assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
 
         // We should have a disconnected chain of `E''` and `F''`
         // with the tip of `D''` pointing to `F''`.
@@ -1444,11 +1444,11 @@ mod tests {
         hard_chain.append_block(E.clone()).unwrap();
         hard_chain.append_block(G.clone()).unwrap();
 
-        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
 
         assert_eq!(hard_chain.height(), 1);
         assert_eq!(hard_chain.canonical_tip(), A);
@@ -1564,7 +1564,7 @@ mod tests {
         println!("PUSHING C'': {:?}", C_second.block_hash().unwrap());
         hard_chain.append_block(C_second.clone()).unwrap();
         let C_second_ih = hard_chain.heights_mapping.get(&C_second.height()).unwrap().get(&C_second.block_hash().unwrap()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
         assert_eq!(*C_second_ih, 0);
         assert_eq!(hard_chain.max_orphan_height, Some(3));
 
@@ -1572,8 +1572,8 @@ mod tests {
         hard_chain.append_block(D_prime.clone()).unwrap();
         let C_second_ih = hard_chain.heights_mapping.get(&C_second.height()).unwrap().get(&C_second.block_hash().unwrap()).unwrap();
         let D_prime_ih = hard_chain.heights_mapping.get(&D_prime.height()).unwrap().get(&D_prime.block_hash().unwrap()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
         assert_eq!(*C_second_ih, 0);
         assert_eq!(*D_prime_ih, 0);
         assert_eq!(hard_chain.max_orphan_height, Some(4));
@@ -1587,10 +1587,10 @@ mod tests {
         let D_prime_ih = hard_chain.heights_mapping.get(&D_prime.height()).unwrap().get(&D_prime.block_hash().unwrap()).unwrap();
         let D_second_ih = hard_chain.heights_mapping.get(&D_second.height()).unwrap().get(&D_second.block_hash().unwrap()).unwrap();
         let F_ih = hard_chain.heights_mapping.get(&F.height()).unwrap().get(&F.block_hash().unwrap()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
         assert_eq!(*C_second_ih, 1);
         assert_eq!(*D_prime_ih, 0);
         assert_eq!(*D_second_ih, 0);
@@ -1604,11 +1604,11 @@ mod tests {
         let D_prime_ih = hard_chain.heights_mapping.get(&D_prime.height()).unwrap().get(&D_prime.block_hash().unwrap()).unwrap();
         let D_second_ih = hard_chain.heights_mapping.get(&D_second.height()).unwrap().get(&D_second.block_hash().unwrap()).unwrap();
         let F_ih = hard_chain.heights_mapping.get(&F.height()).unwrap().get(&F.block_hash().unwrap()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
         assert_eq!(hard_chain.max_orphan_height, Some(6));
 
         println!("DEBUG HEIGHTS MAPPING: {:?}", hard_chain.heights_mapping);
@@ -1620,105 +1620,105 @@ mod tests {
 
         println!("PUSHING D: {:?}", D.block_hash().unwrap());
         hard_chain.append_block(D.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
         assert_eq!(hard_chain.max_orphan_height, Some(6));
 
         println!("PUSHING G: {:?}", G.block_hash().unwrap());
         hard_chain.append_block(G.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
         assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING B': {:?}", B_prime.block_hash().unwrap());
         hard_chain.append_block(B_prime.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
         assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING D''': {:?}", D_tertiary.block_hash().unwrap());
         hard_chain.append_block(D_tertiary.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
         assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING C: {:?}", C.block_hash().unwrap());
         hard_chain.append_block(C.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
         assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING E': {:?}", E_prime.block_hash().unwrap());
         hard_chain.append_block(E_prime.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
         assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING B: {:?}", B.block_hash().unwrap());
         hard_chain.append_block(B.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&B.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&B.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
         assert_eq!(hard_chain.valid_tips, HashSet::new());
         assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING A: {:?}", A.block_hash().unwrap());
         hard_chain.append_block(A.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&B.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&B.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
         let mut tips = HashSet::new();
         tips.insert(D.block_hash().unwrap());
         tips.insert(D_second.block_hash().unwrap());
@@ -1734,12 +1734,12 @@ mod tests {
 
         println!("PUSHING E''");
         hard_chain.append_block(E_second.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&B.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&B.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
         let mut tips = HashSet::new();
         tips.insert(D.block_hash().unwrap());
         tips.insert(E_second.block_hash().unwrap());
@@ -1752,15 +1752,15 @@ mod tests {
 
         println!("PUSHING F''");
         hard_chain.append_block(F_second.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&B.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
-        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&B.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToDisconnected);
+        assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::DisconnectedTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
         let mut tips = HashSet::new();
         tips.insert(D.block_hash().unwrap());
         tips.insert(E_prime.block_hash().unwrap());
@@ -1776,15 +1776,15 @@ mod tests {
 
         println!("PUSHING E");
         hard_chain.append_block(E.clone()).unwrap();
-        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-        assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+        assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+        assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
         let mut tips = HashSet::new();
         tips.insert(F_second.block_hash().unwrap());
         tips.insert(E_prime.block_hash().unwrap());
@@ -2039,11 +2039,11 @@ mod tests {
             assert!(hard_chain.query(&E.block_hash().unwrap()).is_none());
             assert!(hard_chain.query(&F.block_hash().unwrap()).is_none());
             assert!(hard_chain.query(&G.block_hash().unwrap()).is_none());
-            assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
+            assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
             let mut tips = HashSet::new();
             tips.insert(G.block_hash().unwrap());
 
@@ -2184,15 +2184,15 @@ mod tests {
             tips.insert(E_prime.block_hash().unwrap());
             tips.insert(D_tertiary.block_hash().unwrap());
 
-            assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-            assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
+            assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
             let mut tips = HashSet::new();
             tips.insert(F_second.block_hash().unwrap());
             tips.insert(E_prime.block_hash().unwrap());
@@ -2201,19 +2201,19 @@ mod tests {
 
             hard_chain.rewind(&B.block_hash().unwrap()).unwrap();
 
-            assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-            assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
-            assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::ValidChainTip);
+            assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
             let mut tips = HashSet::new();
             tips.insert(F_second.block_hash().unwrap());
             tips.insert(E_prime.block_hash().unwrap());
