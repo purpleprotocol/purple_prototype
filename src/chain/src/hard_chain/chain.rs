@@ -276,6 +276,10 @@ impl HardChain {
                 self.heights_mapping.insert(cur_height, hm);
             }
 
+            // Try to update the maximum orphan height with 
+            // the previous canonical tip's height.
+            self.update_max_orphan_height(current.height());
+
             // Recurse parents and remove them until we
             // reach the block with the given hash.
             loop {
@@ -305,6 +309,9 @@ impl HardChain {
                         self.heights_mapping.insert(cur_height, hm);
                     }
 
+                    // Update max orphan height
+                    self.update_max_orphan_height(parent.height());
+
                     current = parent;
                     inverse_height += 1;
                 }
@@ -317,6 +324,18 @@ impl HardChain {
             Ok(())
         } else {
             Err(ChainErr::NoSuchBlock)
+        }
+    }
+
+    fn update_max_orphan_height(&mut self, new_height: u64) {
+        if self.max_orphan_height.is_none() {
+            self.max_orphan_height = Some(new_height);
+        } else {
+            let cur_height = self.max_orphan_height.unwrap();
+
+            if new_height > cur_height {
+                self.max_orphan_height = Some(new_height);
+            } 
         }
     }
 
@@ -369,6 +388,29 @@ impl HardChain {
 
         // Remove from valid tips
         self.valid_tips.remove(&block_hash);
+
+        // Update max orphan height if this is the case
+        if let Some(max_height) = self.max_orphan_height {
+            if block.height() == max_height {
+                // Traverse heights backwards until we have
+                // an entry. We then set that as the new max orphan height.
+                let mut current = max_height - 1;
+
+                loop {
+                    if current == 0 {
+                        self.max_orphan_height = None;
+                        break;
+                    }
+
+                    if self.heights_mapping.get(&current).is_some() {
+                        self.max_orphan_height = Some(current);
+                        break;
+                    }
+
+                    current -= 1;
+                }
+            }
+        }
 
         // Remove from disconnected mappings
         let tips = self.disconnected_heads_mapping.remove(&block_hash);
@@ -456,13 +498,7 @@ impl HardChain {
         self.orphan_pool.insert(orphan_hash.clone(), orphan.clone());
 
         // Set max orphan height if this is the case
-        if let Some(max_orphan_height) = self.max_orphan_height {
-            if height > max_orphan_height {
-                self.max_orphan_height = Some(height);
-            }
-        } else {
-            self.max_orphan_height = Some(height);
-        }
+        self.update_max_orphan_height(height);
 
         // Write to validations mappings
         self.validations_mapping.insert(orphan_hash, validation_status);
@@ -1530,6 +1566,7 @@ mod tests {
         let C_second_ih = hard_chain.heights_mapping.get(&C_second.height()).unwrap().get(&C_second.block_hash().unwrap()).unwrap();
         assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
         assert_eq!(*C_second_ih, 0);
+        assert_eq!(hard_chain.max_orphan_height, Some(3));
 
         println!("PUSHING D': {:?}", D_prime.block_hash().unwrap());
         hard_chain.append_block(D_prime.clone()).unwrap();
@@ -1539,9 +1576,11 @@ mod tests {
         assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
         assert_eq!(*C_second_ih, 0);
         assert_eq!(*D_prime_ih, 0);
+        assert_eq!(hard_chain.max_orphan_height, Some(4));
 
         println!("PUSHING F: {:?}", F.block_hash().unwrap());
         hard_chain.append_block(F.clone()).unwrap();
+        assert_eq!(hard_chain.max_orphan_height, Some(6));
         println!("PUSHING D'': {:?}", D_second.block_hash().unwrap());
         hard_chain.append_block(D_second.clone()).unwrap();
         let C_second_ih = hard_chain.heights_mapping.get(&C_second.height()).unwrap().get(&C_second.block_hash().unwrap()).unwrap();
@@ -1556,6 +1595,7 @@ mod tests {
         assert_eq!(*D_prime_ih, 0);
         assert_eq!(*D_second_ih, 0);
         assert_eq!(*F_ih, 0);
+        assert_eq!(hard_chain.max_orphan_height, Some(6));
 
         println!("PUSHING C': {:?}", C_prime.block_hash().unwrap());
         hard_chain.append_block(C_prime.clone()).unwrap();
@@ -1569,7 +1609,8 @@ mod tests {
         assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
         assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
         assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
-        
+        assert_eq!(hard_chain.max_orphan_height, Some(6));
+
         println!("DEBUG HEIGHTS MAPPING: {:?}", hard_chain.heights_mapping);
         assert_eq!(*C_second_ih, 1);
         assert_eq!(*C_prime_ih, 1);
@@ -1585,6 +1626,7 @@ mod tests {
         assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
         assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
         assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(hard_chain.max_orphan_height, Some(6));
 
         println!("PUSHING G: {:?}", G.block_hash().unwrap());
         hard_chain.append_block(G.clone()).unwrap();
@@ -1595,6 +1637,7 @@ mod tests {
         assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
         assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
         assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING B': {:?}", B_prime.block_hash().unwrap());
         hard_chain.append_block(B_prime.clone()).unwrap();
@@ -1606,6 +1649,7 @@ mod tests {
         assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
         assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
         assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING D''': {:?}", D_tertiary.block_hash().unwrap());
         hard_chain.append_block(D_tertiary.clone()).unwrap();
@@ -1618,6 +1662,7 @@ mod tests {
         assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
         assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
         assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING C: {:?}", C.block_hash().unwrap());
         hard_chain.append_block(C.clone()).unwrap();
@@ -1631,6 +1676,7 @@ mod tests {
         assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
         assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
         assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING E': {:?}", E_prime.block_hash().unwrap());
         hard_chain.append_block(E_prime.clone()).unwrap();
@@ -1645,6 +1691,7 @@ mod tests {
         assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
         assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
         assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
+        assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING B: {:?}", B.block_hash().unwrap());
         hard_chain.append_block(B.clone()).unwrap();
@@ -1660,6 +1707,7 @@ mod tests {
         assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), ValidationStatus::BelongsToDisconnected);
         assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), ValidationStatus::DisconnectedTip);
         assert_eq!(hard_chain.valid_tips, HashSet::new());
+        assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING A: {:?}", A.block_hash().unwrap());
         hard_chain.append_block(A.clone()).unwrap();
@@ -1682,6 +1730,7 @@ mod tests {
         assert_eq!(hard_chain.valid_tips, tips);
         assert_eq!(hard_chain.height(), 5);
         assert_eq!(hard_chain.canonical_tip(), E_prime);
+        assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING E''");
         hard_chain.append_block(E_second.clone()).unwrap();
@@ -1699,6 +1748,7 @@ mod tests {
         assert_eq!(hard_chain.valid_tips, tips);
         assert_eq!(hard_chain.height(), 5);
         assert_eq!(hard_chain.canonical_tip(), E_prime);
+        assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING F''");
         hard_chain.append_block(F_second.clone()).unwrap();
@@ -1722,6 +1772,7 @@ mod tests {
         assert_eq!(hard_chain.valid_tips, tips);
         assert_eq!(hard_chain.height(), 6);
         assert_eq!(hard_chain.canonical_tip(), F_second);
+        assert_eq!(hard_chain.max_orphan_height, Some(7));
 
         println!("PUSHING E");
         hard_chain.append_block(E.clone()).unwrap();
@@ -1742,6 +1793,7 @@ mod tests {
         assert_eq!(hard_chain.valid_tips, tips);
         assert_eq!(hard_chain.height(), 7);
         assert_eq!(hard_chain.canonical_tip(), G);
+        assert_eq!(hard_chain.max_orphan_height, Some(6));
     }
 
     quickcheck! {
@@ -1965,6 +2017,7 @@ mod tests {
 
             assert_eq!(hard_chain.height(), 7);
             assert_eq!(hard_chain.canonical_tip(), G.clone());
+            assert_eq!(hard_chain.max_orphan_height, None);
             assert!(hard_chain.query(&A.block_hash().unwrap()).is_some());
             assert!(hard_chain.query(&B.block_hash().unwrap()).is_some());
             assert!(hard_chain.query(&C.block_hash().unwrap()).is_some());
@@ -1977,6 +2030,7 @@ mod tests {
 
             assert_eq!(hard_chain.height(), 2);
             assert_eq!(hard_chain.canonical_tip(), B);
+            assert_eq!(hard_chain.max_orphan_height, Some(7));
             assert!(hard_chain.valid_tips.contains(&G.block_hash().unwrap()));
             assert!(hard_chain.query(&A.block_hash().unwrap()).is_some());
             assert!(hard_chain.query(&B.block_hash().unwrap()).is_some());

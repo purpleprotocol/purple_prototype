@@ -77,8 +77,7 @@ impl Code {
     /// the following format:
     /// 1) Functon name length   - 8bits                - The length of the function name field.
     /// 2) Address index         - 16bits               - The index of the address from the address index space.
-    /// 3) Functon name          - Variable length      - The name of the function.
-    ///
+    /// 3) Function name          - Variable length      - The name of the function.
     ///
     /// The functions section describes the functions that
     /// are defined in the contract.
