@@ -82,15 +82,7 @@ impl Balance {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::new();
-        let formatted = format!("{}", &self.0);
-        let bytes = formatted.as_bytes();
-
-        for byte in bytes.iter() {
-            result.push(*byte);
-        }
-
-        result
+        self.0.to_string().as_bytes().to_vec()
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<Balance, &'static str> {
