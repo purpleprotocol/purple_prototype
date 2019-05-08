@@ -26,7 +26,7 @@ mod orphan_type;
 
 pub use crate::chain::*;
 pub use block::*;
-pub use easy_chain::chain::*;
 pub use easy_chain::block::*;
-pub use hard_chain::chain::*;
+pub use easy_chain::chain::*;
 pub use hard_chain::block::*;
+pub use hard_chain::chain::*;

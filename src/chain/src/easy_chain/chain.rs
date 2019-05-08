@@ -23,7 +23,7 @@ pub type EasyChainRef = ChainRef<EasyBlock>;
 
 /// The easy chain stores blocks that represent buffered
 /// validator pool join requests. If a miner wishes to become
-/// a validator, it will most probably mine on the easy chain 
+/// a validator, it will most probably mine on the easy chain
 /// (which has lower difficulty in order to populate the pool
 /// more effectively).
 ///

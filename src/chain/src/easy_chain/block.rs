@@ -17,18 +17,18 @@
 */
 
 use crate::block::Block;
+use bin_tools::*;
 use chrono::prelude::*;
 use crypto::Hash;
+use lazy_static::*;
+use std::boxed::Box;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
 use std::sync::Arc;
-use std::boxed::Box;
-use bin_tools::*;
-use lazy_static::*;
 
 lazy_static! {
     /// Atomic reference count to hard chain genesis block
-    static ref GENESIS_RC: Arc<EasyBlock> = { 
+    static ref GENESIS_RC: Arc<EasyBlock> = {
         let hash = Hash::random();
         let mut block = EasyBlock {
             parent_hash: None,
@@ -39,7 +39,7 @@ lazy_static! {
         };
 
         block.compute_hash();
-        Arc::new(block) 
+        Arc::new(block)
     };
 }
 
@@ -92,15 +92,15 @@ impl Block for EasyBlock {
     fn block_hash(&self) -> Option<Hash> {
         self.hash.clone()
     }
-    
+
     fn parent_hash(&self) -> Option<Hash> {
         self.parent_hash.clone()
     }
-    
+
     fn merkle_root(&self) -> Option<Hash> {
         self.merkle_root.clone()
     }
-    
+
     fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp.clone()
     }
@@ -139,7 +139,7 @@ impl EasyBlock {
     pub fn verify_hash(&self) -> bool {
         let message = self.compute_hash_message();
         let oracle = crypto::hash_slice(&message);
-    
+
         self.hash.unwrap() == oracle
     }
 

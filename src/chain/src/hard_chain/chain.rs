@@ -21,7 +21,7 @@ use crate::hard_chain::block::HardBlock;
 
 pub type HardChainRef = ChainRef<HardBlock>;
 
-/// The hard chain stores blocks that represent state 
+/// The hard chain stores blocks that represent state
 /// changes in the validator pool. A block from the hard chain
 /// can be thought of as a function which changes the state of
 /// the validator pool.

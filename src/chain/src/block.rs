@@ -18,8 +18,8 @@
 
 use chrono::prelude::*;
 use crypto::Hash;
-use std::sync::Arc;
 use std::boxed::Box;
+use std::sync::Arc;
 
 /// Generic block interface
 pub trait Block {

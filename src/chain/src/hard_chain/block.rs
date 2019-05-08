@@ -18,24 +18,24 @@
 
 use crate::block::Block;
 use crate::easy_chain::block::EasyBlock;
+use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
 use crypto::Hash;
+use lazy_static::*;
+use std::boxed::Box;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
 use std::io::Cursor;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::boxed::Box;
-use bin_tools::*;
-use lazy_static::*;
 
 /// The size of the hard block proof
 pub const HARD_PROOF_SIZE: usize = 42;
 
 lazy_static! {
     /// Atomic reference count to hard chain genesis block
-    static ref GENESIS_RC: Arc<HardBlock> = { 
+    static ref GENESIS_RC: Arc<HardBlock> = {
         let easy_block_hash = EasyBlock::genesis().block_hash().unwrap();
 
         let mut block = HardBlock {
@@ -49,7 +49,7 @@ lazy_static! {
 
         block.compute_hash();
 
-        Arc::new(block) 
+        Arc::new(block)
     };
 }
 
@@ -109,11 +109,11 @@ impl Block for HardBlock {
     fn parent_hash(&self) -> Option<Hash> {
         self.parent_hash.clone()
     }
-    
+
     fn merkle_root(&self) -> Option<Hash> {
         self.merkle_root.clone()
     }
-    
+
     fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp.clone()
     }
@@ -158,7 +158,7 @@ impl Block for HardBlock {
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
         buf.drain(..9);
-    
+
         let hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
@@ -206,9 +206,9 @@ impl Block for HardBlock {
         let timestamp = match std::str::from_utf8(&buf) {
             Ok(utf8) => match DateTime::<Utc>::from_str(utf8) {
                 Ok(timestamp) => timestamp,
-                Err(_)        => return Err("Invalid block timestamp")
-            }, 
-            Err(_) => return Err("Invalid block timestamp")
+                Err(_) => return Err("Invalid block timestamp"),
+            },
+            Err(_) => return Err("Invalid block timestamp"),
         };
 
         Ok(Arc::new(HardBlock {
@@ -239,7 +239,7 @@ impl HardBlock {
     pub fn calculate_merkle_root(&mut self) {
         // TODO: Replace this
         self.merkle_root = Some(Hash::NULL);
-    }  
+    }
 
     pub fn compute_hash(&mut self) {
         let message = self.compute_hash_message();
@@ -251,7 +251,7 @@ impl HardBlock {
     pub fn verify_hash(&self) -> bool {
         let message = self.compute_hash_message();
         let oracle = crypto::hash_slice(&message);
-    
+
         self.hash.unwrap() == oracle
     }
 

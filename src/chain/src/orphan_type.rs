@@ -20,7 +20,7 @@
 pub enum OrphanType {
     /// The orphan has both a valid parent and/or children
     /// but it belongs to a chain that is disconnected from
-    /// the caonical one.
+    /// the canonical one.
     BelongsToDisconnected,
 
     /// The orphan belongs to a valid chain that is not canonical
