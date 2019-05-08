@@ -25,10 +25,33 @@ use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
 use std::io::Cursor;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::boxed::Box;
 use bin_tools::*;
+use lazy_static::*;
 
 /// The size of the hard block proof
 pub const HARD_PROOF_SIZE: usize = 42;
+
+lazy_static! {
+    /// Atomic reference count to hard chain genesis block
+    static ref GENESIS_RC: Arc<HardBlock> = { 
+        let easy_block_hash = EasyBlock::genesis().block_hash().unwrap();
+
+        let mut block = HardBlock {
+            easy_block_hash,
+            parent_hash: None,
+            merkle_root: Some(Hash::NULL),
+            height: 0,
+            hash: None,
+            timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
+        };
+
+        block.compute_hash();
+
+        Arc::new(block) 
+    };
+}
 
 #[derive(Clone, Debug)]
 /// A block belonging to the `HardChain`.
@@ -71,17 +94,8 @@ impl HashTrait for HardBlock {
 }
 
 impl Block for HardBlock {
-    fn genesis() -> HardBlock {
-        let easy_block_hash = EasyBlock::genesis().block_hash().unwrap();
-
-        HardBlock {
-            easy_block_hash,
-            parent_hash: None,
-            merkle_root: Some(Hash::NULL),
-            height: 0,
-            hash: None,
-            timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
-        }
+    fn genesis() -> Arc<HardBlock> {
+        GENESIS_RC.clone()
     }
 
     fn height(&self) -> u64 {
@@ -103,58 +117,12 @@ impl Block for HardBlock {
     fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp.clone()
     }
-}
 
-impl HardBlock {
-    pub const BLOCK_TYPE: u8 = 0;
-
-    pub fn new(parent_hash: Option<Hash>, height: u64, easy_block_hash: Hash) -> HardBlock {
-        HardBlock {
-            parent_hash,
-            easy_block_hash,
-            merkle_root: None,
-            height,
-            hash: None,
-            timestamp: Utc::now(),
-        }
+    fn after_write() -> Option<Box<FnMut(Arc<HardBlock>)>> {
+        None
     }
 
-    pub fn calculate_merkle_root(&mut self) {
-        // TODO: Replace this
-        self.merkle_root = Some(Hash::NULL);
-    }  
-
-    pub fn compute_hash(&mut self) {
-        let message = self.compute_hash_message();
-        let hash = crypto::hash_slice(&message);
-
-        self.hash = Some(hash);
-    }
-
-    pub fn verify_hash(&self) -> bool {
-        let message = self.compute_hash_message();
-        let oracle = crypto::hash_slice(&message);
-    
-        self.hash.unwrap() == oracle
-    }
-
-    fn compute_hash_message(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = Vec::new();
-        let encoded_height = encode_be_u64!(self.height);
-
-        buf.extend_from_slice(&encoded_height);
-
-        if let Some(parent_hash) = self.parent_hash {
-            buf.extend_from_slice(&parent_hash.0.to_vec());
-        }
-
-        buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
-        buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
-
-        buf
-    }
-
-    pub fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
 
         buf.write_u8(Self::BLOCK_TYPE).unwrap();
@@ -167,7 +135,7 @@ impl HardBlock {
         buf
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<HardBlock, &'static str> {
+    fn from_bytes(bytes: &[u8]) -> Result<Arc<HardBlock>, &'static str> {
         let mut rdr = Cursor::new(bytes.to_vec());
         let block_type = if let Ok(result) = rdr.read_u8() {
             result
@@ -243,14 +211,64 @@ impl HardBlock {
             Err(_) => return Err("Invalid block timestamp")
         };
 
-        Ok(HardBlock {
+        Ok(Arc::new(HardBlock {
             merkle_root: Some(merkle_root),
             timestamp,
             easy_block_hash,
             hash: Some(hash),
             parent_hash: Some(parent_hash),
             height,
-        })
+        }))
+    }
+}
+
+impl HardBlock {
+    pub const BLOCK_TYPE: u8 = 0;
+
+    pub fn new(parent_hash: Option<Hash>, height: u64, easy_block_hash: Hash) -> HardBlock {
+        HardBlock {
+            parent_hash,
+            easy_block_hash,
+            merkle_root: None,
+            height,
+            hash: None,
+            timestamp: Utc::now(),
+        }
+    }
+
+    pub fn calculate_merkle_root(&mut self) {
+        // TODO: Replace this
+        self.merkle_root = Some(Hash::NULL);
+    }  
+
+    pub fn compute_hash(&mut self) {
+        let message = self.compute_hash_message();
+        let hash = crypto::hash_slice(&message);
+
+        self.hash = Some(hash);
+    }
+
+    pub fn verify_hash(&self) -> bool {
+        let message = self.compute_hash_message();
+        let oracle = crypto::hash_slice(&message);
+    
+        self.hash.unwrap() == oracle
+    }
+
+    fn compute_hash_message(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+        let encoded_height = encode_be_u64!(self.height);
+
+        buf.extend_from_slice(&encoded_height);
+
+        if let Some(parent_hash) = self.parent_hash {
+            buf.extend_from_slice(&parent_hash.0.to_vec());
+        }
+
+        buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
+        buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
+
+        buf
     }
 }
 

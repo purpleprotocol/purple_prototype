@@ -18,11 +18,13 @@
 
 use chrono::prelude::*;
 use crypto::Hash;
+use std::sync::Arc;
+use std::boxed::Box;
 
 /// Generic block interface
 pub trait Block {
     /// Returns the genesis block.
-    fn genesis() -> Self;
+    fn genesis() -> Arc<Self>;
 
     /// Returns the hash of the block.
     fn block_hash(&self) -> Option<Hash>;
@@ -38,4 +40,13 @@ pub trait Block {
 
     /// Returns the height of the block.
     fn height(&self) -> u64;
+
+    /// Callback that executes after a block is written to a chain.
+    fn after_write() -> Option<Box<FnMut(Arc<Self>)>>;
+
+    /// Serializes the block.
+    fn to_bytes(&self) -> Vec<u8>;
+
+    /// Deserializes the block
+    fn from_bytes(bytes: &[u8]) -> Result<Arc<Self>, &'static str>;
 }

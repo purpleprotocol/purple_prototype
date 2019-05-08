@@ -21,7 +21,27 @@ use chrono::prelude::*;
 use crypto::Hash;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
+use std::sync::Arc;
+use std::boxed::Box;
 use bin_tools::*;
+use lazy_static::*;
+
+lazy_static! {
+    /// Atomic reference count to hard chain genesis block
+    static ref GENESIS_RC: Arc<EasyBlock> = { 
+        let hash = Hash::random();
+        let mut block = EasyBlock {
+            parent_hash: None,
+            merkle_root: Some(Hash::NULL),
+            height: 0,
+            hash: Some(hash),
+            timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
+        };
+
+        block.compute_hash();
+        Arc::new(block) 
+    };
+}
 
 #[derive(Debug)]
 /// A block belonging to the `EasyChain`.
@@ -61,16 +81,8 @@ impl HashTrait for EasyBlock {
 }
 
 impl Block for EasyBlock {
-    fn genesis() -> EasyBlock {
-        let hash = Hash::random();
-
-        EasyBlock {
-            parent_hash: None,
-            merkle_root: Some(Hash::NULL),
-            height: 0,
-            hash: Some(hash),
-            timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
-        }
+    fn genesis() -> Arc<EasyBlock> {
+        GENESIS_RC.clone()
     }
 
     fn height(&self) -> u64 {
@@ -91,6 +103,18 @@ impl Block for EasyBlock {
     
     fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp.clone()
+    }
+
+    fn after_write() -> Option<Box<FnMut(Arc<EasyBlock>)>> {
+        None
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        unimplemented!();
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Arc<EasyBlock>, &'static str> {
+        unimplemented!();
     }
 }
 
@@ -134,14 +158,6 @@ impl EasyBlock {
 
         buf
     }
-
-    pub fn to_bytes(&self) -> Vec<u8> {
-        unimplemented!();
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Result<EasyBlock, &'static str> {
-        unimplemented!();
-    }
 }
 
 #[cfg(test)]
@@ -150,9 +166,7 @@ mod tests {
 
     #[test]
     fn it_verifies_hashes() {
-        let mut block = EasyBlock::genesis();
-        block.compute_hash();
-
+        let block = EasyBlock::genesis();
         assert!(block.verify_hash());
     }
 }
