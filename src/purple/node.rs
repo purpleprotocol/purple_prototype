@@ -16,30 +16,15 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use causality::Stamp;
+use chain::HardChainRef;
+use persistence::PersistentDb;
 
 #[derive(Clone, Debug)]
-pub struct ValidatorState {
-    /// Whether or not the validator is allowed
-    /// to send an event.
-    pub(crate) allowed_to_send: bool,
-
-    /// The remaining number of allocated blocks
-    /// that the validator is allowed to send during
-    /// its lifetime in the pool.
-    pub(crate) remaining_blocks: u64,
-
-    /// The stamp of the latest event that
-    /// has been sent by the validator.
-    pub(crate) latest_stamp: Stamp,
-}
-
-impl ValidatorState {
-    pub fn new(allowed_to_send: bool, remaining_blocks: u64, init_stamp: Stamp) -> ValidatorState {
-        ValidatorState {
-            allowed_to_send,
-            remaining_blocks,
-            latest_stamp: init_stamp,
-        }
-    }
+/// Purple node wrapper. This is responsible for handling
+/// communication between the network layer and the different 
+/// sub-systems such as the persistence layer i.e. the chain
+/// modules, the consensus module, the mempool, etc.
+pub struct PurpleNode {
+    hard_chain: HardChainRef,
+    node_storage: PersistentDb,
 }

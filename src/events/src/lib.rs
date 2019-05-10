@@ -62,6 +62,11 @@ pub enum Event {
 
     /// Dummy event used for testing
     Dummy(NodeId, Hash, Option<Hash>, Stamp),
+
+    /// Represents a placeholder for the root event 
+    /// in the causal graph when there are no events
+    /// stored.
+    Root,
 }
 
 impl PartialEq for Event {
@@ -89,6 +94,7 @@ impl Event {
             Event::Join(ref event) => event.stamp.clone(),
             Event::Leave(ref event) => event.stamp.clone(),
             Event::Dummy(_, _, _, ref stamp) => stamp.clone(),
+            Event::Root => Stamp::seed()
         }
     }
 
@@ -98,6 +104,7 @@ impl Event {
             Event::Join(ref event) => event.node_id.clone(),
             Event::Leave(ref event) => event.node_id.clone(),
             Event::Dummy(ref node_id, _, _, _) => node_id.clone(),
+            Event::Root => unimplemented!()
         }
     }
 
@@ -107,6 +114,7 @@ impl Event {
             Event::Join(ref event) => event.hash.clone(),
             Event::Leave(ref event) => event.hash.clone(),
             Event::Dummy(ref node_id, ref hash, _, _) => Some(hash.clone()),
+            Event::Root => Some(Hash::NULL),
         }
     }
 
@@ -116,6 +124,7 @@ impl Event {
             Event::Join(ref event) => event.parent_cg_hash.clone(),
             Event::Leave(ref event) => Some(event.parent_hash.clone()),
             Event::Dummy(ref node_id, _, ref parent_hash, _) => parent_hash.clone(),
+            Event::Root => None
         }
     }
 }

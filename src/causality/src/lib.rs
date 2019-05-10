@@ -29,7 +29,7 @@ use serde::ser::{Serialize, Serializer};
 use std::str::from_utf8;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Stamp(ItcStamp);
 
 impl Stamp {
@@ -115,6 +115,12 @@ impl Stamp {
         } else {
             Err("The given bin is not a utf8 valid string")
         }
+    }
+}
+
+impl std::fmt::Debug for Stamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Stamp({})", self.0)
     }
 }
 

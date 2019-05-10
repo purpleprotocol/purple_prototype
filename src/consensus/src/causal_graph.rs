@@ -284,14 +284,13 @@ impl CausalGraph {
                         }
                     }
 
-                    // Add invalid events to removal set
+                    // Remove invalid events
                     for (e, _) in invalid_events.iter() {
-                        to_remove.push(
-                            self.lookup_table
+                        let event = self.lookup_table
                                 .get(&e.event_hash().unwrap())
-                                .unwrap()
-                                .clone(),
-                        );
+                                .unwrap();
+                        
+                        self.pending.remove(event);
                     }
 
                     for e in to_remove.iter() {
@@ -586,9 +585,9 @@ impl CausalGraph {
         }
     }
 
-    pub(crate) fn add_validator(&mut self, id: NodeId, can_send: bool, stamp: Stamp) {
+    pub(crate) fn add_validator(&mut self, id: NodeId, can_send: bool, stamp: Stamp, allocated: u64) {
         self.validators
-            .insert(id, ValidatorState::new(can_send, stamp));
+            .insert(id, ValidatorState::new(can_send, allocated, stamp));
     }
 
     pub fn empty(&self) -> bool {
