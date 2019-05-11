@@ -16,13 +16,17 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use chain::{EasyChainRef, HardChainRef};
-use persistence::PersistentDb;
-use network::NetworkInterface;
+use crate::error::NetworkErr;
+use crate::peer::Peer;
 
-#[derive(Clone, Debug)]
-/// Purple node wrapper. This is responsible for handling
-/// communication between the network layer and the different 
-/// sub-systems such as the persistence layer i.e. the chain
-/// modules, the consensus module, the mempool, etc.
-pub struct PurpleNode<N: NetworkInterface>(N);
+/// Generic network interface.
+pub trait NetworkInterface {
+    /// Sends a packet to a specific peer.
+    fn send_to_peer(peer: &Peer, packet: &[u8]) -> Result<(), NetworkErr>;
+
+    /// Sends a packet to all peers.
+    fn send_to_all(packet: &[u8]) -> Result<(), NetworkErr>;
+
+    /// Callback that processes each packet that is received from any peer.
+    fn process_packet(peer: &Peer, packet: &[u8]) -> Result<(), NetworkErr>;
+}

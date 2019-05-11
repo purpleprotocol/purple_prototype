@@ -433,8 +433,8 @@ impl<B: Block> Chain<B> {
                         .validations_mapping
                         .get_mut(&parent.block_hash().unwrap())
                         .unwrap();
+                        
                     *status = OrphanType::BelongsToValidChain;
-
                     current = parent.parent_hash().unwrap();
                 }
 

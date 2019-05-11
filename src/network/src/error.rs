@@ -16,13 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use chain::{EasyChainRef, HardChainRef};
-use persistence::PersistentDb;
-use network::NetworkInterface;
-
-#[derive(Clone, Debug)]
-/// Purple node wrapper. This is responsible for handling
-/// communication between the network layer and the different 
-/// sub-systems such as the persistence layer i.e. the chain
-/// modules, the consensus module, the mempool, etc.
-pub struct PurpleNode<N: NetworkInterface>(N);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NetworkErr {
+    NoSuchPeer
+}

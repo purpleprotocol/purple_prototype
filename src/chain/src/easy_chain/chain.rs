@@ -27,13 +27,13 @@ pub type EasyChainRef = ChainRef<EasyBlock>;
 /// (which has lower difficulty in order to populate the pool
 /// more effectively).
 ///
-/// The difficulty of the easy chain grows asimptotically with
+/// The difficulty of the easy chain grows asymptotically with
 /// the number of mined blocks since the last mined block on the
 /// hard-chain so that the buffer is rate-limited.
 ///
 /// When a block is mined on the hard chain, all of the miners
-/// that have succesfuly mined a block on the easy chain (along
-/// with the miner that succesfuly mined a hard block) since
+/// that have successfully mined a block on the easy chain (along
+/// with the miner that successfully mined a hard block) since
 /// the last mined block on the hard one are joined to the pool
 /// in one operation.
 ///
