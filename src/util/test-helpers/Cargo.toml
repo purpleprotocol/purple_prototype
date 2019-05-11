@@ -8,8 +8,8 @@ publish = false
 hex = "0.3.2"
 rlp = "0.3.0"
 tempfile = "3.0.5"
-kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
-patricia-trie = { git = "https://github.com/paritytech/parity-common" }
+kvdb-rocksdb = "0.1.0"
+patricia-trie = "0.3.0"
 account = { path = "../../account" }
 persistence = { path = "../../persistence" }
 crypto = { path = "../../crypto" }

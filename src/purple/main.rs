@@ -23,6 +23,7 @@ extern crate unwrap;
 #[macro_use]
 extern crate jsonrpc_macros;
 
+extern crate chain;
 extern crate clap;
 extern crate crypto;
 extern crate dirs;

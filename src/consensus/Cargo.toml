@@ -5,16 +5,16 @@ authors = ["Octavian Oncescu <octavonce@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-parking_lot = "0.6"
-graphlib = "0.2.1"
+graphlib = "0.3.1"
 crypto = { path = "../crypto" }
 events = { path = "../events" }
 network = { path = "../network" }
 causality = { path = "../causality" }
+chain = { path = "../chain" }
 recursive = { path = "../util/recursive" }
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
 
 [dev-dependencies]
-rand = "0.6.0"
+rand = "^0.6.0"
 quickcheck = "0.7.2"
 crypto = { path = "../crypto" }

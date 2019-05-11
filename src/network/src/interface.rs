@@ -16,16 +16,17 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(non_snake_case)]
+use crate::error::NetworkErr;
+use crate::peer::Peer;
 
-mod candidate;
-mod causal_graph;
-mod consensus_machine;
-pub mod parameters;
-mod validation;
-mod validator_state;
+/// Generic network interface.
+pub trait NetworkInterface {
+    /// Sends a packet to a specific peer.
+    fn send_to_peer(peer: &Peer, packet: &[u8]) -> Result<(), NetworkErr>;
 
-pub use candidate::*;
-pub use consensus_machine::*;
-pub use validation::*;
-pub use validator_state::*;
+    /// Sends a packet to all peers.
+    fn send_to_all(packet: &[u8]) -> Result<(), NetworkErr>;
+
+    /// Callback that processes each packet that is received from any peer.
+    fn process_packet(peer: &Peer, packet: &[u8]) -> Result<(), NetworkErr>;
+}

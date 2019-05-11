@@ -62,6 +62,11 @@ pub enum Event {
 
     /// Dummy event used for testing
     Dummy(NodeId, Hash, Option<Hash>, Stamp),
+
+    /// Represents a placeholder for the root event 
+    /// in the causal graph when there are no events
+    /// stored.
+    Root,
 }
 
 impl PartialEq for Event {
@@ -70,7 +75,7 @@ impl PartialEq for Event {
         // when the node is a server i.e. when the event is
         // guaranteed to have a hash because it already passed
         // the parsing stage.
-        self.hash().unwrap() == other.hash().unwrap()
+        self.event_hash().unwrap() == other.event_hash().unwrap()
     }
 }
 
@@ -78,7 +83,7 @@ impl Eq for Event {}
 
 impl HashTrait for Event {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.hash().unwrap().hash(state);
+        self.event_hash().unwrap().hash(state);
     }
 }
 
@@ -89,6 +94,7 @@ impl Event {
             Event::Join(ref event) => event.stamp.clone(),
             Event::Leave(ref event) => event.stamp.clone(),
             Event::Dummy(_, _, _, ref stamp) => stamp.clone(),
+            Event::Root => Stamp::seed()
         }
     }
 
@@ -98,15 +104,17 @@ impl Event {
             Event::Join(ref event) => event.node_id.clone(),
             Event::Leave(ref event) => event.node_id.clone(),
             Event::Dummy(ref node_id, _, _, _) => node_id.clone(),
+            Event::Root => unimplemented!()
         }
     }
 
-    pub fn hash(&self) -> Option<Hash> {
+    pub fn event_hash(&self) -> Option<Hash> {
         match *self {
             Event::Heartbeat(ref event) => event.hash.clone(),
             Event::Join(ref event) => event.hash.clone(),
             Event::Leave(ref event) => event.hash.clone(),
             Event::Dummy(ref node_id, ref hash, _, _) => Some(hash.clone()),
+            Event::Root => Some(Hash::NULL),
         }
     }
 
@@ -116,6 +124,7 @@ impl Event {
             Event::Join(ref event) => event.parent_cg_hash.clone(),
             Event::Leave(ref event) => Some(event.parent_hash.clone()),
             Event::Dummy(ref node_id, _, ref parent_hash, _) => parent_hash.clone(),
+            Event::Root => None
         }
     }
 }

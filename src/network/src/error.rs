@@ -16,16 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(non_snake_case)]
-
-mod candidate;
-mod causal_graph;
-mod consensus_machine;
-pub mod parameters;
-mod validation;
-mod validator_state;
-
-pub use candidate::*;
-pub use consensus_machine::*;
-pub use validation::*;
-pub use validator_state::*;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NetworkErr {
+    NoSuchPeer
+}

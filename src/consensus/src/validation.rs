@@ -16,30 +16,21 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use causality::Stamp;
+#[derive(Clone, Debug, PartialEq)]
+pub enum ValidationResp {
+    /// The event is valid.
+    Valid,
 
-#[derive(Clone, Debug)]
-pub struct ValidatorState {
-    /// Whether or not the validator is allowed
-    /// to send an event.
-    pub(crate) allowed_to_send: bool,
+    /// The node id of the pushed event does not
+    /// belong to an active validator.
+    NotValidator,
 
-    /// The remaining number of allocated blocks
-    /// that the validator is allowed to send during
-    /// its lifetime in the pool.
-    pub(crate) remaining_blocks: u64,
+    /// The validator is not allowed to send an event.
+    NotAllowedToSend,
 
-    /// The stamp of the latest event that
-    /// has been sent by the validator.
-    pub(crate) latest_stamp: Stamp,
-}
+    /// The stamp of the event is not valid.
+    InvalidStamp,
 
-impl ValidatorState {
-    pub fn new(allowed_to_send: bool, remaining_blocks: u64, init_stamp: Stamp) -> ValidatorState {
-        ValidatorState {
-            allowed_to_send,
-            remaining_blocks,
-            latest_stamp: init_stamp,
-        }
-    }
+    /// The validity of the event cannot be determined.
+    CannotDetermineValidity,
 }

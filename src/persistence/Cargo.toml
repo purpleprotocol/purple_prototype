@@ -5,13 +5,13 @@ authors = ["octavonce <octavonce@gmail.com>"]
 publish = false
 
 [dependencies]
-hashdb = { git = "https://github.com/paritytech/parity-common" }
-patricia-trie = { git = "https://github.com/paritytech/parity-common" }
+hashdb = "0.3.0"
+patricia-trie = "0.3.0"
 elastic-array = "0.10.0"
 rlp = "0.3.0"
 parking_lot = "0.6"
-kvdb = { git = "https://github.com/paritytech/parity-common" }
-kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
+kvdb = "0.1.0"
+kvdb-rocksdb = "0.1.0"
 crypto = { path = "../crypto" }
 
 [dev-dependencies]

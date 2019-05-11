@@ -16,30 +16,20 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use causality::Stamp;
+#[derive(Clone, Debug, PartialEq, Copy)]
+pub enum OrphanType {
+    /// The orphan has both a valid parent and/or children
+    /// but it belongs to a chain that is disconnected from
+    /// the canonical one.
+    BelongsToDisconnected,
 
-#[derive(Clone, Debug)]
-pub struct ValidatorState {
-    /// Whether or not the validator is allowed
-    /// to send an event.
-    pub(crate) allowed_to_send: bool,
+    /// The orphan belongs to a valid chain that is not canonical
+    BelongsToValidChain,
 
-    /// The remaining number of allocated blocks
-    /// that the validator is allowed to send during
-    /// its lifetime in the pool.
-    pub(crate) remaining_blocks: u64,
+    /// The orphan is the tip of a valid chain that is descended
+    /// from the canonical chain.
+    ValidChainTip,
 
-    /// The stamp of the latest event that
-    /// has been sent by the validator.
-    pub(crate) latest_stamp: Stamp,
-}
-
-impl ValidatorState {
-    pub fn new(allowed_to_send: bool, remaining_blocks: u64, init_stamp: Stamp) -> ValidatorState {
-        ValidatorState {
-            allowed_to_send,
-            remaining_blocks,
-            latest_stamp: init_stamp,
-        }
-    }
+    /// The orphan is the tip of a disconnected chain
+    DisconnectedTip,
 }

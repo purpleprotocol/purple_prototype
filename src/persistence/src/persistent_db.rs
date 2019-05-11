@@ -40,6 +40,12 @@ impl PersistentDb {
     }
 }
 
+impl std::fmt::Debug for PersistentDb {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "PersistentDb {{ cf: {:?} }}", self.cf)
+    }
+}
+
 impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     fn keys(&self) -> HashMap<Hash, i32> {
         unimplemented!();

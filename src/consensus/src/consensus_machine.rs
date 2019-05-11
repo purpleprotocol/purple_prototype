@@ -16,17 +16,19 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::candidate_set::CandidateSet;
 use crate::causal_graph::CausalGraph;
 use crate::validator_state::ValidatorState;
+use crate::validation::ValidationResp;
+use causality::Stamp;
 use events::Event;
 use network::NodeId;
-use parking_lot::{Mutex, RwLock};
+use hashbrown::HashMap;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub enum CGError {
     AlreadyInCG,
+    AlreadyJoined,
     NoEventFound,
     NoCandidateSetFound,
     InvalidEvent,
@@ -34,87 +36,170 @@ pub enum CGError {
 
 #[derive(Debug)]
 pub struct ConsensusMachine {
-    causal_graph: Arc<RwLock<CausalGraph>>,
-    candidate_sets: Vec<Arc<Mutex<CandidateSet>>>,
-    validators: Vec<Arc<Mutex<ValidatorState>>>,
+    pub(crate) causal_graph: CausalGraph,
+    
+    /// Number denoting the current consensus epoch.
+    /// This is incremented each time a validator set
+    /// is joined to the pool.
+    epoch: u64,
+
+    /// Remaining number of blocks that the pool is allowed
+    /// to produce during the current epoch.
+    remaining_blocks: u64,
 }
 
 impl ConsensusMachine {
-    pub fn new(node_id: NodeId, root_event: Arc<Event>) -> ConsensusMachine {
+    pub fn new(node_id: NodeId, epoch: u64, allocated: u64, root_event: Arc<Event>) -> ConsensusMachine {
         ConsensusMachine {
-            causal_graph: Arc::new(RwLock::new(CausalGraph::new(node_id, root_event))),
-            candidate_sets: Vec::new(),
-            validators: Vec::new(),
+            causal_graph: CausalGraph::new(node_id, root_event),
+            epoch,
+            remaining_blocks: allocated,
         }
     }
 
-    pub fn is_valid(&self, event: Arc<Event>) -> bool {
-        unimplemented!();
+    #[cfg(test)]
+    pub fn new_with_test_mode(node_id: NodeId, root_event: Arc<Event>) -> ConsensusMachine {
+        ConsensusMachine {
+            causal_graph: CausalGraph::new_with_test_mode(node_id, root_event),
+            epoch: 0,
+            remaining_blocks: 1000,
+        }
+    }
+
+    pub fn is_valid(&self, event: Arc<Event>) -> ValidationResp {
+        self.causal_graph.is_valid(event)
+    }
+
+    /// Performs an injection of new validators and allocated
+    /// blocks that the whole pool can produce. Note that this
+    /// function does not check for duplicate node ids.
+    pub fn inject(&mut self, validator_set: &HashMap<NodeId, u64>, allocated: u64) {
+        let mut fork_stack: Vec<(Stamp, Option<NodeId>)> = vec![(Stamp::seed(), None)];
+        let mut forked = vec![];
+
+        // On each injection/epoch change we re-assign 
+        // the nodes internal ids on an injection.
+        let mut all_node_ids: Vec<NodeId> = validator_set
+            .keys()
+            .chain(self.causal_graph.validators.keys())
+            .cloned()
+            .collect();
+
+        // Sort ids lexicographically so that injections are deterministic.
+        all_node_ids.sort_unstable();
+
+        // For each node id, fork a stamp and insert it to 
+        // the validator pool.
+        while let Some(node_id) = all_node_ids.pop() {
+            loop {
+                if let Some((next_fork, from)) = fork_stack.pop() {
+                    let allocated = validator_set.get(&node_id).unwrap();
+                    let mut stamp = Stamp::seed();
+
+                    // Update the information of the forked
+                    // node if there is any.
+                    if let Some(from) = from {
+                        let (l, r) = next_fork.fork();
+                        
+                        // Assign stamps to nodes
+                        forked.push((l.clone(), Some(from.clone())));
+                        forked.push((r.clone(), Some(node_id.clone())));
+
+                        stamp = r;
+                        
+                        // Replace stamp of forked node
+                        let from_state = self.causal_graph.validators.get_mut(&from).unwrap();
+                        from_state.latest_stamp = l;
+                    } else {
+                        forked.push((next_fork.clone(), Some(node_id.clone())));
+                        stamp = next_fork;
+                    }
+
+                    // Fetch or create the validator state
+                    let validator_state = if let Some(state) = self.causal_graph.validators.get_mut(&node_id) {
+                        state 
+                    } else {
+                        self.causal_graph.validators.insert(node_id.clone(), ValidatorState::new(true, allocated.clone(), Stamp::seed()));
+                        self.causal_graph.validators.get_mut(&node_id).unwrap()
+                    };
+
+                    // Update the stamp of the validator state
+                    validator_state.allowed_to_send = true;
+                    validator_state.latest_stamp = stamp;
+
+                    break;
+                } else {
+                    // Re-fill the fork stack with the forked stamps
+                    fork_stack = forked;
+                    forked = vec![];
+                }
+            }
+        }
+
+        // Go to next epoch
+        self.epoch += 1;
+
+        // Inject allocated events
+        self.remaining_blocks = allocated;
     }
 
     /// Attempts to push an atomic reference to an
-    /// event to the causal graph. This function also
-    /// validates the event in accordance with the rest
-    /// of the causal graph.
+    /// event to the causal graph. This function will
+    /// return any events that have been totally ordered
+    /// if successful.
     ///
     /// This will return `Err(CGError::AlreadyInCG)` if the event
     /// is already situated in the `CausalGraph`.
-    pub fn push(&mut self, event: Arc<Event>) -> Result<(), CGError> {
-        let mut g = self.causal_graph.write();
-
-        if g.contains(event.clone()) {
+    pub fn push(&mut self, event: Arc<Event>) -> Result<Vec<Arc<Event>>, CGError> {
+        if self.causal_graph.contains(event.clone()) {
             return Err(CGError::AlreadyInCG);
         }
 
-        g.push(event);
-
-        Ok(())
+        Ok(self.causal_graph.push(event))
     }
 
     /// Returns the highest event that is currently
     /// residing in the causal graph.
     pub fn highest(&self) -> Arc<Event> {
-        let graph = &(*self.causal_graph).read();
-        graph.highest()
+        self.causal_graph.highest()
     }
 
     /// Returns the highest event in the causal graph
     /// that **does not** belong to the node with the
     /// given `NodeId`.
     pub fn highest_exclusive(&self, node_id: &NodeId) -> Option<Arc<Event>> {
-        let graph = &(*self.causal_graph).read();
-        graph.highest_exclusive(node_id)
+        self.causal_graph.highest_exclusive(node_id)
     }
 
     /// Return the highest event that follows the our latest
     /// sent event in the causal graph that **does not**
     /// belong to ourselves.
-    pub fn highest_following(&mut self) -> Option<Arc<Event>> {
-        let graph = &(*self.causal_graph).read();
-        graph.highest_following()
+    pub fn highest_following(&self) -> Option<Arc<Event>> {
+        self.causal_graph.highest_following()
     }
 
     /// Return the highest event that follows the given
     /// given event in the causal graph that **does not**
     /// belong to the node with the given `NodeId`.
-    pub fn compute_highest_following(&mut self, node_id: &NodeId, event: Arc<Event>) -> Option<Arc<Event>> {
-        let graph = &(*self.causal_graph).read();
-        graph.compute_highest_following(node_id, event)
+    pub fn compute_highest_following(
+        &self,
+        node_id: &NodeId,
+        event: Arc<Event>,
+    ) -> Option<Arc<Event>> {
+        self.causal_graph.compute_highest_following(node_id, event)
     }
 
     /// Returns true if the second event happened exactly after the first event.
     pub(crate) fn is_direct_follower(&self, event1: Arc<Event>, event2: Arc<Event>) -> bool {
-        self.causal_graph.read().is_direct_follower(event1, event2)
+        self.causal_graph.is_direct_follower(event1, event2)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #[macro_use]
-    use quickcheck::*;
     use super::*;
-    use causality::Stamp;
     use crypto::{Hash, Identity};
+    use quickcheck::*;
     use rand::{thread_rng, Rng};
 
     #[test]
@@ -220,16 +305,21 @@ mod tests {
         // of the order in which the events are pushed.
         thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new(n1.clone(), A.clone());
+        let mut machine = ConsensusMachine::new_with_test_mode(n1.clone(), A.clone());
 
         for e in events {
             machine.push(e).unwrap();
         }
 
         assert_eq!(machine.highest_following().unwrap(), F.clone());
-        assert_eq!(machine.compute_highest_following(&n1, A.clone()).unwrap(), F);
         assert_eq!(
-            machine.compute_highest_following(&n2, A_prime.clone()).unwrap(),
+            machine.compute_highest_following(&n1, A.clone()).unwrap(),
+            F
+        );
+        assert_eq!(
+            machine
+                .compute_highest_following(&n2, A_prime.clone())
+                .unwrap(),
             D_prime
         );
     }
@@ -335,7 +425,7 @@ mod tests {
         // of the order in which the events are pushed.
         thread_rng().shuffle(&mut events);
 
-        let mut machine = ConsensusMachine::new(n1, A.clone());
+        let mut machine = ConsensusMachine::new_with_test_mode(n1, A.clone());
 
         for e in events {
             machine.push(e).unwrap();
@@ -346,6 +436,15 @@ mod tests {
     }
 
     quickcheck! {
+        // fn it_achieves_consensus() -> bool {
+        //     let i1 = Identity::new();
+        //     let i2 = Identity::new();
+        //     let i3 = Identity::new();
+        //     let n1 = NodeId(*i1.pkey());
+        //     let n2 = NodeId(*i2.pkey());
+        //     let n3 = NodeId(*i3.pkey());
+        // }
+
         /// Causal graph structure:
         ///
         /// A -> B -> C -> D -> E -> F
@@ -456,13 +555,13 @@ mod tests {
             // of the order in which the events are pushed.
             thread_rng().shuffle(&mut events);
 
-            let mut machine = ConsensusMachine::new(n1, A.clone());
+            let mut machine = ConsensusMachine::new_with_test_mode(n1, A.clone());
 
             for e in events {
                 machine.push(e).unwrap();
             }
 
-            assert!(!machine.causal_graph.read().graph.is_cyclic());
+            assert!(!machine.causal_graph.graph.is_cyclic());
             assert!(machine.is_direct_follower(B.clone(), A.clone()));
             assert!(machine.is_direct_follower(C.clone(), B.clone()));
             assert!(machine.is_direct_follower(D.clone(), C.clone()));

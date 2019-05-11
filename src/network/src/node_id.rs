@@ -20,7 +20,7 @@ use crypto::PublicKey;
 use quickcheck::Arbitrary;
 use rand::Rng;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NodeId(pub PublicKey);
 
 impl NodeId {

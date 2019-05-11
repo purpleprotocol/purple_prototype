@@ -18,7 +18,7 @@ quickcheck = "0.7.2"
 crypto = { path = "../crypto" }
 bin-tools = { path = "../util/bin-tools/" }
 persistence = { path = "../persistence" }
-patricia-trie = { git = "https://github.com/paritytech/parity-common" }
+patricia-trie = "0.3.0"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde"] }
 
 [dev-dependencies]

@@ -18,14 +18,15 @@
 
 #![allow(non_snake_case)]
 
-mod candidate;
-mod causal_graph;
-mod consensus_machine;
-pub mod parameters;
-mod validation;
-mod validator_state;
+mod block;
+mod chain;
+mod easy_chain;
+mod hard_chain;
+mod orphan_type;
 
-pub use candidate::*;
-pub use consensus_machine::*;
-pub use validation::*;
-pub use validator_state::*;
+pub use crate::chain::*;
+pub use block::*;
+pub use easy_chain::block::*;
+pub use easy_chain::chain::*;
+pub use hard_chain::block::*;
+pub use hard_chain::chain::*;
