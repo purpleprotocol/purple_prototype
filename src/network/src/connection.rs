@@ -17,6 +17,7 @@
 */
 
 use network::Network;
+use crate::error::NetworkErr;
 use packets::connect::Connect;
 use parking_lot::Mutex;
 use peer::Peer;
@@ -41,7 +42,6 @@ const PEER_TIMEOUT: u64 = 3000;
 pub fn start_listener(
     network: Arc<Mutex<Network>>,
     accept_connections: Arc<AtomicBool>,
-    max_peers: usize,
 ) -> Spawn {
     info!("Starting TCP listener on port {}", PORT);
 
@@ -59,7 +59,6 @@ pub fn start_listener(
             process_connection(
                 network.clone(),
                 s,
-                max_peers,
                 accept_connections.clone(),
                 ConnectionType::Server,
             )
@@ -71,7 +70,6 @@ pub fn start_listener(
 pub fn connect_to_peer(
     network: Arc<Mutex<Network>>,
     accept_connections: Arc<AtomicBool>,
-    max_peers: usize,
     addr: &SocketAddr,
 ) -> Spawn {
     let connect = TcpStream::connect(addr)
@@ -80,7 +78,6 @@ pub fn connect_to_peer(
             process_connection(
                 network,
                 sock,
-                max_peers,
                 accept_connections,
                 ConnectionType::Client,
             )
@@ -92,7 +89,6 @@ pub fn connect_to_peer(
 fn process_connection(
     network: Arc<Mutex<Network>>,
     sock: TcpStream,
-    max_peers: usize,
     accept_connections: Arc<AtomicBool>,
     client_or_server: ConnectionType,
 ) -> Spawn {
@@ -114,11 +110,8 @@ fn process_connection(
 
     // Create new peer and add it to the peer table
     let peer = Peer::new(None, addr);
-    network.lock().add_peer(peer);
 
-    let peer_count = network.lock().peer_count();
-
-    if peer_count >= max_peers {
+    if let Err(NetworkErr::MaximumPeersReached) = network.lock().add_peer(addr, peer) {
         // Stop accepting peers
         accept_connections.store(false, Ordering::Relaxed);
     }
@@ -191,10 +184,11 @@ fn process_connection(
 
     // Spawn a task to process the connection
     tokio::spawn(socket_reader.then(move |_| {
-        network.lock().remove_peer_with_addr(&addr);
+        let mut network = network.lock();
+        network.remove_peer_with_addr(&addr);
 
         // Re-enable connections
-        if network.lock().peer_count() < max_peers {
+        if network.peer_count() < network.max_peers {
             accept_connections.store(true, Ordering::Relaxed);
         }
 

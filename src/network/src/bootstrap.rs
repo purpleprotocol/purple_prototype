@@ -62,7 +62,6 @@ pub fn bootstrap(
                 connect_to_peer(
                     network.clone(),
                     accept_connections.clone(),
-                    max_peers,
                     &addr,
                 )
             })
@@ -80,7 +79,6 @@ pub fn bootstrap(
                         connect_to_peer(
                             network.clone(),
                             accept_connections.clone(),
-                            max_peers,
                             &addr,
                         )
                     });
@@ -112,7 +110,6 @@ pub fn bootstrap(
             connect_to_peer(
                 network.clone(),
                 accept_connections.clone(),
-                max_peers,
                 &addr,
             )
         });

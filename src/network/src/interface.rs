@@ -17,16 +17,16 @@
 */
 
 use crate::error::NetworkErr;
-use crate::peer::Peer;
+use crate::node_id::NodeId;
 
 /// Generic network interface.
 pub trait NetworkInterface {
     /// Sends a packet to a specific peer.
-    fn send_to_peer(peer: &Peer, packet: &[u8]) -> Result<(), NetworkErr>;
+    fn send_to_peer(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr>;
 
     /// Sends a packet to all peers.
-    fn send_to_all(packet: &[u8]) -> Result<(), NetworkErr>;
+    fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr>;
 
     /// Callback that processes each packet that is received from any peer.
-    fn process_packet(peer: &Peer, packet: &[u8]) -> Result<(), NetworkErr>;
+    fn process_packet(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr>;
 }

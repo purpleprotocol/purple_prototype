@@ -17,32 +17,43 @@
 */
 
 use std::net::SocketAddr;
+use crate::error::NetworkErr;
+use hashbrown::HashMap;
 use NodeId;
 use Peer;
 
 #[derive(Debug, Clone)]
 pub struct Network {
-    /// List of peers we are connected to
-    peers: Vec<Peer>,
+    /// Mapping between connected ips and peer information
+    peers: HashMap<SocketAddr, Peer>,
 
     /// Our node id
     node_id: NodeId,
 
     /// The name of the network we are on
     network_name: String,
+
+    /// Maximum number of allowed peers, default is 8
+    pub(crate) max_peers: usize
 }
 
 impl Network {
-    pub fn new(node_id: NodeId, network_name: String) -> Network {
+    pub fn new(node_id: NodeId, network_name: String, max_peers: usize) -> Network {
         Network {
-            peers: Vec::new(),
-            node_id: node_id,
-            network_name: network_name,
+            peers: HashMap::with_capacity(max_peers),
+            node_id,
+            network_name,
+            max_peers
         }
     }
 
-    pub fn add_peer(&mut self, peer: Peer) {
-        self.peers.push(peer);
+    pub fn add_peer(&mut self, addr: SocketAddr, peer: Peer) -> Result<(), NetworkErr> {
+        if self.peer_count() < self.max_peers {
+            self.peers.insert(addr, peer);
+            Ok(())
+        } else {
+            Err(NetworkErr::MaximumPeersReached)
+        }
     }
 
     /// Returns the number of listed peers.
@@ -54,28 +65,23 @@ impl Network {
     ///
     /// This function will panic if there is no entry for the given address.
     pub fn set_node_id(&mut self, addr: &SocketAddr, node_id: NodeId) {
-        match self.peers.iter().position(|x| x.ip == *addr) {
-            Some(idx) => self.peers[idx].set_id(node_id),
+        match self.peers.get_mut(addr) {
+            Some(peer) => peer.set_id(node_id),
             None => panic!("There is no listed peer with the given address!"),
         };
     }
 
     /// Removes the peer entry with the given address.
-    ///
-    /// This function will panic if there is no entry for the given address.
     pub fn remove_peer_with_addr(&mut self, addr: &SocketAddr) {
-        match self.peers.iter().position(|x| x.ip == *addr) {
-            Some(idx) => self.peers.remove(idx),
-            None => panic!("There is no listed peer with the given address!"),
-        };
+        self.peers.remove(addr);
     }
 
     /// Returns true if the peer with the given address has a `None` id field.
     ///
     /// This function will panic if there is no entry for the given address.
     pub fn is_none_id(&self, addr: &SocketAddr) -> bool {
-        match self.peers.iter().position(|x| x.ip == *addr) {
-            Some(idx) => self.peers[idx].id.is_none(),
+        match self.peers.get(addr) {
+            Some(peer) => peer.id.is_none(),
             None => panic!("There is no listed peer with the given address!"),
         }
     }

@@ -1141,6 +1141,7 @@ dependencies = [
  "crypto 0.1.0",
  "env_logger 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)",
  "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",

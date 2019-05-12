@@ -18,5 +18,13 @@
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NetworkErr {
-    NoSuchPeer
+    /// We are not connected to the given peer
+    PeerNotFound,
+    
+    /// We cannot add more peers since we are
+    /// already at the maximum.
+    MaximumPeersReached,
+
+    /// We are not connected to any peer.
+    NoPeers,
 }
