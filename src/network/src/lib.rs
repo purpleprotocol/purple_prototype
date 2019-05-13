@@ -36,6 +36,10 @@ extern crate rlp;
 extern crate tokio;
 extern crate tokio_io_timeout;
 extern crate tokio_timer;
+extern crate hashbrown;
+
+#[cfg(test)]
+pub mod mock;
 
 mod bootstrap;
 mod connection;

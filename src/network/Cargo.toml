@@ -22,3 +22,4 @@ hashdb = "0.3.0"
 crypto = { path = "../crypto" }
 persistence = { path = "../persistence" }
 quickcheck = "0.7.2"
+hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["rayon", "serde"] }

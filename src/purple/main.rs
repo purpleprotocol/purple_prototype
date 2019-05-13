@@ -76,13 +76,14 @@ fn main() {
     let network = Arc::new(Mutex::new(Network::new(
         node_id,
         argv.network_name.to_owned(),
+        argv.max_peers,
     )));
     let accept_connections = Arc::new(AtomicBool::new(true));
 
     // Start the tokio runtime
     tokio::run(ok(()).and_then(move |_| {
         // Start listening to connections
-        start_listener(network.clone(), accept_connections.clone(), argv.max_peers);
+        start_listener(network.clone(), accept_connections.clone());
 
         // Start bootstrap process
         bootstrap(
@@ -137,6 +138,7 @@ struct Argv {
     network_name: String,
     mempool_size: u16,
     max_peers: usize,
+    archival_mode: bool,
 }
 
 fn parse_cli_args() -> Argv {
@@ -162,6 +164,13 @@ fn parse_cli_args() -> Argv {
                 .help("The maximum number of allowed peer connections")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("prune")
+                .long("prune")
+                .value_name("PRUNE")
+                .help("Wether to prune the ledger or to keep the entire transaction history")
+                .takes_value(true),
+        )
         .get_matches();
 
     let network_name: String = if let Some(arg) = matches.value_of("network_name") {
@@ -182,9 +191,17 @@ fn parse_cli_args() -> Argv {
         8
     };
 
+    let archival_mode: bool = if let Some(arg) = matches.value_of("prune") {
+        let result: bool = unwrap!(arg.parse(), "Bad value for <PRUNE>");
+        !result
+    } else {
+        true
+    };
+
     Argv {
-        network_name: network_name,
-        max_peers: max_peers,
-        mempool_size: mempool_size,
+        network_name,
+        max_peers,
+        mempool_size,
+        archival_mode,
     }
 }
