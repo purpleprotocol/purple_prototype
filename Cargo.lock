@@ -469,7 +469,7 @@ dependencies = [
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rust-base58 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "rust_sodium 0.10.1 (git+https://github.com/octavonce/rust_sodium)",
+ "rust_sodium 0.10.2 (git+https://github.com/octavonce/rust_sodium)",
  "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1579,7 +1579,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "autocfg 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand_core 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand_core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1608,7 +1608,7 @@ name = "rand_hc"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rand_core 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand_core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1656,7 +1656,7 @@ name = "rand_xorshift"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rand_core 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand_core 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1804,20 +1804,20 @@ dependencies = [
 
 [[package]]
 name = "rust_sodium"
-version = "0.10.1"
-source = "git+https://github.com/octavonce/rust_sodium#30240adad6980d9572e24817ce2235800c93ef74"
+version = "0.10.2"
+source = "git+https://github.com/octavonce/rust_sodium#e1e4c2cbb47af29458eac55823fbb83afdd14b55"
 dependencies = [
  "libc 0.2.51 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "rust_sodium-sys 0.10.2 (git+https://github.com/octavonce/rust_sodium)",
+ "rust_sodium-sys 0.10.4 (git+https://github.com/octavonce/rust_sodium)",
  "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
  "unwrap 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "rust_sodium-sys"
-version = "0.10.2"
-source = "git+https://github.com/octavonce/rust_sodium#30240adad6980d9572e24817ce2235800c93ef74"
+version = "0.10.4"
+source = "git+https://github.com/octavonce/rust_sodium#e1e4c2cbb47af29458eac55823fbb83afdd14b55"
 dependencies = [
  "cc 1.0.35 (registry+https://github.com/rust-lang/crates.io-index)",
  "flate2 1.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2654,8 +2654,8 @@ dependencies = [
 "checksum rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "16d1effe9845d54f90e7be8420ee49e5c94623140b97ee4bc6fb5bfddb745720"
 "checksum rust-base58 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "b313b91fcdc6719ad41fa2dad2b7e810b03833fae4bf911950e15529a5f04439"
 "checksum rust_decimal 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)" = "460a9f4908697f83b2198dcbf27dc18e9bdfa9cdc5ecfacb2cd3ad1b97501260"
-"checksum rust_sodium 0.10.1 (git+https://github.com/octavonce/rust_sodium)" = "<none>"
-"checksum rust_sodium-sys 0.10.2 (git+https://github.com/octavonce/rust_sodium)" = "<none>"
+"checksum rust_sodium 0.10.2 (git+https://github.com/octavonce/rust_sodium)" = "<none>"
+"checksum rust_sodium-sys 0.10.4 (git+https://github.com/octavonce/rust_sodium)" = "<none>"
 "checksum rustc-demangle 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)" = "ccc78bfd5acd7bf3e89cffcf899e5cb1a52d6fafa8dec2739ad70c9577a57288"
 "checksum rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "403bb3a286107a04825a5f82e1270acc1e14028d3d554d7a1e08914549575ab8"
 "checksum rustc-serialize 0.3.24 (registry+https://github.com/rust-lang/crates.io-index)" = "dcf128d1287d2ea9d80910b5f1120d0b8eede3fbf1abe91c40d39ea7d51e6fda"
