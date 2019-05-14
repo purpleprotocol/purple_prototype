@@ -18,6 +18,12 @@
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NetworkErr {
+    /// The connection attempt has failed
+    ConnectFailed,
+
+    /// The received `Connect` packet is invalid
+    InvalidConnectPacket,
+
     /// We are not connected to the given peer
     PeerNotFound,
 

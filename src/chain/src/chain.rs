@@ -42,11 +42,14 @@ pub enum ChainErr {
     /// The given block does not have a parent hash
     NoParentHash,
 
-    // Bad block height
+    /// Bad block height
     BadHeight,
 
-    // The block with the given hash is not written in the ledger
+    /// The block with the given hash is not written in the ledger
     NoSuchBlock,
+
+    /// The orphan pool is full.
+    TooManyOrphans,
 }
 
 /// Size of the block cache.
@@ -952,6 +955,10 @@ impl<B: Block> Chain<B> {
 
                 Ok(())
             } else {
+                if self.orphan_pool.len() >= MAX_ORPHANS {
+                    return Err(ChainErr::TooManyOrphans);
+                }
+
                 // If the parent exists and it is not the canonical
                 // tip this means that this block is represents a
                 // potential fork in the chain so we add it to the

@@ -18,9 +18,16 @@
 
 use crate::error::NetworkErr;
 use crate::node_id::NodeId;
+use std::net::SocketAddr;
 
 /// Generic network interface.
 pub trait NetworkInterface {
+    /// Attempts to connect to the peer with the given ip.
+    fn connect(&self, address: &SocketAddr) -> Result<(), NetworkErr>;
+
+    /// Attempts to connect to a previously encountered peer 
+    fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr>;
+
     /// Sends a packet to a specific peer.
     fn send_to_peer(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr>;
 
@@ -28,5 +35,11 @@ pub trait NetworkInterface {
     fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr>;
 
     /// Callback that processes each packet that is received from any peer.
-    fn process_packet(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr>;
+    fn process_packet(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
+
+    /// Bans the peer with the node id
+    fn ban_peer(&self, peer: &NodeId) -> Result<(), NetworkErr>;
+
+    /// Bans any further connections from the given ip. 
+    fn ban_ip(&self, peer: &SocketAddr) -> Result<(), NetworkErr>;
 }

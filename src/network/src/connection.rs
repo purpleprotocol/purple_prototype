@@ -17,8 +17,8 @@
 */
 
 use crate::error::NetworkErr;
-use network::Network;
-use packets::connect::Connect;
+use crate::interface::NetworkInterface;
+use crate::network::Network;
 use parking_lot::Mutex;
 use peer::Peer;
 use std::io::BufReader;
@@ -137,33 +137,21 @@ fn process_connection(
 
             let refuse_connection = refuse_connection.clone();
 
-            line.map(move |(reader, message)| {
-                // We should receive a connect packet
-                // if the peer's id is non-existent.
-                if network.lock().is_none_id(&addr) {
-                    match Connect::from_bytes(&message) {
-                        Ok(connect_packet) => {
-                            debug!(
-                                "Received connect packet from {}: {:?}",
-                                addr, connect_packet
-                            );
-                            reader
-                        }
-                        _ => {
-                            // Invalid packet, remove peer
-                            debug!("Invalid connect packet from {}", addr);
-
-                            // Flag socket for connection refusal
-                            refuse_connection.store(true, Ordering::Relaxed);
-
-                            reader
-                        }
+            line
+                .map(move |(reader, message)| {
+                    let result = network.lock().process_packet(&addr, &message);
+                    (reader, result)
+                })
+                .map(move |(reader, result)| {
+                    // TODO: Allow for handling other errors
+                    if let Err(NetworkErr::InvalidConnectPacket) = result {
+                        // Flag socket for connection refusal if we 
+                        // have received an invalid connect packet.
+                        refuse_connection.store(true, Ordering::Relaxed);
                     }
-                } else {
-                    info!("{}: {}", addr, hex::encode(message));
+
                     reader
-                }
-            })
+                })
         });
 
     // Now that we've got futures representing each half of the socket, we

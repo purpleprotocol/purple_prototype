@@ -18,10 +18,13 @@
 
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
+use crate::packets::connect::Connect;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::collections::VecDeque;
+use crypto::SecretKey as Sk;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
-use std::collections::VecDeque;
-use std::sync::Arc;
 use NodeId;
 use Peer;
 
@@ -31,16 +34,27 @@ pub struct MockNetwork {
     mailboxes: Arc<Mutex<HashMap<NodeId, VecDeque<Vec<u8>>>>>,
 
     /// Mapping between connected peers and their information
-    peers: HashMap<NodeId, Peer>,
+    peers: HashMap<SocketAddr, Peer>,
 
     /// Our node id
     node_id: NodeId,
+
+    /// Our secret key
+    secret_key: Sk,
 
     /// The name of the network we are on
     network_name: String,
 }
 
 impl NetworkInterface for MockNetwork {
+    fn connect(&self, address: &SocketAddr) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
     fn send_to_peer(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr> {
         let mut mailboxes = self.mailboxes.lock();
 
@@ -66,22 +80,48 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
-    fn process_packet(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr> {
+    fn process_packet(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+        // We should receive a connect packet
+        // if the peer's id is non-existent.
+        if self.peers.get(peer).unwrap().id.is_none() {
+            match Connect::from_bytes(packet) {
+                Ok(connect_packet) => {
+                    debug!(
+                        "Received connect packet from {}: {:?}",
+                        peer, connect_packet
+                    );
+
+                    Ok(())
+                }
+                _ => {
+                    // Invalid packet, remove peer
+                    debug!("Invalid connect packet from {}", peer);
+                    Err(NetworkErr::InvalidConnectPacket)
+                }
+            }
+        } else {
+            info!("{}: {}", peer, hex::encode(packet));
+            Ok(())
+        }
+    }
+
+    fn ban_peer(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn ban_ip(&self, peer: &SocketAddr) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 }
 
 impl MockNetwork {
-    pub fn new(
-        node_id: NodeId,
-        network_name: String,
-        mailboxes: Arc<Mutex<HashMap<NodeId, VecDeque<Vec<u8>>>>>,
-    ) -> MockNetwork {
+    pub fn new(node_id: NodeId, network_name: String, secret_key: Sk, mailboxes: Arc<Mutex<HashMap<NodeId, VecDeque<Vec<u8>>>>>) -> MockNetwork {
         MockNetwork {
             mailboxes,
             peers: HashMap::new(),
             node_id,
-            network_name,
+            secret_key,
+            network_name
         }
     }
 }

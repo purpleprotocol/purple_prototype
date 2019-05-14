@@ -42,7 +42,7 @@ extern crate persistence;
 extern crate tokio;
 
 use clap::{App, Arg};
-use crypto::Identity;
+use crypto::{Identity, SecretKey as Sk};
 use elastic_array::ElasticArray128;
 use futures::future::ok;
 use futures::Future;
@@ -72,10 +72,11 @@ fn main() {
     let mut node_storage = PersistentDb::new(db.clone(), Some(1));
     let ledger = PersistentDb::new(db, Some(2));
 
-    let node_id = fetch_node_id(&mut node_storage);
+    let (node_id, skey) = fetch_credentials(&mut node_storage);
     let network = Arc::new(Mutex::new(Network::new(
         node_id,
         argv.network_name.to_owned(),
+        skey,
         argv.max_peers,
     )));
     let accept_connections = Arc::new(AtomicBool::new(true));
@@ -98,20 +99,23 @@ fn main() {
 }
 
 // Fetch stored node id or create new identity and store it
-fn fetch_node_id(db: &mut PersistentDb) -> NodeId {
+fn fetch_credentials(db: &mut PersistentDb) -> (NodeId, Sk) {
     let node_id_key = crypto::hash_slice(b"node_id");
+    let node_skey_key = crypto::hash_slice(b"node_skey");
 
-    match db.get(&node_id_key) {
-        Some(id) => {
-            let mut buf = [0; 32];
-            buf.copy_from_slice(&id);
+    match (db.get(&node_id_key), db.get(&node_skey_key)) {
+        (Some(id), Some(skey)) => {
+            let mut id_buf = [0; 32];
+            let mut skey_buf = [0; 64];
 
-            NodeId::new(buf)
+            id_buf.copy_from_slice(&id);
+            skey_buf.copy_from_slice(&skey);
+
+            (NodeId::new(id_buf), Sk(skey_buf))
         }
-        None => {
+        _ => {
             // Create new identity and write keys to database
             let identity = Identity::new();
-            let node_skey_key = crypto::hash_slice(b"node_skey");
 
             let bin_pkey = identity.pkey().0;
             let bin_skey = identity.skey().0;
@@ -119,7 +123,7 @@ fn fetch_node_id(db: &mut PersistentDb) -> NodeId {
             db.emplace(node_id_key, ElasticArray128::<u8>::from_slice(&bin_pkey));
             db.emplace(node_skey_key, ElasticArray128::<u8>::from_slice(&bin_skey));
 
-            NodeId::new(bin_pkey)
+           (NodeId::new(bin_pkey), identity.skey().clone())
         }
     }
 }

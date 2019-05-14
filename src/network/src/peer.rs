@@ -18,6 +18,7 @@
 
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use std::net::SocketAddr;
+use std::hash::{Hash, Hasher};
 use NodeId;
 
 #[derive(Debug, Clone)]
@@ -68,5 +69,27 @@ impl Peer {
     pub fn set_session_keys(&mut self, rx: SessionKey, tx: SessionKey) {
         self.rx = Some(rx);
         self.tx = Some(tx);
+    }
+}
+
+impl PartialEq for Peer {
+    fn eq(&self, other: &Peer) ->  bool {
+        match (&self.id, &other.id) {
+            // Check both ids and ips
+            (Some(id1), Some(id2)) => id1 == id2 && self.ip == other.ip,
+            // Fallback to just comparing ips
+            (_, _) => self.ip == other.ip,
+        }
+    }
+}
+
+impl Eq for Peer {}
+
+impl Hash for Peer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        if let Some(id) = &self.id {
+            id.hash(state);
+        }
+        self.ip.hash(state);
     }
 }
