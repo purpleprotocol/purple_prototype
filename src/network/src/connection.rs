@@ -17,10 +17,11 @@
 */
 
 use crate::error::NetworkErr;
-use crate::interface::NetworkInterface;
 use crate::network::Network;
+use crate::interface::NetworkInterface;
+use crate::peer::{Peer, ConnectionType};
+use crate::packets::connect::Connect;
 use parking_lot::Mutex;
-use peer::Peer;
 use std::io::BufReader;
 use std::iter;
 use std::net::SocketAddr;
@@ -101,16 +102,22 @@ fn process_connection(
     let network = network.clone();
 
     // Create new peer and add it to the peer table
-    let peer = Peer::new(None, addr);
+    let peer = Arc::new(Mutex::new(Peer::new(None, addr, client_or_server)));
 
-    if let Err(NetworkErr::MaximumPeersReached) = network.lock().add_peer(addr, peer) {
-        // Stop accepting peers
-        accept_connections.store(false, Ordering::Relaxed);
-    }
+    let (node_id, skey) = {
+        let mut network = network.lock();
+
+        if let Err(NetworkErr::MaximumPeersReached) = network.add_peer(addr, peer.clone()) {
+            // Stop accepting peers
+            accept_connections.store(false, Ordering::Relaxed);
+        }
+
+        (network.node_id.clone(), network.secret_key.clone())
+    };
 
     // Split up the reading and writing parts of the
     // socket.
-    let (reader, _writer) = sock.split();
+    let (reader, writer) = sock.split();
     let reader = BufReader::new(reader);
 
     // Model the read portion of this socket by mapping an infinite
@@ -119,6 +126,40 @@ fn process_connection(
     let iter = stream::iter_ok::<_, io::Error>(iter::repeat(()));
     let network_clone = network.clone();
     let refuse_connection_clone = refuse_connection.clone();
+
+    let writer_iter = stream::iter_ok::<_, ()>(iter::repeat(()));
+    let socket_writer = writer_iter
+        .fold(writer, move |mut writer, _| {
+            let mut peer = peer.lock();
+            let skey = skey.clone();
+
+            // Write a connect packet if we are the client
+            // and we have not yet sent a connect packet.
+            if let ConnectionType::Client = client_or_server {
+                if !peer.sent_connect {
+                    // Send `Connect` packet.
+                    let mut connect = Connect::new(node_id.0, peer.pk);
+                    connect.sign(skey);
+
+                    let packet = connect.to_bytes();
+
+                    writer
+                        .poll_write(&packet)
+                        .map_err(|err| warn!("write failed = {:?}", err));
+
+                    peer.sent_connect = true;
+                }
+            }
+
+            // Pop packet from outbound buffer and write it to the socket.
+            if let Some(packet) = peer.outbound_buffer.pop_back() {
+                writer
+                    .poll_write(&packet)
+                    .map_err(|err| warn!("write failed = {:?}", err));
+            }
+
+            ok(writer)
+        });
 
     let socket_reader = iter
         .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
@@ -143,7 +184,7 @@ fn process_connection(
                     (reader, result)
                 })
                 .map(move |(reader, result)| {
-                    // TODO: Allow for handling other errors
+                    // TODO: Handle other errors as well
                     if let Err(NetworkErr::InvalidConnectPacket) = result {
                         // Flag socket for connection refusal if we 
                         // have received an invalid connect packet.
@@ -159,8 +200,15 @@ fn process_connection(
     // tear down the other. Then we spawn off the result.
     let network = network.clone();
     let socket_reader = socket_reader.map_err(|_| ());
+    let socket_writer = socket_writer.map_err(|_| ());
 
     let accept_connections = accept_connections.clone();
+
+    // Spawn task to process socket writing
+    tokio::spawn(socket_writer.then(move |_| {
+        debug!("Write half of {} closed", addr);
+        Ok(())
+    }));
 
     // Spawn a task to process the connection
     tokio::spawn(socket_reader.then(move |_| {
@@ -175,11 +223,6 @@ fn process_connection(
         info!("Connection to {} closed", addr);
         Ok(())
     }))
-}
-
-enum ConnectionType {
-    Client,
-    Server,
 }
 
 // #[cfg(test)]

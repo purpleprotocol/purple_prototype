@@ -19,7 +19,17 @@
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use std::net::SocketAddr;
 use std::hash::{Hash, Hasher};
+use std::collections::VecDeque;
 use NodeId;
+
+#[derive(Clone, Debug, Copy)]
+pub enum ConnectionType {
+    Client,
+    Server,
+}
+
+/// Size of the outbound buffer.
+pub const OUTBOUND_BUF_SIZE: usize = 1000;
 
 #[derive(Debug, Clone)]
 pub struct Peer {
@@ -30,11 +40,28 @@ pub struct Peer {
     /// node's id has been received.
     pub id: Option<NodeId>,
 
+    /// The type of the connection. Can be 
+    /// either `Client` or `Server`.
+    /// 
+    /// A connection type is `Client` when
+    /// we are the one connecting.
+    /// 
+    /// A connection type is `Server` when
+    /// a peer connects to us.
+    pub connection_type: ConnectionType,
+
     /// The ip address of the peer
     pub ip: SocketAddr,
 
+    /// Wether the peer has send a `Connect` packet or not.
+    pub sent_connect: bool,
+
+    /// Buffer storing packets that are to be 
+    /// sent to the peer.
+    pub outbound_buffer: VecDeque<Vec<u8>>,
+
     /// Session generated public key
-    pk: Pk,
+    pub pk: Pk,
 
     /// Session generated secret key
     sk: Sk,
@@ -47,8 +74,9 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn new(id: Option<NodeId>, ip: SocketAddr) -> Peer {
+    pub fn new(id: Option<NodeId>, ip: SocketAddr, connection_type: ConnectionType) -> Peer {
         let (pk, sk) = gen_kx_keypair();
+        let outbound_buffer = VecDeque::with_capacity(OUTBOUND_BUF_SIZE);
 
         Peer {
             id: id,
@@ -57,6 +85,9 @@ impl Peer {
             sk: sk,
             rx: None,
             tx: None,
+            sent_connect: false,
+            connection_type,
+            outbound_buffer,
         }
     }
 

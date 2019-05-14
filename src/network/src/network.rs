@@ -22,19 +22,21 @@ use crate::packets::connect::Connect;
 use std::net::SocketAddr;
 use crypto::SecretKey as Sk;
 use hashbrown::{HashSet, HashMap};
+use std::sync::Arc;
+use parking_lot::Mutex;
 use NodeId;
 use Peer;
 
 #[derive(Debug, Clone)]
 pub struct Network {
     /// Mapping between connected ips and peer information
-    peers: HashMap<SocketAddr, Peer>,
+    peers: HashMap<SocketAddr, Arc<Mutex<Peer>>>,
 
     /// Our node id
-    node_id: NodeId,
+    pub(crate) node_id: NodeId,
 
     /// Our secret key
-    secret_key: Sk,
+    pub(crate) secret_key: Sk,
 
     /// The name of the network we are on
     network_name: String,
@@ -54,7 +56,7 @@ impl Network {
         }
     }
 
-    pub fn add_peer(&mut self, addr: SocketAddr, peer: Peer) -> Result<(), NetworkErr> {
+    pub fn add_peer(&mut self, addr: SocketAddr, peer: Arc<Mutex<Peer>>) -> Result<(), NetworkErr> {
         if self.peer_count() < self.max_peers {
             self.peers.insert(addr, peer);
             Ok(())
@@ -78,7 +80,7 @@ impl Network {
     /// This function will panic if there is no entry for the given address.
     pub fn set_node_id(&mut self, addr: &SocketAddr, node_id: NodeId) {
         match self.peers.get_mut(addr) {
-            Some(peer) => peer.set_id(node_id),
+            Some(peer) => peer.lock().set_id(node_id),
             None => panic!("There is no listed peer with the given address!"),
         };
     }
@@ -93,7 +95,7 @@ impl Network {
     /// This function will panic if there is no entry for the given address.
     pub fn is_none_id(&self, addr: &SocketAddr) -> bool {
         match self.peers.get(addr) {
-            Some(peer) => peer.id.is_none(),
+            Some(peer) => peer.lock().id.is_none(),
             None => panic!("There is no listed peer with the given address!"),
         }
     }

@@ -57,3 +57,21 @@ pub use interface::*;
 pub use network::*;
 pub use node_id::*;
 pub use peer::*;
+
+#[cfg(test)]
+use std::net::{SocketAddr, IpAddr, Ipv4Addr};
+
+#[cfg(test)]
+use rand::prelude::*;
+
+#[cfg(test)]
+pub fn random_socket_addr() -> SocketAddr {
+    let mut thread_rng = rand::thread_rng();
+    let i1 = thread_rng.gen();
+    let i2 = thread_rng.gen();
+    let i3 = thread_rng.gen();
+    let i4 = thread_rng.gen();
+
+    let addr = IpAddr::V4(Ipv4Addr::new(i1, i2, i3, i4));
+    SocketAddr::new(addr, 44034)
+}

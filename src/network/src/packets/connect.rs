@@ -17,20 +17,20 @@
 */
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{PublicKey as Pk, SecretKey as Sk, Signature, KxPublicKey as KxPk};
 use std::io::Cursor;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Connect {
     node_id: Pk,
-    kx_key: Pk,
+    kx_key: KxPk,
     signature: Option<Signature>,
 }
 
 impl Connect {
     pub const PACKET_TYPE: u8 = 1;
 
-    pub fn new(node_id: Pk, kx_key: Pk) -> Connect {
+    pub fn new(node_id: Pk, kx_key: KxPk) -> Connect {
         Connect {
             node_id: node_id,
             kx_key: kx_key,
@@ -110,7 +110,7 @@ impl Connect {
 
             b.copy_from_slice(&kx_key_vec);
 
-            Pk(b)
+            KxPk(b)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -164,12 +164,12 @@ use crypto::Identity;
 #[cfg(test)]
 impl Arbitrary for Connect {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Connect {
-        let id1 = Identity::new();
-        let id2 = Identity::new();
+        let (pk, _) = crypto::gen_kx_keypair();
+        let id = Identity::new();
 
         Connect {
-            node_id: *id1.pkey(),
-            kx_key: *id2.pkey(),
+            node_id: *id.pkey(),
+            kx_key: pk,
             signature: Some(Arbitrary::arbitrary(g)),
         }
     }
@@ -185,13 +185,15 @@ mod tests {
         }
 
         fn verify_signature(id1: Identity, id2: Identity) -> bool {
+            let id = Identity::new();
+            let (pk, _) = crypto::gen_kx_keypair();
             let mut packet = Connect {
-                node_id: *id1.pkey(),
-                kx_key: *id2.pkey(),
+                node_id: *id.pkey(),
+                kx_key: pk,
                 signature: None
             };
 
-            packet.sign(id1.skey().clone());
+            packet.sign(id.skey().clone());
             packet.verify_sig()
         }
 
