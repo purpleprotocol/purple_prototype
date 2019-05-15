@@ -17,12 +17,12 @@
 */
 
 use crate::causal_graph::CausalGraph;
-use crate::validator_state::ValidatorState;
 use crate::validation::ValidationResp;
+use crate::validator_state::ValidatorState;
 use causality::Stamp;
 use events::Event;
-use network::NodeId;
 use hashbrown::HashMap;
+use network::NodeId;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -37,7 +37,7 @@ pub enum CGError {
 #[derive(Debug)]
 pub struct ConsensusMachine {
     pub(crate) causal_graph: CausalGraph,
-    
+
     /// Number denoting the current consensus epoch.
     /// This is incremented each time a validator set
     /// is joined to the pool.
@@ -49,7 +49,12 @@ pub struct ConsensusMachine {
 }
 
 impl ConsensusMachine {
-    pub fn new(node_id: NodeId, epoch: u64, allocated: u64, root_event: Arc<Event>) -> ConsensusMachine {
+    pub fn new(
+        node_id: NodeId,
+        epoch: u64,
+        allocated: u64,
+        root_event: Arc<Event>,
+    ) -> ConsensusMachine {
         ConsensusMachine {
             causal_graph: CausalGraph::new(node_id, root_event),
             epoch,
@@ -77,7 +82,7 @@ impl ConsensusMachine {
         let mut fork_stack: Vec<(Stamp, Option<NodeId>)> = vec![(Stamp::seed(), None)];
         let mut forked = vec![];
 
-        // On each injection/epoch change we re-assign 
+        // On each injection/epoch change we re-assign
         // the nodes internal ids on an injection.
         let mut all_node_ids: Vec<NodeId> = validator_set
             .keys()
@@ -88,7 +93,7 @@ impl ConsensusMachine {
         // Sort ids lexicographically so that injections are deterministic.
         all_node_ids.sort_unstable();
 
-        // For each node id, fork a stamp and insert it to 
+        // For each node id, fork a stamp and insert it to
         // the validator pool.
         while let Some(node_id) = all_node_ids.pop() {
             loop {
@@ -100,13 +105,13 @@ impl ConsensusMachine {
                     // node if there is any.
                     if let Some(from) = from {
                         let (l, r) = next_fork.fork();
-                        
+
                         // Assign stamps to nodes
                         forked.push((l.clone(), Some(from.clone())));
                         forked.push((r.clone(), Some(node_id.clone())));
 
                         stamp = r;
-                        
+
                         // Replace stamp of forked node
                         let from_state = self.causal_graph.validators.get_mut(&from).unwrap();
                         from_state.latest_stamp = l;
@@ -116,12 +121,16 @@ impl ConsensusMachine {
                     }
 
                     // Fetch or create the validator state
-                    let validator_state = if let Some(state) = self.causal_graph.validators.get_mut(&node_id) {
-                        state 
-                    } else {
-                        self.causal_graph.validators.insert(node_id.clone(), ValidatorState::new(true, allocated.clone(), Stamp::seed()));
-                        self.causal_graph.validators.get_mut(&node_id).unwrap()
-                    };
+                    let validator_state =
+                        if let Some(state) = self.causal_graph.validators.get_mut(&node_id) {
+                            state
+                        } else {
+                            self.causal_graph.validators.insert(
+                                node_id.clone(),
+                                ValidatorState::new(true, allocated.clone(), Stamp::seed()),
+                            );
+                            self.causal_graph.validators.get_mut(&node_id).unwrap()
+                        };
 
                     // Update the stamp of the validator state
                     validator_state.allowed_to_send = true;

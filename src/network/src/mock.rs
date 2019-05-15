@@ -18,10 +18,10 @@
 
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
-use std::sync::Arc;
-use std::collections::VecDeque;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
+use std::collections::VecDeque;
+use std::sync::Arc;
 use NodeId;
 use Peer;
 
@@ -37,7 +37,7 @@ pub struct MockNetwork {
     node_id: NodeId,
 
     /// The name of the network we are on
-    network_name: String
+    network_name: String,
 }
 
 impl NetworkInterface for MockNetwork {
@@ -72,12 +72,16 @@ impl NetworkInterface for MockNetwork {
 }
 
 impl MockNetwork {
-    pub fn new(node_id: NodeId, network_name: String, mailboxes: Arc<Mutex<HashMap<NodeId, VecDeque<Vec<u8>>>>>) -> MockNetwork {
+    pub fn new(
+        node_id: NodeId,
+        network_name: String,
+        mailboxes: Arc<Mutex<HashMap<NodeId, VecDeque<Vec<u8>>>>>,
+    ) -> MockNetwork {
         MockNetwork {
             mailboxes,
             peers: HashMap::new(),
             node_id,
-            network_name
+            network_name,
         }
     }
 }

@@ -24,7 +24,7 @@ extern crate patricia_trie;
 extern crate persistence;
 extern crate quicksort;
 extern crate rlp;
-extern crate tempfile;
+extern crate tempdir;
 
 use account::{Address, Balance};
 use crypto::Hash;
@@ -33,17 +33,12 @@ use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec, PersistentDb};
 use quicksort::*;
 use std::sync::Arc;
-use tempfile::tempdir;
+use tempdir::TempDir;
 
 pub use quicksort::*;
 
 pub fn init_tempdb() -> PersistentDb {
-    let config = DatabaseConfig::with_columns(None);
-    let dir = tempdir().unwrap();
-    let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
-    let db_ref = Arc::new(db);
-
-    PersistentDb::new(db_ref, None)
+    PersistentDb::new_in_memory()
 }
 
 pub fn init_balance(

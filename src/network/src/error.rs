@@ -20,7 +20,7 @@
 pub enum NetworkErr {
     /// We are not connected to the given peer
     PeerNotFound,
-    
+
     /// We cannot add more peers since we are
     /// already at the maximum.
     MaximumPeersReached,
