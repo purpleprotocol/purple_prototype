@@ -59,11 +59,7 @@ pub fn bootstrap(
 
         let fut = stream::iter_ok(peers_to_connect)
             .for_each(move |addr| {
-                connect_to_peer(
-                    network.clone(),
-                    accept_connections.clone(),
-                    &addr,
-                )
+                connect_to_peer(network.clone(), accept_connections.clone(), &addr)
             })
             .and_then(move |_| {
                 // Connect to bootstrap nodes if we haven't
@@ -76,11 +72,7 @@ pub fn bootstrap(
                     let network = network_clone.clone();
 
                     let fut = stream::iter_ok(bootnodes).for_each(move |addr| {
-                        connect_to_peer(
-                            network.clone(),
-                            accept_connections.clone(),
-                            &addr,
-                        )
+                        connect_to_peer(network.clone(), accept_connections.clone(), &addr)
                     });
 
                     tokio::spawn(fut);
@@ -107,11 +99,7 @@ pub fn bootstrap(
         let network = network.clone();
 
         let fut = stream::iter_ok(peers_to_connect).for_each(move |addr| {
-            connect_to_peer(
-                network.clone(),
-                accept_connections.clone(),
-                &addr,
-            )
+            connect_to_peer(network.clone(), accept_connections.clone(), &addr)
         });
 
         tokio::spawn(fut)

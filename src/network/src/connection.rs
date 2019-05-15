@@ -16,8 +16,8 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use network::Network;
 use crate::error::NetworkErr;
+use network::Network;
 use packets::connect::Connect;
 use parking_lot::Mutex;
 use peer::Peer;
@@ -39,10 +39,7 @@ pub const PORT: u16 = 44034;
 const PEER_TIMEOUT: u64 = 3000;
 
 /// Initializes the listener for the given network
-pub fn start_listener(
-    network: Arc<Mutex<Network>>,
-    accept_connections: Arc<AtomicBool>,
-) -> Spawn {
+pub fn start_listener(network: Arc<Mutex<Network>>, accept_connections: Arc<AtomicBool>) -> Spawn {
     info!("Starting TCP listener on port {}", PORT);
 
     // Bind the server's socket.
@@ -75,12 +72,7 @@ pub fn connect_to_peer(
     let connect = TcpStream::connect(addr)
         .map_err(|e| warn!("connect failed = {:?}", e))
         .and_then(move |sock| {
-            process_connection(
-                network,
-                sock,
-                accept_connections,
-                ConnectionType::Client,
-            )
+            process_connection(network, sock, accept_connections, ConnectionType::Client)
         });
 
     tokio::spawn(connect)

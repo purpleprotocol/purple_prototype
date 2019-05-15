@@ -27,6 +27,7 @@ extern crate byteorder;
 extern crate crypto;
 extern crate env_logger;
 extern crate futures;
+extern crate hashbrown;
 extern crate hashdb;
 extern crate hex;
 extern crate parking_lot;
@@ -36,24 +37,23 @@ extern crate rlp;
 extern crate tokio;
 extern crate tokio_io_timeout;
 extern crate tokio_timer;
-extern crate hashbrown;
 
 #[cfg(test)]
 pub mod mock;
 
 mod bootstrap;
 mod connection;
+mod error;
+mod interface;
 mod network;
 mod node_id;
 pub mod packets;
 mod peer;
-mod interface;
-mod error;
 
 pub use bootstrap::*;
 pub use connection::*;
+pub use error::*;
+pub use interface::*;
 pub use network::*;
 pub use node_id::*;
 pub use peer::*;
-pub use interface::*;
-pub use error::*;

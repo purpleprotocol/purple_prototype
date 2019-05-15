@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use std::net::SocketAddr;
 use crate::error::NetworkErr;
 use hashbrown::HashMap;
+use std::net::SocketAddr;
 use NodeId;
 use Peer;
 
@@ -34,7 +34,7 @@ pub struct Network {
     network_name: String,
 
     /// Maximum number of allowed peers, default is 8
-    pub(crate) max_peers: usize
+    pub(crate) max_peers: usize,
 }
 
 impl Network {
@@ -43,7 +43,7 @@ impl Network {
             peers: HashMap::with_capacity(max_peers),
             node_id,
             network_name,
-            max_peers
+            max_peers,
         }
     }
 

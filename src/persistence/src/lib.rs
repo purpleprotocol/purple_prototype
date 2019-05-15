@@ -20,8 +20,8 @@
 extern crate tempdir;
 
 extern crate crypto;
-extern crate hashbrown;
 extern crate elastic_array;
+extern crate hashbrown;
 extern crate hashdb;
 extern crate kvdb_rocksdb;
 extern crate parking_lot;

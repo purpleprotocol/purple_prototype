@@ -18,10 +18,10 @@
 
 use crypto::Hash;
 use elastic_array::ElasticArray128;
+use hashbrown::HashMap;
 use hashdb::{AsHashDB, HashDB};
 use kvdb_rocksdb::Database;
 use rlp::NULL_RLP;
-use hashbrown::HashMap;
 use std::sync::Arc;
 use BlakeDbHasher;
 
@@ -88,7 +88,7 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
         if val == &NULL_RLP {
             return Hash::NULL_RLP;
         }
-        
+
         let val_hash = crypto::hash_slice(val);
 
         if let Some(db_ref) = &self.db_ref {
@@ -100,7 +100,10 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
 
             val_hash
         } else {
-            self.memory_db.as_mut().unwrap().insert(val_hash.0.to_vec(), val.to_vec());
+            self.memory_db
+                .as_mut()
+                .unwrap()
+                .insert(val_hash.0.to_vec(), val.to_vec());
             val_hash
         }
     }

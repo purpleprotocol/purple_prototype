@@ -1,5 +1,5 @@
 # Purple Protocol
-[![Build Status](https://travis-ci.org/purpleprotocol/purple.svg?branch=master)](https://travis-ci.org/purpleprotocol/purple-rs) [![AppVeyor](https://ci.appveyor.com/api/projects/status/p2nqwukuv0cftx36?svg=true)](https://ci.appveyor.com/project/OctavianOncescu/purple) [![Discord](https://img.shields.io/discord/435827644915777536.svg)](https://discord.gg/UCYWSsd) [![_pdf whitepaper](https://img.shields.io/badge/_pdf-whitepaper-blue.svg)](https://purpleprotocol.org/whitepaper/)
+[![Build Status](https://travis-ci.org/purpleprotocol/purple.svg?branch=master)](https://travis-ci.org/purpleprotocol/purple) [![AppVeyor](https://ci.appveyor.com/api/projects/status/p2nqwukuv0cftx36?svg=true)](https://ci.appveyor.com/project/OctavianOncescu/purple) [![Discord](https://img.shields.io/discord/435827644915777536.svg)](https://discord.gg/UCYWSsd) [![_pdf whitepaper](https://img.shields.io/badge/_pdf-whitepaper-blue.svg)](https://purpleprotocol.org/whitepaper/)
 
 Welcome to the official Rust implementation of the Purple Protocol!
 

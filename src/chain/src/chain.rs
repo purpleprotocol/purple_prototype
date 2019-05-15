@@ -433,7 +433,7 @@ impl<B: Block> Chain<B> {
                         .validations_mapping
                         .get_mut(&parent.block_hash().unwrap())
                         .unwrap();
-                        
+
                     *status = OrphanType::BelongsToValidChain;
                     current = parent.parent_hash().unwrap();
                 }
@@ -1247,7 +1247,7 @@ impl<B: Block> Chain<B> {
 mod tests {
     use super::*;
     use crate::easy_chain::block::EasyBlock;
-    use crate::hard_chain::block::HardBlock;
+    use chrono::prelude::*;
     use quickcheck::*;
     use rand::*;
 
@@ -1269,153 +1269,169 @@ mod tests {
         });
     }
 
+    use std::hash::Hasher;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Nonce used for creating unique `DummyBlock` hashes
+    static NONCE: AtomicUsize = AtomicUsize::new(0);
+
+    #[derive(Clone, Debug)]
+    /// Dummy block used for testing
+    struct DummyBlock {
+        hash: Hash,
+        parent_hash: Hash,
+        height: u64,
+    }
+
+    impl DummyBlock {
+        pub fn new(parent_hash: Option<Hash>, height: u64) -> DummyBlock {
+            let hash =
+                crypto::hash_slice(&format!("block-{}", NONCE.load(Ordering::Relaxed)).as_bytes());
+            NONCE.fetch_add(1, Ordering::Relaxed);
+            let parent_hash = parent_hash.unwrap();
+
+            DummyBlock {
+                hash,
+                parent_hash,
+                height,
+            }
+        }
+    }
+
+    impl PartialEq for DummyBlock {
+        fn eq(&self, other: &DummyBlock) -> bool {
+            self.block_hash().unwrap() == other.block_hash().unwrap()
+        }
+    }
+
+    impl Eq for DummyBlock {}
+
+    impl HashTrait for DummyBlock {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            self.block_hash().unwrap().hash(state);
+        }
+    }
+
+    impl Block for DummyBlock {
+        fn genesis() -> Arc<Self> {
+            let genesis = DummyBlock {
+                hash: Hash::NULL,
+                parent_hash: Hash::NULL,
+                height: 0,
+            };
+
+            Arc::new(genesis)
+        }
+
+        fn parent_hash(&self) -> Option<Hash> {
+            Some(self.parent_hash.clone())
+        }
+
+        fn block_hash(&self) -> Option<Hash> {
+            Some(self.hash.clone())
+        }
+
+        fn merkle_root(&self) -> Option<Hash> {
+            unimplemented!();
+        }
+
+        fn timestamp(&self) -> DateTime<Utc> {
+            unimplemented!();
+        }
+
+        fn height(&self) -> u64 {
+            self.height
+        }
+
+        fn after_write() -> Option<Box<FnMut(Arc<Self>)>> {
+            None
+        }
+
+        fn to_bytes(&self) -> Vec<u8> {
+            let mut buf = Vec::new();
+            let height = encode_be_u64!(self.height);
+
+            buf.extend_from_slice(&height);
+            buf.extend_from_slice(&self.hash.0.to_vec());
+            buf.extend_from_slice(&self.parent_hash.0.to_vec());
+
+            buf
+        }
+
+        fn from_bytes(bytes: &[u8]) -> Result<Arc<Self>, &'static str> {
+            let mut buf = bytes.to_vec();
+            let height_bytes: Vec<u8> = buf.drain(..8).collect();
+            let height = decode_be_u64!(&height_bytes).unwrap();
+            let hash_bytes: Vec<u8> = buf.drain(..32).collect();
+            let parent_hash_bytes = buf;
+            let mut hash = [0; 32];
+            let mut parent_hash = [0; 32];
+
+            hash.copy_from_slice(&hash_bytes);
+            parent_hash.copy_from_slice(&parent_hash_bytes);
+
+            let hash = Hash(hash);
+            let parent_hash = Hash(parent_hash);
+
+            Ok(Arc::new(DummyBlock {
+                height,
+                hash,
+                parent_hash,
+            }))
+        }
+    }
+
     #[test]
     fn stages_append_test1() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<HardBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-        let mut A = HardBlock::new(
-            Some(HardBlock::genesis().block_hash().unwrap()),
-            1,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        A.calculate_merkle_root();
-        A.compute_hash();
+        let mut A = DummyBlock::new(Some(Hash::NULL), 1);
         let A = Arc::new(A);
 
-        let mut B = HardBlock::new(
-            Some(A.block_hash().unwrap()),
-            2,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        B.calculate_merkle_root();
-        B.compute_hash();
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
         let B = Arc::new(B);
 
-        let mut C = HardBlock::new(
-            Some(B.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C.calculate_merkle_root();
-        C.compute_hash();
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
         let C = Arc::new(C);
 
-        let mut D = HardBlock::new(
-            Some(C.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D.calculate_merkle_root();
-        D.compute_hash();
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
         let D = Arc::new(D);
 
-        let mut E = HardBlock::new(
-            Some(D.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E.calculate_merkle_root();
-        E.compute_hash();
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
         let E = Arc::new(E);
 
-        let mut F = HardBlock::new(
-            Some(E.block_hash().unwrap()),
-            6,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        F.calculate_merkle_root();
-        F.compute_hash();
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
         let F = Arc::new(F);
 
-        let mut G = HardBlock::new(
-            Some(F.block_hash().unwrap()),
-            7,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        G.calculate_merkle_root();
-        G.compute_hash();
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
         let G = Arc::new(G);
 
-        let mut B_prime = HardBlock::new(
-            Some(A.block_hash().unwrap()),
-            2,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        B_prime.calculate_merkle_root();
-        B_prime.compute_hash();
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
         let B_prime = Arc::new(B_prime);
 
-        let mut C_prime = HardBlock::new(
-            Some(B_prime.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C_prime.calculate_merkle_root();
-        C_prime.compute_hash();
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
         let C_prime = Arc::new(C_prime);
 
-        let mut D_prime = HardBlock::new(
-            Some(C_prime.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_prime.calculate_merkle_root();
-        D_prime.compute_hash();
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
         let D_prime = Arc::new(D_prime);
 
-        let mut E_prime = HardBlock::new(
-            Some(D_prime.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E_prime.calculate_merkle_root();
-        E_prime.compute_hash();
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
         let E_prime = Arc::new(E_prime);
 
-        let mut C_second = HardBlock::new(
-            Some(B_prime.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C_second.calculate_merkle_root();
-        C_second.compute_hash();
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
         let C_second = Arc::new(C_second);
 
-        let mut D_second = HardBlock::new(
-            Some(C_second.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_second.calculate_merkle_root();
-        D_second.compute_hash();
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
         let D_second = Arc::new(D_second);
 
-        let mut E_second = HardBlock::new(
-            Some(D_second.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E_second.calculate_merkle_root();
-        E_second.compute_hash();
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
         let E_second = Arc::new(E_second);
 
-        let mut F_second = HardBlock::new(
-            Some(E_second.block_hash().unwrap()),
-            6,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        F_second.calculate_merkle_root();
-        F_second.compute_hash();
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
         let F_second = Arc::new(F_second);
 
-        let mut D_tertiary = HardBlock::new(
-            Some(C_prime.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_tertiary.calculate_merkle_root();
-        D_tertiary.compute_hash();
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
         let D_tertiary = Arc::new(D_tertiary);
 
         hard_chain.append_block(E_second.clone()).unwrap();
@@ -1510,150 +1526,54 @@ mod tests {
     #[test]
     fn stages_append_test2() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<HardBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-        let mut A = HardBlock::new(
-            Some(HardBlock::genesis().block_hash().unwrap()),
-            1,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        A.calculate_merkle_root();
-        A.compute_hash();
+        let mut A = DummyBlock::new(Some(Hash::NULL), 1);
         let A = Arc::new(A);
 
-        let mut B = HardBlock::new(
-            Some(A.block_hash().unwrap()),
-            2,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        B.calculate_merkle_root();
-        B.compute_hash();
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
         let B = Arc::new(B);
 
-        let mut C = HardBlock::new(
-            Some(B.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C.calculate_merkle_root();
-        C.compute_hash();
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
         let C = Arc::new(C);
 
-        let mut D = HardBlock::new(
-            Some(C.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D.calculate_merkle_root();
-        D.compute_hash();
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
         let D = Arc::new(D);
 
-        let mut E = HardBlock::new(
-            Some(D.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E.calculate_merkle_root();
-        E.compute_hash();
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
         let E = Arc::new(E);
 
-        let mut F = HardBlock::new(
-            Some(E.block_hash().unwrap()),
-            6,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        F.calculate_merkle_root();
-        F.compute_hash();
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
         let F = Arc::new(F);
 
-        let mut G = HardBlock::new(
-            Some(F.block_hash().unwrap()),
-            7,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        G.calculate_merkle_root();
-        G.compute_hash();
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
         let G = Arc::new(G);
 
-        let mut B_prime = HardBlock::new(
-            Some(A.block_hash().unwrap()),
-            2,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        B_prime.calculate_merkle_root();
-        B_prime.compute_hash();
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
         let B_prime = Arc::new(B_prime);
 
-        let mut C_prime = HardBlock::new(
-            Some(B_prime.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C_prime.calculate_merkle_root();
-        C_prime.compute_hash();
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
         let C_prime = Arc::new(C_prime);
 
-        let mut D_prime = HardBlock::new(
-            Some(C_prime.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_prime.calculate_merkle_root();
-        D_prime.compute_hash();
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
         let D_prime = Arc::new(D_prime);
 
-        let mut E_prime = HardBlock::new(
-            Some(D_prime.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E_prime.calculate_merkle_root();
-        E_prime.compute_hash();
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
         let E_prime = Arc::new(E_prime);
 
-        let mut C_second = HardBlock::new(
-            Some(B_prime.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C_second.calculate_merkle_root();
-        C_second.compute_hash();
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
         let C_second = Arc::new(C_second);
 
-        let mut D_second = HardBlock::new(
-            Some(C_second.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_second.calculate_merkle_root();
-        D_second.compute_hash();
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
         let D_second = Arc::new(D_second);
 
-        let mut E_second = HardBlock::new(
-            Some(D_second.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E_second.calculate_merkle_root();
-        E_second.compute_hash();
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
         let E_second = Arc::new(E_second);
 
-        let mut F_second = HardBlock::new(
-            Some(E_second.block_hash().unwrap()),
-            6,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        F_second.calculate_merkle_root();
-        F_second.compute_hash();
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
         let F_second = Arc::new(F_second);
 
-        let mut D_tertiary = HardBlock::new(
-            Some(C_prime.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_tertiary.calculate_merkle_root();
-        D_tertiary.compute_hash();
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
         let D_tertiary = Arc::new(D_tertiary);
 
         hard_chain.append_block(A.clone()).unwrap();
@@ -1803,150 +1723,54 @@ mod tests {
     /// of appended blocks.
     fn stages_append_test3() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<HardBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-        let mut A = HardBlock::new(
-            Some(HardBlock::genesis().block_hash().unwrap()),
-            1,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        A.calculate_merkle_root();
-        A.compute_hash();
+        let mut A = DummyBlock::new(Some(Hash::NULL), 1);
         let A = Arc::new(A);
 
-        let mut B = HardBlock::new(
-            Some(A.block_hash().unwrap()),
-            2,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        B.calculate_merkle_root();
-        B.compute_hash();
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
         let B = Arc::new(B);
 
-        let mut C = HardBlock::new(
-            Some(B.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C.calculate_merkle_root();
-        C.compute_hash();
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
         let C = Arc::new(C);
 
-        let mut D = HardBlock::new(
-            Some(C.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D.calculate_merkle_root();
-        D.compute_hash();
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
         let D = Arc::new(D);
 
-        let mut E = HardBlock::new(
-            Some(D.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E.calculate_merkle_root();
-        E.compute_hash();
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
         let E = Arc::new(E);
 
-        let mut F = HardBlock::new(
-            Some(E.block_hash().unwrap()),
-            6,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        F.calculate_merkle_root();
-        F.compute_hash();
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
         let F = Arc::new(F);
 
-        let mut G = HardBlock::new(
-            Some(F.block_hash().unwrap()),
-            7,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        G.calculate_merkle_root();
-        G.compute_hash();
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
         let G = Arc::new(G);
 
-        let mut B_prime = HardBlock::new(
-            Some(A.block_hash().unwrap()),
-            2,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        B_prime.calculate_merkle_root();
-        B_prime.compute_hash();
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
         let B_prime = Arc::new(B_prime);
 
-        let mut C_prime = HardBlock::new(
-            Some(B_prime.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C_prime.calculate_merkle_root();
-        C_prime.compute_hash();
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
         let C_prime = Arc::new(C_prime);
 
-        let mut D_prime = HardBlock::new(
-            Some(C_prime.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_prime.calculate_merkle_root();
-        D_prime.compute_hash();
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
         let D_prime = Arc::new(D_prime);
 
-        let mut E_prime = HardBlock::new(
-            Some(D_prime.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E_prime.calculate_merkle_root();
-        E_prime.compute_hash();
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
         let E_prime = Arc::new(E_prime);
 
-        let mut C_second = HardBlock::new(
-            Some(B_prime.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C_second.calculate_merkle_root();
-        C_second.compute_hash();
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
         let C_second = Arc::new(C_second);
 
-        let mut D_second = HardBlock::new(
-            Some(C_second.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_second.calculate_merkle_root();
-        D_second.compute_hash();
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
         let D_second = Arc::new(D_second);
 
-        let mut E_second = HardBlock::new(
-            Some(D_second.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E_second.calculate_merkle_root();
-        E_second.compute_hash();
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
         let E_second = Arc::new(E_second);
 
-        let mut F_second = HardBlock::new(
-            Some(E_second.block_hash().unwrap()),
-            6,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        F_second.calculate_merkle_root();
-        F_second.compute_hash();
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
         let F_second = Arc::new(F_second);
 
-        let mut D_tertiary = HardBlock::new(
-            Some(C_prime.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_tertiary.calculate_merkle_root();
-        D_tertiary.compute_hash();
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
         let D_tertiary = Arc::new(D_tertiary);
 
         hard_chain.append_block(C_second.clone()).unwrap();
@@ -3572,150 +3396,54 @@ mod tests {
     /// tip instead of G at commit hash `d0ad0bd6a7422f6308b96a34a6f7725662c8b7d4`.
     fn stages_append_test4() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<HardBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-        let mut A = HardBlock::new(
-            Some(HardBlock::genesis().block_hash().unwrap()),
-            1,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        A.calculate_merkle_root();
-        A.compute_hash();
+        let mut A = DummyBlock::new(Some(Hash::NULL), 1);
         let A = Arc::new(A);
 
-        let mut B = HardBlock::new(
-            Some(A.block_hash().unwrap()),
-            2,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        B.calculate_merkle_root();
-        B.compute_hash();
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
         let B = Arc::new(B);
 
-        let mut C = HardBlock::new(
-            Some(B.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C.calculate_merkle_root();
-        C.compute_hash();
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
         let C = Arc::new(C);
 
-        let mut D = HardBlock::new(
-            Some(C.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D.calculate_merkle_root();
-        D.compute_hash();
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
         let D = Arc::new(D);
 
-        let mut E = HardBlock::new(
-            Some(D.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E.calculate_merkle_root();
-        E.compute_hash();
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
         let E = Arc::new(E);
 
-        let mut F = HardBlock::new(
-            Some(E.block_hash().unwrap()),
-            6,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        F.calculate_merkle_root();
-        F.compute_hash();
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
         let F = Arc::new(F);
 
-        let mut G = HardBlock::new(
-            Some(F.block_hash().unwrap()),
-            7,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        G.calculate_merkle_root();
-        G.compute_hash();
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
         let G = Arc::new(G);
 
-        let mut B_prime = HardBlock::new(
-            Some(A.block_hash().unwrap()),
-            2,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        B_prime.calculate_merkle_root();
-        B_prime.compute_hash();
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
         let B_prime = Arc::new(B_prime);
 
-        let mut C_prime = HardBlock::new(
-            Some(B_prime.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C_prime.calculate_merkle_root();
-        C_prime.compute_hash();
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
         let C_prime = Arc::new(C_prime);
 
-        let mut D_prime = HardBlock::new(
-            Some(C_prime.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_prime.calculate_merkle_root();
-        D_prime.compute_hash();
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
         let D_prime = Arc::new(D_prime);
 
-        let mut E_prime = HardBlock::new(
-            Some(D_prime.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E_prime.calculate_merkle_root();
-        E_prime.compute_hash();
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
         let E_prime = Arc::new(E_prime);
 
-        let mut C_second = HardBlock::new(
-            Some(B_prime.block_hash().unwrap()),
-            3,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        C_second.calculate_merkle_root();
-        C_second.compute_hash();
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
         let C_second = Arc::new(C_second);
 
-        let mut D_second = HardBlock::new(
-            Some(C_second.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_second.calculate_merkle_root();
-        D_second.compute_hash();
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
         let D_second = Arc::new(D_second);
 
-        let mut E_second = HardBlock::new(
-            Some(D_second.block_hash().unwrap()),
-            5,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        E_second.calculate_merkle_root();
-        E_second.compute_hash();
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
         let E_second = Arc::new(E_second);
 
-        let mut F_second = HardBlock::new(
-            Some(E_second.block_hash().unwrap()),
-            6,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        F_second.calculate_merkle_root();
-        F_second.compute_hash();
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
         let F_second = Arc::new(F_second);
 
-        let mut D_tertiary = HardBlock::new(
-            Some(C_prime.block_hash().unwrap()),
-            4,
-            EasyBlock::genesis().block_hash().unwrap(),
-        );
-        D_tertiary.calculate_merkle_root();
-        D_tertiary.compute_hash();
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
         let D_tertiary = Arc::new(D_tertiary);
 
         hard_chain.append_block(D_second.clone()).unwrap();
@@ -6426,88 +6154,54 @@ mod tests {
         /// the height of the chain must be that of `G` which is 7.
         fn append_stress_test() -> bool {
             let db = test_helpers::init_tempdb();
+            let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-
-            let mut hard_chain = Chain::<HardBlock>::new(db);
-
-            let mut A = HardBlock::new(Some(HardBlock::genesis().block_hash().unwrap()), 1, EasyBlock::genesis().block_hash().unwrap());
-            A.calculate_merkle_root();
-            A.compute_hash();
+            let mut A = DummyBlock::new(Some(Hash::NULL), 1);
             let A = Arc::new(A);
 
-            let mut B = HardBlock::new(Some(A.block_hash().unwrap()), 2, EasyBlock::genesis().block_hash().unwrap());
-            B.calculate_merkle_root();
-            B.compute_hash();
+            let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
             let B = Arc::new(B);
 
-            let mut C = HardBlock::new(Some(B.block_hash().unwrap()), 3, EasyBlock::genesis().block_hash().unwrap());
-            C.calculate_merkle_root();
-            C.compute_hash();
+            let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
             let C = Arc::new(C);
 
-            let mut D = HardBlock::new(Some(C.block_hash().unwrap()), 4, EasyBlock::genesis().block_hash().unwrap());
-            D.calculate_merkle_root();
-            D.compute_hash();
+            let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
             let D = Arc::new(D);
 
-            let mut E = HardBlock::new(Some(D.block_hash().unwrap()), 5, EasyBlock::genesis().block_hash().unwrap());
-            E.calculate_merkle_root();
-            E.compute_hash();
+            let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
             let E = Arc::new(E);
 
-            let mut F = HardBlock::new(Some(E.block_hash().unwrap()), 6, EasyBlock::genesis().block_hash().unwrap());
-            F.calculate_merkle_root();
-            F.compute_hash();
+            let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
             let F = Arc::new(F);
 
-            let mut G = HardBlock::new(Some(F.block_hash().unwrap()), 7, EasyBlock::genesis().block_hash().unwrap());
-            G.calculate_merkle_root();
-            G.compute_hash();
+            let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
             let G = Arc::new(G);
 
-            let mut B_prime = HardBlock::new(Some(A.block_hash().unwrap()), 2, EasyBlock::genesis().block_hash().unwrap());
-            B_prime.calculate_merkle_root();
-            B_prime.compute_hash();
+            let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
             let B_prime = Arc::new(B_prime);
 
-            let mut C_prime = HardBlock::new(Some(B_prime.block_hash().unwrap()), 3, EasyBlock::genesis().block_hash().unwrap());
-            C_prime.calculate_merkle_root();
-            C_prime.compute_hash();
+            let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
             let C_prime = Arc::new(C_prime);
 
-            let mut D_prime = HardBlock::new(Some(C_prime.block_hash().unwrap()), 4, EasyBlock::genesis().block_hash().unwrap());
-            D_prime.calculate_merkle_root();
-            D_prime.compute_hash();
+            let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
             let D_prime = Arc::new(D_prime);
 
-            let mut E_prime = HardBlock::new(Some(D_prime.block_hash().unwrap()), 5, EasyBlock::genesis().block_hash().unwrap());
-            E_prime.calculate_merkle_root();
-            E_prime.compute_hash();
+            let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
             let E_prime = Arc::new(E_prime);
 
-            let mut C_second = HardBlock::new(Some(B_prime.block_hash().unwrap()), 3, EasyBlock::genesis().block_hash().unwrap());
-            C_second.calculate_merkle_root();
-            C_second.compute_hash();
+            let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
             let C_second = Arc::new(C_second);
 
-            let mut D_second = HardBlock::new(Some(C_second.block_hash().unwrap()), 4, EasyBlock::genesis().block_hash().unwrap());
-            D_second.calculate_merkle_root();
-            D_second.compute_hash();
+            let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
             let D_second = Arc::new(D_second);
 
-            let mut E_second = HardBlock::new(Some(D_second.block_hash().unwrap()), 5, EasyBlock::genesis().block_hash().unwrap());
-            E_second.calculate_merkle_root();
-            E_second.compute_hash();
+            let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
             let E_second = Arc::new(E_second);
 
-            let mut F_second = HardBlock::new(Some(E_second.block_hash().unwrap()), 6, EasyBlock::genesis().block_hash().unwrap());
-            F_second.calculate_merkle_root();
-            F_second.compute_hash();
+            let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
             let F_second = Arc::new(F_second);
 
-            let mut D_tertiary = HardBlock::new(Some(C_prime.block_hash().unwrap()), 4, EasyBlock::genesis().block_hash().unwrap());
-            D_tertiary.calculate_merkle_root();
-            D_tertiary.compute_hash();
+            let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
             let D_tertiary = Arc::new(D_tertiary);
 
             let mut blocks = vec![
@@ -6563,43 +6257,27 @@ mod tests {
 
         fn it_rewinds_correctly1() -> bool {
             let db = test_helpers::init_tempdb();
+            let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-
-            let mut hard_chain = Chain::<HardBlock>::new(db);
-
-            let mut A = HardBlock::new(Some(HardBlock::genesis().block_hash().unwrap()), 1, EasyBlock::genesis().block_hash().unwrap());
-            A.calculate_merkle_root();
-            A.compute_hash();
+            let mut A = DummyBlock::new(Some(Hash::NULL), 1);
             let A = Arc::new(A);
 
-            let mut B = HardBlock::new(Some(A.block_hash().unwrap()), 2, EasyBlock::genesis().block_hash().unwrap());
-            B.calculate_merkle_root();
-            B.compute_hash();
+            let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
             let B = Arc::new(B);
 
-            let mut C = HardBlock::new(Some(B.block_hash().unwrap()), 3, EasyBlock::genesis().block_hash().unwrap());
-            C.calculate_merkle_root();
-            C.compute_hash();
+            let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
             let C = Arc::new(C);
 
-            let mut D = HardBlock::new(Some(C.block_hash().unwrap()), 4, EasyBlock::genesis().block_hash().unwrap());
-            D.calculate_merkle_root();
-            D.compute_hash();
+            let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
             let D = Arc::new(D);
 
-            let mut E = HardBlock::new(Some(D.block_hash().unwrap()), 5, EasyBlock::genesis().block_hash().unwrap());
-            E.calculate_merkle_root();
-            E.compute_hash();
+            let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
             let E = Arc::new(E);
 
-            let mut F = HardBlock::new(Some(E.block_hash().unwrap()), 6, EasyBlock::genesis().block_hash().unwrap());
-            F.calculate_merkle_root();
-            F.compute_hash();
+            let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
             let F = Arc::new(F);
 
-            let mut G = HardBlock::new(Some(F.block_hash().unwrap()), 7, EasyBlock::genesis().block_hash().unwrap());
-            G.calculate_merkle_root();
-            G.compute_hash();
+            let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
             let G = Arc::new(G);
 
             let blocks = vec![
@@ -6655,88 +6333,54 @@ mod tests {
 
         fn it_rewinds_correctly2() -> bool {
             let db = test_helpers::init_tempdb();
+            let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-
-            let mut hard_chain = Chain::<HardBlock>::new(db);
-
-            let mut A = HardBlock::new(Some(HardBlock::genesis().block_hash().unwrap()), 1, EasyBlock::genesis().block_hash().unwrap());
-            A.calculate_merkle_root();
-            A.compute_hash();
+            let mut A = DummyBlock::new(Some(Hash::NULL), 1);
             let A = Arc::new(A);
 
-            let mut B = HardBlock::new(Some(A.block_hash().unwrap()), 2, EasyBlock::genesis().block_hash().unwrap());
-            B.calculate_merkle_root();
-            B.compute_hash();
+            let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
             let B = Arc::new(B);
 
-            let mut C = HardBlock::new(Some(B.block_hash().unwrap()), 3, EasyBlock::genesis().block_hash().unwrap());
-            C.calculate_merkle_root();
-            C.compute_hash();
+            let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
             let C = Arc::new(C);
 
-            let mut D = HardBlock::new(Some(C.block_hash().unwrap()), 4, EasyBlock::genesis().block_hash().unwrap());
-            D.calculate_merkle_root();
-            D.compute_hash();
+            let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
             let D = Arc::new(D);
 
-            let mut E = HardBlock::new(Some(D.block_hash().unwrap()), 5, EasyBlock::genesis().block_hash().unwrap());
-            E.calculate_merkle_root();
-            E.compute_hash();
+            let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
             let E = Arc::new(E);
 
-            let mut F = HardBlock::new(Some(E.block_hash().unwrap()), 6, EasyBlock::genesis().block_hash().unwrap());
-            F.calculate_merkle_root();
-            F.compute_hash();
+            let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
             let F = Arc::new(F);
 
-            let mut G = HardBlock::new(Some(F.block_hash().unwrap()), 7, EasyBlock::genesis().block_hash().unwrap());
-            G.calculate_merkle_root();
-            G.compute_hash();
+            let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
             let G = Arc::new(G);
 
-            let mut B_prime = HardBlock::new(Some(A.block_hash().unwrap()), 2, EasyBlock::genesis().block_hash().unwrap());
-            B_prime.calculate_merkle_root();
-            B_prime.compute_hash();
+            let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
             let B_prime = Arc::new(B_prime);
 
-            let mut C_prime = HardBlock::new(Some(B_prime.block_hash().unwrap()), 3, EasyBlock::genesis().block_hash().unwrap());
-            C_prime.calculate_merkle_root();
-            C_prime.compute_hash();
+            let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
             let C_prime = Arc::new(C_prime);
 
-            let mut D_prime = HardBlock::new(Some(C_prime.block_hash().unwrap()), 4, EasyBlock::genesis().block_hash().unwrap());
-            D_prime.calculate_merkle_root();
-            D_prime.compute_hash();
+            let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
             let D_prime = Arc::new(D_prime);
 
-            let mut E_prime = HardBlock::new(Some(D_prime.block_hash().unwrap()), 5, EasyBlock::genesis().block_hash().unwrap());
-            E_prime.calculate_merkle_root();
-            E_prime.compute_hash();
+            let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
             let E_prime = Arc::new(E_prime);
 
-            let mut C_second = HardBlock::new(Some(B_prime.block_hash().unwrap()), 3, EasyBlock::genesis().block_hash().unwrap());
-            C_second.calculate_merkle_root();
-            C_second.compute_hash();
+            let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
             let C_second = Arc::new(C_second);
 
-            let mut D_second = HardBlock::new(Some(C_second.block_hash().unwrap()), 4, EasyBlock::genesis().block_hash().unwrap());
-            D_second.calculate_merkle_root();
-            D_second.compute_hash();
+            let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
             let D_second = Arc::new(D_second);
 
-            let mut E_second = HardBlock::new(Some(D_second.block_hash().unwrap()), 5, EasyBlock::genesis().block_hash().unwrap());
-            E_second.calculate_merkle_root();
-            E_second.compute_hash();
+            let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
             let E_second = Arc::new(E_second);
 
-            let mut F_second = HardBlock::new(Some(E_second.block_hash().unwrap()), 6, EasyBlock::genesis().block_hash().unwrap());
-            F_second.calculate_merkle_root();
-            F_second.compute_hash();
+            let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
             let F_second = Arc::new(F_second);
 
-            let mut D_tertiary = HardBlock::new(Some(C_prime.block_hash().unwrap()), 4, EasyBlock::genesis().block_hash().unwrap());
-            D_tertiary.calculate_merkle_root();
-            D_tertiary.compute_hash();
+            let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
             let D_tertiary = Arc::new(D_tertiary);
 
             let blocks = vec![
