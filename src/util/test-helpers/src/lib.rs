@@ -38,12 +38,7 @@ use tempdir::TempDir;
 pub use quicksort::*;
 
 pub fn init_tempdb() -> PersistentDb {
-    let config = DatabaseConfig::with_columns(None);
-    let dir = TempDir::new("purple_test").unwrap();
-    let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
-    let db_ref = Arc::new(db);
-
-    PersistentDb::new(db_ref, None)
+    PersistentDb::new_in_memory()
 }
 
 pub fn init_balance(

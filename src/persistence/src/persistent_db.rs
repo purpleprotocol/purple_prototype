@@ -21,21 +21,32 @@ use elastic_array::ElasticArray128;
 use hashdb::{AsHashDB, HashDB};
 use kvdb_rocksdb::Database;
 use rlp::NULL_RLP;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use BlakeDbHasher;
 
 #[derive(Clone)]
 pub struct PersistentDb {
-    db_ref: Arc<Database>,
+    db_ref: Option<Arc<Database>>,
     cf: Option<u32>,
+    memory_db: Option<HashMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl PersistentDb {
     pub fn new(db_ref: Arc<Database>, cf: Option<u32>) -> PersistentDb {
         PersistentDb {
-            db_ref: db_ref,
+            db_ref: Some(db_ref),
             cf: cf,
+            memory_db: None,
+        }
+    }
+
+    /// Creates a new in-memory `PersistentDb`.
+    pub fn new_in_memory() -> PersistentDb {
+        PersistentDb {
+            db_ref: None,
+            cf: None,
+            memory_db: Some(HashMap::new()),
         }
     }
 }
@@ -47,7 +58,7 @@ impl std::fmt::Debug for PersistentDb {
 }
 
 impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
-    fn keys(&self) -> HashMap<Hash, i32> {
+    fn keys(&self) -> std::collections::HashMap<Hash, i32> {
         unimplemented!();
     }
 
@@ -56,11 +67,20 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return Some(ElasticArray128::from_slice(&NULL_RLP));
         }
 
-        let db_ref = &self.db_ref;
+        if let Some(db_ref) = &self.db_ref {
+            match db_ref.get(self.cf, &key.0.to_vec()) {
+                Ok(result) => result,
+                Err(err) => panic!(err),
+            }
+        } else {
+            let memory_db = self.memory_db.as_ref().unwrap();
+            let result = memory_db.get(&key.0.to_vec());
 
-        match db_ref.get(self.cf, &*key.0.to_vec()) {
-            Ok(result) => result,
-            Err(err) => panic!(err),
+            if result.is_some() {
+                Some(ElasticArray128::<u8>::from_slice(result.unwrap()))
+            } else {
+                None
+            }
         }
     }
 
@@ -68,16 +88,21 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
         if val == &NULL_RLP {
             return Hash::NULL_RLP;
         }
-
-        let db_ref = &self.db_ref;
+        
         let val_hash = crypto::hash_slice(val);
-        let mut tx = db_ref.transaction();
 
-        // Write item to db
-        tx.put(self.cf, &val_hash.0.to_vec(), val);
-        db_ref.write(tx).unwrap();
+        if let Some(db_ref) = &self.db_ref {
+            let mut tx = db_ref.transaction();
 
-        val_hash
+            // Write item to db
+            tx.put(self.cf, &val_hash.0.to_vec(), val);
+            db_ref.write(tx).unwrap();
+
+            val_hash
+        } else {
+            self.memory_db.as_mut().unwrap().insert(val_hash.0.to_vec(), val.to_vec());
+            val_hash
+        }
     }
 
     fn contains(&self, key: &Hash) -> bool {
@@ -85,17 +110,14 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return true;
         }
 
-        let db_ref = &self.db_ref;
-
-        match db_ref.get(self.cf, &*key.0.to_vec()) {
-            Ok(result) => {
-                if let Some(_) = result {
-                    true
-                } else {
-                    false
-                }
+        if let Some(db_ref) = &self.db_ref {
+            match db_ref.get(self.cf, &key.0.to_vec()) {
+                Ok(result) => result.is_some(),
+                Err(err) => panic!(err),
             }
-            Err(err) => panic!(err),
+        } else {
+            let mut memory_db = self.memory_db.as_ref().unwrap();
+            memory_db.get(&key.0.to_vec()).is_some()
         }
     }
 
@@ -104,12 +126,16 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return;
         }
 
-        let db_ref = &self.db_ref;
-        let mut tx = db_ref.transaction();
+        if let Some(db_ref) = &self.db_ref {
+            let mut tx = db_ref.transaction();
 
-        // Write item to db
-        tx.put(self.cf, &key.0.to_vec(), &val);
-        db_ref.write(tx).unwrap();
+            // Write item to db
+            tx.put(self.cf, &key.0.to_vec(), &val);
+            db_ref.write(tx).unwrap();
+        } else {
+            let mut memory_db = self.memory_db.as_mut().unwrap();
+            memory_db.insert(key.0.to_vec(), val.to_vec());
+        }
     }
 
     fn remove(&mut self, key: &Hash) {
@@ -117,11 +143,15 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return;
         }
 
-        let db_ref = &self.db_ref;
-        let mut tx = db_ref.transaction();
+        if let Some(db_ref) = &self.db_ref {
+            let mut tx = db_ref.transaction();
 
-        tx.delete(self.cf, &key.0.to_vec());
-        db_ref.write(tx).unwrap();
+            tx.delete(self.cf, &key.0.to_vec());
+            db_ref.write(tx).unwrap();
+        } else {
+            let mut memory_db = self.memory_db.as_mut().unwrap();
+            memory_db.remove(&key.0.to_vec());
+        }
     }
 }
 

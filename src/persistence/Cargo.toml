@@ -12,6 +12,7 @@ rlp = "0.3.0"
 parking_lot = "0.6"
 kvdb = "0.1.0"
 kvdb-rocksdb = "0.1.0"
+hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
 crypto = { path = "../crypto" }
 
 [dev-dependencies]
