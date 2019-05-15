@@ -138,12 +138,12 @@ impl AsHashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
 mod tests {
     use super::*;
     use kvdb_rocksdb::DatabaseConfig;
-    use tempfile::tempdir;
+    use tempdir::TempDir;
 
     #[test]
     fn it_inserts_data() {
         let config = DatabaseConfig::with_columns(None);
-        let dir = tempdir().unwrap();
+        let dir = TempDir::new("purple_test").unwrap();
         let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn it_emplaces_data() {
         let config = DatabaseConfig::with_columns(None);
-        let dir = tempdir().unwrap();
+        let dir = TempDir::new("purple_test").unwrap();
         let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
@@ -172,7 +172,7 @@ mod tests {
     #[test]
     fn contains() {
         let config = DatabaseConfig::with_columns(None);
-        let dir = tempdir().unwrap();
+        let dir = TempDir::new("purple_test").unwrap();
         let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn remove() {
         let config = DatabaseConfig::with_columns(None);
-        let dir = tempdir().unwrap();
+        let dir = TempDir::new("purple_test").unwrap();
         let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);

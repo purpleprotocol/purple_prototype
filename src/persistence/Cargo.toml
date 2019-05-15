@@ -15,4 +15,4 @@ kvdb-rocksdb = "0.1.0"
 crypto = { path = "../crypto" }
 
 [dev-dependencies]
-tempfile = "3.0.5"
+tempdir = "0.3.7"

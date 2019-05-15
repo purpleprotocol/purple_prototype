@@ -17,7 +17,7 @@
 */
 
 #[cfg(test)]
-extern crate tempfile;
+extern crate tempdir;
 
 extern crate crypto;
 extern crate elastic_array;
