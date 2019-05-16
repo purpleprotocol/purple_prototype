@@ -67,10 +67,10 @@ pub struct Peer {
     sk: Sk,
 
     /// Our encryption key
-    rx: Option<SessionKey>,
+    pub(crate) rx: Option<SessionKey>,
 
     /// The peer's encryption key
-    tx: Option<SessionKey>,
+    pub (crate) tx: Option<SessionKey>,
 }
 
 impl Peer {

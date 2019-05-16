@@ -176,6 +176,7 @@ fn process_connection(
                 }
             });
 
+            let network_clone = network.clone();
             let refuse_connection = refuse_connection.clone();
 
             line
@@ -186,9 +187,14 @@ fn process_connection(
                 .map(move |(reader, result)| {
                     // TODO: Handle other errors as well
                     if let Err(NetworkErr::InvalidConnectPacket) = result {
+                        let network = network_clone.clone();
+
                         // Flag socket for connection refusal if we 
                         // have received an invalid connect packet.
                         refuse_connection.store(true, Ordering::Relaxed);
+
+                        // Also, ban the peer
+                        network.lock().ban_ip(&addr).unwrap();
                     }
 
                     reader

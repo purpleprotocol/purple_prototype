@@ -102,11 +102,19 @@ impl Network {
 }
 
 impl NetworkInterface for Network {
-    fn connect(&self, address: &SocketAddr) -> Result<(), NetworkErr> {
+    fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
     fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn disconnect(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn disconnect_from_ip(&self, ip: &SocketAddr) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
@@ -118,7 +126,7 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
-    fn process_packet(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+    fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         // We should receive a connect packet
         // if the peer's id is non-existent.
         if self.is_none_id(peer) {

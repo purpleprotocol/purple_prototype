@@ -178,6 +178,73 @@ impl Arbitrary for Connect {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+    use std::collections::VecDeque;
+    use parking_lot::Mutex;
+    use hashbrown::HashMap;
+    use crate::interface::NetworkInterface;
+    use crate::mock::MockNetwork;
+    use crate::node_id::NodeId;
+
+    #[test]
+    fn it_successfuly_performs_connect_handshake() {
+        let mailboxes = Arc::new(Mutex::new(HashMap::new()));
+        let addr1 = crate::random_socket_addr();
+        let addr2 = crate::random_socket_addr();
+        let (pk1, sk1) = crypto::gen_keypair();
+        let (pk2, sk2) = crypto::gen_keypair(); 
+        let n1 = NodeId::from_pkey(pk1);
+        let n2 = NodeId::from_pkey(pk2);
+
+        let mut address_mappings = HashMap::new();
+
+        address_mappings.insert(addr1.clone(), n1.clone());
+        address_mappings.insert(addr2.clone(), n2.clone());
+
+        mailboxes.lock().insert(n1.clone(), VecDeque::new());
+        mailboxes.lock().insert(n2.clone(), VecDeque::new());
+
+        let network1 = MockNetwork::new(n1.clone(), addr1, "test_network".to_owned(), sk1, mailboxes.clone(), address_mappings.clone());
+        let network2 = MockNetwork::new(n2.clone(), addr2, "test_network".to_owned(), sk2, mailboxes.clone(), address_mappings.clone());
+        let network1 = Arc::new(Mutex::new(network1));
+        let network1_c = network1.clone();
+        let network2 = Arc::new(Mutex::new(network2));
+        let network2_c = network2.clone();
+
+        // Peer 1 listener thread
+        thread::Builder::new()
+            .name("peer1".to_string())
+            .spawn(move || MockNetwork::start_receive_loop(network1))
+            .unwrap();
+
+        // Peer 2 listener thread
+        thread::Builder::new()
+            .name("peer2".to_string())
+            .spawn(move || MockNetwork::start_receive_loop(network2))
+            .unwrap();
+
+        // Attempt to connect the first peer to the second
+        network1_c.lock().connect(&addr2).unwrap();
+
+        // Pause main thread for a bit before
+        // making assertions.
+        thread::sleep(Duration::from_millis(2));
+
+        let network1 = network1_c.lock();
+        let network2 = network2_c.lock();
+
+        assert!(network1.peers.get(&addr2).is_some());
+        assert!(network2.peers.get(&addr1).is_some());
+
+        let peer2 = network1.peers.get(&addr2).unwrap().clone();
+        let peer1 = network2.peers.get(&addr1).unwrap().clone();
+        
+        // Check if the peers have the same session keys
+        assert_eq!(peer1.rx.unwrap(), peer2.tx.unwrap());
+        assert_eq!(peer2.rx.unwrap(), peer1.tx.unwrap());
+    }
 
     quickcheck! {
         fn serialize_deserialize(tx: Connect) -> bool {
