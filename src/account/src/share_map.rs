@@ -240,9 +240,9 @@ mod tests {
 
         let message = b"test message";
 
-        let sh1_signature = crypto::sign(message, id1.skey().clone());
-        let sh2_signature = crypto::sign(message, id2.skey().clone());
-        let sh3_signature = crypto::sign(message, id3.skey().clone());
+        let sh1_signature = crypto::sign(message, id1.skey());
+        let sh2_signature = crypto::sign(message, id2.skey());
+        let sh3_signature = crypto::sign(message, id3.skey());
 
         let sh1_oracle = Decimal::from_str("30.0").unwrap();
         let sh2_oracle = Decimal::from_str("30.0").unwrap();

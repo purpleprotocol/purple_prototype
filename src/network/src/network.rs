@@ -17,18 +17,27 @@
 */
 
 use crate::error::NetworkErr;
-use hashbrown::HashMap;
+use crate::interface::NetworkInterface;
+use crate::packets::connect::Connect;
+use crate::packet::Packet;
 use std::net::SocketAddr;
+use crypto::SecretKey as Sk;
+use hashbrown::{HashSet, HashMap};
+use std::sync::Arc;
+use parking_lot::Mutex;
 use NodeId;
 use Peer;
 
 #[derive(Debug, Clone)]
 pub struct Network {
     /// Mapping between connected ips and peer information
-    peers: HashMap<SocketAddr, Peer>,
+    pub(crate) peers: HashMap<SocketAddr, Peer>,
 
     /// Our node id
-    node_id: NodeId,
+    pub(crate) node_id: NodeId,
+
+    /// Our secret key
+    pub(crate) secret_key: Sk,
 
     /// The name of the network we are on
     network_name: String,
@@ -38,12 +47,13 @@ pub struct Network {
 }
 
 impl Network {
-    pub fn new(node_id: NodeId, network_name: String, max_peers: usize) -> Network {
+    pub fn new(node_id: NodeId, network_name: String, secret_key: Sk, max_peers: usize) -> Network {
         Network {
             peers: HashMap::with_capacity(max_peers),
             node_id,
             network_name,
-            max_peers,
+            secret_key,
+            max_peers
         }
     }
 
@@ -59,6 +69,11 @@ impl Network {
     /// Returns the number of listed peers.
     pub fn peer_count(&self) -> usize {
         self.peers.len()
+    }
+
+    /// Returns a reference to the stored secret key.
+    pub fn skey(&self) -> &Sk {
+        &self.secret_key
     }
 
     /// Sets the node id of the peer with the given address.
@@ -84,5 +99,103 @@ impl Network {
             Some(peer) => peer.id.is_none(),
             None => panic!("There is no listed peer with the given address!"),
         }
+    }
+}
+
+impl NetworkInterface for Network {
+    fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn disconnect(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn disconnect_from_ip(&self, ip: &SocketAddr) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn send_to_peer(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn send_unsigned<P: Packet>(&self, peer: &NodeId, packet: &mut P) -> Result<(), NetworkErr> {
+        if packet.signature().is_none() {
+            packet.sign(&self.secret_key);
+        }
+
+        let packet = packet.to_bytes();
+        self.send_to_peer(peer, &packet)?;
+
+        Ok(())
+    }
+
+    fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+        let (is_none_id, conn_type) = {
+            let peer = self.peers.get(peer).unwrap();
+            (peer.id.is_none(), peer.connection_type)
+        };
+        
+        // We should receive a connect packet
+        // if the peer's id is non-existent.
+        if is_none_id {
+            match Connect::from_bytes(packet) {
+                Ok(connect_packet) => {
+                    debug!(
+                        "Received connect packet from {}: {:?}",
+                        peer, connect_packet
+                    );
+
+                    // Handle connect packet
+                    Connect::handle(self, peer, &connect_packet, conn_type)?;
+
+                    Ok(())
+                }
+                _ => {
+                    // Invalid packet, remove peer
+                    debug!("Invalid connect packet from {}", peer);
+                    Err(NetworkErr::InvalidConnectPacket)
+                }
+            }
+        } else {
+            info!("{}: {}", peer, hex::encode(packet));
+            Ok(())
+        }
+    }
+
+    fn ban_peer(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn ban_ip(&self, peer: &SocketAddr) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn fetch_peer(&self, peer: &SocketAddr) -> Result<&Peer, NetworkErr> {
+        if let Some(peer) = self.peers.get(peer) {
+            Ok(peer)
+        } else {
+            Err(NetworkErr::PeerNotFound)        
+        }
+    }
+
+    fn fetch_peer_mut(&mut self, peer: &SocketAddr) -> Result<&mut Peer, NetworkErr> {
+        if let Some(peer) = self.peers.get_mut(peer) {
+            Ok(peer)
+        } else {
+            Err(NetworkErr::PeerNotFound)        
+        }
+    }
+
+    fn our_node_id(&self) -> &NodeId {
+        &self.node_id
     }
 }

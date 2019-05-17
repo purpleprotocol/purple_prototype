@@ -172,7 +172,7 @@ impl Pay {
         let message = assemble_sign_message(&self);
 
         // Sign data
-        let signature = crypto::sign(&message, skey);
+        let signature = crypto::sign(&message, &skey);
 
         match self.signature {
             Some(ref mut sig) => {

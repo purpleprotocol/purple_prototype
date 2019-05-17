@@ -33,7 +33,12 @@ pub use blake_hasher::*;
 pub use hash::*;
 pub use rust_base58::base58::*;
 pub use rust_sodium::crypto::kx::{
-    gen_keypair as gen_kx_keypair, PublicKey as KxPublicKey, SecretKey as KxSecretKey, SessionKey,
+    gen_keypair as gen_kx_keypair, 
+    PublicKey as KxPublicKey, 
+    SecretKey as KxSecretKey, 
+    SessionKey,
+    client_session_keys as client_sk,
+    server_session_keys as server_sk,
 };
 pub use rust_sodium::crypto::sign::{gen_keypair, PublicKey, SecretKey};
 pub use signature::*;
@@ -44,8 +49,8 @@ mod signature;
 
 use rust_sodium::crypto::sign::{sign_detached, verify_detached};
 
-pub fn sign(message: &[u8], skey: SecretKey) -> Signature {
-    let sig = sign_detached(message, &skey);
+pub fn sign(message: &[u8], skey: &SecretKey) -> Signature {
+    let sig = sign_detached(message, skey);
     Signature::new(&sig.0)
 }
 

@@ -18,7 +18,18 @@
 
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use std::net::SocketAddr;
+use std::hash::{Hash, Hasher};
+use std::collections::VecDeque;
 use NodeId;
+
+#[derive(Clone, Debug, Copy)]
+pub enum ConnectionType {
+    Client,
+    Server,
+}
+
+/// Size of the outbound buffer.
+pub const OUTBOUND_BUF_SIZE: usize = 1000;
 
 #[derive(Debug, Clone)]
 pub struct Peer {
@@ -29,25 +40,43 @@ pub struct Peer {
     /// node's id has been received.
     pub id: Option<NodeId>,
 
+    /// The type of the connection. Can be 
+    /// either `Client` or `Server`.
+    /// 
+    /// A connection type is `Client` when
+    /// we are the one connecting.
+    /// 
+    /// A connection type is `Server` when
+    /// a peer connects to us.
+    pub connection_type: ConnectionType,
+
     /// The ip address of the peer
     pub ip: SocketAddr,
 
+    /// Wether the peer has send a `Connect` packet or not.
+    pub sent_connect: bool,
+
+    /// Buffer storing packets that are to be 
+    /// sent to the peer.
+    pub outbound_buffer: VecDeque<Vec<u8>>,
+
     /// Session generated public key
-    pk: Pk,
+    pub pk: Pk,
 
     /// Session generated secret key
-    sk: Sk,
+    pub(crate) sk: Sk,
 
     /// Our encryption key
-    rx: Option<SessionKey>,
+    pub(crate) rx: Option<SessionKey>,
 
     /// The peer's encryption key
-    tx: Option<SessionKey>,
+    pub (crate) tx: Option<SessionKey>,
 }
 
 impl Peer {
-    pub fn new(id: Option<NodeId>, ip: SocketAddr) -> Peer {
+    pub fn new(id: Option<NodeId>, ip: SocketAddr, connection_type: ConnectionType) -> Peer {
         let (pk, sk) = gen_kx_keypair();
+        let outbound_buffer = VecDeque::with_capacity(OUTBOUND_BUF_SIZE);
 
         Peer {
             id: id,
@@ -56,6 +85,9 @@ impl Peer {
             sk: sk,
             rx: None,
             tx: None,
+            sent_connect: false,
+            connection_type,
+            outbound_buffer,
         }
     }
 
@@ -68,5 +100,27 @@ impl Peer {
     pub fn set_session_keys(&mut self, rx: SessionKey, tx: SessionKey) {
         self.rx = Some(rx);
         self.tx = Some(tx);
+    }
+}
+
+impl PartialEq for Peer {
+    fn eq(&self, other: &Peer) ->  bool {
+        match (&self.id, &other.id) {
+            // Check both ids and ips
+            (Some(id1), Some(id2)) => id1 == id2 && self.ip == other.ip,
+            // Fallback to just comparing ips
+            (_, _) => self.ip == other.ip,
+        }
+    }
+}
+
+impl Eq for Peer {}
+
+impl Hash for Peer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        if let Some(id) = &self.id {
+            id.hash(state);
+        }
+        self.ip.hash(state);
     }
 }
