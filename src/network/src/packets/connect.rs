@@ -290,7 +290,7 @@ mod tests {
 
         // Pause main thread for a bit before
         // making assertions.
-        thread::sleep(Duration::from_millis(2));
+        thread::sleep(Duration::from_millis(100));
 
         let peer1 = {
             let network2 = network2_c.lock();
