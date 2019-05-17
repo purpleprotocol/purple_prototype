@@ -21,6 +21,7 @@ use crate::network::Network;
 use crate::interface::NetworkInterface;
 use crate::peer::{Peer, ConnectionType};
 use crate::packets::connect::Connect;
+use crate::packet::Packet;
 use parking_lot::Mutex;
 use std::io::BufReader;
 use std::iter;
@@ -102,7 +103,7 @@ fn process_connection(
     let network = network.clone();
 
     // Create new peer and add it to the peer table
-    let peer = Arc::new(Mutex::new(Peer::new(None, addr, client_or_server)));
+    let peer = Peer::new(None, addr, client_or_server);
 
     let (node_id, skey) = {
         let mut network = network.lock();
@@ -125,13 +126,15 @@ fn process_connection(
     // terminated with an error once we hit EOF on the socket.
     let iter = stream::iter_ok::<_, io::Error>(iter::repeat(()));
     let network_clone = network.clone();
+    let network_clone2 = network.clone();
+    let network = network_clone.clone();
     let refuse_connection_clone = refuse_connection.clone();
 
     let writer_iter = stream::iter_ok::<_, ()>(iter::repeat(()));
     let socket_writer = writer_iter
         .fold(writer, move |mut writer, _| {
-            let mut peer = peer.lock();
-            let skey = skey.clone();
+            let mut network = network_clone.lock();
+            let peer = network.peers.get_mut(&addr).unwrap();
 
             // Write a connect packet if we are the client
             // and we have not yet sent a connect packet.
@@ -139,7 +142,7 @@ fn process_connection(
                 if !peer.sent_connect {
                     // Send `Connect` packet.
                     let mut connect = Connect::new(node_id.0, peer.pk);
-                    connect.sign(skey);
+                    connect.sign(&skey);
 
                     let packet = connect.to_bytes();
 
@@ -164,7 +167,7 @@ fn process_connection(
     let socket_reader = iter
         .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
         .fold(reader, move |reader, _| {
-            let network = network_clone.clone();
+            let network = network.clone();
 
             // Read a line off the socket, failing if we're at EOF.
             let line = io::read_until(reader, b'\n', Vec::new());
@@ -204,7 +207,7 @@ fn process_connection(
     // Now that we've got futures representing each half of the socket, we
     // use the `select` combinator to wait for either half to be done to
     // tear down the other. Then we spawn off the result.
-    let network = network.clone();
+    let network = network_clone2.clone();
     let socket_reader = socket_reader.map_err(|_| ());
     let socket_writer = socket_writer.map_err(|_| ());
 

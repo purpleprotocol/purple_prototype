@@ -49,7 +49,9 @@ mod network;
 mod node_id;
 pub mod packets;
 mod peer;
+mod packet;
 
+pub use packet::*;
 pub use bootstrap::*;
 pub use connection::*;
 pub use error::*;

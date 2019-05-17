@@ -18,6 +18,9 @@
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NetworkErr {
+    /// The format of the packet is invalid
+    BadFormat,
+
     /// The connection attempt has failed
     ConnectFailed,
 

@@ -20,20 +20,27 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packets::connect::Connect;
 use crate::peer::{Peer, ConnectionType};
+use crate::packet::Packet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::collections::VecDeque;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::{Sender, Receiver};
 use crypto::SecretKey as Sk;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
 use NodeId;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+/// Mock network layer used for testing.
 pub struct MockNetwork {
     /// Mapping between node ids and their mailboxes
     /// An entry in the mailbox is a tuple of two elements
     /// containing the sender's address and the received packet.
-    mailboxes: Arc<Mutex<HashMap<NodeId, VecDeque<(SocketAddr, Vec<u8>)>>>>,
+    mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>,
+
+    /// Our receiver
+    rx: Receiver<(SocketAddr, Vec<u8>)>,
 
     /// Mapping between ips and node ids.
     address_mappings: HashMap<SocketAddr, NodeId>, 
@@ -56,11 +63,11 @@ pub struct MockNetwork {
 
 impl NetworkInterface for MockNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
-        let (pk, sk) = crypto::gen_kx_keypair();
-        let mut connect_packet = Connect::new(self.node_id.0, pk.clone());
-        connect_packet.sign(self.secret_key.clone()); 
-        let connect = connect_packet.to_bytes();
         let mut peer = Peer::new(None, address.clone(), ConnectionType::Client);
+        let mut connect_packet = Connect::new(self.node_id.0, peer.pk.clone());
+        connect_packet.sign(&self.secret_key); 
+        let connect = connect_packet.to_bytes();
+        
         peer.sent_connect = true;
         self.peers.insert(address.clone(), peer);
 
@@ -83,10 +90,8 @@ impl NetworkInterface for MockNetwork {
     }
 
     fn send_to_peer(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr> {
-        let mut mailboxes = self.mailboxes.lock();
-
-        if let Some(mailbox) = mailboxes.get_mut(peer) {
-            mailbox.push_front((self.ip.clone(), packet.to_vec()));
+        if let Some(mailbox) = self.mailboxes.get(peer) {
+            mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
             Ok(())
         } else {
             Err(NetworkErr::PeerNotFound)
@@ -94,45 +99,62 @@ impl NetworkInterface for MockNetwork {
     }
 
     fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr> {
-        let mut mailboxes = self.mailboxes.lock();
-
-        if mailboxes.is_empty() {
+        if self.mailboxes.is_empty() {
             return Err(NetworkErr::NoPeers);
         }
 
-        for (_, mailbox) in mailboxes.iter_mut() {
-            mailbox.push_front((self.ip.clone(), packet.to_vec()));
+        for (_, mailbox) in self.mailboxes.iter() {
+            mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
         }
 
         Ok(())
     }
 
-    fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
-        // Insert to peer table if this is the first received packet.
-        if self.peers.get(peer).is_none() {
-            self.peers.insert(peer.clone(), Peer::new(None, peer.clone(), ConnectionType::Server));
+    fn send_unsigned<P: Packet>(&self, peer: &NodeId, packet: &mut P) -> Result<(), NetworkErr> {
+        if packet.signature().is_none() {
+            packet.sign(&self.secret_key);
         }
-        
+
+        let packet = packet.to_bytes();
+        self.send_to_peer(peer, &packet)?;
+
+        Ok(())
+    }
+
+    fn process_packet(&mut self, addr: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+        // Insert to peer table if this is the first received packet.
+        if self.peers.get(addr).is_none() {
+            self.peers.insert(addr.clone(), Peer::new(None, addr.clone(), ConnectionType::Server));
+        }
+
+        let (is_none_id, conn_type) = {
+            let peer = self.peers.get(addr).unwrap();
+            (peer.id.is_none(), peer.connection_type)
+        };
+
         // We should receive a connect packet
         // if the peer's id is non-existent.
-        if self.peers.get(peer).unwrap().id.is_none() {
+        if is_none_id {
             match Connect::from_bytes(packet) {
                 Ok(connect_packet) => {
                     debug!(
                         "Received connect packet from {}: {:?}",
-                        peer, connect_packet
+                        addr, connect_packet
                     );
+
+                    // Handle connect packet
+                    Connect::handle(self, addr, &connect_packet, conn_type)?;
 
                     Ok(())
                 }
                 _ => {
                     // Invalid packet, remove peer
-                    debug!("Invalid connect packet from {}", peer);
+                    debug!("Invalid connect packet from {}", addr);
                     Err(NetworkErr::InvalidConnectPacket)
                 }
             }
         } else {
-            info!("{}: {}", peer, hex::encode(packet));
+            info!("{}: {}", addr, hex::encode(packet));
             Ok(())
         }
     }
@@ -144,11 +166,32 @@ impl NetworkInterface for MockNetwork {
     fn ban_ip(&self, peer: &SocketAddr) -> Result<(), NetworkErr> {
         unimplemented!();
     }
+
+    fn fetch_peer(&self, peer: &SocketAddr) -> Result<&Peer, NetworkErr> {
+        if let Some(peer) = self.peers.get(peer) {
+            Ok(peer)
+        } else {
+            Err(NetworkErr::PeerNotFound)        
+        }
+    }
+
+    fn fetch_peer_mut(&mut self, peer: &SocketAddr) -> Result<&mut Peer, NetworkErr> {
+        if let Some(peer) = self.peers.get_mut(peer) {
+            Ok(peer)
+        } else {
+            Err(NetworkErr::PeerNotFound)        
+        }
+    }
+
+    fn our_node_id(&self) -> &NodeId {
+        &self.node_id
+    }
 }
 
 impl MockNetwork {
-    pub fn new(node_id: NodeId, ip: SocketAddr, network_name: String, secret_key: Sk, mailboxes: Arc<Mutex<HashMap<NodeId, VecDeque<(SocketAddr, Vec<u8>)>>>>, address_mappings: HashMap<SocketAddr, NodeId>) -> MockNetwork {
+    pub fn new(node_id: NodeId, ip: SocketAddr, network_name: String, secret_key: Sk, rx: Receiver<(SocketAddr, Vec<u8>)>, mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>, address_mappings: HashMap<SocketAddr, NodeId>) -> MockNetwork {
         MockNetwork {
+            rx,
             mailboxes,
             address_mappings,
             peers: HashMap::new(),
@@ -162,11 +205,8 @@ impl MockNetwork {
     pub fn start_receive_loop(network: Arc<Mutex<Self>>) {
         loop {
             let mut network = network.lock();
-            let mailboxes = network.mailboxes.clone();
-            let mut mailboxes = mailboxes.lock();
-            let inbound_buf = mailboxes.get_mut(&network.node_id).unwrap();
 
-            if let Some((addr, packet)) = inbound_buf.pop_back() {
+            if let Ok((addr, packet)) = network.rx.try_recv() {
                 if let Err(err) = network.process_packet(&addr, &packet) {
                     match err {
                         NetworkErr::InvalidConnectPacket =>  {

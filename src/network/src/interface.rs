@@ -17,10 +17,12 @@
 */
 
 use crate::error::NetworkErr;
+use crate::peer::Peer;
+use crate::packet::Packet;
 use crate::node_id::NodeId;
 use std::net::SocketAddr;
 
-/// Generic network interface.
+/// Generic network layer interface.
 pub trait NetworkInterface {
     /// Attempts to connect to the peer with the given ip.
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr>;
@@ -40,6 +42,11 @@ pub trait NetworkInterface {
     /// Sends a packet to all peers.
     fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr>;
 
+    /// Attempts to send a packet to the specific peer. This
+    /// function will also sign the packet if it does not yet
+    /// have a signature and it will also serialize it to binary.
+    fn send_unsigned<P: Packet>(&self, peer: &NodeId, packet: &mut P) -> Result<(), NetworkErr>;
+
     /// Callback that processes each packet that is received from any peer.
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
 
@@ -48,4 +55,15 @@ pub trait NetworkInterface {
 
     /// Bans any further connections from the given ip. 
     fn ban_ip(&self, peer: &SocketAddr) -> Result<(), NetworkErr>;
+
+    /// Attempts to retrieve a reference to 
+    /// the peer entry of the given `NodeId`.
+    fn fetch_peer(&self, peer: &SocketAddr) -> Result<&Peer, NetworkErr>;
+
+    /// Attempts to retrieve a mutable reference to 
+    /// the peer entry of the given ip.
+    fn fetch_peer_mut(&mut self, peer: &SocketAddr) -> Result<&mut Peer, NetworkErr>;
+
+    /// Returns a reference to our node id.
+    fn our_node_id(&self) -> &NodeId;
 }

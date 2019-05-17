@@ -64,7 +64,7 @@ pub struct Peer {
     pub pk: Pk,
 
     /// Session generated secret key
-    sk: Sk,
+    pub(crate) sk: Sk,
 
     /// Our encryption key
     pub(crate) rx: Option<SessionKey>,
