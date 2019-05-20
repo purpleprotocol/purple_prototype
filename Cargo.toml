@@ -33,6 +33,7 @@ persistence = { path = "src/persistence" }
 network = { path = "src/network" }
 transactions = { path = "src/transactions" }
 chain = { path = "src/chain" }
+miner = { path = "src/miner" }
 
 [[bin]]
 path = "src/purple/main.rs"
@@ -40,3 +41,7 @@ name = "purple"
 
 [profile.release]
 lto = true
+
+[features]
+default = []
+gpu = ["miner/gpu"]

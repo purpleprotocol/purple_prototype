@@ -1,0 +1,12 @@
+[package]
+name = "miner"
+version = "0.1.0"
+authors = ["Octavian Oncescu <octavonce@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+cuckoo-sys = { path = "../util/cuckoo-sys" }
+
+[features]
+default = []
+gpu = ["cuckoo-sys/gpu"]
