@@ -1,4 +1,3 @@
-
 #[cfg(not(feature = "gpu"))]
 fn main() {
     cc::Build::new()
