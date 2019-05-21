@@ -16,38 +16,54 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-/// Initializes a new `SolverCtx`.
-extern "C" SolverCtx* new_solver_ctx(nthreads: u32, ntrims: u32, showcycle: bool, allrounds: bool) {
-    SolverParams params;
-    params.nthreads = nthreads;
-    params.ntrims = ntrims;
-    params.showcycle = showcycle;
-    params.allrounds = allrounds;
+#include "interface.hpp"
 
-    return create_solver_ctx(&params);
+/// Initializes a new `SolverCtx`.
+extern "C" SolverCtx* new_solver_ctx(uint32_t nthreads, uint32_t ntrims, bool showcycle, bool allrounds) {
+    uint32_t nntrims = ntrims;
+    if (ntrims == 0) nntrims = EDGEBITS > 30 ? 96 : 68; 
+    uint32_t nnthreads = nthreads == 0 ? 1 : nthreads; 
+    SolverCtx* ctx = new SolverCtx(nnthreads, nntrims, showcycle, allrounds, true);
+    return ctx;
 }
 
 extern "C" void delete_solver_ctx(SolverCtx* ctx) {
-    destroy_solver_ctx(ctx);
+    delete ctx;
 }
 
 /// Starts a miner process.
-extern "C" void start_miner(SolverCtx* ctx, char* header, uint64_t* nonce, uint64_t* proof, uint64_t proofsize, uint64_t range) {
-    assert(range > 1);
+extern "C" void start_miner(SolverCtx* ctx, char* header, uint64_t nonce, uint64_t* proof, uint32_t proofsize) {
+    assert(proofsize >= 2);
+    PROOFSIZE = proofsize;
+    
+    while (true) {
+        ctx->setheadernonce(header, sizeof(header), nonce);
+        uint32_t numsols = ctx->solve();
 
-    stop_solver(ctx);
-	run_solver(ctx, header, sizeof(header), nonce, range, NULL, NULL);
+        if (numsols > 0) {
+            proof = (uint64_t*)&ctx->sols[0];
+            break;
+        }
+
+        nonce++;
+    }
 }
 
 /// Stops the current miner process. Returns 0 if succesful.
 /// Returns -1 if there is no process that is currently running.
 extern "C" int stop_miner(SolverCtx* ctx) {
-    stop_solver(ctx);
+    ctx->abort();
+    return 0;
 }
 
 /// Verifies a proof
-extern "C" bool verify(SolverCtx* ctx, char* header, uint64_t nonce, uint64_t* proof, uint64_t proofsize) {
-    return false;
+extern "C" bool verify_proof(char* header, uint64_t nonce, uint64_t* proof, uint32_t proofsize) {
+    assert(proofsize >= 12);
+    PROOFSIZE = proofsize;
+    SolverCtx* ctx = new_solver_ctx(0, 0, false, true);
+    ctx->setheadernonce(header, sizeof(header), nonce);
+
+    return verify((word_t*)proof, ctx->trimmer.sip_keys) == POW_OK;
 }
 
 // /// Returns 0 if the miner has stopped and has found a solution.

@@ -5,7 +5,7 @@
 #include "compress.hpp"
 #include <new>
 
-typedef word_t proof[PROOFSIZE];
+typedef word_t proof[MAXPROOFSIZE];
 
 // cuck(ar)oo graph with given limit on number of edges (and on single partition nodes)
 template <typename word_t>

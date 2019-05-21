@@ -18,17 +18,19 @@
   C interface to C++ cuckaroo lib
 */
 
-#ifndef INTERFACE_H
-#define INTERFACE_H
+#ifndef MINER_INTERFACE_H
+#define MINER_INTERFACE_H
 
 #include "mean.hpp"
 
-extern "C" SolverCtx* new_solver_ctx();
+typedef solver_ctx SolverCtx;
+
+extern "C" SolverCtx* new_solver_ctx(uint32_t nthreads, uint32_t ntrims, bool showcycle, bool allrounds);
 extern "C" void delete_solver_ctx(SolverCtx* ctx);
 
-extern "C" void start_miner(SolverCtx* ctx, char* header, uint64_t* nonce, uint64_t* proof, uint64_t proofsize, uint64_t range);
+extern "C" void start_miner(SolverCtx* ctx, char* header, uint64_t nonce, uint64_t* proof, uint32_t proofsize);
 extern "C" int stop_miner(SolverCtx* ctx);
-extern "C" bool verify(char* header, uint64_t nonce, uint64_t* proof, uint64_t proofsize)
+extern "C" bool verify_proof(char* header, uint64_t nonce, uint64_t* proof, uint32_t proofsize);
 //extern "C" int found_solution(SolverCtx* ctx);
 
 #endif

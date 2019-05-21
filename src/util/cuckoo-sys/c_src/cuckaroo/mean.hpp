@@ -786,7 +786,7 @@ int nonce_cmp(const void *a, const void *b) {
   return *(u32 *)a - *(u32 *)b;
 }
 
-typedef word_t proof[PROOFSIZE];
+typedef word_t proof[MAXPROOFSIZE];
 
 // break circular reference with forward declaration
 class solver_ctx;

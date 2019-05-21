@@ -30,11 +30,21 @@ typedef uint64_t u64;
 // i.e. the 2-log of the number of edges
 #define EDGEBITS 29
 #endif
+#ifndef MAXPROOFSIZE
+// Separate MAXPROOFSIZE which is used to determine the size of 
+// the proof array on the stack from the PROOFSIZE define which
+// is mutable in order to allow us to easily adjust the proof 
+// size parameter.
+#define MAXPROOFSIZE 200
+#endif
+
 #ifndef PROOFSIZE
 // the next most important parameter is the (even) length
 // of the cycle to be found. a minimum of 12 is recommended
-#define PROOFSIZE 42
+#define PROOFSIZE proofsize
 #endif
+
+u32 proofsize = 42;
 
 #if EDGEBITS > 30
 typedef uint64_t word_t;
@@ -81,7 +91,7 @@ struct SolverParams {
 struct Solution {
  u64 id = 0;
  u64 nonce = 0;
- u64 proof[PROOFSIZE];
+ u64 proof[MAXPROOFSIZE];
 };
 
 struct SolverSolutions {
