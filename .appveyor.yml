@@ -64,4 +64,4 @@ build: false
 
 test_script:
   - git submodule update --init --recursive
-  - cargo test --verbose --all %cargoflags% --features gpu
+  - cargo test --verbose --all %cargoflags%
