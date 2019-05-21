@@ -33,7 +33,7 @@ If you want a clear description of the progress so far you can look at the [mile
   
 
 ## Building
-Building the project requires cmake and clang/llvm. After all dependencies are installed, run:
+Building the project requires cmake, clang/llvm and the CUDA toolkit. After all dependencies are installed, run:
 
 ```
 cargo build
