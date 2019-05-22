@@ -50,6 +50,7 @@ set (AR_CPU_SRC
 			cuckoo/src/cuckaroo/bitmap.hpp
 			cuckoo/src/cuckaroo/graph.hpp
 			cuckoo/src/threads/barrier.hpp
+			cuckoo/src/threads/osthread.hpp
 			cuckoo/src/crypto/siphash.hpp
 			cuckoo/src/cuckaroo/mean.hpp
 			cuckoo/src/cuckaroo/mean.cpp
@@ -58,9 +59,9 @@ set (AR_CPU_SRC
 if (WIN32)
 	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_compat_19 "-DXBITS=2 -DNSIPHASH=1 -DEDGEBITS=19 -DSAVEEDGES")
 	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_avx2_19 "-arch:AVX2 -DXBITS=2 -DNSIPHASH=8 -DEDGEBITS=19 -DSAVEEDGES")
-	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_compat_28 "-mno-avx2 -DNSIPHASH=4 -DEDGEBITS=28 -DSAVEEDGES")
+	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_compat_28 "-DNSIPHASH=4 -DEDGEBITS=28 -DSAVEEDGES")
 	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_avx2_28 "-arch:AVX2 -DNSIPHASH=8 -DEDGEBITS=28 -DSAVEEDGES")
-	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_compat_30 "-mno-avx2 -DNSIPHASH=4 -DEDGEBITS=30 -DSAVEEDGES")
+	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_compat_30 "-DNSIPHASH=4 -DEDGEBITS=30 -DSAVEEDGES")
 	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_avx2_30 "-arch:AVX2 -DNSIPHASH=8 -DEDGEBITS=30 -DSAVEEDGES")
 else()
 	build_cpu_target("${AR_CPU_SRC}" cuckaroo_cpu_compat_19 "-DXBITS=2 -DNSIPHASH=1 -DEDGEBITS=19 -DSAVEEDGES")
