@@ -5,6 +5,13 @@ authors = ["Octavian Oncescu <octavonce@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+libloading = "0.5"
+parking_lot = "0.7.1"
+blake2-rfc = "0.2.18"
+byteorder = "1.2.7"
+libc = "0.2.55"
+rand = "0.6.0"
+crypto = { path = "../crypto" }
 
 [build-dependencies]
 cmake = "0.1.24"
