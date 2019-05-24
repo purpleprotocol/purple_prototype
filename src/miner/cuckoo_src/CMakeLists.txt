@@ -52,6 +52,7 @@ set (AR_CPU_SRC
 			cuckoo/src/threads/barrier.hpp
 			cuckoo/src/threads/osthread.hpp
 			cuckoo/src/windows/windows_compat.h
+			cuckoo/src/threads/winpthreads.h
 			cuckoo/src/crypto/siphash.hpp
 			cuckoo/src/cuckaroo/mean.hpp
 			cuckoo/src/cuckaroo/mean.cpp
