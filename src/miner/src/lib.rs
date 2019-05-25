@@ -19,13 +19,31 @@
   https://github.com/mimblewimble/grin-miner/blob/master/cuckoo-miner/src/build.rs
 */
 
+// Only compile miner code if `cpu` or `gpu` features are set
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 mod ffi;
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 mod plugin;
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 mod error;
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 mod plugin_config;
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 mod shared_data;
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 mod solver_instance;
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 mod miner;
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 mod proof;
 
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 pub use crate::miner::*;

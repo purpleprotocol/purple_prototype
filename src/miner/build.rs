@@ -40,6 +40,10 @@ fn fail_on_empty_directory(name: &str) {
 	}
 }
 
+#[cfg(not(any(feature = "cpu", feature = "gpu")))]
+fn main() {}
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 fn main() {
     fail_on_empty_directory("cuckoo_src/cuckoo");
     let path_str = env::var("OUT_DIR").unwrap();

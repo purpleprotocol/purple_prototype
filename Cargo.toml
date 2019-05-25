@@ -44,4 +44,5 @@ lto = true
 
 [features]
 default = []
-gpu = ["miner/gpu"]
+miner-cpu = ["miner/cpu"]
+miner-gpu = ["miner/gpu"]
