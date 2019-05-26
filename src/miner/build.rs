@@ -19,16 +19,24 @@
   https://github.com/mimblewimble/grin-miner/blob/master/cuckoo-miner/src/build.rs
 */
 
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 use cmake::Config;
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 use std::{env, fs};
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 use std::path::PathBuf;
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 use fs_extra::dir::*;
 
 #[cfg(feature = "gpu")]
 const BUILD_CUDA_PLUGINS: &str = "TRUE";
-#[cfg(not(feature = "gpu"))]
+#[cfg(feature = "cpu")]
 const BUILD_CUDA_PLUGINS: &str = "FALSE";
 
+#[cfg(any(feature = "cpu", feature = "gpu"))]
 fn fail_on_empty_directory(name: &str) {
 	if fs::read_dir(name).unwrap().count() == 0 {
 		println!(

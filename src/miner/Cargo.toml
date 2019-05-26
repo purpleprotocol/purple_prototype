@@ -11,6 +11,9 @@ blake2-rfc = "0.2.18"
 byteorder = "1.2.7"
 libc = "0.2.55"
 rand = "0.6.0"
+failure = "0.1.5"
+serde = "1.0.91"
+num = "0.2"
 crypto = { path = "../crypto" }
 
 [build-dependencies]

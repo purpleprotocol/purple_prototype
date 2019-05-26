@@ -19,6 +19,10 @@
   https://github.com/mimblewimble/grin-miner/blob/master/cuckoo-miner/src/build.rs
 */
 
+#[macro_use] 
+mod macros;
+mod pow;
+
 // Only compile miner code if `cpu` or `gpu` features are set
 
 #[cfg(any(feature = "cpu", feature = "gpu"))]
