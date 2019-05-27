@@ -24,7 +24,7 @@ use parking_lot::Mutex;
 use lazy_static::*;
 
 const MIN_EDGE_BITS: u8 = 24;
-const MAX_EDGE_BITS: u8 = 30;
+const MAX_EDGE_BITS: u8 = 31;
 const PROOF_SIZE: usize = 42;
 
 #[cfg(test)]

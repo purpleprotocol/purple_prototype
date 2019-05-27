@@ -44,5 +44,6 @@ lto = true
 
 [features]
 default = []
+miner-cpu-avx = ["miner/cpu", "miner/avx"]
 miner-cpu = ["miner/cpu"]
 miner-gpu = ["miner/gpu"]

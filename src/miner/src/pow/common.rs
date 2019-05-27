@@ -33,71 +33,71 @@ impl EdgeType for u64 {}
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct Edge<T>
 where
-	T: EdgeType,
+    T: EdgeType,
 {
-	pub u: T,
-	pub v: T,
+    pub u: T,
+    pub v: T,
 }
 
 impl<T> fmt::Display for Edge<T>
 where
-	T: EdgeType,
+    T: EdgeType,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(
-			f,
-			"(u: {}, v: {})",
-			self.u.to_u64().unwrap_or(0),
-			self.v.to_u64().unwrap_or(0)
-		)
-	}
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "(u: {}, v: {})",
+            self.u.to_u64().unwrap_or(0),
+            self.v.to_u64().unwrap_or(0)
+        )
+    }
 }
 
 /// An element of an adjencency list
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Link<T>
 where
-	T: EdgeType,
+    T: EdgeType,
 {
-	pub next: T,
-	pub to: T,
+    pub next: T,
+    pub to: T,
 }
 
 impl<T> fmt::Display for Link<T>
 where
-	T: EdgeType,
+    T: EdgeType,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(
-			f,
-			"(next: {}, to: {})",
-			self.next.to_u64().unwrap_or(0),
-			self.to.to_u64().unwrap_or(0)
-		)
-	}
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "(next: {}, to: {})",
+            self.next.to_u64().unwrap_or(0),
+            self.to.to_u64().unwrap_or(0)
+        )
+    }
 }
 
 pub fn set_header_nonce(header: &[u8], nonce: Option<u32>) -> Result<[u64; 4], Error> {
-	if let Some(n) = nonce {
-		let len = header.len();
-		let mut header = header.to_owned();
-		header.write_u32::<LittleEndian>(n)?;
-		create_siphash_keys(&header)
-	} else {
-		create_siphash_keys(&header)
-	}
+    if let Some(n) = nonce {
+        let len = header.len();
+        let mut header = header.to_owned();
+        header.write_u32::<LittleEndian>(n)?;
+        create_siphash_keys(&header)
+    } else {
+        create_siphash_keys(&header)
+    }
 }
 
 pub fn create_siphash_keys(header: &[u8]) -> Result<[u64; 4], Error> {
-	let h = crypto::hash_slice(&header);
-	let hb = h.0;
-	let mut rdr = Cursor::new(hb);
-	Ok([
-		rdr.read_u64::<LittleEndian>()?,
-		rdr.read_u64::<LittleEndian>()?,
-		rdr.read_u64::<LittleEndian>()?,
-		rdr.read_u64::<LittleEndian>()?,
-	])
+    let h = crypto::hash_slice(&header);
+    let hb = h.0;
+    let mut rdr = Cursor::new(hb);
+    Ok([
+        rdr.read_u64::<LittleEndian>()?,
+        rdr.read_u64::<LittleEndian>()?,
+        rdr.read_u64::<LittleEndian>()?,
+        rdr.read_u64::<LittleEndian>()?,
+    ])
 }
 
 #[derive(Debug)]
@@ -105,49 +105,49 @@ pub fn create_siphash_keys(header: &[u8]) -> Result<[u64; 4], Error> {
 /// from header, nonce, edge_bits, etc.
 pub struct CuckooParams<T>
 where
-	T: EdgeType + fmt::Debug,
+    T: EdgeType + fmt::Debug,
 {
-	pub edge_bits: u8,
-	pub proof_size: usize,
-	pub num_edges: u64,
-	pub siphash_keys: [u64; 4],
-	pub edge_mask: T,
+    pub edge_bits: u8,
+    pub proof_size: usize,
+    pub num_edges: u64,
+    pub siphash_keys: [u64; 4],
+    pub edge_mask: T,
 }
 
 impl<T> CuckooParams<T>
 where
-	T: EdgeType + fmt::Debug,
+    T: EdgeType + fmt::Debug,
 {
-	/// Instantiates new params and calculate edge mask, etc
-	pub fn new(edge_bits: u8, proof_size: usize) -> Result<CuckooParams<T>, Error> {
-		let num_edges = (1 as u64) << edge_bits;
-		let edge_mask = to_edge!(num_edges - 1);
-		Ok(CuckooParams {
-			edge_bits,
-			proof_size,
-			num_edges,
-			siphash_keys: [0; 4],
-			edge_mask,
-		})
-	}
+    /// Instantiates new params and calculate edge mask, etc
+    pub fn new(edge_bits: u8, proof_size: usize) -> Result<CuckooParams<T>, Error> {
+        let num_edges = (1 as u64) << edge_bits;
+        let edge_mask = to_edge!(num_edges - 1);
+        Ok(CuckooParams {
+            edge_bits,
+            proof_size,
+            num_edges,
+            siphash_keys: [0; 4],
+            edge_mask,
+        })
+    }
 
-	/// Reset the main keys used for siphash from the header and nonce
-	pub fn reset_header_nonce(&mut self, header: Vec<u8>, nonce: Option<u32>) -> Result<(), Error> {
-		self.siphash_keys = set_header_nonce(&header, nonce)?;
-		Ok(())
-	}
+    /// Reset the main keys used for siphash from the header and nonce
+    pub fn reset_header_nonce(&mut self, header: Vec<u8>, nonce: Option<u32>) -> Result<(), Error> {
+        self.siphash_keys = set_header_nonce(&header, nonce)?;
+        Ok(())
+    }
 
-	/// Return siphash masked for type
-	pub fn sipnode(&self, edge: T, uorv: u64, shift: bool) -> Result<T, Error> {
-		let hash_u64 = siphash24(
-			&self.siphash_keys,
-			2 * edge.to_u64().ok_or(ErrorKind::IntegerCast)? + uorv,
-		);
-		let mut masked = hash_u64 & self.edge_mask.to_u64().ok_or(ErrorKind::IntegerCast)?;
-		if shift {
-			masked <<= 1;
-			masked |= uorv;
-		}
-		Ok(T::from(masked).ok_or(ErrorKind::IntegerCast)?)
-	}
+    /// Return siphash masked for type
+    pub fn sipnode(&self, edge: T, uorv: u64, shift: bool) -> Result<T, Error> {
+        let hash_u64 = siphash24(
+            &self.siphash_keys,
+            2 * edge.to_u64().ok_or(ErrorKind::IntegerCast)? + uorv,
+        );
+        let mut masked = hash_u64 & self.edge_mask.to_u64().ok_or(ErrorKind::IntegerCast)?;
+        if shift {
+            masked <<= 1;
+            masked |= uorv;
+        }
+        Ok(T::from(masked).ok_or(ErrorKind::IntegerCast)?)
+    }
 }

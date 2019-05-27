@@ -23,48 +23,48 @@ use crate::plugin::{SolverStats, SolverSolutions};
 
 /// Data intended to be shared across threads
 pub struct JobSharedData {
-	/// ID of the current running job (not currently used)
-	pub job_id: u32,
+    /// ID of the current running job (not currently used)
+    pub job_id: u32,
 
-	/// block height of current running job
-	pub height: u64,
+    /// block height of current running job
+    pub height: u64,
 
-	/// Header
-	pub header: Vec<u8>,
+    /// Header
+    pub header: Vec<u8>,
 
-	/// The target difficulty. Only solutions >= this
-	/// target will be put into the output queue
-	pub difficulty: u64,
+    /// The target difficulty. Only solutions >= this
+    /// target will be put into the output queue
+    pub difficulty: u64,
 
-	/// Output solutions
-	pub solutions: Vec<SolverSolutions>,
+    /// Output solutions
+    pub solutions: Vec<SolverSolutions>,
 
-	/// Current stats
-	pub stats: Vec<SolverStats>,
+    /// Current stats
+    pub stats: Vec<SolverStats>,
 }
 
 impl Default for JobSharedData {
-	fn default() -> JobSharedData {
-		JobSharedData {
-			job_id: 0,
-			height: 0,
-			header: Vec::new(),
-			difficulty: 0,
-			solutions: Vec::new(),
-			stats: vec![],
-		}
-	}
+    fn default() -> JobSharedData {
+        JobSharedData {
+            job_id: 0,
+            height: 0,
+            header: Vec::new(),
+            difficulty: 0,
+            solutions: Vec::new(),
+            stats: vec![],
+        }
+    }
 }
 
 impl JobSharedData {
-	pub fn new(num_solvers: usize) -> JobSharedData {
-		JobSharedData {
-			job_id: 0,
-			height: 0,
-			header: Vec::new(),
-			difficulty: 1,
-			solutions: Vec::new(),
-			stats: vec![SolverStats::default(); num_solvers],
-		}
-	}
+    pub fn new(num_solvers: usize) -> JobSharedData {
+        JobSharedData {
+            job_id: 0,
+            height: 0,
+            header: Vec::new(),
+            difficulty: 1,
+            solutions: Vec::new(),
+            stats: vec![SolverStats::default(); num_solvers],
+        }
+    }
 }
