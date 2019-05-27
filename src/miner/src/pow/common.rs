@@ -25,7 +25,7 @@ use std::io::Cursor;
 use std::ops::{BitOrAssign, Mul};
 
 /// Operations needed for edge type (going to be u32 or u64)
-pub trait EdgeType: PrimInt + ToPrimitive + Mul + BitOrAssign + Hash {}
+pub trait EdgeType: PrimInt + ToPrimitive + Mul + BitOrAssign + Hash + fmt::Debug {}
 impl EdgeType for u32 {}
 impl EdgeType for u64 {}
 
@@ -100,11 +100,12 @@ pub fn create_siphash_keys(header: &[u8]) -> Result<[u64; 4], Error> {
 	])
 }
 
+#[derive(Debug)]
 /// Utility struct to calculate commonly used Cuckoo parameters calculated
 /// from header, nonce, edge_bits, etc.
 pub struct CuckooParams<T>
 where
-	T: EdgeType,
+	T: EdgeType + fmt::Debug,
 {
 	pub edge_bits: u8,
 	pub proof_size: usize,
@@ -115,7 +116,7 @@ where
 
 impl<T> CuckooParams<T>
 where
-	T: EdgeType,
+	T: EdgeType + fmt::Debug,
 {
 	/// Instantiates new params and calculate edge mask, etc
 	pub fn new(edge_bits: u8, proof_size: usize) -> Result<CuckooParams<T>, Error> {

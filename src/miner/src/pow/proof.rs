@@ -1,3 +1,4 @@
+use crypto::Hash;
 use std::fmt;
 use std::iter;
 use rand::*;
@@ -37,11 +38,11 @@ impl fmt::Debug for Proof {
 impl Eq for Proof {}
 
 impl Proof {
-	/// Builds a proof with provided nonces at default edge_bits
-	pub fn new(mut in_nonces: Vec<u64>) -> Proof {
+	/// Builds a proof with provided nonces and edge_bits
+	pub fn new(mut in_nonces: Vec<u64>, edge_bits: u8) -> Proof {
 		in_nonces.sort_unstable();
 		Proof {
-			edge_bits: MIN_EDGE_BITS,
+			edge_bits,
 			nonces: in_nonces,
 		}
 	}
@@ -78,9 +79,12 @@ impl Proof {
 		self.nonces.len()
 	}
 
-	// /// Difficulty achieved by this proof with given scaling factor
-	// fn scaled_difficulty(&self, scale: u64) -> u64 {
-	// 	let diff = ((scale as u128) << 64) / (max(1, self.hash().to_u64()) as u128);
-	// 	min(diff, <u64>::max_value() as u128) as u64
-	// }
+    pub fn hash(&self) -> Hash {
+        unimplemented!();
+    } 
+
+    /// TODO: Re-write this
+	pub fn to_difficulty(&self, scale: u64) -> u64 {
+		max!(1, self.hash().to_u64())
+	}
 }

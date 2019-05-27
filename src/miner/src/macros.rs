@@ -30,3 +30,16 @@ macro_rules! to_edge {
 		T::from($n).ok_or(ErrorKind::IntegerCast)?
 	};
 }
+
+#[macro_export]
+macro_rules! max {
+    ($x: expr) => ($x);
+    ($x: expr, $($z: expr),+) => {{
+        let y = max!($($z),*);
+        if $x > y {
+            $x
+        } else {
+            y
+        }
+    }}
+}

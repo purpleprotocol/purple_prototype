@@ -36,12 +36,12 @@ use crate::pow::siphash::siphash_block;
 pub fn new_cuckaroo_ctx<T>(
 	edge_bits: u8,
 	proof_size: usize,
-) -> Result<Box<dyn PoWContext<T>>, Error>
+) -> Result<CuckarooContext<T>, Error>
 where
 	T: EdgeType + 'static,
 {
 	let params = CuckooParams::new(edge_bits, proof_size)?;
-	Ok(Box::new(CuckarooContext { params }))
+	Ok(CuckarooContext { params })
 }
 
 /// Cuckatoo cycle context. Only includes the verifier for now.
@@ -70,10 +70,6 @@ where
 	}
 
 	fn verify(&self, proof: &Proof) -> Result<(), Error> {
-		// if proof.proof_size() != global::proofsize() {
-		// 	return Err(ErrorKind::Verification(
-		// 		"wrong cycle length".to_owned(),))?;
-		// }
 		let nonces = &proof.nonces;
 		let mut uvs = vec![0u64; 2 * proof.proof_size()];
 		let mut xor0: u64 = 0;
@@ -87,8 +83,8 @@ where
 				return Err(ErrorKind::Verification("edges not ascending".to_owned()))?;
 			}
 			let edge = to_edge!(siphash_block(&self.params.siphash_keys, nonces[n]));
-			uvs[2 * n] = to_u64!(edge & self.params.edge_mask);
-			uvs[2 * n + 1] = to_u64!((edge >> 32) & self.params.edge_mask);
+            uvs[2 * n] = to_u64!(edge & self.params.edge_mask);
+            uvs[2 * n + 1] = to_u64!((edge >> 32) & self.params.edge_mask);
 			xor0 ^= uvs[2 * n];
 			xor1 ^= uvs[2 * n + 1];
 		}
@@ -97,6 +93,7 @@ where
 				"endpoints don't match up".to_owned(),
 			))?;
 		}
+
 		let mut n = 0;
 		let mut i = 0;
 		let mut j;
@@ -137,6 +134,7 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
+    use byteorder::{WriteBytesExt, LittleEndian};
 
 	// empty header, nonce 71
 	static V1_19_HASH: [u64; 4] = [
@@ -172,9 +170,9 @@ mod test {
 	fn cuckaroo19_vectors() {
 		let mut ctx = new_impl::<u64>(19, 42);
 		ctx.params.siphash_keys = V1_19_HASH.clone();
-		assert!(ctx.verify(&Proof::new(V1_19_SOL.to_vec().clone())).is_ok());
+        assert!(ctx.verify(&Proof::new(V1_19_SOL.to_vec().clone(), 19)).is_ok());
 		ctx.params.siphash_keys = V2_19_HASH.clone();
-		assert!(ctx.verify(&Proof::new(V2_19_SOL.to_vec().clone())).is_ok());
+		assert!(ctx.verify(&Proof::new(V2_19_SOL.to_vec().clone(), 19)).is_ok());
 		assert!(ctx.verify(&Proof::zero(42)).is_err());
 	}
 

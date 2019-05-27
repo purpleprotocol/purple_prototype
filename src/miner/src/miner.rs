@@ -25,7 +25,7 @@ use crate::solver_instance::SolverInstance;
 use crate::shared_data::JobSharedData;
 use crate::error::CuckooMinerError;
 use crate::ffi::PluginLibrary;
-use crate::proof::Proof;
+use crate::pow::proof::Proof;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, Receiver};
 use std::thread;
@@ -173,7 +173,7 @@ impl PurpleMiner {
 								edge_bits: solver.solutions.edge_bits as u8,
 								nonces: s.proof.to_vec(),
 							};
-							proof.to_difficulty_unscaled().to_num() >= target_difficulty
+							proof.to_difficulty().to_num() >= target_difficulty
 						})
 						.map(|s| {
 							s.clone()

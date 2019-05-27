@@ -1,6 +1,6 @@
-pub mod siphash;
-pub mod cuckaroo;
-pub mod error;
-pub mod common;
+mod siphash;
+mod error;
+mod common;
 pub mod pow_ctx;
+pub mod cuckaroo;
 pub mod proof;

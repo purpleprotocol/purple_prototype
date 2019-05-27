@@ -22,6 +22,7 @@
 #[macro_use] 
 mod macros;
 mod pow;
+mod verify;
 
 // Only compile miner code if `cpu` or `gpu` features are set
 
@@ -51,3 +52,6 @@ mod proof;
 
 #[cfg(any(feature = "cpu", feature = "gpu"))]
 pub use crate::miner::*;
+
+//
+pub use crate::verify::*;
