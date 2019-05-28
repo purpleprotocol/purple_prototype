@@ -22,10 +22,12 @@
 use crate::plugin::{SolverCtxWrapper, SolverSolutions, Solution, SolverStats};
 use crate::plugin_config::PluginConfig;
 use crate::solver_instance::SolverInstance;
-use crate::shared_data::JobSharedData;
+use crate::shared_data::JobData;
+use crate::plugin_type::PluginType;
 use crate::error::CuckooMinerError;
 use crate::ffi::PluginLibrary;
 use crate::pow::proof::Proof;
+use crate::verify::*;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, Receiver};
 use std::thread;
@@ -40,9 +42,20 @@ use cfg_if::*;
 const SO_SUFFIX: &str = ".cuckooplugin";
 
 cfg_if! {
-    if #[cfg(all(feature = "cpu", feature = "avx"))] {
+    if #[cfg(all(test, feature = "cpu", feature = "avx"))] {
         static PLUGINS: &[&str] = &[
             "cuckaroo_cpu_avx2_19",
+        ];
+    } else if #[cfg(all(test, feature = "cpu"))] {
+        static PLUGINS: &[&str] = &[
+            "cuckaroo_cpu_compat_19",
+        ];
+    } else if #[cfg(all(test, feature = "gpu"))] {
+        static PLUGINS: &[&str] = &[
+            "cuckaroo_cuda_19",
+        ];
+    } else if #[cfg(all(feature = "cpu", feature = "avx"))] {
+        static PLUGINS: &[&str] = &[
             "cuckaroo_cpu_avx2_24",
             "cuckaroo_cpu_avx2_25",
             "cuckaroo_cpu_avx2_26",
@@ -54,7 +67,6 @@ cfg_if! {
         ];
     } else if #[cfg(feature = "cpu")] {
         static PLUGINS: &[&str] = &[
-            "cuckaroo_cpu_compat_19",
             "cuckaroo_cpu_compat_24",
             "cuckaroo_cpu_compat_25",
             "cuckaroo_cpu_compat_26",
@@ -95,12 +107,25 @@ enum ControlMessage {
     SolverStopped(usize),
 }
 
+#[derive(Debug, PartialEq)]
+enum MinerState {
+    Starting,
+    Ready
+}
+
+#[derive(Debug, PartialEq)]
+enum SolverState {
+    Starting,
+    Paused,
+    Working,
+}
+
 pub struct PurpleMiner {
     /// All of the loaded configurations
     configs: Vec<PluginConfig>,
 
     /// Data shared across threads
-    pub shared_data: Arc<RwLock<JobSharedData>>,
+    pub shared_data: Arc<RwLock<JobData>>,
 
     /// Job control tx
     control_txs: Vec<Sender<ControlMessage>>,
@@ -110,6 +135,12 @@ pub struct PurpleMiner {
 
     /// Solver has stopped and cleanly shutdown
     solver_stopped_rxs: Vec<Receiver<ControlMessage>>,
+
+    /// State of the solvers
+    solver_states: Vec<Arc<RwLock<SolverState>>>,
+
+    /// The state of the miner
+    miner_state: MinerState,
 }
 
 impl PurpleMiner {
@@ -122,21 +153,39 @@ impl PurpleMiner {
         let len = configs.len();
         PurpleMiner {
             configs,
-            shared_data: Arc::new(RwLock::new(JobSharedData::new(len))),
+            shared_data: Arc::new(RwLock::new(JobData::new(len))),
             control_txs: vec![],
             solver_loop_txs: vec![],
             solver_stopped_rxs: vec![],
+            miner_state: MinerState::Starting,
+            solver_states: vec![]
         }
+    }
+
+    fn is_starting(&self, plugin: PluginType) -> bool {
+        let state = self.solver_states[plugin.repr()].read();
+        *state == SolverState::Starting
+    }
+
+    fn is_paused(&self, plugin: PluginType) -> bool {
+        let state = self.solver_states[plugin.repr()].read();
+        *state == SolverState::Paused
+    }
+
+    fn is_working(&self, plugin: PluginType) -> bool {
+        let state = self.solver_states[plugin.repr()].read();
+        *state == SolverState::Working
     }
 
     /// Solver's instance of a thread
     fn solver_thread(
         mut solver: SolverInstance,
         instance: usize,
-        shared_data: Arc<RwLock<JobSharedData>>,
+        shared_data: Arc<RwLock<JobData>>,
         control_rx: mpsc::Receiver<ControlMessage>,
         solver_loop_rx: mpsc::Receiver<ControlMessage>,
         solver_stopped_tx: mpsc::Sender<ControlMessage>,
+        solver_state: Arc<RwLock<SolverState>>,
     ) {
         {
             let mut s = shared_data.write();
@@ -166,6 +215,13 @@ impl PurpleMiner {
             }
         });
 
+
+        // Mark solver as paused
+        {
+            let mut solver_state = solver_state.write();
+            *solver_state = SolverState::Paused;
+        }
+
         let mut iter_count = 0;
         let mut paused = true;
         loop {
@@ -173,8 +229,22 @@ impl PurpleMiner {
                 // debug!("solver_thread - solver_loop_rx got msg: {:?}", message);
                 match message {
                     ControlMessage::Stop => break,
-                    ControlMessage::Pause => paused = true,
-                    ControlMessage::Resume => paused = false,
+                    ControlMessage::Pause => {
+                        // Mark solver as paused
+                        {
+                            let mut solver_state = solver_state.write();
+                            *solver_state = SolverState::Paused;
+                        }
+                        paused = true
+                    }
+                    ControlMessage::Resume => {
+                        // Mark solver as working
+                        {
+                            let mut solver_state = solver_state.write();
+                            *solver_state = SolverState::Working;
+                        }
+                        paused = false
+                    }
                     _ => {}
                 }
             }
@@ -191,6 +261,7 @@ impl PurpleMiner {
             let job_id = { shared_data.read().job_id.clone() };
             let target_difficulty = { shared_data.read().difficulty.clone() };
             
+
             // Gen random nonce
             let nonce: u64 = rand::OsRng::new().unwrap().gen();
 
@@ -202,6 +273,8 @@ impl PurpleMiner {
                 &mut solver.solutions,
                 &mut solver.stats,
             );
+
+
             iter_count += 1;
             let still_valid = { height == shared_data.read().height };
             if still_valid {
@@ -269,15 +342,19 @@ impl PurpleMiner {
             let (control_tx, control_rx) = mpsc::channel::<ControlMessage>();
             let (solver_tx, solver_rx) = mpsc::channel::<ControlMessage>();
             let (solver_stopped_tx, solver_stopped_rx) = mpsc::channel::<ControlMessage>();
+            let solver_state = Arc::new(RwLock::new(SolverState::Starting));
+            let solver_state_clone = solver_state.clone();
             self.control_txs.push(control_tx);
             self.solver_loop_txs.push(solver_tx);
             self.solver_stopped_rxs.push(solver_stopped_rx);
+            self.solver_states.push(solver_state);
             thread::spawn(move || {
                 let _ =
-                    PurpleMiner::solver_thread(s, i, sd, control_rx, solver_rx, solver_stopped_tx);
+                    PurpleMiner::solver_thread(s, i, sd, control_rx, solver_rx, solver_stopped_tx, solver_state_clone);
             });
             i += 1;
         }
+        self.miner_state = MinerState::Ready;
         Ok(())
     }
 
@@ -293,15 +370,23 @@ impl PurpleMiner {
 
     pub fn notify(
         &mut self,
-        job_id: u32,      // Job id
-        height: u64,      // Job height
+        job_id: u32,        // Job id
+        height: u64,        // Job height
         header: &[u8],  
-        difficulty: u64,  /* The target difficulty, only sols greater than this difficulty will
-                           * be returned. */
+        difficulty: u64,    /* The target difficulty, only sols greater than this difficulty will
+                             * be returned. */
+        plugin: PluginType, // Which plugin to use
     ) -> Result<(), CuckooMinerError> {
+        #[cfg(not(test))]
+        {
+            if let PluginType::Cuckoo19 = plugin {
+                panic!("Cannot use cuckoo 19 in release mode! This plugin is just for testing.");
+            }
+        }
+
         let mut sd = self.shared_data.write();
-        let mut paused = false;
-        if height != sd.height {
+        let mut paused = self.is_paused(plugin);
+        if height != sd.height && !paused {
             // stop/pause any existing jobs if job is for a new
             // height
             self.pause_solvers();
@@ -312,13 +397,12 @@ impl PurpleMiner {
         sd.header = header.to_vec();
         sd.difficulty = difficulty;
         if paused {
-            self.resume_solvers();
+            self.resume_solver(plugin.repr());
         }
         Ok(())
     }
 
     /// Returns solutions if currently waiting.
-
     pub fn get_solutions(&self) -> Option<SolverSolutions> {
         // just to prevent endless needless locking of this
         // when using fast test miners, in real cuckoo30 terms
@@ -385,6 +469,12 @@ impl PurpleMiner {
         // debug!("Resume message sent");
     }
 
+    /// Tells a specific solver to resume
+    pub fn resume_solver(&self, solver_idx: usize) {
+        let t = &self.solver_loop_txs[solver_idx];
+        let _ = t.send(ControlMessage::Resume);
+    }
+
     /// block until solvers have all exited
     pub fn wait_for_solver_shutdown(&self) {
         for r in self.solver_stopped_rxs.iter() {
@@ -407,4 +497,35 @@ fn get_plugins_path() -> PathBuf {
     p_path.pop();
     p_path.push("plugins");
     p_path
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn it_finds_and_verifies_proofs() {
+        let mut miner = PurpleMiner::new();
+        miner.start_solvers().unwrap();
+
+        loop {
+            thread::sleep_ms(1000);
+
+            if !miner.is_starting(PluginType::Cuckoo19) && !miner.is_working(PluginType::Cuckoo19) {
+                // Start miner
+                miner.notify(0, 1, b"", 0, PluginType::Cuckoo19).unwrap();
+            }
+
+
+            if let Some(solution) = miner.get_solutions() {
+
+                let solution = solution.sols[0];
+                let nonce = solution.nonce;
+                let proof = Proof::new(solution.to_u64s(), 19);
+                
+                assert!(verify(b"", nonce as u32, &proof).is_ok());
+                break;
+            }
+        }
+    }
 }

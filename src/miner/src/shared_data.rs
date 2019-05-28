@@ -22,7 +22,7 @@
 use crate::plugin::{SolverStats, SolverSolutions};
 
 /// Data intended to be shared across threads
-pub struct JobSharedData {
+pub struct JobData {
     /// ID of the current running job (not currently used)
     pub job_id: u32,
 
@@ -43,9 +43,9 @@ pub struct JobSharedData {
     pub stats: Vec<SolverStats>,
 }
 
-impl Default for JobSharedData {
-    fn default() -> JobSharedData {
-        JobSharedData {
+impl Default for JobData {
+    fn default() -> JobData {
+        JobData {
             job_id: 0,
             height: 0,
             header: Vec::new(),
@@ -56,9 +56,9 @@ impl Default for JobSharedData {
     }
 }
 
-impl JobSharedData {
-    pub fn new(num_solvers: usize) -> JobSharedData {
-        JobSharedData {
+impl JobData {
+    pub fn new(num_solvers: usize) -> JobData {
+        JobData {
             job_id: 0,
             height: 0,
             header: Vec::new(),

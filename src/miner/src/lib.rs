@@ -25,6 +25,8 @@ mod pow;
 mod verify;
 
 // Only compile miner code if `cpu` or `gpu` features are set
+#[cfg(any(feature = "cpu", feature = "gpu"))]
+mod plugin_type;
 
 #[cfg(any(feature = "cpu", feature = "gpu"))]
 mod ffi;

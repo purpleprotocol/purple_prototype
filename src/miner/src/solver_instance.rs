@@ -27,30 +27,30 @@ use crate::plugin::{SolverStats, SolverSolutions};
 /// Holds a loaded lib + config + stats
 /// 1 instance = 1 device on 1 controlling thread
 pub struct SolverInstance {
-	/// The loaded plugin
-	pub lib: PluginLibrary,
-	/// Associated config
-	pub config: PluginConfig,
-	/// Last stats output
-	pub stats: SolverStats,
-	/// Last solution output
-	pub solutions: SolverSolutions,
+    /// The loaded plugin
+    pub lib: PluginLibrary,
+    /// Associated config
+    pub config: PluginConfig,
+    /// Last stats output
+    pub stats: SolverStats,
+    /// Last solution output
+    pub solutions: SolverSolutions,
 }
 
 impl SolverInstance {
-	/// Create a new solver instance with the given config
-	pub fn new(config: PluginConfig) -> Result<SolverInstance, CuckooMinerError> {
-		let l = PluginLibrary::new(&config.file)?;
-		Ok(SolverInstance {
-			lib: l,
-			config: config,
-			stats: SolverStats::default(),
-			solutions: SolverSolutions::default(),
-		})
-	}
+    /// Create a new solver instance with the given config
+    pub fn new(config: PluginConfig) -> Result<SolverInstance, CuckooMinerError> {
+        let l = PluginLibrary::new(&config.file)?;
+        Ok(SolverInstance {
+            lib: l,
+            config: config,
+            stats: SolverStats::default(),
+            solutions: SolverSolutions::default(),
+        })
+    }
 
-	/// Release the lib
-	pub fn unload(&mut self) {
-		self.lib.unload();
-	}
+    /// Release the lib
+    pub fn unload(&mut self) {
+        self.lib.unload();
+    }
 }
