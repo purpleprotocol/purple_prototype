@@ -20,6 +20,7 @@ use crypto::Hash;
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
 use hashdb::{AsHashDB, HashDB};
+use kvdb::DBTransaction;
 use kvdb_rocksdb::Database;
 use rlp::NULL_RLP;
 use std::sync::Arc;
@@ -29,6 +30,7 @@ use BlakeDbHasher;
 pub struct PersistentDb {
     db_ref: Option<Arc<Database>>,
     cf: Option<u32>,
+    tx: Option<DBTransaction>,
     memory_db: Option<HashMap<Vec<u8>, Vec<u8>>>,
 }
 
@@ -37,6 +39,7 @@ impl PersistentDb {
         PersistentDb {
             db_ref: Some(db_ref),
             cf: cf,
+            tx: None,
             memory_db: None,
         }
     }
@@ -46,7 +49,84 @@ impl PersistentDb {
         PersistentDb {
             db_ref: None,
             cf: None,
+            tx: None,
             memory_db: Some(HashMap::new()),
+        }
+    }
+
+    /// Commits the pending transactions to the db
+    fn flush(&self) {
+        if let (Some(db_ref), Some(tx)) = (self.db_ref, self.tx) {
+            db_ref.write(tx).unwrap();
+        }
+    }
+
+    /// Clears the pending transactions which has not been commited
+    fn wipe(&self) {
+        if let Some(db_ref) = &self.db_ref {
+            self.tx = Some(db_ref.transaction());
+        }
+    }
+
+    fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+        if let Some(db_ref) = &self.db_ref {
+            match db_ref.get(self.cf, &key) {
+                Ok(result) => Some(result.unwrap().into_vec()),
+                Err(err) => panic!(err),
+            }
+        } else {
+            let memory_db = self.memory_db.as_ref().unwrap();
+            let result = memory_db.get(&key.to_vec());
+
+            result.cloned()
+        }
+    }
+
+    /// Sets a value for a specified key
+    /// Remark: Transactions will be commited when flush is called
+    fn insert(&self, key: &[u8], val: &[u8]) {
+        if let Some(db_ref) = &self.db_ref {
+            if self.tx.is_none() {
+                self.tx = Some(db_ref.transaction());
+            }
+
+            self.tx.unwrap().put(self.cf, key, val);
+        } else {
+            self.memory_db
+                .as_mut()
+                .unwrap()
+                .insert(key.to_vec(), val.to_vec());
+        }
+    }
+
+    /// Remark: Transactions will be commited when flush is called
+    fn emplace(&mut self, key: &[u8], val: &[u8]) {
+        if let Some(db_ref) = &self.db_ref {
+            if self.tx.is_none() {
+                self.tx = Some(db_ref.transaction());
+            }
+
+            self.tx.unwrap().put(self.cf, key, val);
+        } else {
+            self.memory_db
+                .as_mut()
+                .unwrap()
+                .insert(key.to_vec(), val.to_vec());
+        }
+    }
+
+    /// Removes a value from the specified key
+    /// Remark: Transactions will be commited when flush is called
+    fn remove(&mut self, key: &[u8]) {
+        if let Some(db_ref) = &self.db_ref {
+            if self.tx.is_none() {
+                self.tx = Some(db_ref.transaction());
+            }
+
+            self.tx.unwrap().delete(self.cf, &key.to_vec());
+        } else {
+            let mut memory_db = self.memory_db.as_mut().unwrap();
+            memory_db.remove(&key.to_vec());
         }
     }
 }
