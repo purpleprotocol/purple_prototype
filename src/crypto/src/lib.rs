@@ -19,13 +19,15 @@
 #[macro_use]
 extern crate serde_derive;
 
-extern crate blake2;
+extern crate blake2_rfc;
 extern crate hashdb;
 extern crate hex;
 extern crate merkle_light;
 extern crate quickcheck;
 extern crate rand;
 extern crate rlp;
+extern crate byteorder;
+extern crate crc32fast;
 extern crate rust_base58;
 extern crate rust_sodium;
 

@@ -13,7 +13,7 @@ hex = "0.3.2"
 itc = "0.1.2"
 log = "0.4.0"
 env_logger = "0.6.0"
-parking_lot = "0.6"
+parking_lot = "0.7.1"
 tokio = "0.1.11"
 futures = "0.1.25"
 dirs = "1.0.4"
@@ -33,6 +33,7 @@ persistence = { path = "src/persistence" }
 network = { path = "src/network" }
 transactions = { path = "src/transactions" }
 chain = { path = "src/chain" }
+miner = { path = "src/miner" }
 
 [[bin]]
 path = "src/purple/main.rs"
@@ -40,3 +41,9 @@ name = "purple"
 
 [profile.release]
 lto = true
+
+[features]
+default = []
+miner-cpu-avx = ["miner/cpu", "miner/avx"]
+miner-cpu = ["miner/cpu"]
+miner-gpu = ["miner/gpu"]

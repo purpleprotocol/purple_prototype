@@ -16,8 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
+use blake2_rfc::blake2b::{Blake2b, blake2b};
+use byteorder::{WriteBytesExt, LittleEndian};
+use crc32fast::Hasher as CrcHasher;
 use blake_hasher::BlakeHasher;
 use hashdb::Hasher;
 use quickcheck::Arbitrary;
@@ -40,6 +41,13 @@ impl Hash {
         218, 34, 59, 9, 150, 124, 91, 210, 17, 7, 67, 48, 126, 10, 246, 211, 159, 97, 114, 10, 167,
         33, 138, 100, 10, 8, 238, 209, 45, 213, 117, 199,
     ]);
+
+    /// Converts the `Hash` to an unique integer representation.
+    pub fn to_u64(&self) -> u64 {
+        let mut hasher = CrcHasher::new();
+        hasher.update(&self.0);
+        hasher.finalize() as u64
+    }
 
     pub fn to_vec(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::with_capacity(HASH_BYTES);
@@ -120,15 +128,11 @@ impl AsRef<[u8]> for Hash {
     }
 }
 
+#[inline]
 pub fn hash_slice(val: &[u8]) -> Hash {
-    let mut hasher = VarBlake2b::new(HASH_BYTES).unwrap();
     let mut result: [u8; HASH_BYTES] = [0; HASH_BYTES];
-
-    hasher.input(&val);
-    hasher.variable_result(|r| {
-        result.copy_from_slice(r);
-    });
-
+    let blake_result = blake2b(HASH_BYTES, &[], val);
+    result.copy_from_slice(blake_result.as_bytes());
     Hash(result)
 }
 
