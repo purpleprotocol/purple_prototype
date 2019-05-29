@@ -1,19 +1,13 @@
+use crate::verify::PROOF_SIZE;
+use byteorder::{WriteBytesExt, LittleEndian};
 use crypto::Hash;
 use std::fmt;
 use std::iter;
 use rand::*;
+use bitvec::Bits;
 
 const MIN_EDGE_BITS: u8 = 24;
 
-/// A Cuckaroo Cycle proof of work, consisting of the edge_bits to get the graph
-/// size (i.e. the 2-log of the number of edges) and the nonces
-/// of the graph solution. While being expressed as u64 for simplicity,
-/// nonces a.k.a. edge indices range from 0 to (1 << edge_bits) - 1
-///
-/// The hash of the `Proof` is the hash of its packed nonces when serializing
-/// them at their exact bit size. The resulting bit sequence is padded to be
-/// byte-aligned.
-///
 #[derive(Clone, PartialOrd, PartialEq)]
 pub struct Proof {
     /// Power of 2 used for the size of the cuckoo graph
@@ -80,11 +74,56 @@ impl Proof {
     }
 
     pub fn hash(&self) -> Hash {
-        unimplemented!();
+        let mut buf = Vec::with_capacity(8 * PROOF_SIZE + 1);
+        buf.write_u8(self.edge_bits).unwrap();
+
+        for n in self.nonces.iter() {
+            buf.write_u64::<LittleEndian>(*n).unwrap();
+        }
+
+        crypto::hash_slice(&buf)
     } 
 
-    /// TODO: Re-write this
-    pub fn to_difficulty(&self) -> u64 {
-        max!(1, self.hash().to_u64())
+    /// The difficulty is the number of leading
+    /// 0 bits found in the hash of the proof.
+    pub fn to_difficulty(&self) -> u8 {
+        let difficulty = {
+            let mut difficulty = 0;
+            let hash = self.hash();
+
+            // Traverse hash bytes
+            for byte in hash.0.iter() {
+                let mut stop = false;
+
+                // Traverse bits
+                for i in 0..9 {
+                    if byte.get(i) {
+                        stop = true;
+                        break;
+                    }
+
+                    difficulty += 1;
+                }
+
+                if stop {
+                    break;
+                }
+            }
+
+            difficulty
+        };
+        
+        max!(1, difficulty)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_maps_proof_to_difficulty() {
+        let proof = Proof::random(PROOF_SIZE);
+        let difficulty = proof.to_difficulty();
     }
 }

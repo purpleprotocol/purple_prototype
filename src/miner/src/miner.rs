@@ -293,7 +293,7 @@ impl PurpleMiner {
                                 edge_bits: solver.solutions.edge_bits as u8,
                                 nonces: s.proof.to_vec(),
                             };
-                            proof.to_difficulty() >= target_difficulty
+                            proof.to_difficulty() as u64 >= target_difficulty
                         })
                         .cloned()
                         .collect();

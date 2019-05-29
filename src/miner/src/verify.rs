@@ -25,7 +25,7 @@ use lazy_static::*;
 
 const MIN_EDGE_BITS: u8 = 24;
 const MAX_EDGE_BITS: u8 = 31;
-const PROOF_SIZE: usize = 42;
+pub const PROOF_SIZE: usize = 42;
 
 #[cfg(test)]
 lazy_static! {
@@ -53,10 +53,13 @@ pub enum VerifyError {
 
     /// The length of the proof is invalid.
     InvalidProofLength,
+
+    /// The difficulty does not match the target
+    LowDifficulty,
 }
 
 /// Verifies the given header and `Proof`.
-pub fn verify(header: &[u8], nonce: u32, proof: &Proof) -> Result<(), VerifyError> {
+pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -> Result<(), VerifyError> {
     if proof.proof_size() != PROOF_SIZE {
         return Err(VerifyError::InvalidProofLength);
     }
@@ -72,6 +75,10 @@ pub fn verify(header: &[u8], nonce: u32, proof: &Proof) -> Result<(), VerifyErro
         
         #[cfg(not(test))]
         return Err(VerifyError::UnsupportedEdgeBits);
+    }
+
+    if proof.to_difficulty() < target_difficulty {
+        return Err(VerifyError::LowDifficulty);
     }
     
     match proof.edge_bits {
@@ -220,6 +227,6 @@ mod tests {
     // #[test]
     // fn it_verifies_proofs() {
     //     let proof = Proof::new(CUCKOO_19_SOL.to_vec().clone(), 19);
-    //     assert_eq!(verify(b"", NONCE, &proof), Ok(()));
+    //     assert_eq!(verify(b"", NONCE, 0, &proof), Ok(()));
     // }
 }
