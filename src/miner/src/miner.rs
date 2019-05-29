@@ -268,12 +268,11 @@ impl PurpleMiner {
             solver.lib.run_solver(
                 ctx,
                 header,
-                0,
+                nonce,
                 1,
                 &mut solver.solutions,
                 &mut solver.stats,
             );
-
 
             iter_count += 1;
             let still_valid = { height == shared_data.read().height };
@@ -507,6 +506,7 @@ mod tests {
     fn it_finds_and_verifies_proofs() {
         let mut miner = PurpleMiner::new();
         miner.start_solvers().unwrap();
+        let mut count = 0;
 
         loop {
             thread::sleep_ms(1000);
@@ -518,7 +518,6 @@ mod tests {
 
 
             if let Some(solution) = miner.get_solutions() {
-
                 let solution = solution.sols[0];
                 let nonce = solution.nonce;
                 let proof = Proof::new(solution.to_u64s(), 19);
@@ -526,6 +525,13 @@ mod tests {
                 assert!(verify(b"", nonce as u32, &proof).is_ok());
                 break;
             }
+
+            // Kill test if running for more than 60 seconds
+            if count > 60 {
+                break;
+            }
+
+            count += 1;
         }
     }
 }
