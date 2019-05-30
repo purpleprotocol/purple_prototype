@@ -34,6 +34,12 @@ pub struct PersistentDb {
     memory_db: Option<HashMap<Vec<u8>, Vec<u8>>>,
 }
 
+trait BasicOperations<T> {
+    fn retrieve(&self, key: &[T]) -> Option<Vec<T>>; //renamed from get
+    fn put(&mut self, key: &[T], val: &[T]);
+    fn delete(&mut self, key: &[T]); //renamed from remove
+}
+
 impl PersistentDb {
     pub fn new(db_ref: Arc<Database>, cf: Option<u32>) -> PersistentDb {
         PersistentDb {
@@ -55,20 +61,39 @@ impl PersistentDb {
     }
 
     /// Commits the pending transactions to the db
-    fn flush(&self) {
-        if let (Some(db_ref), Some(tx)) = (self.db_ref, self.tx) {
-            db_ref.write(tx).unwrap();
+    pub fn flush(&mut self) {
+        // The case when db_ref.is_none and tx.is_some is not a realistic one,
+        // because tx is a DBTransaction created from db_ref
+        if let (Some(db_ref), Some(tx)) = (&self.db_ref, &self.tx) {
+            // Commit the transactions to the db
+            db_ref.write(tx.clone()).unwrap();
+        } else if let (Some(db_ref), None) = (&self.db_ref, &self.tx) {
+            warn!("Unnecessarily called flush before doing any transaction");
+        } else if let (None, None) = (&self.db_ref, &self.tx) {
+            warn!("Unnecessarily called flush because no db reference can be found")
         }
+
+        // Wipe pending state
+        self.wipe();
     }
 
-    /// Clears the pending transactions which has not been commited
-    fn wipe(&self) {
+    /// Clears the added transactions
+    pub fn wipe(&mut self) {
         if let Some(db_ref) = &self.db_ref {
             self.tx = Some(db_ref.transaction());
         }
     }
+}
 
-    fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+impl std::fmt::Debug for PersistentDb {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "PersistentDb {{ cf: {:?} }}", self.cf)
+    }
+}
+
+impl BasicOperations<u8> for PersistentDb {
+    /// Gets the value based on the provided key
+    fn retrieve(&self, key: &[u8]) -> Option<Vec<u8>> {
         if let Some(db_ref) = &self.db_ref {
             match db_ref.get(self.cf, &key) {
                 Ok(result) => Some(result.unwrap().into_vec()),
@@ -83,30 +108,15 @@ impl PersistentDb {
     }
 
     /// Sets a value for a specified key
-    /// Remark: Transactions will be commited when flush is called
-    fn insert(&self, key: &[u8], val: &[u8]) {
+    /// # Remarks
+    /// Transactions will be commited when flush is called
+    fn put(&mut self, key: &[u8], val: &[u8]) {
         if let Some(db_ref) = &self.db_ref {
             if self.tx.is_none() {
                 self.tx = Some(db_ref.transaction());
             }
 
-            self.tx.unwrap().put(self.cf, key, val);
-        } else {
-            self.memory_db
-                .as_mut()
-                .unwrap()
-                .insert(key.to_vec(), val.to_vec());
-        }
-    }
-
-    /// Remark: Transactions will be commited when flush is called
-    fn emplace(&mut self, key: &[u8], val: &[u8]) {
-        if let Some(db_ref) = &self.db_ref {
-            if self.tx.is_none() {
-                self.tx = Some(db_ref.transaction());
-            }
-
-            self.tx.unwrap().put(self.cf, key, val);
+            self.tx.clone().unwrap().put(self.cf, key, val);
         } else {
             self.memory_db
                 .as_mut()
@@ -116,24 +126,19 @@ impl PersistentDb {
     }
 
     /// Removes a value from the specified key
-    /// Remark: Transactions will be commited when flush is called
-    fn remove(&mut self, key: &[u8]) {
+    /// # Remarks
+    /// Transactions will be commited when flush is called
+    fn delete(&mut self, key: &[u8]) {
         if let Some(db_ref) = &self.db_ref {
             if self.tx.is_none() {
                 self.tx = Some(db_ref.transaction());
             }
 
-            self.tx.unwrap().delete(self.cf, &key.to_vec());
+            self.tx.clone().unwrap().delete(self.cf, &key.to_vec());
         } else {
             let mut memory_db = self.memory_db.as_mut().unwrap();
             memory_db.remove(&key.to_vec());
         }
-    }
-}
-
-impl std::fmt::Debug for PersistentDb {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "PersistentDb {{ cf: {:?} }}", self.cf)
     }
 }
 
@@ -147,20 +152,11 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return Some(ElasticArray128::from_slice(&NULL_RLP));
         }
 
-        if let Some(db_ref) = &self.db_ref {
-            match db_ref.get(self.cf, &key.0.to_vec()) {
-                Ok(result) => result,
-                Err(err) => panic!(err),
-            }
+        let result = self.retrieve(&key.0.to_vec());
+        if result.is_some() {
+            Some(ElasticArray128::<u8>::from_slice(&result.unwrap()))
         } else {
-            let memory_db = self.memory_db.as_ref().unwrap();
-            let result = memory_db.get(&key.0.to_vec());
-
-            if result.is_some() {
-                Some(ElasticArray128::<u8>::from_slice(result.unwrap()))
-            } else {
-                None
-            }
+            None
         }
     }
 
@@ -170,22 +166,9 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
         }
 
         let val_hash = crypto::hash_slice(val);
+        self.put(&val_hash.0.to_vec(), val);
 
-        if let Some(db_ref) = &self.db_ref {
-            let mut tx = db_ref.transaction();
-
-            // Write item to db
-            tx.put(self.cf, &val_hash.0.to_vec(), val);
-            db_ref.write(tx).unwrap();
-
-            val_hash
-        } else {
-            self.memory_db
-                .as_mut()
-                .unwrap()
-                .insert(val_hash.0.to_vec(), val.to_vec());
-            val_hash
-        }
+        val_hash
     }
 
     fn contains(&self, key: &Hash) -> bool {
@@ -193,15 +176,7 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return true;
         }
 
-        if let Some(db_ref) = &self.db_ref {
-            match db_ref.get(self.cf, &key.0.to_vec()) {
-                Ok(result) => result.is_some(),
-                Err(err) => panic!(err),
-            }
-        } else {
-            let mut memory_db = self.memory_db.as_ref().unwrap();
-            memory_db.get(&key.0.to_vec()).is_some()
-        }
+        self.retrieve(&key.0.to_vec()).is_some()
     }
 
     fn emplace(&mut self, key: Hash, val: ElasticArray128<u8>) {
@@ -209,16 +184,7 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return;
         }
 
-        if let Some(db_ref) = &self.db_ref {
-            let mut tx = db_ref.transaction();
-
-            // Write item to db
-            tx.put(self.cf, &key.0.to_vec(), &val);
-            db_ref.write(tx).unwrap();
-        } else {
-            let mut memory_db = self.memory_db.as_mut().unwrap();
-            memory_db.insert(key.0.to_vec(), val.to_vec());
-        }
+        self.put(&key.0.to_vec(), &val);
     }
 
     fn remove(&mut self, key: &Hash) {
@@ -226,15 +192,7 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return;
         }
 
-        if let Some(db_ref) = &self.db_ref {
-            let mut tx = db_ref.transaction();
-
-            tx.delete(self.cf, &key.0.to_vec());
-            db_ref.write(tx).unwrap();
-        } else {
-            let mut memory_db = self.memory_db.as_mut().unwrap();
-            memory_db.remove(&key.0.to_vec());
-        }
+        self.delete(&key.0.to_vec());
     }
 }
 
@@ -263,7 +221,7 @@ mod tests {
         let data = b"Hello world";
 
         let key = persistent_db.insert(data);
-
+        persistent_db.flush();
         assert_eq!(persistent_db.get(&key).unwrap().to_vec(), data.to_vec());
     }
 
@@ -278,7 +236,7 @@ mod tests {
         let data = b"Hello world";
 
         persistent_db.emplace(key, ElasticArray128::from_slice(data));
-
+        persistent_db.flush();
         assert_eq!(persistent_db.get(&key).unwrap().to_vec(), data.to_vec());
     }
 
@@ -292,7 +250,7 @@ mod tests {
         let data = b"Hello world";
 
         let key = persistent_db.insert(data);
-
+        persistent_db.flush();
         assert!(persistent_db.contains(&key));
     }
 
@@ -306,11 +264,11 @@ mod tests {
         let data = b"Hello world";
 
         let key = persistent_db.insert(data);
-
+        persistent_db.flush();
         assert!(persistent_db.contains(&key));
 
         persistent_db.remove(&key);
-
+        persistent_db.flush();
         assert!(!persistent_db.contains(&key));
     }
 }

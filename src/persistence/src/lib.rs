@@ -18,6 +18,8 @@
 
 #[cfg(test)]
 extern crate tempdir;
+#[macro_use]
+extern crate log;
 
 extern crate crypto;
 extern crate elastic_array;
