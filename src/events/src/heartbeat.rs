@@ -376,11 +376,11 @@ impl Heartbeat {
     impl_hash!();
 }
 
-fn assemble_hash_message(obj: &Heartbeat) -> Vec<u8> {
+fn assemble_hash_message(_obj: &Heartbeat) -> Vec<u8> {
     unimplemented!();
 }
 
-fn assemble_sign_message(obj: &Heartbeat) -> Vec<u8> {
+fn assemble_sign_message(_obj: &Heartbeat) -> Vec<u8> {
     unimplemented!();
 }
 

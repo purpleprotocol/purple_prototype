@@ -44,9 +44,9 @@ mod heartbeat;
 mod join;
 mod leave;
 
-pub use heartbeat::*;
-pub use join::*;
-pub use leave::*;
+pub use crate::heartbeat::*;
+pub use crate::join::*;
+pub use crate::leave::*;
 
 use causality::Stamp;
 use crypto::Hash;
@@ -113,7 +113,7 @@ impl Event {
             Event::Heartbeat(ref event) => event.hash.clone(),
             Event::Join(ref event) => event.hash.clone(),
             Event::Leave(ref event) => event.hash.clone(),
-            Event::Dummy(ref node_id, ref hash, _, _) => Some(hash.clone()),
+            Event::Dummy(ref _node_id, ref hash, _, _) => Some(hash.clone()),
             Event::Root => Some(Hash::NULL),
         }
     }
@@ -123,7 +123,7 @@ impl Event {
             Event::Heartbeat(ref event) => Some(event.parent_hash.clone()),
             Event::Join(ref event) => event.parent_cg_hash.clone(),
             Event::Leave(ref event) => Some(event.parent_hash.clone()),
-            Event::Dummy(ref node_id, _, ref parent_hash, _) => parent_hash.clone(),
+            Event::Dummy(ref _node_id, _, ref parent_hash, _) => parent_hash.clone(),
             Event::Root => None,
         }
     }

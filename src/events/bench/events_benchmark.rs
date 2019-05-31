@@ -18,9 +18,9 @@ use criterion::Criterion;
 use crypto::{Hash, Identity};
 use events::Heartbeat;
 use network::NodeId;
-use patricia_trie::{TrieDBMut, TrieMut};
+use patricia_trie::{TrieDBMut};
 use persistence::{BlakeDbHasher, Codec};
-use test::Bencher;
+
 use transactions::Tx;
 
 fn criterion_benchmark(c: &mut Criterion) {
