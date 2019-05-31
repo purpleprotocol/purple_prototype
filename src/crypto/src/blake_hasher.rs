@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use hash::*;
+use crate::hash::*;
 use merkle_light::hash::Algorithm;
 use std::default::Default;
 use std::hash::Hasher;

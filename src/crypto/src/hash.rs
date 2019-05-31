@@ -16,10 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use blake2_rfc::blake2b::{Blake2b, blake2b};
-use byteorder::{WriteBytesExt, LittleEndian};
+use blake2_rfc::blake2b::{blake2b};
+
 use crc32fast::Hasher as CrcHasher;
-use blake_hasher::BlakeHasher;
+use crate::blake_hasher::BlakeHasher;
 use hashdb::Hasher;
 use quickcheck::Arbitrary;
 use rand::Rng;

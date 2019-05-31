@@ -31,8 +31,8 @@ extern crate crc32fast;
 extern crate rust_base58;
 extern crate rust_sodium;
 
-pub use blake_hasher::*;
-pub use hash::*;
+pub use crate::blake_hasher::*;
+pub use crate::hash::*;
 pub use rust_base58::base58::*;
 pub use rust_sodium::crypto::kx::{
     gen_keypair as gen_kx_keypair, 
@@ -43,7 +43,7 @@ pub use rust_sodium::crypto::kx::{
     server_session_keys as server_sk,
 };
 pub use rust_sodium::crypto::sign::{gen_keypair, PublicKey, SecretKey};
-pub use signature::*;
+pub use crate::signature::*;
 
 mod blake_hasher;
 mod hash;
