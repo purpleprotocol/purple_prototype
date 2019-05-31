@@ -16,12 +16,12 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use connection::connect_to_peer;
+use crate::connection::connect_to_peer;
 use futures::stream;
 use futures::Future;
 use futures::Stream;
 use hashdb::HashDB;
-use network::Network;
+use crate::network::Network;
 use parking_lot::Mutex;
 use persistence::PersistentDb;
 use std::net::SocketAddr;

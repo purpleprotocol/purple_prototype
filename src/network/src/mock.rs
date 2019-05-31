@@ -23,13 +23,13 @@ use crate::peer::{Peer, ConnectionType};
 use crate::packet::Packet;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::collections::VecDeque;
-use std::sync::mpsc::channel;
+
+
 use std::sync::mpsc::{Sender, Receiver};
 use crypto::SecretKey as Sk;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
-use NodeId;
+use crate::NodeId;
 
 #[derive(Debug)]
 /// Mock network layer used for testing.
@@ -77,15 +77,15 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
-    fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+    fn connect_to_known(&self, _peer: &NodeId) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
-    fn disconnect(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+    fn disconnect(&self, _peer: &NodeId) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
-    fn disconnect_from_ip(&self, ip: &SocketAddr) -> Result<(), NetworkErr> {
+    fn disconnect_from_ip(&self, _ip: &SocketAddr) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
@@ -159,11 +159,11 @@ impl NetworkInterface for MockNetwork {
         }
     }
 
-    fn ban_peer(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+    fn ban_peer(&self, _peer: &NodeId) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
-    fn ban_ip(&self, peer: &SocketAddr) -> Result<(), NetworkErr> {
+    fn ban_ip(&self, _peer: &SocketAddr) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 

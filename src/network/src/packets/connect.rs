@@ -234,8 +234,8 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
-    use std::collections::VecDeque;
-    use std::cell::RefCell;
+    
+    
     use std::sync::mpsc::channel;
     use parking_lot::Mutex;
     use hashbrown::HashMap;
@@ -312,7 +312,7 @@ mod tests {
             tx == Connect::from_bytes(&Connect::to_bytes(&tx)).unwrap()
         }
 
-        fn verify_signature(id1: Identity, id2: Identity) -> bool {
+        fn verify_signature(_id1: Identity, _id2: Identity) -> bool {
             let id = Identity::new();
             let (pk, _) = crypto::gen_kx_keypair();
             let mut packet = Connect {

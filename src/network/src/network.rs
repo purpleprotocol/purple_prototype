@@ -22,11 +22,11 @@ use crate::packets::connect::Connect;
 use crate::packet::Packet;
 use std::net::SocketAddr;
 use crypto::SecretKey as Sk;
-use hashbrown::{HashSet, HashMap};
-use std::sync::Arc;
-use parking_lot::Mutex;
-use NodeId;
-use Peer;
+use hashbrown::{HashMap};
+
+
+use crate::NodeId;
+use crate::Peer;
 
 #[derive(Debug, Clone)]
 pub struct Network {
@@ -103,27 +103,27 @@ impl Network {
 }
 
 impl NetworkInterface for Network {
-    fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
+    fn connect(&mut self, _address: &SocketAddr) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
-    fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+    fn connect_to_known(&self, _peer: &NodeId) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
-    fn disconnect(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+    fn disconnect(&self, _peer: &NodeId) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
-    fn disconnect_from_ip(&self, ip: &SocketAddr) -> Result<(), NetworkErr> {
+    fn disconnect_from_ip(&self, _ip: &SocketAddr) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
-    fn send_to_peer(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr> {
+    fn send_to_peer(&self, _peer: &NodeId, _packet: &[u8]) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
-    fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr> {
+    fn send_to_all(&self, _packet: &[u8]) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
@@ -171,11 +171,11 @@ impl NetworkInterface for Network {
         }
     }
 
-    fn ban_peer(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+    fn ban_peer(&self, _peer: &NodeId) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
-    fn ban_ip(&self, peer: &SocketAddr) -> Result<(), NetworkErr> {
+    fn ban_ip(&self, _peer: &SocketAddr) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 

@@ -51,14 +51,14 @@ pub mod packets;
 mod peer;
 mod packet;
 
-pub use packet::*;
-pub use bootstrap::*;
-pub use connection::*;
-pub use error::*;
-pub use interface::*;
-pub use network::*;
-pub use node_id::*;
-pub use peer::*;
+pub use crate::packet::*;
+pub use crate::bootstrap::*;
+pub use crate::connection::*;
+pub use crate::error::*;
+pub use crate::interface::*;
+pub use crate::network::*;
+pub use crate::node_id::*;
+pub use crate::peer::*;
 
 #[cfg(test)]
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};
