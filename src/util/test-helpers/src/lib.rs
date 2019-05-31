@@ -28,12 +28,12 @@ extern crate tempdir;
 
 use account::{Address, Balance};
 use crypto::Hash;
-use kvdb_rocksdb::{Database, DatabaseConfig};
+
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec, PersistentDb};
-use quicksort::*;
-use std::sync::Arc;
-use tempdir::TempDir;
+
+
+
 
 pub use quicksort::*;
 
