@@ -3,10 +3,11 @@ name = "jump"
 version = "0.1.0"
 authors = []
 publish = false
+edition = "2018"
 
 [build-dependencies]
 cc = "1.0"
 
 [dependencies]
 libc = "0.2.0"
-crypto = { path = "../crypto" } 
+crypto = { path = "../crypto" }
