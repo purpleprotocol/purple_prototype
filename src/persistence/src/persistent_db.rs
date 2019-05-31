@@ -34,12 +34,6 @@ pub struct PersistentDb {
     memory_db: Option<HashMap<Vec<u8>, Vec<u8>>>,
 }
 
-trait BasicOperations<T> {
-    fn retrieve(&self, key: &[T]) -> Option<Vec<T>>; //renamed from get
-    fn put(&mut self, key: &[T], val: &[T]);
-    fn delete(&mut self, key: &[T]); //renamed from remove
-}
-
 impl PersistentDb {
     pub fn new(db_ref: Arc<Database>, cf: Option<u32>) -> PersistentDb {
         PersistentDb {
@@ -67,7 +61,7 @@ impl PersistentDb {
         if let (Some(db_ref), Some(tx)) = (&self.db_ref, &self.tx) {
             // Commit the transactions to the db
             db_ref.write(tx.clone()).unwrap();
-        } else if let (Some(db_ref), None) = (&self.db_ref, &self.tx) {
+        } else if let (Some(_db_ref), None) = (&self.db_ref, &self.tx) {
             warn!("Unnecessarily called flush before doing any transaction");
         } else if let (None, None) = (&self.db_ref, &self.tx) {
             warn!("Unnecessarily called flush because no db reference can be found")
@@ -83,20 +77,16 @@ impl PersistentDb {
             self.tx = Some(db_ref.transaction());
         }
     }
-}
 
-impl std::fmt::Debug for PersistentDb {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "PersistentDb {{ cf: {:?} }}", self.cf)
-    }
-}
-
-impl BasicOperations<u8> for PersistentDb {
     /// Gets the value based on the provided key
-    fn retrieve(&self, key: &[u8]) -> Option<Vec<u8>> {
+    pub fn retrieve(&self, key: &[u8]) -> Option<Vec<u8>> {
         if let Some(db_ref) = &self.db_ref {
             match db_ref.get(self.cf, &key) {
-                Ok(result) => Some(result.unwrap().into_vec()),
+                Ok(result) => match result {
+                        Some(res) => Some(res.into_vec()),
+                        None => None,
+                    }
+                
                 Err(err) => panic!(err),
             }
         } else {
@@ -110,13 +100,16 @@ impl BasicOperations<u8> for PersistentDb {
     /// Sets a value for a specified key
     /// # Remarks
     /// Transactions will be commited when flush is called
-    fn put(&mut self, key: &[u8], val: &[u8]) {
+    pub fn put(&mut self, key: &[u8], val: &[u8]) {
         if let Some(db_ref) = &self.db_ref {
             if self.tx.is_none() {
                 self.tx = Some(db_ref.transaction());
-            }
 
-            self.tx.clone().unwrap().put(self.cf, key, val);
+                if self.tx.is_none() {
+                    panic!("The transaction couldn't be created!");
+                }
+            }
+            self.tx.as_mut().unwrap().put(self.cf, key, val);
         } else {
             self.memory_db
                 .as_mut()
@@ -128,17 +121,23 @@ impl BasicOperations<u8> for PersistentDb {
     /// Removes a value from the specified key
     /// # Remarks
     /// Transactions will be commited when flush is called
-    fn delete(&mut self, key: &[u8]) {
+    pub fn delete(&mut self, key: &[u8]) {
         if let Some(db_ref) = &self.db_ref {
             if self.tx.is_none() {
                 self.tx = Some(db_ref.transaction());
             }
 
-            self.tx.clone().unwrap().delete(self.cf, &key.to_vec());
+            self.tx.as_mut().unwrap().delete(self.cf, &key.to_vec());
         } else {
             let mut memory_db = self.memory_db.as_mut().unwrap();
             memory_db.remove(&key.to_vec());
         }
+    }
+}
+
+impl std::fmt::Debug for PersistentDb {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "PersistentDb {{ cf: {:?} }}", self.cf)
     }
 }
 
@@ -264,6 +263,7 @@ mod tests {
         let data = b"Hello world";
 
         let key = persistent_db.insert(data);
+        
         persistent_db.flush();
         assert!(persistent_db.contains(&key));
 
