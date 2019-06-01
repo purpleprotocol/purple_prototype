@@ -26,11 +26,23 @@ use rlp::NULL_RLP;
 use std::sync::Arc;
 use BlakeDbHasher;
 
+#[derive(PartialEq, Clone)]
+enum Operation {
+    Remove,
+    Put,
+}
+
+#[derive(Clone)]
+struct OperationInfo {
+    op: Operation,
+    val: Option<Vec<u8>>,
+}
+
 #[derive(Clone)]
 pub struct PersistentDb {
     db_ref: Option<Arc<Database>>,
     cf: Option<u32>,
-    tx: Option<DBTransaction>,
+    reg: Option<HashMap<Vec<u8>, OperationInfo>>,
     memory_db: Option<HashMap<Vec<u8>, Vec<u8>>>,
 }
 
@@ -39,7 +51,7 @@ impl PersistentDb {
         PersistentDb {
             db_ref: Some(db_ref),
             cf: cf,
-            tx: None,
+            reg: None,
             memory_db: None,
         }
     }
@@ -49,22 +61,43 @@ impl PersistentDb {
         PersistentDb {
             db_ref: None,
             cf: None,
-            tx: None,
+            reg: None,
             memory_db: Some(HashMap::new()),
         }
     }
 
     /// Commits the pending transactions to the db
     pub fn flush(&mut self) {
-        // The case when db_ref.is_none and tx.is_some is not a realistic one,
-        // because tx is a DBTransaction created from db_ref
-        if let (Some(db_ref), Some(tx)) = (&self.db_ref, &self.tx) {
-            // Commit the transactions to the db
-            db_ref.write(tx.clone()).unwrap();
-        } else if let (Some(_db_ref), None) = (&self.db_ref, &self.tx) {
-            warn!("Unnecessarily called flush before doing any transaction");
-        } else if let (None, None) = (&self.db_ref, &self.tx) {
-            warn!("Unnecessarily called flush because no db reference can be found")
+        // The case when db_ref.is_none and reg.is_some is not a realistic one,
+        // because HashMap registry is not used for db_ref
+        match (&self.db_ref, &self.reg) {
+            (Some(db_ref), Some(reg)) => {
+                // Initialize a new transaction
+                let mut tx: DBTransaction = db_ref.transaction();
+
+                // Load all the pending transactions into the DBTransaction
+                for (key, val) in reg.iter() {
+                    match val.op {
+                        Operation::Put => match val.clone().val {
+                            Some(value) => tx.put(self.cf, &key, &value),
+                            None => {
+                                panic!("Tried to do an insert operation without providing value")
+                            }
+                        },
+                        Operation::Remove => tx.delete(self.cf, key),
+                    }
+                }
+
+                // Commit the transactions
+                db_ref.write(tx.clone()).unwrap()
+            }
+            (Some(_db_ref), None) => {
+                warn!("Unnecessarily called flush before doing any transaction")
+            }
+            (None, None) => {
+                warn!("Unnecessarily called flush because no db reference can be found")
+            }
+            (None, Some(_reg)) => panic!("Transactions cannot exist while the db is None"),
         }
 
         // Wipe pending state
@@ -73,21 +106,59 @@ impl PersistentDb {
 
     /// Clears the added transactions
     pub fn wipe(&mut self) {
+        if let Some(_db_ref) = &self.db_ref {
+            self.reg = Some(HashMap::new());
+        }
+    }
+
+    /// Gets the value directly from the db
+    /// # Remarks
+    /// Pending transactions will not be searched
+    pub fn retrieve_from_db(&self, key: &[u8]) -> Option<Vec<u8>> {
         if let Some(db_ref) = &self.db_ref {
-            self.tx = Some(db_ref.transaction());
+            match db_ref.get(self.cf, &key) {
+                Ok(result) => match result {
+                    Some(res) => Some(res.into_vec()),
+                    None => None,
+                },
+                Err(err) => panic!(err),
+            }
+        } else {
+            let memory_db = self.memory_db.as_ref().unwrap();
+            let result = memory_db.get(&key.to_vec());
+
+            result.cloned()
         }
     }
 
     /// Gets the value based on the provided key
     pub fn retrieve(&self, key: &[u8]) -> Option<Vec<u8>> {
         if let Some(db_ref) = &self.db_ref {
-            match db_ref.get(self.cf, &key) {
-                Ok(result) => match result {
+            if let Some(reg) = &self.reg {
+                // A registry exists, need to check the value from there
+                match reg.get(&key.to_vec()) {
+                    Some(res) => match res.op {
+                        Operation::Put => res.clone().val,
+                        Operation::Remove => None,
+                    },
+                    None => match db_ref.get(self.cf, &key) {
+                        Ok(result) => match result {
+                            Some(res) => Some(res.into_vec()),
+                            None => None,
+                        },
+
+                        Err(err) => panic!(err),
+                    },
+                }
+            } else {
+                match db_ref.get(self.cf, &key) {
+                    Ok(result) => match result {
                         Some(res) => Some(res.into_vec()),
                         None => None,
-                    }
-                
-                Err(err) => panic!(err),
+                    },
+
+                    Err(err) => panic!(err),
+                }
             }
         } else {
             let memory_db = self.memory_db.as_ref().unwrap();
@@ -101,15 +172,22 @@ impl PersistentDb {
     /// # Remarks
     /// Transactions will be commited when flush is called
     pub fn put(&mut self, key: &[u8], val: &[u8]) {
-        if let Some(db_ref) = &self.db_ref {
-            if self.tx.is_none() {
-                self.tx = Some(db_ref.transaction());
+        if let Some(_db_ref) = &self.db_ref {
+            if self.reg.is_none() {
+                self.reg = Some(HashMap::new());
 
-                if self.tx.is_none() {
-                    panic!("The transaction couldn't be created!");
+                if self.reg.is_none() {
+                    panic!("The registry couldn't be created");
                 }
             }
-            self.tx.as_mut().unwrap().put(self.cf, key, val);
+
+            // Add the pending insert to the registry HashMap
+            let value = OperationInfo {
+                op: Operation::Put,
+                val: Some(val.to_vec()),
+            };
+
+            self.reg.as_mut().unwrap().insert(key.to_vec(), value);
         } else {
             self.memory_db
                 .as_mut()
@@ -122,12 +200,22 @@ impl PersistentDb {
     /// # Remarks
     /// Transactions will be commited when flush is called
     pub fn delete(&mut self, key: &[u8]) {
-        if let Some(db_ref) = &self.db_ref {
-            if self.tx.is_none() {
-                self.tx = Some(db_ref.transaction());
+        if let Some(_db_ref) = &self.db_ref {
+            if self.reg.is_none() {
+                self.reg = Some(HashMap::new());
+
+                if self.reg.is_none() {
+                    panic!("The registry couldn't be created");
+                }
             }
 
-            self.tx.as_mut().unwrap().delete(self.cf, &key.to_vec());
+            // Add the pending delete to the registry HashMap
+            let value = OperationInfo {
+                op: Operation::Remove,
+                val: None,
+            };
+
+            self.reg.as_mut().unwrap().insert(key.to_vec(), value);
         } else {
             let mut memory_db = self.memory_db.as_mut().unwrap();
             memory_db.remove(&key.to_vec());
@@ -263,12 +351,90 @@ mod tests {
         let data = b"Hello world";
 
         let key = persistent_db.insert(data);
-        
+
         persistent_db.flush();
         assert!(persistent_db.contains(&key));
 
         persistent_db.remove(&key);
         persistent_db.flush();
         assert!(!persistent_db.contains(&key));
+    }
+
+    #[test]
+    fn it_keeps_last_operation_per_key() {
+        let config = DatabaseConfig::with_columns(None);
+        let dir = TempDir::new("purple_test").unwrap();
+        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db_ref = Arc::new(db);
+        let mut persistent_db = PersistentDb::new(db_ref, None);
+        let data = b"Hello world";
+
+        let key = persistent_db.insert(data);
+        persistent_db.remove(&key);
+        persistent_db.flush();
+        assert!(!persistent_db.contains(&key));
+
+        let key = persistent_db.insert(data);
+        persistent_db.flush();
+        assert!(persistent_db.contains(&key));
+    }
+
+    #[test]
+    fn it_looks_into_pending_transactions() {
+        let config = DatabaseConfig::with_columns(None);
+        let dir = TempDir::new("purple_test").unwrap();
+        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db_ref = Arc::new(db);
+        let mut persistent_db = PersistentDb::new(db_ref, None);
+        let data = b"Hello world";
+
+        let key = persistent_db.insert(data);
+        assert!(persistent_db.contains(&key));
+        assert!(persistent_db.get(&key).is_some());
+        assert!(persistent_db.retrieve(&key.0.to_vec()).is_some());
+        assert!(persistent_db.retrieve_from_db(&key.0.to_vec()).is_none());
+
+        persistent_db.flush();
+        assert!(persistent_db.contains(&key));
+        assert!(persistent_db.get(&key).is_some());
+        assert!(persistent_db.retrieve(&key.0.to_vec()).is_some());
+        assert!(persistent_db.retrieve_from_db(&key.0.to_vec()).is_some());
+    }
+
+    #[test]
+    fn it_doesnt_write_until_flush() {
+        let config = DatabaseConfig::with_columns(None);
+        let dir = TempDir::new("purple_test").unwrap();
+        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db_ref = Arc::new(db);
+        let mut persistent_db = PersistentDb::new(db_ref, None);
+        let data = b"Hello world";
+
+        let key = persistent_db.insert(data);
+        assert!(persistent_db.retrieve_from_db(&key.0.to_vec()).is_none());
+
+        persistent_db.flush();
+        assert!(persistent_db.retrieve_from_db(&key.0.to_vec()).is_some());
+    }
+
+    #[test]
+    fn wipe_works() {
+        let config = DatabaseConfig::with_columns(None);
+        let dir = TempDir::new("purple_test").unwrap();
+        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db_ref = Arc::new(db);
+        let mut persistent_db = PersistentDb::new(db_ref, None);
+        let data = b"Hello world";
+        let data2 = b"Hello world 2";
+        let data3 = b"Hello world 3";
+
+        let key = persistent_db.insert(data);
+        let key2 = persistent_db.insert(data2);
+        let key3 = persistent_db.insert(data3);
+        persistent_db.wipe();
+
+        assert!(persistent_db.get(&key).is_none());
+        assert!(persistent_db.get(&key2).is_none());
+        assert!(persistent_db.get(&key3).is_none());
     }
 }
