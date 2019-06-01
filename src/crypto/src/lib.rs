@@ -44,10 +44,12 @@ pub use rust_sodium::crypto::kx::{
 };
 pub use rust_sodium::crypto::sign::{gen_keypair, PublicKey, SecretKey};
 pub use signature::*;
+//pub use bls::*;
 
 mod blake_hasher;
 mod hash;
 mod signature;
+//mod bls;
 
 use rust_sodium::crypto::sign::{sign_detached, verify_detached};
 

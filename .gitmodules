@@ -1,3 +1,12 @@
 [submodule "src/miner/cuckoo_src/cuckoo"]
 	path = src/miner/cuckoo_src/cuckoo
 	url = https://github.com/tromp/cuckoo
+[submodule "src/crypto/c_src/mcl"]
+	path = src/crypto/c_src/mcl
+	url = git://github.com/herumi/mcl.git
+[submodule "src/crypto/c_src/bls"]
+	path = src/crypto/c_src/bls
+	url = git://github.com/herumi/bls.git
+[submodule "src/crypto/c_src/cybozulib_ext"]
+	path = src/crypto/c_src/cybozulib_ext
+	url = git://github.com/herumi/cybozulib_ext.git
