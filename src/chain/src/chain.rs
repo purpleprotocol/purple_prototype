@@ -328,7 +328,6 @@ impl<B: Block> Chain<B> {
         }
     }
 
-    // TODO: Make writes atomic
     fn write_block(&mut self, block: Arc<B>) {
         let block_hash = block.block_hash().unwrap();
 
@@ -445,6 +444,8 @@ impl<B: Block> Chain<B> {
                 self.disconnected_tips_mapping.remove(&tip_hash.clone());
             }
         }
+
+        self.db.flush();
 
         // Execute after write callback
         if let Some(mut cb) = B::after_write() {
