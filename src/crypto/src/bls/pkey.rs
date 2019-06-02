@@ -16,5 +16,35 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[derive(Clone, Debug, PartialEq, Hash)]
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use multi_sigs::bls::common::VerKey;
+
+#[derive(Clone)]
 pub struct BlsPkey(VerKey);
+
+impl PartialEq for BlsPkey {
+    fn eq(&self, other: &Self) -> bool {
+        crate::hash_slice(&self.0.to_bytes()) == crate::hash_slice(&other.0.to_bytes())
+    }
+}
+
+impl Eq for BlsPkey { }
+
+impl fmt::Debug for BlsPkey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "BlsPkey({})", hex::encode(self.0.to_bytes()))
+    }
+}
+
+impl Hash for BlsPkey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.to_bytes().hash(state);
+    }
+}
+
+impl BlsPkey {
+    pub fn new(key: VerKey) -> BlsPkey {
+        BlsPkey(key)
+    }
+}
