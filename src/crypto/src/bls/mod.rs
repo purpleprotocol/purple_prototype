@@ -17,14 +17,44 @@
 */
 
 use multi_sigs::bls::common::{SigKey, VerKey, Keypair};
+use multi_sigs::bls::simple::Signature;
 
 pub mod pkey;
 pub mod skey;
+pub mod signature;
 
 use pkey::*;
 use skey::*;
+use crate::bls::signature::*;
 
 pub fn gen_bls_keypair() -> (BlsPkey, BlsSkey) {
     let keypair = Keypair::new(None);
     (BlsPkey::new(keypair.ver_key), BlsSkey::new(keypair.sig_key))
+}
+
+pub fn bls_sign(message: &[u8], skey: &BlsSkey) -> BlsSig {
+    let sig = Signature::new(message, &skey.0);
+    BlsSig::new(sig)
+}
+
+pub fn bls_verify(message: &[u8], sig: &BlsSig, pkey: &BlsPkey) -> bool {
+    sig.0.verify(message, &pkey.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sign_verify() {
+        let (pk, sk) = gen_bls_keypair();
+        let (pk2, _)=  gen_bls_keypair();
+        let message = b"test_message";
+        let message2 = b"test_message2";
+        let sig = bls_sign(message, &sk);
+
+        assert!(bls_verify(message, &sig, &pk));
+        assert!(!bls_verify(message, &sig, &pk2));
+        assert!(!bls_verify(message2, &sig, &pk));
+    }
 }

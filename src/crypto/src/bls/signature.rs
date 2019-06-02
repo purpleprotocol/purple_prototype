@@ -18,38 +18,33 @@
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use multi_sigs::bls::common::SigKey;
+use multi_sigs::bls::simple::Signature;
 
-pub struct BlsSkey(pub SigKey);
+#[derive(Clone)]
+pub struct BlsSig(pub Signature);
 
-impl Clone for BlsSkey {
-    fn clone(&self) -> BlsSkey {
-        BlsSkey::new(SigKey::from_bytes(&self.0.to_bytes()).unwrap())
-    }
-}
-
-impl PartialEq for BlsSkey {
+impl PartialEq for BlsSig {
     fn eq(&self, other: &Self) -> bool {
         crate::hash_slice(&self.0.to_bytes()) == crate::hash_slice(&other.0.to_bytes())
     }
 }
 
-impl Eq for BlsSkey { }
+impl Eq for BlsSig { }
 
-impl fmt::Debug for BlsSkey {
+impl fmt::Debug for BlsSig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "BlsSkey({})", hex::encode(self.0.to_bytes()))
+        write!(f, "BlsSig({})", hex::encode(self.0.to_bytes()))
     }
 }
 
-impl Hash for BlsSkey {
+impl Hash for BlsSig {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.to_bytes().hash(state);
     }
 }
 
-impl BlsSkey {
-    pub fn new(key: SigKey) -> BlsSkey {
-        BlsSkey(key)
+impl BlsSig {
+    pub fn new(sig: Signature) -> BlsSig {
+        BlsSig(sig)
     }
 }

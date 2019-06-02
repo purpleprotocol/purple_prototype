@@ -21,7 +21,7 @@ use std::hash::{Hash, Hasher};
 use multi_sigs::bls::common::VerKey;
 
 #[derive(Clone)]
-pub struct BlsPkey(VerKey);
+pub struct BlsPkey(pub VerKey);
 
 impl PartialEq for BlsPkey {
     fn eq(&self, other: &Self) -> bool {
