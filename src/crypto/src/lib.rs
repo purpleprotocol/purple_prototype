@@ -19,6 +19,7 @@
 #[macro_use]
 extern crate serde_derive;
 
+extern crate multi_sigs;
 extern crate blake2_rfc;
 extern crate hashdb;
 extern crate hex;

@@ -18,6 +18,4 @@ serde_derive = "1.0.59"
 quickcheck = "0.7.2"
 hashdb = "0.3.0"
 rand = "0.6.0"
-
-[build-dependencies]
-cmake = "0.1"
+multi-sigs = { git = "https://github.com/lovesh/signature-schemes" }
