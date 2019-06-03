@@ -25,7 +25,7 @@ use hashdb::Hasher;
 use patricia_trie::node::Node;
 use patricia_trie::{ChildReference, NibbleSlice, NodeCodec};
 use rlp::{DecoderError, Prototype, Rlp, RlpStream};
-use BlakeDbHasher;
+use crate::BlakeDbHasher;
 
 pub struct Codec;
 

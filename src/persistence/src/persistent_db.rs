@@ -16,6 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::BlakeDbHasher;
 use crypto::Hash;
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
@@ -24,7 +25,6 @@ use kvdb::DBTransaction;
 use kvdb_rocksdb::Database;
 use rlp::NULL_RLP;
 use std::sync::Arc;
-use BlakeDbHasher;
 
 #[derive(PartialEq, Clone)]
 enum Operation {

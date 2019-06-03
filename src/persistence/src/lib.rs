@@ -31,9 +31,9 @@ extern crate parking_lot;
 extern crate patricia_trie;
 extern crate rlp;
 
-pub use hasher::*;
-pub use node_codec::*;
-pub use persistent_db::*;
+pub use crate::hasher::*;
+pub use crate::node_codec::*;
+pub use crate::persistent_db::*;
 
 mod hasher;
 mod node_codec;
