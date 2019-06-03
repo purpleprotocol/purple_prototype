@@ -59,7 +59,7 @@ pub fn sign(message: &[u8], skey: &SecretKey) -> Signature {
     Signature::new(&sig.0)
 }
 
-pub fn verify(message: &[u8], signature: Signature, pkey: PublicKey) -> bool {
+pub fn verify(message: &[u8], signature: &Signature, pkey: &PublicKey) -> bool {
     verify_detached(&signature.inner(), message, &pkey)
 }
 
@@ -86,5 +86,20 @@ use quickcheck::Arbitrary;
 impl Arbitrary for Identity {
     fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> Identity {
         Identity::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deterministic_signatures() {
+        let (pk, sk) = gen_keypair();
+        let message = b"some_test_message";
+        let sig1 = sign(message, &sk);
+        let sig2 = sign(message, &sk);
+
+        assert_eq!(sig1, sig2);
     }
 }

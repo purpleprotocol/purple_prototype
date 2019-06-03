@@ -50,7 +50,7 @@ impl MultiSig {
 
             // Check signature against all public keys
             for pk in pkeys {
-                if crypto::verify(message, sig.clone(), *pk) {
+                if crypto::verify(message, &sig, pk) {
                     valid = true;
                     break;
                 }
@@ -85,7 +85,7 @@ impl MultiSig {
 
         for sig in &self.0 {
             // Find a matching address in the share map for the signature
-            match share_map.find_signer(message, sig.clone()) {
+            match share_map.find_signer(message, &sig) {
                 Some(sh_ratio) => signed_ratio += sh_ratio,
                 None => return false,
             }

@@ -103,7 +103,7 @@ impl Call {
         match self.signature {
             Some(Signature::Normal(ref sig)) => {
                 if let Address::Normal(ref addr) = self.from {
-                    crypto::verify(&message, sig.clone(), addr.pkey())
+                    crypto::verify(&message, sig, &addr.pkey())
                 } else {
                     panic!("The address of the signer is not a normal address!");
                 }

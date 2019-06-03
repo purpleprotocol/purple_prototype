@@ -216,7 +216,7 @@ impl OpenMultiSig {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig.clone(), self.creator.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.creator.pkey()),
             None => false,
         }
     }

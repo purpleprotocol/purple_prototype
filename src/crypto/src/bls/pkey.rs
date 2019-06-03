@@ -17,11 +17,37 @@
 */
 
 use std::fmt;
+use std::ops::{Add, AddAssign};
 use std::hash::{Hash, Hasher};
 use multi_sigs::bls::common::VerKey;
+use multi_sigs::bls::types::GroupG2;
 
 #[derive(Clone)]
 pub struct BlsPkey(pub VerKey);
+
+impl Add for BlsPkey {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        let mut point: GroupG2 = GroupG2::new();
+        point.inf();
+        point.add(&self.0.point);
+        point.add(&other.0.point);
+
+        BlsPkey(VerKey { point })
+    }   
+}
+
+impl AddAssign for BlsPkey {
+    fn add_assign(&mut self, other: Self) {
+        let mut point: GroupG2 = GroupG2::new();
+        point.inf();
+        point.add(&self.0.point);
+        point.add(&other.0.point);
+
+        *self = BlsPkey(VerKey { point });
+    }
+}
 
 impl PartialEq for BlsPkey {
     fn eq(&self, other: &Self) -> bool {

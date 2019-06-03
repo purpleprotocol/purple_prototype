@@ -119,12 +119,12 @@ impl ShareMap {
     /// ratio of shares of the signer.
     ///
     /// Returns `None` if no match is found.
-    pub fn find_signer(&self, message: &[u8], signature: Signature) -> Option<Decimal> {
+    pub fn find_signer(&self, message: &[u8], signature: &Signature) -> Option<Decimal> {
         let mut result: Option<Decimal> = None;
 
         // Attempt to find a matching key
         for (addr, shares) in self.share_map.iter() {
-            if crypto::verify(message, signature.clone(), addr.pkey()) {
+            if crypto::verify(message, signature, &addr.pkey()) {
                 // A match has been found
                 let signer_ratio = (Decimal::from_str(&format!("{}.0", *shares)).unwrap()
                     / Decimal::from_str(&format!("{}.0", self.issued_shares)).unwrap())
@@ -252,11 +252,11 @@ mod tests {
         sm.add_shareholder(addr2, 15000);
         sm.add_shareholder(addr3, 20000);
 
-        let result = sm.find_signer(message, sh1_signature).unwrap();
+        let result = sm.find_signer(message, &sh1_signature).unwrap();
 
         assert_eq!(result, sh1_oracle);
-        assert_eq!(sm.find_signer(message, sh2_signature).unwrap(), sh2_oracle);
-        assert_eq!(sm.find_signer(message, sh3_signature).unwrap(), sh3_oracle);
+        assert_eq!(sm.find_signer(message, &sh2_signature).unwrap(), sh2_oracle);
+        assert_eq!(sm.find_signer(message, &sh3_signature).unwrap(), sh3_oracle);
     }
 
     quickcheck! {

@@ -17,11 +17,38 @@
 */
 
 use std::fmt;
+use std::ops::{Add, AddAssign};
 use std::hash::{Hash, Hasher};
+use multi_sigs::bls::common::VerKey;
 use multi_sigs::bls::simple::Signature;
+use multi_sigs::bls::types::GroupG1;
 
 #[derive(Clone)]
-pub struct BlsSig(pub Signature);
+pub struct BlsSig(pub(crate) Signature);
+
+impl Add for BlsSig {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        let mut point: GroupG1 = GroupG1::new();
+        point.inf();
+        point.add(&self.0.point);
+        point.add(&other.0.point);
+
+        BlsSig(Signature { point })
+    }   
+}
+
+impl AddAssign for BlsSig {
+    fn add_assign(&mut self, other: Self) {
+        let mut point: GroupG1 = GroupG1::new();
+        point.inf();
+        point.add(&self.0.point);
+        point.add(&other.0.point);
+
+        *self = BlsSig(Signature { point });
+    }
+}
 
 impl PartialEq for BlsSig {
     fn eq(&self, other: &Self) -> bool {
