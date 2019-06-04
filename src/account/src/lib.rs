@@ -33,18 +33,8 @@ extern crate rust_decimal;
 
 pub mod addresses;
 pub mod balance;
-pub mod multi_sig;
-pub mod share_map;
-pub mod shares;
-pub mod signature;
 
 pub use addresses::contract::*;
-pub use addresses::multi_sig::*;
 pub use addresses::normal::*;
-pub use addresses::shareholders::*;
 pub use addresses::*;
 pub use balance::*;
-pub use multi_sig::*;
-pub use share_map::*;
-pub use shares::*;
-pub use signature::*;

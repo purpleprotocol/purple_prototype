@@ -24,7 +24,7 @@ use rand::Rng;
 pub struct ContractAddress(Hash);
 
 impl ContractAddress {
-    pub const ADDR_TYPE: u8 = 4;
+    pub const ADDR_TYPE: u8 = 2;
 
     pub fn new(addr: Hash) -> ContractAddress {
         ContractAddress(addr)

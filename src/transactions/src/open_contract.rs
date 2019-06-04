@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, ContractAddress, MultiSig, ShareMap, Signature};
+use account::{Address, NormalAddress, Balance, ContractAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
+use crypto::{Signature, Hash, PublicKey as Pk, SecretKey as Sk};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
@@ -26,7 +26,7 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenContract {
-    owner: Address,
+    owner: NormalAddress,
     code: Vec<u8>,
     default_state: Vec<u8>,
     amount: Balance,
@@ -223,10 +223,6 @@ impl OpenContract {
     }
 
     /// Signs the transaction with the given secret key.
-    ///
-    /// This function will panic if there already exists
-    /// a signature and the address type doesn't match
-    /// the signature type.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data
         let message = assemble_sign_message(&self);
@@ -234,106 +230,17 @@ impl OpenContract {
         // Sign data
         let signature = crypto::sign(&message, &skey);
 
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                if let Address::Normal(_) = self.owner {
-                    let result = Signature::Normal(signature);
-                    self.signature = Some(result);
-                } else {
-                    panic!("Invalid address type");
-                }
-            }
-            Some(Signature::MultiSig(ref mut sig)) => {
-                if let Address::Normal(_) = self.owner {
-                    panic!("Invalid address type");
-                } else {
-                    // Append signature to the multi sig struct
-                    sig.append_sig(signature);
-                }
-            }
-            None => {
-                if let Address::Normal(_) = self.owner {
-                    // Create a normal signature
-                    let result = Signature::Normal(signature);
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                } else {
-                    // Create a multi signature
-                    let result = Signature::MultiSig(MultiSig::from_sig(signature));
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                }
-            }
-        };
+        self.signature = Some(signature);
     }
 
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
-    pub fn verify_sig(&mut self) -> bool {
+    pub fn verify_sig(&self) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(ref sig)) => {
-                if let Address::Normal(ref addr) = self.owner {
-                    crypto::verify(&message, sig.clone(), addr.pkey())
-                } else {
-                    panic!("The address of the signer is not a normal address!");
-                }
-            }
-            Some(Signature::MultiSig(_)) => {
-                panic!("Calling this function on a multi signature transaction is not permitted!");
-            }
-            None => false,
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
-    pub fn verify_multi_sig(&mut self, required_keys: u8, pkeys: &[Pk]) -> bool {
-        if pkeys.len() < required_keys as usize {
-            false
-        } else {
-            let message = assemble_sign_message(&self);
-
-            match self.signature {
-                Some(Signature::Normal(_)) => {
-                    panic!("Calling this function on a transaction with a normal signature is not permitted!");
-                }
-                Some(Signature::MultiSig(ref sig)) => sig.verify(&message, required_keys, pkeys),
-                None => false,
-            }
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(
-        &mut self,
-        required_percentile: u8,
-        share_map: ShareMap,
-    ) -> bool {
-        let message = assemble_sign_message(&self);
-
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                panic!("Calling this function on a transaction with a normal signature is not permitted!");
-            }
-            Some(Signature::MultiSig(ref sig)) => {
-                sig.verify_shares(&message, required_percentile, share_map)
-            }
+            Some(ref sig) => crypto::verify(&message, sig, &self.owner.pkey()),
             None => false,
         }
     }
@@ -345,20 +252,19 @@ impl OpenContract {
     /// 2) Self payable             - 8bits
     /// 3) Amount length            - 8bits
     /// 4) Fee length               - 8bits
-    /// 5) Signature length         - 16bits
-    /// 6) State length             - 16bits
-    /// 7) Code length              - 16bits
-    /// 8) Nonce                    - 64bits
-    /// 9) Owner                    - 33byte binary
-    /// 10) Address                 - 33byte binary
-    /// 11) Currency hash           - 32byte binary
-    /// 12) Fee hash                - 32byte binary
-    /// 13) Hash                    - 32byte binary
-    /// 14) Signature               - Binary of signature length
-    /// 15) Amount                  - Binary of amount length
-    /// 16) Fee                     - Binary of fee length
-    /// 17) Default state           - Binary of state length
-    /// 18) Code                    - Binary of code length
+    /// 5) State length             - 16bits
+    /// 6) Code length              - 16bits
+    /// 7) Nonce                    - 64bits
+    /// 8) Owner                    - 33byte binary
+    /// 9) Address                  - 33byte binary
+    /// 10) Currency hash           - 32byte binary
+    /// 11) Fee hash                - 32byte binary
+    /// 12) Hash                    - 32byte binary
+    /// 13) Signature               - 64byte binary
+    /// 14) Amount                  - Binary of amount length
+    /// 15) Fee                     - Binary of fee length
+    /// 16) Default state           - Binary of state length
+    /// 17) Code                    - Binary of code length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -394,14 +300,12 @@ impl OpenContract {
         let amount_len = amount.len();
         let fee_len = fee.len();
         let code_len = code.len();
-        let signature_len = signature.len();
         let state_len = default_state.len();
 
         buffer.write_u8(tx_type).unwrap();
         buffer.write_u8(self_payable).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
-        buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
         buffer.write_u16::<BigEndian>(state_len as u16).unwrap();
         buffer.write_u16::<BigEndian>(code_len as u16).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
@@ -462,21 +366,13 @@ impl OpenContract {
 
         rdr.set_position(4);
 
-        let signature_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad signature len");
-        };
-
-        rdr.set_position(6);
-
         let state_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
         } else {
             return Err("Bad state len");
         };
 
-        rdr.set_position(8);
+        rdr.set_position(6);
 
         let code_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
@@ -484,7 +380,7 @@ impl OpenContract {
             return Err("Bad code len");
         };
 
-        rdr.set_position(10);
+        rdr.set_position(8);
 
         let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
@@ -494,12 +390,12 @@ impl OpenContract {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..18).collect();
+        let _: Vec<u8> = buf.drain(..16).collect();
 
         let owner = if buf.len() > 33 as usize {
             let owner_vec: Vec<u8> = buf.drain(..33).collect();
 
-            match Address::from_bytes(&owner_vec) {
+            match NormalAddress::from_bytes(&owner_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -551,8 +447,8 @@ impl OpenContract {
             return Err("Incorrect packet structure! Buffer size is smaller than the size for the hash field");
         };
 
-        let signature = if buf.len() > signature_len as usize {
-            let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
 
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,
@@ -724,7 +620,7 @@ mod tests {
         let default_state: Vec<u8> = vec![0x1a, 0xff, 0x22, 0x2a];
 
         let mut tx = OpenContract {
-            owner: Address::Normal(owner_addr.clone()),
+            owner: owner_addr,
             fee: fee.clone(),
             code: code.clone(),
             default_state: default_state.clone(),
@@ -819,7 +715,7 @@ mod tests {
             let id = Identity::new();
 
             let mut tx = OpenContract {
-                owner: Address::normal_from_pkey(*id.pkey()),
+                owner: NormalAddress::from_pkey(*id.pkey()),
                 amount: amount,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,
@@ -836,107 +732,6 @@ mod tests {
             tx.compute_address();
             tx.sign(id.skey().clone());
             tx.verify_sig()
-        }
-
-        fn verify_multi_signature(
-            code: Vec<u8>,
-            default_state: Vec<u8>,
-            self_payable: bool,
-            amount: Balance,
-            fee: Balance,
-            fee_hash: Hash,
-            asset_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let owner_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let mut tx = OpenContract {
-                owner: Address::multi_sig_from_pkeys(&pkeys, *owner_id.pkey(), 4314),
-                amount: amount,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                nonce: 54432,
-                self_payable: self_payable,
-                fee: fee,
-                default_state: default_state,
-                code: code,
-                address: None,
-                signature: None,
-                hash: None
-            };
-
-            tx.compute_address();
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig(10, &pkeys)
-        }
-
-        fn verify_multi_signature_shares(
-            code: Vec<u8>,
-            default_state: Vec<u8>,
-            amount: Balance,
-            asset_hash: Hash,
-            fee: Balance,
-            fee_hash: Hash,
-            self_payable: bool
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let owner_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let addresses: Vec<NormalAddress> = pkeys
-                .iter()
-                .map(|pk| NormalAddress::from_pkey(*pk))
-                .collect();
-
-            let mut share_map = ShareMap::new();
-
-            for addr in addresses.clone() {
-                share_map.add_shareholder(addr, 100);
-            }
-
-            let mut tx = OpenContract {
-                owner: Address::shareholders_from_pkeys(&pkeys, *owner_id.pkey(), 4314),
-                amount: amount,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                nonce: 54432,
-                fee: fee,
-                default_state: default_state,
-                code: code,
-                self_payable: self_payable,
-                address: None,
-                signature: None,
-                hash: None
-            };
-
-            tx.compute_address();
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

@@ -50,7 +50,7 @@ pub struct CreateCurrency {
 }
 
 impl CreateCurrency {
-    pub const TX_TYPE: u8 = 8;
+    pub const TX_TYPE: u8 = 4;
 
     /// Validates the transaction against the provided state.
     pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
@@ -379,10 +379,6 @@ impl CreateCurrency {
     }
 
     /// Signs the transaction with the given secret key.
-    ///
-    /// This function will panic if there already exists
-    /// a signature and the address type doesn't match
-    /// the signature type.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data
         let message = assemble_sign_message(&self);
@@ -400,7 +396,7 @@ impl CreateCurrency {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig.clone(), self.creator.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.creator.pkey()),
             None => false,
         }
     }
@@ -556,8 +552,8 @@ impl CreateCurrency {
             return Err("Incorrect packet structure");
         };
 
-        let signature = if buf.len() > 65 as usize {
-            let sig_vec: Vec<u8> = buf.drain(..65).collect();
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64).collect();
 
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,

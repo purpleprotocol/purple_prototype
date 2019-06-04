@@ -42,7 +42,7 @@ pub struct CreateMintable {
 }
 
 impl CreateMintable {
-    pub const TX_TYPE: u8 = 9;
+    pub const TX_TYPE: u8 = 5;
 
     /// Validates the transaction against the provided state.
     pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
@@ -445,7 +445,7 @@ impl CreateMintable {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig.clone(), self.creator.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.creator.pkey()),
             None => false,
         }
     }
@@ -625,8 +625,8 @@ impl CreateMintable {
             return Err("Incorrect packet structure");
         };
 
-        let signature = if buf.len() > 65 as usize {
-            let sig_vec: Vec<u8> = buf.drain(..65).collect();
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64).collect();
 
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,

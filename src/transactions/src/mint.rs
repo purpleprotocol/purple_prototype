@@ -16,16 +16,16 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, MultiSig, ShareMap, Signature};
+use account::{NormalAddress, Address, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
+use crypto::{Signature, Hash, PublicKey as Pk, SecretKey as Sk};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Mint {
-    minter: Address,
+    minter: NormalAddress,
     receiver: Address,
     amount: Balance,
     asset_hash: Hash,
@@ -38,7 +38,7 @@ pub struct Mint {
 }
 
 impl Mint {
-    pub const TX_TYPE: u8 = 10;
+    pub const TX_TYPE: u8 = 6;
 
     /// Validates the transaction against the provided state.
     pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
@@ -51,7 +51,7 @@ impl Mint {
             return false;
         }
 
-        if !self.validate_signature(minter, signature, trie) {
+        if !self.verify_sig() {
             return false;
         }
 
@@ -294,10 +294,6 @@ impl Mint {
     }
 
     /// Signs the transaction with the given secret key.
-    ///
-    /// This function will panic if there already exists
-    /// a signature and the address type doesn't match
-    /// the signature type.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data
         let message = assemble_sign_message(&self);
@@ -305,106 +301,17 @@ impl Mint {
         // Sign data
         let signature = crypto::sign(&message, &skey);
 
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                if let Address::Normal(_) = self.minter {
-                    let result = Signature::Normal(signature);
-                    self.signature = Some(result);
-                } else {
-                    panic!("Invalid address type");
-                }
-            }
-            Some(Signature::MultiSig(ref mut sig)) => {
-                if let Address::Normal(_) = self.minter {
-                    panic!("Invalid address type");
-                } else {
-                    // Append signature to the multi sig struct
-                    sig.append_sig(signature);
-                }
-            }
-            None => {
-                if let Address::Normal(_) = self.minter {
-                    // Create a normal signature
-                    let result = Signature::Normal(signature);
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                } else {
-                    // Create a multi signature
-                    let result = Signature::MultiSig(MultiSig::from_sig(signature));
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                }
-            }
-        };
+        self.signature = Some(signature);
     }
 
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
-    pub fn verify_sig(&mut self) -> bool {
+    pub fn verify_sig(&self) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(ref sig)) => {
-                if let Address::Normal(ref addr) = self.minter {
-                    crypto::verify(&message, sig.clone(), addr.pkey())
-                } else {
-                    panic!("The address of the signer is not a normal address!");
-                }
-            }
-            Some(Signature::MultiSig(_)) => {
-                panic!("Calling this function on a multi signature transaction is not permitted!");
-            }
-            None => false,
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
-    pub fn verify_multi_sig(&mut self, required_keys: u8, pkeys: &[Pk]) -> bool {
-        if pkeys.len() < required_keys as usize {
-            false
-        } else {
-            let message = assemble_sign_message(&self);
-
-            match self.signature {
-                Some(Signature::Normal(_)) => {
-                    panic!("Calling this function on a transaction with a normal signature is not permitted!");
-                }
-                Some(Signature::MultiSig(ref sig)) => sig.verify(&message, required_keys, pkeys),
-                None => false,
-            }
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(
-        &mut self,
-        required_percentile: u8,
-        share_map: ShareMap,
-    ) -> bool {
-        let message = assemble_sign_message(&self);
-
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                panic!("Calling this function on a transaction with a normal signature is not permitted!");
-            }
-            Some(Signature::MultiSig(ref sig)) => {
-                sig.verify_shares(&message, required_percentile, share_map)
-            }
+            Some(ref sig) => crypto::verify(&message, sig, &self.minter.pkey()),
             None => false,
         }
     }
@@ -421,9 +328,9 @@ impl Mint {
     /// 7) Currency hash            - 32byte binary
     /// 8) Fee hash                 - 32byte binary
     /// 9) Hash                     - 32byte binary
-    /// 10) Amount                  - Binary of amount length
-    /// 11) Fee                     - Binary of fee length
-    /// 12) Signature               - Binary of signature length
+    /// 10) Signature               - 64byte binary
+    /// 11) Amount                  - Binary of amount length
+    /// 12) Fee                     - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -461,9 +368,9 @@ impl Mint {
         buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
+        buffer.append(&mut signature);
         buffer.append(&mut amount.to_vec());
         buffer.append(&mut fee.to_vec());
-        buffer.append(&mut signature);
 
         Ok(buffer)
     }
@@ -511,7 +418,7 @@ impl Mint {
         let minter = if buf.len() > 33 as usize {
             let minter_vec: Vec<u8> = buf.drain(..33).collect();
 
-            match Address::from_bytes(&minter_vec) {
+            match NormalAddress::from_bytes(&minter_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -563,6 +470,17 @@ impl Mint {
             return Err("Incorrect packet structure");
         };
 
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
+
+            match Signature::from_bytes(&sig_vec) {
+                Ok(sig) => sig,
+                Err(err) => return Err(err),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
         let amount = if buf.len() > amount_len as usize {
             let amount_vec: Vec<u8> = buf.drain(..amount_len as usize).collect();
 
@@ -574,23 +492,12 @@ impl Mint {
             return Err("Incorrect packet structure");
         };
 
-        let fee = if buf.len() > fee_len as usize {
+        let fee = if buf.len() == fee_len as usize {
             let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
 
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
                 Err(_) => return Err("Bad fee"),
-            }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let signature = if buf.len() == signature_len as usize {
-            let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
-
-            match Signature::from_bytes(&sig_vec) {
-                Ok(sig) => sig,
-                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -616,7 +523,6 @@ impl Mint {
     }
 
     impl_hash!();
-    impl_validate_signature!();
 }
 
 fn assemble_hash_message(obj: &Mint) -> Vec<u8> {
@@ -698,6 +604,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -729,7 +636,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -752,6 +659,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -783,7 +691,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -806,6 +714,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -837,7 +746,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"0.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -860,6 +769,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -872,7 +782,7 @@ mod tests {
         test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"10.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -895,6 +805,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -924,7 +835,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"10.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -947,6 +858,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -978,7 +890,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -1040,6 +952,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -1071,7 +984,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: minter_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -1133,6 +1046,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -1164,7 +1078,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: minter_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -1237,7 +1151,7 @@ mod tests {
             let id = Identity::new();
 
             let mut tx = Mint {
-                minter: Address::normal_from_pkey(*id.pkey()),
+                minter: NormalAddress::from_pkey(*id.pkey()),
                 receiver: receiver,
                 amount: amount,
                 fee: fee,
@@ -1249,91 +1163,6 @@ mod tests {
 
             tx.sign(id.skey().clone());
             tx.verify_sig()
-        }
-
-        fn verify_multi_signature(
-            receiver: Address,
-            amount: Balance,
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let mut tx = Mint {
-                minter: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                receiver: receiver,
-                amount: amount,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig(10, &pkeys)
-        }
-
-        fn verify_multi_signature_shares(
-            receiver: Address,
-            amount: Balance,
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let addresses: Vec<NormalAddress> = pkeys
-                .iter()
-                .map(|pk| NormalAddress::from_pkey(*pk))
-                .collect();
-
-            let mut share_map = ShareMap::new();
-
-            for addr in addresses.clone() {
-                share_map.add_shareholder(addr, 100);
-            }
-
-            let mut tx = Mint {
-                minter: Address::shareholders_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                receiver: receiver,
-                amount: amount,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

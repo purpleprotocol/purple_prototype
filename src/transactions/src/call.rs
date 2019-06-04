@@ -16,16 +16,16 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, ContractAddress, MultiSig, ShareMap, Signature};
+use account::{NormalAddress, Address, Balance, ContractAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
+use crypto::{Hash, Signature, PublicKey as Pk, SecretKey as Sk};
 use purple_vm::Gas;
 use std::io::Cursor;
 use std::str;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Call {
-    from: Address,
+    from: NormalAddress,
     to: ContractAddress,
     inputs: String, // TODO: Change to contract inputs type
     amount: Balance,
@@ -54,106 +54,18 @@ impl Call {
 
         // Sign data
         let signature = crypto::sign(&message, &skey);
-
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                if let Address::Normal(_) = self.from {
-                    let result = Signature::Normal(signature);
-                    self.signature = Some(result);
-                } else {
-                    panic!("Invalid address type");
-                }
-            }
-            Some(Signature::MultiSig(ref mut sig)) => {
-                if let Address::Normal(_) = self.from {
-                    panic!("Invalid address type");
-                } else {
-                    // Append signature to the multi sig struct
-                    sig.append_sig(signature);
-                }
-            }
-            None => {
-                if let Address::Normal(_) = self.from {
-                    // Create a normal signature
-                    let result = Signature::Normal(signature);
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                } else {
-                    // Create a multi signature
-                    let result = Signature::MultiSig(MultiSig::from_sig(signature));
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                }
-            }
-        };
+        self.signature = Some(signature);
     }
 
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
     pub fn verify_sig(&mut self) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(ref sig)) => {
-                if let Address::Normal(ref addr) = self.from {
-                    crypto::verify(&message, sig.clone(), addr.pkey())
-                } else {
-                    panic!("The address of the signer is not a normal address!");
-                }
-            }
-            Some(Signature::MultiSig(_)) => {
-                panic!("Calling this function on a multi signature transaction is not permitted!");
-            }
-            None => false,
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
-    pub fn verify_multi_sig(&mut self, required_keys: u8, pkeys: &[Pk]) -> bool {
-        if pkeys.len() < required_keys as usize {
-            false
-        } else {
-            let message = assemble_sign_message(&self);
-
-            match self.signature {
-                Some(Signature::Normal(_)) => {
-                    panic!("Calling this function on a transaction with a normal signature is not permitted!");
-                }
-                Some(Signature::MultiSig(ref sig)) => sig.verify(&message, required_keys, pkeys),
-                None => false,
-            }
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(
-        &mut self,
-        required_percentile: u8,
-        share_map: ShareMap,
-    ) -> bool {
-        let message = assemble_sign_message(&self);
-
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                panic!("Calling this function on a transaction with a normal signature is not permitted!");
-            }
-            Some(Signature::MultiSig(ref sig)) => {
-                sig.verify_shares(&message, required_percentile, share_map)
+            Some(ref sig) => {
+                crypto::verify(&message, sig, &self.from.pkey())
             }
             None => false,
         }
@@ -167,18 +79,17 @@ impl Call {
     /// 3) Gas price length     - 8bits
     /// 4) Amount length        - 8bits
     /// 5) Fee length           - 8bits
-    /// 6) Signature length     - 16bits
-    /// 7) Inputs length        - 16bits
-    /// 8) From                 - 33byte binary
-    /// 9) To                   - 33byte binary
-    /// 10) Currency hash       - 32byte binary
-    /// 11) Fee hash            - 32byte binary
-    /// 12) Hash                - 32byte binary
-    /// 13) Signature           - Binary of signature length
-    /// 14) Gas price           - Binary of gas price length
-    /// 15) Amount              - Binary of amount length
-    /// 16) Fee                 - Binary of fee length
-    /// 17) Inputs              - Binary of inputs length
+    /// 6) Inputs length        - 16bits
+    /// 7) From                 - 33byte binary
+    /// 8) To                   - 33byte binary
+    /// 9) Currency hash        - 32byte binary
+    /// 10) Fee hash            - 32byte binary
+    /// 11) Hash                - 32byte binary
+    /// 12) Signature           - 64byte binary
+    /// 13) Gas price           - Binary of gas price length
+    /// 14) Amount              - Binary of amount length
+    /// 15) Fee                 - Binary of fee length
+    /// 16) Inputs              - Binary of inputs length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -217,7 +128,6 @@ impl Call {
         buffer.write_u8(gas_price_len as u8).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
-        buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
         buffer.write_u16::<BigEndian>(inputs_len as u16).unwrap();
 
         buffer.append(&mut from.to_vec());
@@ -281,14 +191,6 @@ impl Call {
 
         rdr.set_position(5);
 
-        let signature_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad signature len");
-        };
-
-        rdr.set_position(7);
-
         let inputs_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
         } else {
@@ -297,12 +199,12 @@ impl Call {
 
         // Consume cursor
         let mut buf = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..9).collect();
+        let _: Vec<u8> = buf.drain(..7).collect();
 
         let from = if buf.len() > 33 as usize {
             let from_vec: Vec<u8> = buf.drain(..33).collect();
 
-            match Address::from_bytes(&from_vec) {
+            match NormalAddress::from_bytes(&from_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -354,8 +256,8 @@ impl Call {
             return Err("Incorrect packet structure");
         };
 
-        let signature = if buf.len() > signature_len as usize {
-            let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
 
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,
@@ -552,7 +454,7 @@ mod tests {
             let id = Identity::new();
 
             let mut tx = Call {
-                from: Address::normal_from_pkey(*id.pkey()),
+                from: NormalAddress::from_pkey(*id.pkey()),
                 to: to,
                 amount: amount,
                 fee: fee,
@@ -567,103 +469,6 @@ mod tests {
 
             tx.sign(id.skey().clone());
             tx.verify_sig()
-        }
-
-        fn verify_multi_signature(
-            to: ContractAddress,
-            amount: Balance,
-            fee: Balance,
-            inputs: String,
-            gas_price: Balance,
-            gas_limit: Gas,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let mut tx = Call {
-                from: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                to: to,
-                amount: amount,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                gas_price: gas_price,
-                gas_limit: gas_limit,
-                inputs: inputs,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig(10, &pkeys)
-        }
-
-        fn verify_multi_signature_shares(
-            to: ContractAddress,
-            amount: Balance,
-            fee: Balance,
-            inputs: String,
-            gas_price: Balance,
-            gas_limit: Gas,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let addresses: Vec<NormalAddress> = pkeys
-                .iter()
-                .map(|pk| NormalAddress::from_pkey(*pk))
-                .collect();
-
-            let mut share_map = ShareMap::new();
-
-            for addr in addresses.clone() {
-                share_map.add_shareholder(addr, 100);
-            }
-
-            let mut tx = Call {
-                from: Address::shareholders_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                to: to,
-                amount: amount,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                inputs: inputs,
-                gas_price: gas_price,
-                gas_limit: gas_limit,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

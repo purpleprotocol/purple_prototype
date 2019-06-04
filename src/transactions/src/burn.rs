@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, MultiSig, ShareMap, Signature};
+use account::{NormalAddress, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::Hash;
+use crypto::{Signature, Hash};
 use crypto::{PublicKey as Pk, SecretKey as Sk};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
@@ -27,7 +27,7 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Burn {
-    burner: Address,
+    burner: NormalAddress,
     amount: Balance,
     fee: Balance,
     asset_hash: Hash,
@@ -39,7 +39,7 @@ pub struct Burn {
 }
 
 impl Burn {
-    pub const TX_TYPE: u8 = 11;
+    pub const TX_TYPE: u8 = 7;
 
     /// Validates the transaction against the provided state.
     pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
@@ -52,7 +52,7 @@ impl Burn {
             return false;
         }
 
-        if !self.validate_signature(burner, signature, trie) {
+        if !self.verify_sig() {
             return false;
         }
 
@@ -249,106 +249,18 @@ impl Burn {
 
         // Sign data
         let signature = crypto::sign(&message, &skey);
-
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                if let Address::Normal(_) = self.burner {
-                    let result = Signature::Normal(signature);
-                    self.signature = Some(result);
-                } else {
-                    panic!("Invalid address type");
-                }
-            }
-            Some(Signature::MultiSig(ref mut sig)) => {
-                if let Address::Normal(_) = self.burner {
-                    panic!("Invalid address type");
-                } else {
-                    // Append signature to the multi sig struct
-                    sig.append_sig(signature);
-                }
-            }
-            None => {
-                if let Address::Normal(_) = self.burner {
-                    // Create a normal signature
-                    let result = Signature::Normal(signature);
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                } else {
-                    // Create a multi signature
-                    let result = Signature::MultiSig(MultiSig::from_sig(signature));
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                }
-            }
-        };
+        self.signature = Some(signature);
     }
 
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
     pub fn verify_sig(&mut self) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(ref sig)) => {
-                if let Address::Normal(ref addr) = self.burner {
-                    crypto::verify(&message, sig.clone(), addr.pkey())
-                } else {
-                    panic!("The address of the signer is not a normal address!");
-                }
-            }
-            Some(Signature::MultiSig(_)) => {
-                panic!("Calling this function on a multi signature transaction is not permitted!");
-            }
-            None => false,
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
-    pub fn verify_multi_sig(&mut self, required_keys: u8, pkeys: &[Pk]) -> bool {
-        if pkeys.len() < required_keys as usize {
-            false
-        } else {
-            let message = assemble_sign_message(&self);
-
-            match self.signature {
-                Some(Signature::Normal(_)) => {
-                    panic!("Calling this function on a transaction with a normal signature is not permitted!");
-                }
-                Some(Signature::MultiSig(ref sig)) => sig.verify(&message, required_keys, pkeys),
-                None => false,
-            }
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(
-        &mut self,
-        required_percentile: u8,
-        share_map: ShareMap,
-    ) -> bool {
-        let message = assemble_sign_message(&self);
-
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                panic!("Calling this function on a transaction with a normal signature is not permitted!");
-            }
-            Some(Signature::MultiSig(ref sig)) => {
-                sig.verify_shares(&message, required_percentile, share_map)
+            Some(ref sig) => {
+                crypto::verify(&message, sig, &self.burner.pkey())
             }
             None => false,
         }
@@ -357,14 +269,14 @@ impl Burn {
     /// Serializes the transaction struct to a binary format.
     ///
     /// Fields:
-    /// 1) Transaction type(11) - 8bits
+    /// 1) Transaction type     - 8bits
     /// 2) Fee length           - 8bits
     /// 3) Amount length        - 8bits
-    /// 4) Signature length     - 16bits
-    /// 5) Burner               - 33byte binary
-    /// 6) Currency hash        - 32byte binary
-    /// 7) Fee hash             - 32byte binary
-    /// 8) Hash                 - 32byte binary
+    /// 4) Burner               - 33byte binary
+    /// 5) Currency hash        - 32byte binary
+    /// 6) Fee hash             - 32byte binary
+    /// 7) Hash                 - 32byte binary
+    /// 8) Signature            - 64byte binary
     /// 9) Amount               - Binary of amount length
     /// 10) Fee                 - Binary of fee length
     /// 11) Signature           - Binary of signature length
@@ -397,15 +309,14 @@ impl Burn {
         buffer.write_u8(tx_type).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
-        buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
 
         buffer.append(&mut burner.to_vec());
         buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
+        buffer.append(&mut signature);
         buffer.append(&mut amount.to_vec());
         buffer.append(&mut fee.to_vec());
-        buffer.append(&mut signature);
 
         Ok(buffer)
     }
@@ -438,22 +349,14 @@ impl Burn {
             return Err("Bad amount len");
         };
 
-        rdr.set_position(3);
-
-        let signature_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad signature len");
-        };
-
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..5).collect();
+        let _: Vec<u8> = buf.drain(..3).collect();
 
         let burner = if buf.len() > 33 as usize {
             let burner_vec: Vec<u8> = buf.drain(..33).collect();
 
-            match Address::from_bytes(&burner_vec) {
+            match NormalAddress::from_bytes(&burner_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -494,6 +397,17 @@ impl Burn {
             return Err("Incorrect packet structure");
         };
 
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
+
+            match Signature::from_bytes(&sig_vec) {
+                Ok(sig) => sig,
+                Err(_) => return Err("Bad signature"),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
         let amount = if buf.len() > amount_len as usize {
             let amount_vec: Vec<u8> = buf.drain(..amount_len as usize).collect();
 
@@ -505,23 +419,12 @@ impl Burn {
             return Err("Incorrect packet structure");
         };
 
-        let fee = if buf.len() > fee_len as usize {
+        let fee = if buf.len() == fee_len as usize {
             let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
 
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
                 Err(_) => return Err("Bad gas price"),
-            }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let signature = if buf.len() == signature_len as usize {
-            let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
-
-            match Signature::from_bytes(&sig_vec) {
-                Ok(sig) => sig,
-                Err(_) => return Err("Bad signature"),
             }
         } else {
             return Err("Incorrect packet structure");
@@ -546,7 +449,6 @@ impl Burn {
     }
 
     impl_hash!();
-    impl_validate_signature!();
 }
 
 fn assemble_hash_message(obj: &Burn) -> Vec<u8> {
@@ -613,13 +515,13 @@ mod tests {
     extern crate test_helpers;
 
     use super::*;
-    use account::NormalAddress;
+    use account::{Address, NormalAddress};
     use crypto::Identity;
 
     #[test]
     fn validate() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -627,7 +529,7 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -651,7 +553,7 @@ mod tests {
     #[test]
     fn validate_no_funds() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -659,7 +561,7 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -683,7 +585,7 @@ mod tests {
     #[test]
     fn validate_different_currencies() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -692,8 +594,8 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), fee_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -717,7 +619,7 @@ mod tests {
     #[test]
     fn validate_no_funds_different_currencies() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -726,8 +628,8 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10.0");
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), fee_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -751,7 +653,7 @@ mod tests {
     #[test]
     fn validate_no_funds_for_fee_different_currencies() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -760,8 +662,8 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10.0");
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), fee_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"5.0").unwrap();
         let fee = Balance::from_bytes(b"20.0").unwrap();
@@ -785,7 +687,7 @@ mod tests {
     #[test]
     fn validate_zero() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -793,7 +695,7 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"0.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -817,7 +719,7 @@ mod tests {
     #[test]
     fn apply_it_burns_coins() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -825,7 +727,7 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -894,7 +796,7 @@ mod tests {
 
         fn verify_signature(id: Identity, amount: Balance, fee: Balance, asset_hash: Hash, fee_hash: Hash) -> bool {
             let mut tx = Burn {
-                burner: Address::normal_from_pkey(*id.pkey()),
+                burner: NormalAddress::from_pkey(*id.pkey()),
                 amount: amount,
                 fee: fee,
                 asset_hash: asset_hash,
@@ -905,87 +807,6 @@ mod tests {
 
             tx.sign(id.skey().clone());
             tx.verify_sig()
-        }
-
-        fn verify_multi_signature(
-            amount: Balance,
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let mut tx = Burn {
-                burner: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                amount: amount,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig(10, &pkeys)
-        }
-
-        fn verify_multi_signature_shares(
-            amount: Balance,
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let addresses: Vec<NormalAddress> = pkeys
-                .iter()
-                .map(|pk| NormalAddress::from_pkey(*pk))
-                .collect();
-
-            let mut share_map = ShareMap::new();
-
-            for addr in addresses.clone() {
-                share_map.add_shareholder(addr, 100);
-            }
-
-            let mut tx = Burn {
-                burner: Address::shareholders_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                amount: amount,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

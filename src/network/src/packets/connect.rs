@@ -62,7 +62,7 @@ impl Packet for Connect {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig.clone(), self.node_id),
+            Some(ref sig) => crypto::verify(&message, sig, &self.node_id),
             None => false,
         }
     }

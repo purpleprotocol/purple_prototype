@@ -232,8 +232,6 @@ impl<B: Block> Chain<B> {
 
         if let Some(new_tip) = self.db.get(block_hash) {
             let new_tip = B::from_bytes(&new_tip).unwrap();
-
-            // TODO: Make writes and deletes atomic
             let mut current = self.canonical_tip.clone();
             let mut inverse_height = 1;
 
@@ -309,6 +307,9 @@ impl<B: Block> Chain<B> {
             self.height = new_tip.height();
             self.write_canonical_height(new_tip.height());
             self.canonical_tip = new_tip;
+            
+            // Flush changes
+            self.db.flush();
 
             Ok(())
         } else {

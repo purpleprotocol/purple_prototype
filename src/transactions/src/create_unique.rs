@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, MultiSig, ShareMap, Signature};
+use account::{NormalAddress, Address, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
+use crypto::{Hash, Signature, PublicKey as Pk, SecretKey as Sk};
 
 pub const ASSET_NAME_SIZE: usize = 32;
 pub const META_FIELD_SIZE: usize = 32;
@@ -26,7 +26,7 @@ pub const META_FIELD_SIZE: usize = 32;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateUnique {
     /// The asset creator's address
-    pub creator: Address,
+    pub creator: NormalAddress,
 
     /// The receiver of the asset
     pub receiver: Address,
@@ -57,13 +57,9 @@ pub struct CreateUnique {
 }
 
 impl CreateUnique {
-    pub const TX_TYPE: u8 = 12;
+    pub const TX_TYPE: u8 = 9;
 
     /// Signs the transaction with the given secret key.
-    ///
-    /// This function will panic if there already exists
-    /// a signature and the address type doesn't match
-    /// the signature type.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data
         let message = assemble_sign_message(&self);
@@ -71,106 +67,17 @@ impl CreateUnique {
         // Sign data
         let signature = crypto::sign(&message, &skey);
 
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                if let Address::Normal(_) = self.creator {
-                    let result = Signature::Normal(signature);
-                    self.signature = Some(result);
-                } else {
-                    panic!("Invalid address type");
-                }
-            }
-            Some(Signature::MultiSig(ref mut sig)) => {
-                if let Address::Normal(_) = self.creator {
-                    panic!("Invalid address type");
-                } else {
-                    // Append signature to the multi sig struct
-                    sig.append_sig(signature);
-                }
-            }
-            None => {
-                if let Address::Normal(_) = self.creator {
-                    // Create a normal signature
-                    let result = Signature::Normal(signature);
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                } else {
-                    // Create a multi signature
-                    let result = Signature::MultiSig(MultiSig::from_sig(signature));
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                }
-            }
-        };
+        self.signature = Some(signature);
     }
 
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
-    pub fn verify_sig(&mut self) -> bool {
+    pub fn verify_sig(&self) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(ref sig)) => {
-                if let Address::Normal(ref addr) = self.creator {
-                    crypto::verify(&message, sig.clone(), addr.pkey())
-                } else {
-                    panic!("The address of the signer is not a normal address!");
-                }
-            }
-            Some(Signature::MultiSig(_)) => {
-                panic!("Calling this function on a multi signature transaction is not permitted!");
-            }
-            None => false,
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
-    pub fn verify_multi_sig(&mut self, required_keys: u8, pkeys: &[Pk]) -> bool {
-        if pkeys.len() < required_keys as usize {
-            false
-        } else {
-            let message = assemble_sign_message(&self);
-
-            match self.signature {
-                Some(Signature::Normal(_)) => {
-                    panic!("Calling this function on a transaction with a normal signature is not permitted!");
-                }
-                Some(Signature::MultiSig(ref sig)) => sig.verify(&message, required_keys, pkeys),
-                None => false,
-            }
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(
-        &mut self,
-        required_percentile: u8,
-        share_map: ShareMap,
-    ) -> bool {
-        let message = assemble_sign_message(&self);
-
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                panic!("Calling this function on a transaction with a normal signature is not permitted!");
-            }
-            Some(Signature::MultiSig(ref sig)) => {
-                sig.verify_shares(&message, required_percentile, share_map)
-            }
+            Some(ref sig) => crypto::verify(&message, sig, &self.creator.pkey()),
             None => false,
         }
     }
@@ -407,7 +314,7 @@ mod tests {
             };
 
             let mut tx = CreateUnique {
-                creator: Address::normal_from_pkey(*id.pkey()),
+                creator: NormalAddress::from_pkey(*id.pkey()),
                 receiver: receiver,
                 name: name.0,
                 meta1: meta1,
@@ -424,179 +331,6 @@ mod tests {
 
             tx.sign(id.skey().clone());
             tx.verify_sig()
-        }
-
-        fn verify_multi_signature(
-            receiver: Address,
-            name: Array32,
-            meta: (Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>),
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let (
-                meta1,
-                meta2,
-                meta3,
-                meta4,
-                meta5
-            ) = meta;
-
-            let meta1 = if let Some(Array32(result)) = meta1 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta2 = if let Some(Array32(result)) = meta2 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta3 = if let Some(Array32(result)) = meta3 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta4 = if let Some(Array32(result)) = meta4 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta5 = if let Some(Array32(result)) = meta5 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let mut tx = CreateUnique {
-                creator: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                receiver: receiver,
-                name: name.0,
-                meta1: meta1,
-                meta2: meta2,
-                meta3: meta3,
-                meta4: meta4,
-                meta5: meta5,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig(10, &pkeys)
-        }
-
-        fn verify_multi_signature_shares(
-            receiver: Address,
-            name: Array32,
-            meta: (Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>),
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let addresses: Vec<NormalAddress> = pkeys
-                .iter()
-                .map(|pk| NormalAddress::from_pkey(*pk))
-                .collect();
-
-            let mut share_map = ShareMap::new();
-
-            for addr in addresses.clone() {
-                share_map.add_shareholder(addr, 100);
-            }
-
-            let (
-                meta1,
-                meta2,
-                meta3,
-                meta4,
-                meta5
-            ) = meta;
-
-            let meta1 = if let Some(Array32(result)) = meta1 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta2 = if let Some(Array32(result)) = meta2 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta3 = if let Some(Array32(result)) = meta3 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta4 = if let Some(Array32(result)) = meta4 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta5 = if let Some(Array32(result)) = meta5 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let mut tx = CreateUnique {
-                creator: Address::shareholders_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                receiver: receiver,
-                name: name.0,
-                meta1: meta1,
-                meta2: meta2,
-                meta3: meta3,
-                meta4: meta4,
-                meta5: meta5,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

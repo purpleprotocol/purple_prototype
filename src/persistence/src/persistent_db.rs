@@ -78,8 +78,8 @@ impl PersistentDb {
                 // Load all the pending transactions into the DBTransaction
                 for (key, val) in reg.iter() {
                     match val.op {
-                        Operation::Put => match val.clone().val {
-                            Some(value) => tx.put(self.cf, &key, &value),
+                        Operation::Put => match val.val {
+                            Some(ref value) => tx.put(self.cf, &key, value),
                             None => {
                                 panic!("Tried to do an insert operation without providing value")
                             }
@@ -89,7 +89,7 @@ impl PersistentDb {
                 }
 
                 // Commit the transactions
-                db_ref.write(tx.clone()).unwrap()
+                db_ref.write(tx).unwrap()
             }
             (Some(_db_ref), None) => {
                 warn!("Unnecessarily called flush before doing any transaction")
@@ -106,8 +106,8 @@ impl PersistentDb {
 
     /// Clears the added transactions
     pub fn wipe(&mut self) {
-        if let Some(_db_ref) = &self.db_ref {
-            self.reg = Some(HashMap::new());
+        if let Some(ref mut reg) = self.reg {
+            reg.clear();
         }
     }
 
@@ -138,7 +138,7 @@ impl PersistentDb {
                 // A registry exists, need to check the value from there
                 match reg.get(&key.to_vec()) {
                     Some(res) => match res.op {
-                        Operation::Put => res.clone().val,
+                        Operation::Put => res.val.as_ref().cloned(),
                         Operation::Remove => None,
                     },
                     None => match db_ref.get(self.cf, &key) {
@@ -175,10 +175,6 @@ impl PersistentDb {
         if let Some(_db_ref) = &self.db_ref {
             if self.reg.is_none() {
                 self.reg = Some(HashMap::new());
-
-                if self.reg.is_none() {
-                    panic!("The registry couldn't be created");
-                }
             }
 
             // Add the pending insert to the registry HashMap
@@ -203,10 +199,6 @@ impl PersistentDb {
         if let Some(_db_ref) = &self.db_ref {
             if self.reg.is_none() {
                 self.reg = Some(HashMap::new());
-
-                if self.reg.is_none() {
-                    panic!("The registry couldn't be created");
-                }
             }
 
             // Add the pending delete to the registry HashMap
