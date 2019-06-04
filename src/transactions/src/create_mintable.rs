@@ -42,7 +42,7 @@ pub struct CreateMintable {
 }
 
 impl CreateMintable {
-    pub const TX_TYPE: u8 = 9;
+    pub const TX_TYPE: u8 = 5;
 
     /// Validates the transaction against the provided state.
     pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {

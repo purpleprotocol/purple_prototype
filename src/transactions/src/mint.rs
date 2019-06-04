@@ -38,7 +38,7 @@ pub struct Mint {
 }
 
 impl Mint {
-    pub const TX_TYPE: u8 = 10;
+    pub const TX_TYPE: u8 = 6;
 
     /// Validates the transaction against the provided state.
     pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {

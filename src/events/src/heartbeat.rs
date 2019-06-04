@@ -300,38 +300,6 @@ impl Heartbeat {
                             Ok(Box::new(Tx::Send(deserialized)))
                         }
                         4 => {
-                            let deserialized = match Pay::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid pay transaction"),
-                            };
-
-                            Ok(Box::new(Tx::Pay(deserialized)))
-                        }
-                        5 => {
-                            let deserialized = match OpenMultiSig::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid open multi signature transaction"),
-                            };
-
-                            Ok(Box::new(Tx::OpenMultiSig(deserialized)))
-                        }
-                        6 => {
-                            let deserialized = match OpenShares::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid shares transaction"),
-                            };
-
-                            Ok(Box::new(Tx::OpenShares(deserialized)))
-                        }
-                        7 => {
-                            let deserialized = match IssueShares::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid create currency transaction"),
-                            };
-
-                            Ok(Box::new(Tx::IssueShares(deserialized)))
-                        }
-                        8 => {
                             let deserialized = match CreateCurrency::from_bytes(&tx) {
                                 Ok(result) => result,
                                 Err(_) => return Err("Invalid create currency transaction"),
@@ -339,7 +307,7 @@ impl Heartbeat {
 
                             Ok(Box::new(Tx::CreateCurrency(deserialized)))
                         }
-                        9 => {
+                        5 => {
                             let deserialized = match CreateMintable::from_bytes(&tx) {
                                 Ok(result) => result,
                                 Err(_) => return Err("Invalid create mintable transaction"),
@@ -347,7 +315,7 @@ impl Heartbeat {
 
                             Ok(Box::new(Tx::CreateMintable(deserialized)))
                         }
-                        10 => {
+                        6 => {
                             let deserialized = match Mint::from_bytes(&tx) {
                                 Ok(result) => result,
                                 Err(_) => return Err("Invalid mint transaction"),
@@ -355,7 +323,7 @@ impl Heartbeat {
 
                             Ok(Box::new(Tx::Mint(deserialized)))
                         }
-                        11 => {
+                        7 => {
                             let deserialized = match Burn::from_bytes(&tx) {
                                 Ok(result) => result,
                                 Err(_) => return Err("Invalid burn transaction"),

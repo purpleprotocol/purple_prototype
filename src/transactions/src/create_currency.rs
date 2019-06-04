@@ -50,7 +50,7 @@ pub struct CreateCurrency {
 }
 
 impl CreateCurrency {
-    pub const TX_TYPE: u8 = 8;
+    pub const TX_TYPE: u8 = 4;
 
     /// Validates the transaction against the provided state.
     pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {

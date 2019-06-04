@@ -39,7 +39,7 @@ pub struct Burn {
 }
 
 impl Burn {
-    pub const TX_TYPE: u8 = 11;
+    pub const TX_TYPE: u8 = 7;
 
     /// Validates the transaction against the provided state.
     pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
