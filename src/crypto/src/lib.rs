@@ -56,8 +56,8 @@ pub fn sign(message: &[u8], skey: &SecretKey) -> Signature {
     Signature::new(&sig.0)
 }
 
-pub fn verify(message: &[u8], signature: Signature, pkey: PublicKey) -> bool {
-    verify_detached(&signature.inner(), message, &pkey)
+pub fn verify(message: &[u8], signature: &Signature, pkey: &PublicKey) -> bool {
+    verify_detached(&signature.inner(), message, pkey)
 }
 
 #[derive(Clone, Debug)]

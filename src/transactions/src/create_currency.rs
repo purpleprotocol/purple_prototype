@@ -379,10 +379,6 @@ impl CreateCurrency {
     }
 
     /// Signs the transaction with the given secret key.
-    ///
-    /// This function will panic if there already exists
-    /// a signature and the address type doesn't match
-    /// the signature type.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data
         let message = assemble_sign_message(&self);
@@ -400,7 +396,7 @@ impl CreateCurrency {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig.clone(), self.creator.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.creator.pkey()),
             None => false,
         }
     }

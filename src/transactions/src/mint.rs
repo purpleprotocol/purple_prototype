@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, MultiSig, ShareMap, Signature};
+use account::{Address, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, PublicKey as Pk, SecretKey as Sk};
+use crypto::{Signature, Hash, PublicKey as Pk, SecretKey as Sk};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
@@ -294,10 +294,6 @@ impl Mint {
     }
 
     /// Signs the transaction with the given secret key.
-    ///
-    /// This function will panic if there already exists
-    /// a signature and the address type doesn't match
-    /// the signature type.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data
         let message = assemble_sign_message(&self);
@@ -305,106 +301,17 @@ impl Mint {
         // Sign data
         let signature = crypto::sign(&message, &skey);
 
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                if let Address::Normal(_) = self.minter {
-                    let result = Signature::Normal(signature);
-                    self.signature = Some(result);
-                } else {
-                    panic!("Invalid address type");
-                }
-            }
-            Some(Signature::MultiSig(ref mut sig)) => {
-                if let Address::Normal(_) = self.minter {
-                    panic!("Invalid address type");
-                } else {
-                    // Append signature to the multi sig struct
-                    sig.append_sig(signature);
-                }
-            }
-            None => {
-                if let Address::Normal(_) = self.minter {
-                    // Create a normal signature
-                    let result = Signature::Normal(signature);
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                } else {
-                    // Create a multi signature
-                    let result = Signature::MultiSig(MultiSig::from_sig(signature));
-
-                    // Attach signature to struct
-                    self.signature = Some(result);
-                }
-            }
-        };
+        self.signature = Some(signature);
     }
 
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
-    pub fn verify_sig(&mut self) -> bool {
+    pub fn verify_sig(&self) -> bool {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(Signature::Normal(ref sig)) => {
-                if let Address::Normal(ref addr) = self.minter {
-                    crypto::verify(&message, sig.clone(), addr.pkey())
-                } else {
-                    panic!("The address of the signer is not a normal address!");
-                }
-            }
-            Some(Signature::MultiSig(_)) => {
-                panic!("Calling this function on a multi signature transaction is not permitted!");
-            }
-            None => false,
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    ///
-    /// This function panics if the transaction has a multi
-    /// signature attached to it or if the signer's address
-    /// is not a normal address.
-    pub fn verify_multi_sig(&mut self, required_keys: u8, pkeys: &[Pk]) -> bool {
-        if pkeys.len() < required_keys as usize {
-            false
-        } else {
-            let message = assemble_sign_message(&self);
-
-            match self.signature {
-                Some(Signature::Normal(_)) => {
-                    panic!("Calling this function on a transaction with a normal signature is not permitted!");
-                }
-                Some(Signature::MultiSig(ref sig)) => sig.verify(&message, required_keys, pkeys),
-                None => false,
-            }
-        }
-    }
-
-    /// Verifies the multi signature of the transaction.
-    ///
-    /// Returns `false` if the signature field is missing.
-    pub fn verify_multi_sig_shares(
-        &mut self,
-        required_percentile: u8,
-        share_map: ShareMap,
-    ) -> bool {
-        let message = assemble_sign_message(&self);
-
-        match self.signature {
-            Some(Signature::Normal(_)) => {
-                panic!("Calling this function on a transaction with a normal signature is not permitted!");
-            }
-            Some(Signature::MultiSig(ref sig)) => {
-                sig.verify_shares(&message, required_percentile, share_map)
-            }
+            Some(ref sig) => crypto::verify(&message, sig, &self.minter.pkey()),
             None => false,
         }
     }

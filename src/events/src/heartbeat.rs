@@ -330,7 +330,23 @@ impl Heartbeat {
                             };
 
                             Ok(Box::new(Tx::Burn(deserialized)))
-                        }
+                        },
+                        8 => {
+                            let deserialized = match ChangeMinter::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_) => return Err("Invalid `ChangeMinter` transaction"),
+                            };
+
+                            Ok(Box::new(Tx::ChangeMinter(deserialized)))
+                        },
+                        9 => {
+                            let deserialized = match CreateUnique::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_) => return Err("Invalid `CreateUnique` transaction"),
+                            };
+
+                            Ok(Box::new(Tx::CreateUnique(deserialized)))
+                        },
                         _ => return Err("Bad transaction type"),
                     }
                 })
