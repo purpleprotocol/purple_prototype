@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, ContractAddress};
+use account::{NormalAddress, Address, Balance, ContractAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature, PublicKey as Pk, SecretKey as Sk};
 use purple_vm::Gas;
@@ -25,7 +25,7 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Call {
-    from: Address,
+    from: NormalAddress,
     to: ContractAddress,
     inputs: String, // TODO: Change to contract inputs type
     amount: Balance,
@@ -65,7 +65,7 @@ impl Call {
 
         match self.signature {
             Some(ref sig) => {
-                crypto::verify(&message, sig, &addr.pkey())
+                crypto::verify(&message, sig, &self.from.pkey())
             }
             None => false,
         }
@@ -214,7 +214,7 @@ impl Call {
         let from = if buf.len() > 33 as usize {
             let from_vec: Vec<u8> = buf.drain(..33).collect();
 
-            match Address::from_bytes(&from_vec) {
+            match NormalAddress::from_bytes(&from_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -464,7 +464,7 @@ mod tests {
             let id = Identity::new();
 
             let mut tx = Call {
-                from: Address::normal_from_pkey(*id.pkey()),
+                from: NormalAddress::from_pkey(*id.pkey()),
                 to: to,
                 amount: amount,
                 fee: fee,
@@ -479,103 +479,6 @@ mod tests {
 
             tx.sign(id.skey().clone());
             tx.verify_sig()
-        }
-
-        fn verify_multi_signature(
-            to: ContractAddress,
-            amount: Balance,
-            fee: Balance,
-            inputs: String,
-            gas_price: Balance,
-            gas_limit: Gas,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let mut tx = Call {
-                from: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                to: to,
-                amount: amount,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                gas_price: gas_price,
-                gas_limit: gas_limit,
-                inputs: inputs,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig(10, &pkeys)
-        }
-
-        fn verify_multi_signature_shares(
-            to: ContractAddress,
-            amount: Balance,
-            fee: Balance,
-            inputs: String,
-            gas_price: Balance,
-            gas_limit: Gas,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let addresses: Vec<NormalAddress> = pkeys
-                .iter()
-                .map(|pk| NormalAddress::from_pkey(*pk))
-                .collect();
-
-            let mut share_map = ShareMap::new();
-
-            for addr in addresses.clone() {
-                share_map.add_shareholder(addr, 100);
-            }
-
-            let mut tx = Call {
-                from: Address::shareholders_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                to: to,
-                amount: amount,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                inputs: inputs,
-                gas_price: gas_price,
-                gas_limit: gas_limit,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

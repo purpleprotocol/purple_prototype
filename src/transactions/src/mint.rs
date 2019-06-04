@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance};
+use account::{NormalAddress, Address, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Signature, Hash, PublicKey as Pk, SecretKey as Sk};
 use patricia_trie::{TrieDBMut, TrieMut};
@@ -25,7 +25,7 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Mint {
-    minter: Address,
+    minter: NormalAddress,
     receiver: Address,
     amount: Balance,
     asset_hash: Hash,
@@ -51,7 +51,7 @@ impl Mint {
             return false;
         }
 
-        if !self.validate_signature(minter, signature, trie) {
+        if !self.verify_sig() {
             return false;
         }
 
@@ -418,7 +418,7 @@ impl Mint {
         let minter = if buf.len() > 33 as usize {
             let minter_vec: Vec<u8> = buf.drain(..33).collect();
 
-            match Address::from_bytes(&minter_vec) {
+            match NormalAddress::from_bytes(&minter_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -523,7 +523,6 @@ impl Mint {
     }
 
     impl_hash!();
-    impl_validate_signature!();
 }
 
 fn assemble_hash_message(obj: &Mint) -> Vec<u8> {
@@ -605,6 +604,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -636,7 +636,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -659,6 +659,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -690,7 +691,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -713,6 +714,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -744,7 +746,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"0.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -767,6 +769,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -779,7 +782,7 @@ mod tests {
         test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"10.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -802,6 +805,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -831,7 +835,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"10.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -854,6 +858,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -885,7 +890,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: creator_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -947,6 +952,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -978,7 +984,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: minter_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -1040,6 +1046,7 @@ mod tests {
         let creator_addr = Address::normal_from_pkey(*id.pkey());
         let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -1071,7 +1078,7 @@ mod tests {
         create_mintable.apply(&mut trie);
 
         let mut tx = Mint {
-            minter: minter_addr,
+            minter: minter_norm_addr,
             receiver: minter_addr,
             amount: Balance::from_bytes(b"100.0").unwrap(),
             fee: Balance::from_bytes(b"10.0").unwrap(),
@@ -1144,7 +1151,7 @@ mod tests {
             let id = Identity::new();
 
             let mut tx = Mint {
-                minter: Address::normal_from_pkey(*id.pkey()),
+                minter: NormalAddress::from_pkey(*id.pkey()),
                 receiver: receiver,
                 amount: amount,
                 fee: fee,
@@ -1156,91 +1163,6 @@ mod tests {
 
             tx.sign(id.skey().clone());
             tx.verify_sig()
-        }
-
-        fn verify_multi_signature(
-            receiver: Address,
-            amount: Balance,
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let mut tx = Mint {
-                minter: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                receiver: receiver,
-                amount: amount,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig(10, &pkeys)
-        }
-
-        fn verify_multi_signature_shares(
-            receiver: Address,
-            amount: Balance,
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let addresses: Vec<NormalAddress> = pkeys
-                .iter()
-                .map(|pk| NormalAddress::from_pkey(*pk))
-                .collect();
-
-            let mut share_map = ShareMap::new();
-
-            for addr in addresses.clone() {
-                share_map.add_shareholder(addr, 100);
-            }
-
-            let mut tx = Mint {
-                minter: Address::shareholders_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                receiver: receiver,
-                amount: amount,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

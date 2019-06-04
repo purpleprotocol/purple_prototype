@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance};
+use account::{NormalAddress, Address, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, Signature, PublicKey as Pk, SecretKey as Sk};
 
@@ -26,7 +26,7 @@ pub const META_FIELD_SIZE: usize = 32;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateUnique {
     /// The asset creator's address
-    pub creator: Address,
+    pub creator: NormalAddress,
 
     /// The receiver of the asset
     pub receiver: Address,
@@ -77,7 +77,7 @@ impl CreateUnique {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.minter.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.creator.pkey()),
             None => false,
         }
     }
@@ -314,7 +314,7 @@ mod tests {
             };
 
             let mut tx = CreateUnique {
-                creator: Address::normal_from_pkey(*id.pkey()),
+                creator: NormalAddress::from_pkey(*id.pkey()),
                 receiver: receiver,
                 name: name.0,
                 meta1: meta1,
@@ -331,179 +331,6 @@ mod tests {
 
             tx.sign(id.skey().clone());
             tx.verify_sig()
-        }
-
-        fn verify_multi_signature(
-            receiver: Address,
-            name: Array32,
-            meta: (Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>),
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let (
-                meta1,
-                meta2,
-                meta3,
-                meta4,
-                meta5
-            ) = meta;
-
-            let meta1 = if let Some(Array32(result)) = meta1 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta2 = if let Some(Array32(result)) = meta2 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta3 = if let Some(Array32(result)) = meta3 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta4 = if let Some(Array32(result)) = meta4 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta5 = if let Some(Array32(result)) = meta5 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let mut tx = CreateUnique {
-                creator: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                receiver: receiver,
-                name: name.0,
-                meta1: meta1,
-                meta2: meta2,
-                meta3: meta3,
-                meta4: meta4,
-                meta5: meta5,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig(10, &pkeys)
-        }
-
-        fn verify_multi_signature_shares(
-            receiver: Address,
-            name: Array32,
-            meta: (Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>),
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let addresses: Vec<NormalAddress> = pkeys
-                .iter()
-                .map(|pk| NormalAddress::from_pkey(*pk))
-                .collect();
-
-            let mut share_map = ShareMap::new();
-
-            for addr in addresses.clone() {
-                share_map.add_shareholder(addr, 100);
-            }
-
-            let (
-                meta1,
-                meta2,
-                meta3,
-                meta4,
-                meta5
-            ) = meta;
-
-            let meta1 = if let Some(Array32(result)) = meta1 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta2 = if let Some(Array32(result)) = meta2 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta3 = if let Some(Array32(result)) = meta3 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta4 = if let Some(Array32(result)) = meta4 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let meta5 = if let Some(Array32(result)) = meta5 {
-                Some(result)
-            } else {
-                None
-            };
-
-            let mut tx = CreateUnique {
-                creator: Address::shareholders_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                receiver: receiver,
-                name: name.0,
-                meta1: meta1,
-                meta2: meta2,
-                meta3: meta3,
-                meta4: meta4,
-                meta5: meta5,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

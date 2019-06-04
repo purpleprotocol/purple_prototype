@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance, ContractAddress};
+use account::{Address, NormalAddress, Balance, ContractAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Signature, Hash, PublicKey as Pk, SecretKey as Sk};
 use patricia_trie::{TrieDBMut, TrieMut};
@@ -26,7 +26,7 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenContract {
-    owner: Address,
+    owner: NormalAddress,
     code: Vec<u8>,
     default_state: Vec<u8>,
     amount: Balance,
@@ -406,7 +406,7 @@ impl OpenContract {
         let owner = if buf.len() > 33 as usize {
             let owner_vec: Vec<u8> = buf.drain(..33).collect();
 
-            match Address::from_bytes(&owner_vec) {
+            match NormalAddress::from_bytes(&owner_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -631,7 +631,7 @@ mod tests {
         let default_state: Vec<u8> = vec![0x1a, 0xff, 0x22, 0x2a];
 
         let mut tx = OpenContract {
-            owner: Address::Normal(owner_addr.clone()),
+            owner: owner_addr,
             fee: fee.clone(),
             code: code.clone(),
             default_state: default_state.clone(),
@@ -726,7 +726,7 @@ mod tests {
             let id = Identity::new();
 
             let mut tx = OpenContract {
-                owner: Address::normal_from_pkey(*id.pkey()),
+                owner: NormalAddress::from_pkey(*id.pkey()),
                 amount: amount,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,
@@ -743,107 +743,6 @@ mod tests {
             tx.compute_address();
             tx.sign(id.skey().clone());
             tx.verify_sig()
-        }
-
-        fn verify_multi_signature(
-            code: Vec<u8>,
-            default_state: Vec<u8>,
-            self_payable: bool,
-            amount: Balance,
-            fee: Balance,
-            fee_hash: Hash,
-            asset_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let owner_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let mut tx = OpenContract {
-                owner: Address::multi_sig_from_pkeys(&pkeys, *owner_id.pkey(), 4314),
-                amount: amount,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                nonce: 54432,
-                self_payable: self_payable,
-                fee: fee,
-                default_state: default_state,
-                code: code,
-                address: None,
-                signature: None,
-                hash: None
-            };
-
-            tx.compute_address();
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig(10, &pkeys)
-        }
-
-        fn verify_multi_signature_shares(
-            code: Vec<u8>,
-            default_state: Vec<u8>,
-            amount: Balance,
-            asset_hash: Hash,
-            fee: Balance,
-            fee_hash: Hash,
-            self_payable: bool
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let owner_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let addresses: Vec<NormalAddress> = pkeys
-                .iter()
-                .map(|pk| NormalAddress::from_pkey(*pk))
-                .collect();
-
-            let mut share_map = ShareMap::new();
-
-            for addr in addresses.clone() {
-                share_map.add_shareholder(addr, 100);
-            }
-
-            let mut tx = OpenContract {
-                owner: Address::shareholders_from_pkeys(&pkeys, *owner_id.pkey(), 4314),
-                amount: amount,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                nonce: 54432,
-                fee: fee,
-                default_state: default_state,
-                code: code,
-                self_payable: self_payable,
-                address: None,
-                signature: None,
-                hash: None
-            };
-
-            tx.compute_address();
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

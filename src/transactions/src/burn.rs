@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance};
+use account::{NormalAddress, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Signature, Hash};
 use crypto::{PublicKey as Pk, SecretKey as Sk};
@@ -27,7 +27,7 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Burn {
-    burner: Address,
+    burner: NormalAddress,
     amount: Balance,
     fee: Balance,
     asset_hash: Hash,
@@ -52,7 +52,7 @@ impl Burn {
             return false;
         }
 
-        if !self.validate_signature(burner, signature, trie) {
+        if !self.verify_sig() {
             return false;
         }
 
@@ -260,7 +260,7 @@ impl Burn {
 
         match self.signature {
             Some(ref sig) => {
-                crypto::verify(&message, sig, &addr.pkey())
+                crypto::verify(&message, sig, &self.burner.pkey())
             }
             None => false,
         }
@@ -365,7 +365,7 @@ impl Burn {
         let burner = if buf.len() > 33 as usize {
             let burner_vec: Vec<u8> = buf.drain(..33).collect();
 
-            match Address::from_bytes(&burner_vec) {
+            match NormalAddress::from_bytes(&burner_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -458,7 +458,6 @@ impl Burn {
     }
 
     impl_hash!();
-    impl_validate_signature!();
 }
 
 fn assemble_hash_message(obj: &Burn) -> Vec<u8> {
@@ -525,13 +524,13 @@ mod tests {
     extern crate test_helpers;
 
     use super::*;
-    use account::NormalAddress;
+    use account::{Address, NormalAddress};
     use crypto::Identity;
 
     #[test]
     fn validate() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -539,7 +538,7 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -563,7 +562,7 @@ mod tests {
     #[test]
     fn validate_no_funds() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -571,7 +570,7 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -595,7 +594,7 @@ mod tests {
     #[test]
     fn validate_different_currencies() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -604,8 +603,8 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), fee_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -629,7 +628,7 @@ mod tests {
     #[test]
     fn validate_no_funds_different_currencies() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -638,8 +637,8 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10.0");
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), fee_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -663,7 +662,7 @@ mod tests {
     #[test]
     fn validate_no_funds_for_fee_different_currencies() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -672,8 +671,8 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10.0");
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), fee_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), fee_hash, b"10.0");
 
         let amount = Balance::from_bytes(b"5.0").unwrap();
         let fee = Balance::from_bytes(b"20.0").unwrap();
@@ -697,7 +696,7 @@ mod tests {
     #[test]
     fn validate_zero() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -705,7 +704,7 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"0.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -729,7 +728,7 @@ mod tests {
     #[test]
     fn apply_it_burns_coins() {
         let id = Identity::new();
-        let burner_addr = Address::normal_from_pkey(*id.pkey());
+        let burner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -737,7 +736,7 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, burner_addr.clone(), asset_hash, b"10000.0");
+        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -806,7 +805,7 @@ mod tests {
 
         fn verify_signature(id: Identity, amount: Balance, fee: Balance, asset_hash: Hash, fee_hash: Hash) -> bool {
             let mut tx = Burn {
-                burner: Address::normal_from_pkey(*id.pkey()),
+                burner: NormalAddress::from_pkey(*id.pkey()),
                 amount: amount,
                 fee: fee,
                 asset_hash: asset_hash,

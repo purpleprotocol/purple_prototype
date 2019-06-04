@@ -16,14 +16,14 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, Balance};
+use account::{NormalAddress, Address, Balance};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Signature, Hash, PublicKey as Pk, SecretKey as Sk};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ChangeMinter {
     /// The current minter
-    pub minter: Address,
+    pub minter: NormalAddress,
 
     /// The address of the new minter
     pub new_minter: Address,
@@ -65,7 +65,7 @@ impl ChangeMinter {
 
         match self.signature {
             Some(ref sig) => {
-                crypto::verify(&message, sig, &self.miner.pkey())
+                crypto::verify(&message, sig, &self.minter.pkey())
             }
             None => false,
         }
@@ -163,7 +163,7 @@ mod tests {
             let id = Identity::new();
 
             let mut tx = ChangeMinter {
-                minter: Address::normal_from_pkey(*id.pkey()),
+                minter: NormalAddress::from_pkey(*id.pkey()),
                 new_minter: new_minter,
                 fee: fee,
                 asset_hash: asset_hash,
@@ -174,88 +174,6 @@ mod tests {
 
             tx.sign(id.skey().clone());
             tx.verify_sig()
-        }
-
-        fn verify_multi_signature(
-            new_minter: Address,
-            amount: Balance,
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let mut tx = ChangeMinter {
-                minter: Address::multi_sig_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                new_minter: new_minter,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig(10, &pkeys)
-        }
-
-        fn verify_multi_signature_shares(
-            new_minter: Address,
-            fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
-        ) -> bool {
-            let mut ids: Vec<Identity> = (0..30)
-                .into_iter()
-                .map(|_| Identity::new())
-                .collect();
-
-            let creator_id = ids.pop().unwrap();
-            let pkeys: Vec<Pk> = ids
-                .iter()
-                .map(|i| *i.pkey())
-                .collect();
-
-            let addresses: Vec<NormalAddress> = pkeys
-                .iter()
-                .map(|pk| NormalAddress::from_pkey(*pk))
-                .collect();
-
-            let mut share_map = ShareMap::new();
-
-            for addr in addresses.clone() {
-                share_map.add_shareholder(addr, 100);
-            }
-
-            let mut tx = ChangeMinter {
-                minter: Address::shareholders_from_pkeys(&pkeys, *creator_id.pkey(), 4314),
-                new_minter: new_minter,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
-                signature: None,
-                hash: None
-            };
-
-            // Sign using each identity
-            for id in ids {
-                tx.sign(id.skey().clone());
-            }
-
-            tx.verify_multi_sig_shares(10, share_map)
         }
     }
 }

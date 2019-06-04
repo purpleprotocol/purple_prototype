@@ -63,6 +63,8 @@ pub use burn::*;
 pub use call::*;
 pub use create_currency::*;
 pub use create_mintable::*;
+pub use change_minter::*;
+pub use create_unique::*;
 pub use genesis::*;
 pub use mint::*;
 pub use open_contract::*;
