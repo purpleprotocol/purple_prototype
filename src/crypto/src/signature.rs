@@ -20,8 +20,6 @@ use quickcheck::Arbitrary;
 use rand::Rng;
 use rust_sodium::crypto::sign::Signature as PrimitiveSig;
 
-const SIG_TYPE: u8 = 1;
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Signature(PrimitiveSig);
 
@@ -38,35 +36,17 @@ impl Signature {
     }
 
     pub fn inner_bytes(&self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::with_capacity(64);
-        let bytes = &&(&self.0).0;
-
-        for byte in bytes.iter() {
-            result.push(*byte);
-        }
-
-        result
+        (self.0).0.to_vec()
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::with_capacity(65);
-        let bytes = &&(&self.0).0;
-
-        // Push sig type
-        result.push(SIG_TYPE);
-
-        for byte in bytes.iter() {
-            result.push(*byte);
-        }
-
-        result
+        (self.0).0.to_vec()
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<Signature, &'static str> {
-        if bin.len() == 65 {
-            let (_, tail) = bin.split_at(1);
+        if bin.len() == 64 {
             let mut sig = [0; 64];
-            sig.copy_from_slice(tail);
+            sig.copy_from_slice(bin);
 
             Ok(Signature(PrimitiveSig(sig)))
         } else {

@@ -272,11 +272,11 @@ impl Burn {
     /// 1) Transaction type     - 8bits
     /// 2) Fee length           - 8bits
     /// 3) Amount length        - 8bits
-    /// 4) Signature length     - 16bits
-    /// 5) Burner               - 33byte binary
-    /// 6) Currency hash        - 32byte binary
-    /// 7) Fee hash             - 32byte binary
-    /// 8) Hash                 - 32byte binary
+    /// 4) Burner               - 33byte binary
+    /// 5) Currency hash        - 32byte binary
+    /// 6) Fee hash             - 32byte binary
+    /// 7) Hash                 - 32byte binary
+    /// 8) Signature            - 64byte binary
     /// 9) Amount               - Binary of amount length
     /// 10) Fee                 - Binary of fee length
     /// 11) Signature           - Binary of signature length
@@ -309,15 +309,14 @@ impl Burn {
         buffer.write_u8(tx_type).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
-        buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
 
         buffer.append(&mut burner.to_vec());
         buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
+        buffer.append(&mut signature);
         buffer.append(&mut amount.to_vec());
         buffer.append(&mut fee.to_vec());
-        buffer.append(&mut signature);
 
         Ok(buffer)
     }
@@ -350,17 +349,9 @@ impl Burn {
             return Err("Bad amount len");
         };
 
-        rdr.set_position(3);
-
-        let signature_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad signature len");
-        };
-
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..5).collect();
+        let _: Vec<u8> = buf.drain(..3).collect();
 
         let burner = if buf.len() > 33 as usize {
             let burner_vec: Vec<u8> = buf.drain(..33).collect();
@@ -406,6 +397,17 @@ impl Burn {
             return Err("Incorrect packet structure");
         };
 
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
+
+            match Signature::from_bytes(&sig_vec) {
+                Ok(sig) => sig,
+                Err(_) => return Err("Bad signature"),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
         let amount = if buf.len() > amount_len as usize {
             let amount_vec: Vec<u8> = buf.drain(..amount_len as usize).collect();
 
@@ -417,23 +419,12 @@ impl Burn {
             return Err("Incorrect packet structure");
         };
 
-        let fee = if buf.len() > fee_len as usize {
+        let fee = if buf.len() == fee_len as usize {
             let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
 
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
                 Err(_) => return Err("Bad gas price"),
-            }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let signature = if buf.len() == signature_len as usize {
-            let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
-
-            match Signature::from_bytes(&sig_vec) {
-                Ok(sig) => sig,
-                Err(_) => return Err("Bad signature"),
             }
         } else {
             return Err("Incorrect packet structure");

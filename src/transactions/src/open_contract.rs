@@ -252,20 +252,19 @@ impl OpenContract {
     /// 2) Self payable             - 8bits
     /// 3) Amount length            - 8bits
     /// 4) Fee length               - 8bits
-    /// 5) Signature length         - 16bits
-    /// 6) State length             - 16bits
-    /// 7) Code length              - 16bits
-    /// 8) Nonce                    - 64bits
-    /// 9) Owner                    - 33byte binary
-    /// 10) Address                 - 33byte binary
-    /// 11) Currency hash           - 32byte binary
-    /// 12) Fee hash                - 32byte binary
-    /// 13) Hash                    - 32byte binary
-    /// 14) Signature               - Binary of signature length
-    /// 15) Amount                  - Binary of amount length
-    /// 16) Fee                     - Binary of fee length
-    /// 17) Default state           - Binary of state length
-    /// 18) Code                    - Binary of code length
+    /// 5) State length             - 16bits
+    /// 6) Code length              - 16bits
+    /// 7) Nonce                    - 64bits
+    /// 8) Owner                    - 33byte binary
+    /// 9) Address                  - 33byte binary
+    /// 10) Currency hash           - 32byte binary
+    /// 11) Fee hash                - 32byte binary
+    /// 12) Hash                    - 32byte binary
+    /// 13) Signature               - 64byte binary
+    /// 14) Amount                  - Binary of amount length
+    /// 15) Fee                     - Binary of fee length
+    /// 16) Default state           - Binary of state length
+    /// 17) Code                    - Binary of code length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -301,14 +300,12 @@ impl OpenContract {
         let amount_len = amount.len();
         let fee_len = fee.len();
         let code_len = code.len();
-        let signature_len = signature.len();
         let state_len = default_state.len();
 
         buffer.write_u8(tx_type).unwrap();
         buffer.write_u8(self_payable).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
-        buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
         buffer.write_u16::<BigEndian>(state_len as u16).unwrap();
         buffer.write_u16::<BigEndian>(code_len as u16).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
@@ -369,21 +366,13 @@ impl OpenContract {
 
         rdr.set_position(4);
 
-        let signature_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad signature len");
-        };
-
-        rdr.set_position(6);
-
         let state_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
         } else {
             return Err("Bad state len");
         };
 
-        rdr.set_position(8);
+        rdr.set_position(6);
 
         let code_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
@@ -391,7 +380,7 @@ impl OpenContract {
             return Err("Bad code len");
         };
 
-        rdr.set_position(10);
+        rdr.set_position(8);
 
         let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
@@ -401,7 +390,7 @@ impl OpenContract {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..18).collect();
+        let _: Vec<u8> = buf.drain(..16).collect();
 
         let owner = if buf.len() > 33 as usize {
             let owner_vec: Vec<u8> = buf.drain(..33).collect();
@@ -458,8 +447,8 @@ impl OpenContract {
             return Err("Incorrect packet structure! Buffer size is smaller than the size for the hash field");
         };
 
-        let signature = if buf.len() > signature_len as usize {
-            let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
 
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,

@@ -552,8 +552,8 @@ impl CreateCurrency {
             return Err("Incorrect packet structure");
         };
 
-        let signature = if buf.len() > 65 as usize {
-            let sig_vec: Vec<u8> = buf.drain(..65).collect();
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64).collect();
 
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,

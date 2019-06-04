@@ -383,7 +383,7 @@ impl Send {
     /// 7) Currency hash            - 32byte binary
     /// 8) Fee hash                 - 32byte binary
     /// 9) Hash                     - 32byte binary
-    /// 10) Signature               - Binary of signature length
+    /// 10) Signature               - 64byte binary
     /// 11) Amount                  - Binary of amount length
     /// 12) Fee                     - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
@@ -411,12 +411,10 @@ impl Send {
 
         let fee_len = fee.len();
         let amount_len = amount.len();
-        let signature_len = signature.len();
 
         buffer.write_u8(tx_type).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
-        buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
 
         buffer.append(&mut from.to_vec());
         buffer.append(&mut to.to_vec());
@@ -458,17 +456,9 @@ impl Send {
             return Err("Bad fee len");
         };
 
-        rdr.set_position(3);
-
-        let signature_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad signature len");
-        };
-
         // Consume cursor
         let mut buf = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..5).collect();
+        let _: Vec<u8> = buf.drain(..3).collect();
 
         let from = if buf.len() > 33 as usize {
             let from_vec: Vec<u8> = buf.drain(..33).collect();
@@ -525,8 +515,8 @@ impl Send {
             return Err("Incorrect packet structure");
         };
 
-        let signature = if buf.len() > signature_len as usize {
-            let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
 
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,

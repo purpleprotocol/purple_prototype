@@ -328,9 +328,9 @@ impl Mint {
     /// 7) Currency hash            - 32byte binary
     /// 8) Fee hash                 - 32byte binary
     /// 9) Hash                     - 32byte binary
-    /// 10) Amount                  - Binary of amount length
-    /// 11) Fee                     - Binary of fee length
-    /// 12) Signature               - Binary of signature length
+    /// 10) Signature               - 64byte binary
+    /// 11) Amount                  - Binary of amount length
+    /// 12) Fee                     - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -368,9 +368,9 @@ impl Mint {
         buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
         buffer.append(&mut hash.to_vec());
+        buffer.append(&mut signature);
         buffer.append(&mut amount.to_vec());
         buffer.append(&mut fee.to_vec());
-        buffer.append(&mut signature);
 
         Ok(buffer)
     }
@@ -470,6 +470,17 @@ impl Mint {
             return Err("Incorrect packet structure");
         };
 
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
+
+            match Signature::from_bytes(&sig_vec) {
+                Ok(sig) => sig,
+                Err(err) => return Err(err),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
         let amount = if buf.len() > amount_len as usize {
             let amount_vec: Vec<u8> = buf.drain(..amount_len as usize).collect();
 
@@ -481,23 +492,12 @@ impl Mint {
             return Err("Incorrect packet structure");
         };
 
-        let fee = if buf.len() > fee_len as usize {
+        let fee = if buf.len() == fee_len as usize {
             let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
 
             match Balance::from_bytes(&fee_vec) {
                 Ok(result) => result,
                 Err(_) => return Err("Bad fee"),
-            }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let signature = if buf.len() == signature_len as usize {
-            let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
-
-            match Signature::from_bytes(&sig_vec) {
-                Ok(sig) => sig,
-                Err(err) => return Err(err),
             }
         } else {
             return Err("Incorrect packet structure");

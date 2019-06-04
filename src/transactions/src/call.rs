@@ -79,18 +79,17 @@ impl Call {
     /// 3) Gas price length     - 8bits
     /// 4) Amount length        - 8bits
     /// 5) Fee length           - 8bits
-    /// 6) Signature length     - 16bits
-    /// 7) Inputs length        - 16bits
-    /// 8) From                 - 33byte binary
-    /// 9) To                   - 33byte binary
-    /// 10) Currency hash       - 32byte binary
-    /// 11) Fee hash            - 32byte binary
-    /// 12) Hash                - 32byte binary
-    /// 13) Signature           - Binary of signature length
-    /// 14) Gas price           - Binary of gas price length
-    /// 15) Amount              - Binary of amount length
-    /// 16) Fee                 - Binary of fee length
-    /// 17) Inputs              - Binary of inputs length
+    /// 6) Inputs length        - 16bits
+    /// 7) From                 - 33byte binary
+    /// 8) To                   - 33byte binary
+    /// 9) Currency hash        - 32byte binary
+    /// 10) Fee hash            - 32byte binary
+    /// 11) Hash                - 32byte binary
+    /// 12) Signature           - 64byte binary
+    /// 13) Gas price           - Binary of gas price length
+    /// 14) Amount              - Binary of amount length
+    /// 15) Fee                 - Binary of fee length
+    /// 16) Inputs              - Binary of inputs length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -129,7 +128,6 @@ impl Call {
         buffer.write_u8(gas_price_len as u8).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
-        buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
         buffer.write_u16::<BigEndian>(inputs_len as u16).unwrap();
 
         buffer.append(&mut from.to_vec());
@@ -193,14 +191,6 @@ impl Call {
 
         rdr.set_position(5);
 
-        let signature_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad signature len");
-        };
-
-        rdr.set_position(7);
-
         let inputs_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
         } else {
@@ -209,7 +199,7 @@ impl Call {
 
         // Consume cursor
         let mut buf = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..9).collect();
+        let _: Vec<u8> = buf.drain(..7).collect();
 
         let from = if buf.len() > 33 as usize {
             let from_vec: Vec<u8> = buf.drain(..33).collect();
@@ -266,8 +256,8 @@ impl Call {
             return Err("Incorrect packet structure");
         };
 
-        let signature = if buf.len() > signature_len as usize {
-            let sig_vec: Vec<u8> = buf.drain(..signature_len as usize).collect();
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
 
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,
