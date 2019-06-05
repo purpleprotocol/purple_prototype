@@ -21,6 +21,7 @@ use crate::interface::NetworkInterface;
 use crate::peer::ConnectionType;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use chrono::prelude::*;
 use crypto::{Signature, SecretKey as Sk};
 
 /// Generic packet interface
@@ -39,6 +40,9 @@ pub trait Packet {
 
     /// Returns a reference to the signature field of the packet.
     fn signature(&self) -> Option<&Signature>;
+
+    // Returns the timestamp of the packet.
+    fn timestamp(&self) -> DateTime<Utc>;
 
     /// Callback that handles a `Packet` after it has been parsed.
     fn handle<N: NetworkInterface>(network: &mut N, peer: &SocketAddr, packet: &Self, conn_type: ConnectionType) -> Result<(), NetworkErr>;

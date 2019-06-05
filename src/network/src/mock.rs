@@ -64,7 +64,7 @@ pub struct MockNetwork {
 impl NetworkInterface for MockNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         let mut peer = Peer::new(None, address.clone(), ConnectionType::Client);
-        let mut connect_packet = Connect::new(self.node_id.0, peer.pk.clone());
+        let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key); 
         let connect = connect_packet.to_bytes();
         

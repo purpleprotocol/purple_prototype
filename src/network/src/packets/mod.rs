@@ -17,4 +17,6 @@
 */
 
 pub mod connect;
+pub mod request_peers;
 pub use self::connect::*;
+pub use self::request_peers::*;

@@ -23,24 +23,28 @@ use crate::error::NetworkErr;
 use crate::packet::Packet;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::str;
+use chrono::prelude::*;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use crypto::{PublicKey as Pk, SecretKey as Sk, Signature, KxPublicKey as KxPk};
 use std::io::Cursor;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Connect {
-    node_id: Pk,
+    node_id: NodeId,
     kx_key: KxPk,
+    timestamp: DateTime<Utc>,
     signature: Option<Signature>,
 }
 
 impl Connect {
     pub const PACKET_TYPE: u8 = 1;
 
-    pub fn new(node_id: Pk, kx_key: KxPk) -> Connect {
+    pub fn new(node_id: NodeId, kx_key: KxPk) -> Connect {
         Connect {
             node_id: node_id,
             kx_key: kx_key,
+            timestamp: Utc::now(),
             signature: None,
         }
     }
@@ -62,7 +66,7 @@ impl Packet for Connect {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.node_id),
+            Some(ref sig) => crypto::verify(&message, sig, &self.node_id.0),
             None => false,
         }
     }
@@ -81,18 +85,24 @@ impl Packet for Connect {
             panic!("Signature field is missing");
         };
 
+        let timestamp = self.timestamp().to_rfc3339();
+        let timestamp_length = timestamp.len() as u8;
         let node_id = &self.node_id.0;
         let kx_key = &self.kx_key.0;
 
         // Connect packet structure:
         // 1) Packet type(1)   - 8bits
-        // 2) Key exchange pk  - 32byte binary
-        // 3) Node id          - 32byte binary
-        // 4) Signature        - 64byte binary
+        // 2) Timestamp length - 8bits
+        // 3) Key exchange pk  - 32byte binary
+        // 4) Node id          - 32byte binary
+        // 5) Signature        - 64byte binary
+        // 6) Timestamp        - Binary of timestamp length
         buffer.write_u8(packet_type).unwrap();
-        buffer.append(&mut kx_key.to_vec());
-        buffer.append(&mut node_id.to_vec());
-        buffer.append(&mut signature);
+        buffer.write_u8(timestamp_length).unwrap();
+        buffer.extend_from_slice(kx_key);
+        buffer.extend_from_slice(&node_id.0);
+        buffer.extend_from_slice(&signature);
+        buffer.extend_from_slice(timestamp.as_bytes());
 
         buffer
     }
@@ -109,9 +119,17 @@ impl Packet for Connect {
             return Err(NetworkErr::BadFormat);
         }
 
+        rdr.set_position(1);
+
+        let timestamp_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..1).collect();
+        let _: Vec<u8> = buf.drain(..2).collect();
 
         let kx_key = if buf.len() > 32 as usize {
             let kx_key_vec: Vec<u8> = buf.drain(..32).collect();
@@ -130,30 +148,49 @@ impl Packet for Connect {
 
             b.copy_from_slice(&node_id_vec);
 
-            Pk(b)
+            NodeId(Pk(b))
         } else {
             return Err(NetworkErr::BadFormat);
         };
 
-        let signature = if buf.len() == 64 as usize {
+        let signature = if buf.len() > 64 as usize {
             let sig_vec: Vec<u8> = buf.drain(..64).collect();
             Signature::new(&sig_vec)
         } else {
             return Err(NetworkErr::BadFormat);
         };
 
+        let timestamp = if buf.len() == timestamp_len as usize {
+            let result: Vec<u8> = buf.drain(..timestamp_len as usize).collect();
+            
+            match str::from_utf8(&result) {
+                Ok(result) => match DateTime::parse_from_rfc3339(result) {
+                    Ok(result) => Utc.from_utc_datetime(&result.naive_utc()),
+                    _ => return Err(NetworkErr::BadFormat)
+                },
+                Err(_) => return Err(NetworkErr::BadFormat)
+            } 
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
         let packet = Connect {
-            node_id: node_id,
-            kx_key: kx_key,
+            node_id,
+            kx_key,
+            timestamp,
             signature: Some(signature),
         };
 
         Ok(Arc::new(packet))
     }
 
+    fn timestamp(&self) -> DateTime<Utc> {
+        self.timestamp.clone()
+    }
+
     fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &Connect, conn_type: ConnectionType) -> Result<(), NetworkErr> {
-        let our_node_id = network.our_node_id().0.clone();
-        let node_id = NodeId(packet.node_id.clone());
+        let our_node_id = network.our_node_id().clone();
+        let node_id = packet.node_id.clone();
         let mut our_pk = None;
         
         {
@@ -200,10 +237,12 @@ fn assemble_sign_message(obj: &Connect) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::with_capacity(64);
 
     let kx_key = obj.kx_key.0;
-    let node_id = obj.node_id.0;
+    let node_id = (obj.node_id.0).0;
+    let timestamp = obj.timestamp.to_rfc3339();
 
-    buf.append(&mut kx_key.to_vec());
-    buf.append(&mut node_id.to_vec());
+    buf.extend_from_slice(&kx_key);
+    buf.extend_from_slice(&node_id);
+    buf.extend_from_slice(timestamp.as_bytes());
 
     buf
 }
@@ -219,10 +258,12 @@ impl Arbitrary for Connect {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Connect {
         let (pk, _) = crypto::gen_kx_keypair();
         let id = Identity::new();
+        let timestamp = Utc::now();
 
         Connect {
-            node_id: *id.pkey(),
+            node_id: NodeId(*id.pkey()),
             kx_key: pk,
+            timestamp,
             signature: Some(Arbitrary::arbitrary(g)),
         }
     }
@@ -315,10 +356,12 @@ mod tests {
         fn verify_signature(id1: Identity, id2: Identity) -> bool {
             let id = Identity::new();
             let (pk, _) = crypto::gen_kx_keypair();
+            let timestamp = Utc::now();
             let mut packet = Connect {
-                node_id: *id.pkey(),
+                node_id: NodeId(*id.pkey()),
                 kx_key: pk,
-                signature: None
+                signature: None,
+                timestamp
             };
 
             packet.sign(&id.skey());
