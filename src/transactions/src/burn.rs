@@ -82,7 +82,7 @@ impl Burn {
         let fee_key = format!("{}.{}", burner, fee_hash);
 
         // Retrieve serialized nonce
-        let bin_nonce = match trie.get(&nonce_key) {
+        let _bin_nonce = match trie.get(&nonce_key) {
             Ok(Some(nonce)) => nonce,
             Ok(None) => return false,
             Err(err) => panic!(err),
@@ -444,7 +444,7 @@ impl Burn {
     }
 
     /// Returns a random valid transaction for the provided state.
-    pub fn arbitrary_valid(trie: &TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Burn {
+    pub fn arbitrary_valid(_trie: &TrieDBMut<BlakeDbHasher, Codec>, _sk: Sk) -> Burn {
         unimplemented!();
     }
 

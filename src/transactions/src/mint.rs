@@ -62,7 +62,7 @@ impl Mint {
 
         // Convert addresses to strings
         let minter = hex::encode(bin_minter);
-        let receiver = hex::encode(bin_receiver);
+        let _receiver = hex::encode(bin_receiver);
 
         // Convert hashes to strings
         let asset_hash = hex::encode(bin_asset_hash);
@@ -518,7 +518,7 @@ impl Mint {
     }
 
     /// Returns a random valid transaction for the provided state.
-    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Self {
+    pub fn arbitrary_valid(_trie: &mut TrieDBMut<BlakeDbHasher, Codec>, _sk: Sk) -> Self {
         unimplemented!();
     }
 
@@ -593,9 +593,9 @@ impl Arbitrary for Mint {
 mod tests {
     use super::*;
     use account::NormalAddress;
-    use create_currency::CreateCurrency;
+    use crate::create_currency::CreateCurrency;
     use crypto::Identity;
-    use CreateMintable;
+    use crate::CreateMintable;
 
     #[test]
     fn validate() {
@@ -767,7 +767,7 @@ mod tests {
         let id = Identity::new();
         let id2 = Identity::new();
         let creator_addr = Address::normal_from_pkey(*id.pkey());
-        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let _creator_norm_address = NormalAddress::from_pkey(*id.pkey());
         let minter_addr = Address::normal_from_pkey(*id2.pkey());
         let minter_norm_addr = NormalAddress::from_pkey(*id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");

@@ -95,7 +95,7 @@ fn assemble_hash_message(obj: &CreateUnique) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut creator = obj.creator.to_bytes();
     let mut receiver = obj.receiver.to_bytes();
-    let mut name = obj.name;
+    let name = obj.name;
     let mut fee = obj.fee.to_bytes();
     let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
@@ -138,7 +138,7 @@ fn assemble_sign_message(obj: &CreateUnique) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut creator = obj.creator.to_bytes();
     let mut receiver = obj.receiver.to_bytes();
-    let mut name = obj.name;
+    let name = obj.name;
     let mut fee = obj.fee.to_bytes();
     let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
@@ -183,7 +183,7 @@ use rand::Rng;
 struct Array32(pub [u8; 32]);
 
 impl Arbitrary for Array32 {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Array32 {
+    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> Array32 {
         Array32(rand::thread_rng().gen::<[u8; 32]>())
     }
 }

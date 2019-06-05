@@ -79,11 +79,11 @@ impl CreateCurrency {
         let bin_receiver = &self.receiver.to_bytes();
         let bin_asset_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
-        let coin_supply = &self.coin_supply;
+        let _coin_supply = &self.coin_supply;
 
         // Convert addresses to strings
         let creator = hex::encode(bin_creator);
-        let receiver = hex::encode(bin_receiver);
+        let _receiver = hex::encode(bin_receiver);
 
         // Convert hashes to strings
         let asset_hash = hex::encode(bin_asset_hash);
@@ -590,7 +590,7 @@ impl CreateCurrency {
     }
 
     /// Returns a random valid transaction for the provided state.
-    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> CreateCurrency {
+    pub fn arbitrary_valid(_trie: &mut TrieDBMut<BlakeDbHasher, Codec>, _sk: Sk) -> CreateCurrency {
         unimplemented!();
     }
 
@@ -690,7 +690,7 @@ mod tests {
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateCurrency {
@@ -726,7 +726,7 @@ mod tests {
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateCurrency {
@@ -762,7 +762,7 @@ mod tests {
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateCurrency {
@@ -798,7 +798,7 @@ mod tests {
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateCurrency {
@@ -834,7 +834,7 @@ mod tests {
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateCurrency {
@@ -866,7 +866,7 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateCurrency {

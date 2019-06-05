@@ -18,7 +18,7 @@
 
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use create_currency::{CUR_GROUP_CAPACITY, MIN_CREATOR_NONCE};
+use crate::create_currency::{CUR_GROUP_CAPACITY, MIN_CREATOR_NONCE};
 use crypto::{Hash, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
@@ -76,11 +76,11 @@ impl CreateMintable {
         let bin_receiver = &self.receiver.to_bytes();
         let bin_asset_hash = &self.asset_hash.to_vec();
         let bin_fee_hash = &self.fee_hash.to_vec();
-        let coin_supply = &self.coin_supply;
+        let _coin_supply = &self.coin_supply;
 
         // Convert addresses to strings
         let creator = hex::encode(bin_creator);
-        let receiver = hex::encode(bin_receiver);
+        let _receiver = hex::encode(bin_receiver);
 
         // Convert hashes to strings
         let asset_hash = hex::encode(bin_asset_hash);
@@ -665,7 +665,7 @@ impl CreateMintable {
     }
 
     /// Returns a random valid transaction for the provided state.
-    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> CreateMintable {
+    pub fn arbitrary_valid(_trie: &mut TrieDBMut<BlakeDbHasher, Codec>, _sk: Sk) -> CreateMintable {
         unimplemented!();
     }
 
@@ -773,7 +773,7 @@ mod tests {
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
@@ -811,7 +811,7 @@ mod tests {
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
@@ -849,7 +849,7 @@ mod tests {
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
@@ -887,7 +887,7 @@ mod tests {
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
@@ -925,7 +925,7 @@ mod tests {
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
@@ -959,7 +959,7 @@ mod tests {
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
@@ -997,7 +997,7 @@ mod tests {
         // Manually initialize creator balance
         test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
-        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let _amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {

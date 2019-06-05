@@ -563,7 +563,7 @@ impl Send {
     }
 
     /// Returns a random valid transaction for the provided state.
-    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Self {
+    pub fn arbitrary_valid(_trie: &mut TrieDBMut<BlakeDbHasher, Codec>, _sk: Sk) -> Self {
         unimplemented!();
     }
 
