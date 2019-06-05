@@ -34,7 +34,7 @@ extern crate rust_decimal;
 pub mod addresses;
 pub mod balance;
 
-pub use addresses::contract::*;
-pub use addresses::normal::*;
-pub use addresses::*;
-pub use balance::*;
+pub use crate::addresses::contract::*;
+pub use crate::addresses::normal::*;
+pub use crate::addresses::*;
+pub use crate::balance::*;
