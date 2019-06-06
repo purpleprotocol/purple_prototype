@@ -24,6 +24,8 @@ use crate::packet::Packet;
 use chrono::prelude::*;
 use std::sync::Arc;
 use std::net::SocketAddr;
+use std::str;
+use std::io::Cursor;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
 
@@ -76,11 +78,97 @@ impl Packet for RequestPeers {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        unimplemented!();
+        let mut buffer: Vec<u8> = Vec::new();
+        let packet_type: u8 = Self::PACKET_TYPE;
+
+        let mut signature = if let Some(signature) = &self.signature {
+            signature.inner_bytes()
+        } else {
+            panic!("Signature field is missing");
+        };
+
+        let timestamp = self.timestamp().to_rfc3339();
+        let timestamp_length = timestamp.len() as u8;
+        let node_id = &self.node_id.0;
+
+        // Connect packet structure:
+        // 1) Packet type(2)   - 8bits
+        // 2) Timestamp length - 8bits
+        // 3) Node id          - 32byte binary
+        // 4) Signature        - 64byte binary
+        // 5) Timestamp        - Binary of timestamp length
+        buffer.write_u8(packet_type).unwrap();
+        buffer.write_u8(timestamp_length).unwrap();
+        buffer.extend_from_slice(&node_id.0);
+        buffer.extend_from_slice(&signature);
+        buffer.extend_from_slice(timestamp.as_bytes());
+
+        buffer
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Arc<RequestPeers>, NetworkErr> {
-        unimplemented!();
+        let mut rdr = Cursor::new(bytes.to_vec());
+        let packet_type = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        if packet_type != Self::PACKET_TYPE {
+            return Err(NetworkErr::BadFormat);
+        }
+
+        rdr.set_position(1);
+
+        let timestamp_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        // Consume cursor
+        let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..2).collect();
+
+        let node_id = if buf.len() > 32 as usize {
+            let node_id_vec: Vec<u8> = buf.drain(..32).collect();
+            let mut b = [0; 32];
+
+            b.copy_from_slice(&node_id_vec);
+
+            NodeId(Pk(b))
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64).collect();
+            Signature::new(&sig_vec)
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        let timestamp = if buf.len() == timestamp_len as usize {
+            let result: Vec<u8> = buf.drain(..timestamp_len as usize).collect();
+            
+            match str::from_utf8(&result) {
+                Ok(result) => match DateTime::parse_from_rfc3339(result) {
+                    Ok(result) => Utc.from_utc_datetime(&result.naive_utc()),
+                    _ => return Err(NetworkErr::BadFormat)
+                },
+                Err(_) => return Err(NetworkErr::BadFormat)
+            } 
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        let packet = RequestPeers {
+            node_id,
+            timestamp,
+            signature: Some(signature),
+        };
+
+        Ok(Arc::new(packet))
     }
 
     fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &RequestPeers, conn_type: ConnectionType) -> Result<(), NetworkErr> {
@@ -89,5 +177,58 @@ impl Packet for RequestPeers {
 }
 
 fn assemble_sign_message(obj: &RequestPeers) -> Vec<u8> {
-    unimplemented!();
+    let mut buf: Vec<u8> = Vec::with_capacity(64);
+    let node_id = (obj.node_id.0).0;
+    let timestamp = obj.timestamp.to_rfc3339();
+
+    buf.extend_from_slice(&[RequestPeers::PACKET_TYPE]);
+    buf.extend_from_slice(&node_id);
+    buf.extend_from_slice(timestamp.as_bytes());
+
+    buf
+}
+
+#[cfg(test)]
+use quickcheck::Arbitrary;
+
+#[cfg(test)]
+use crypto::Identity;
+
+#[cfg(test)]
+impl Arbitrary for RequestPeers {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> RequestPeers {
+        let id = Identity::new();
+        let timestamp = Utc::now();
+
+        RequestPeers {
+            node_id: NodeId(*id.pkey()),
+            timestamp,
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(tx: Arc<RequestPeers>) -> bool {
+            tx == RequestPeers::from_bytes(&RequestPeers::to_bytes(&tx)).unwrap()
+        }
+
+        fn verify_signature(id1: Identity, id2: Identity) -> bool {
+            let id = Identity::new();
+            let timestamp = Utc::now();
+            let mut packet = RequestPeers {
+                node_id: NodeId(*id.pkey()),
+                signature: None,
+                timestamp
+            };
+
+            packet.sign(&id.skey());
+            packet.verify_sig()
+        }
+
+    }
 }

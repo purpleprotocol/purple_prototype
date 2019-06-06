@@ -76,7 +76,7 @@ impl Packet for Connect {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = Vec::with_capacity(129);
+        let mut buffer: Vec<u8> = Vec::new();
         let packet_type: u8 = Self::PACKET_TYPE;
 
         let mut signature = if let Some(signature) = &self.signature {
@@ -240,6 +240,7 @@ fn assemble_sign_message(obj: &Connect) -> Vec<u8> {
     let node_id = (obj.node_id.0).0;
     let timestamp = obj.timestamp.to_rfc3339();
 
+    buf.extend_from_slice(&[Connect::PACKET_TYPE]);
     buf.extend_from_slice(&kx_key);
     buf.extend_from_slice(&node_id);
     buf.extend_from_slice(timestamp.as_bytes());
