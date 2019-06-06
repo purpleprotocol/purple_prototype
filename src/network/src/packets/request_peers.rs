@@ -31,17 +31,26 @@ use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestPeers {
+    /// The node id of the requester
     node_id: NodeId,
+
+    /// The packet's timestamp
     timestamp: DateTime<Utc>,
+
+    /// The number of requested peers
+    requested_peers: u8,
+
+    /// Packet signature
     signature: Option<Signature>
 }
 
 impl RequestPeers {
     pub const PACKET_TYPE: u8 = 2;
 
-    pub fn new(node_id: NodeId) -> RequestPeers {
+    pub fn new(node_id: NodeId, requested_peers: u8) -> RequestPeers {
         RequestPeers {
             node_id: node_id,
+            requested_peers,
             timestamp: Utc::now(),
             signature: None,
         }
@@ -94,11 +103,13 @@ impl Packet for RequestPeers {
         // Connect packet structure:
         // 1) Packet type(2)   - 8bits
         // 2) Timestamp length - 8bits
-        // 3) Node id          - 32byte binary
-        // 4) Signature        - 64byte binary
-        // 5) Timestamp        - Binary of timestamp length
+        // 3) Requested peers  - 8bits
+        // 4) Node id          - 32byte binary
+        // 5) Signature        - 64byte binary
+        // 6) Timestamp        - Binary of timestamp length
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u8(timestamp_length).unwrap();
+        buffer.write_u8(self.requested_peers).unwrap();
         buffer.extend_from_slice(&node_id.0);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(timestamp.as_bytes());
@@ -126,9 +137,17 @@ impl Packet for RequestPeers {
             return Err(NetworkErr::BadFormat);
         };
 
+        rdr.set_position(2);
+
+        let requested_peers = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..2).collect();
+        let _: Vec<u8> = buf.drain(..3).collect();
 
         let node_id = if buf.len() > 32 as usize {
             let node_id_vec: Vec<u8> = buf.drain(..32).collect();
@@ -165,6 +184,7 @@ impl Packet for RequestPeers {
         let packet = RequestPeers {
             node_id,
             timestamp,
+            requested_peers,
             signature: Some(signature),
         };
 
@@ -181,7 +201,7 @@ fn assemble_sign_message(obj: &RequestPeers) -> Vec<u8> {
     let node_id = (obj.node_id.0).0;
     let timestamp = obj.timestamp.to_rfc3339();
 
-    buf.extend_from_slice(&[RequestPeers::PACKET_TYPE]);
+    buf.extend_from_slice(&[RequestPeers::PACKET_TYPE, obj.requested_peers]);
     buf.extend_from_slice(&node_id);
     buf.extend_from_slice(timestamp.as_bytes());
 
@@ -203,6 +223,7 @@ impl Arbitrary for RequestPeers {
         RequestPeers {
             node_id: NodeId(*id.pkey()),
             timestamp,
+            requested_peers: Arbitrary::arbitrary(g),
             signature: Some(Arbitrary::arbitrary(g)),
         }
     }
@@ -222,6 +243,7 @@ mod tests {
             let timestamp = Utc::now();
             let mut packet = RequestPeers {
                 node_id: NodeId(*id.pkey()),
+                requested_peers: 10,
                 signature: None,
                 timestamp
             };
