@@ -53,7 +53,7 @@ impl Connect {
 impl Packet for Connect {
     fn sign(&mut self, skey: &Sk) {
         // Assemble data
-        let message = assemble_sign_message(&self);
+        let message = assemble_message(&self);
 
         // Sign data
         let signature = crypto::sign(&message, skey);
@@ -63,7 +63,7 @@ impl Packet for Connect {
     }
 
     fn verify_sig(&self) -> bool {
-        let message = assemble_sign_message(&self);
+        let message = assemble_message(&self);
 
         match self.signature {
             Some(ref sig) => crypto::verify(&message, sig, &self.node_id.0),
@@ -237,7 +237,7 @@ impl Packet for Connect {
     }
 }
 
-fn assemble_sign_message(obj: &Connect) -> Vec<u8> {
+fn assemble_message(obj: &Connect) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::with_capacity(64);
 
     let kx_key = obj.kx_key.0;
