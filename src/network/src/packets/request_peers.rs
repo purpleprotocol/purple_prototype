@@ -21,6 +21,7 @@ use crate::interface::NetworkInterface;
 use crate::node_id::NodeId;
 use crate::error::NetworkErr;
 use crate::packet::Packet;
+use crate::packets::SendPeers;
 use chrono::prelude::*;
 use std::sync::Arc;
 use std::net::SocketAddr;
@@ -191,8 +192,22 @@ impl Packet for RequestPeers {
         Ok(Arc::new(packet))
     }
 
-    fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &RequestPeers, conn_type: ConnectionType) -> Result<(), NetworkErr> {
-        unimplemented!();
+    fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &RequestPeers, _conn_type: ConnectionType) -> Result<(), NetworkErr> {
+        let num_of_peers = packet.requested_peers as usize;
+        let our_node_id = network.our_node_id();
+        let addresses: Vec<SocketAddr> = network
+            .peers()
+            // Don't send the address of the requester
+            .filter(|(peer_addr, peer)| peer.id.is_some() && *peer_addr != addr)
+            .take(num_of_peers)
+            .map(|(addr, _)| addr)
+            .cloned()
+            .collect();
+
+        let mut send_peers = SendPeers::new(our_node_id.clone(), addresses);
+        network.send_unsigned::<SendPeers>(our_node_id, &mut send_peers)?;
+
+        Ok(())
     }
 }
 

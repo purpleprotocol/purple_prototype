@@ -66,4 +66,7 @@ pub trait NetworkInterface {
 
     /// Returns a reference to our node id.
     fn our_node_id(&self) -> &NodeId;
+
+    /// Returns an iterator on the listed peers
+    fn peers<'a>(&'a self) -> Box<dyn Iterator<Item = (&SocketAddr, &Peer)> + 'a>;
 }

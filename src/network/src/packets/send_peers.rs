@@ -288,12 +288,12 @@ mod tests {
             tx == SendPeers::from_bytes(&SendPeers::to_bytes(&tx)).unwrap()
         }
 
-        fn verify_signature(id1: Identity, id2: Identity) -> bool {
+        fn verify_signature(id1: Identity, id2: Identity, peers: Vec<SocketAddr>) -> bool {
             let id = Identity::new();
             let timestamp = Utc::now();
             let mut packet = SendPeers {
                 node_id: NodeId(*id.pkey()),
-                peers: vec![crate::random_socket_addr(), crate::random_socket_addr(), crate::random_socket_addr()],
+                peers,
                 signature: None,
                 timestamp
             };

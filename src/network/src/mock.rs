@@ -186,6 +186,10 @@ impl NetworkInterface for MockNetwork {
     fn our_node_id(&self) -> &NodeId {
         &self.node_id
     }
+
+    fn peers<'a>(&'a self) -> Box<dyn Iterator<Item = (&SocketAddr, &Peer)> + 'a> {
+        Box::new(self.peers.iter())
+    }
 }
 
 impl MockNetwork {
