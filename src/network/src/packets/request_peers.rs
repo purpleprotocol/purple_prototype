@@ -100,7 +100,7 @@ impl Packet for RequestPeers {
         let timestamp_length = timestamp.len() as u8;
         let node_id = &self.node_id.0;
 
-        // Connect packet structure:
+        // Packet structure:
         // 1) Packet type(2)   - 8bits
         // 2) Timestamp length - 8bits
         // 3) Requested peers  - 8bits
@@ -197,7 +197,7 @@ impl Packet for RequestPeers {
 }
 
 fn assemble_sign_message(obj: &RequestPeers) -> Vec<u8> {
-    let mut buf: Vec<u8> = Vec::with_capacity(64);
+    let mut buf: Vec<u8> = Vec::new();
     let node_id = (obj.node_id.0).0;
     let timestamp = obj.timestamp.to_rfc3339();
 
