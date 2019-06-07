@@ -19,11 +19,9 @@
 macro_rules! impl_hash {
     () => {
         /// Computes the transaction's hash.
-        ///
-        /// This function will panic if the signature field is missing.
         pub fn hash(&mut self) {
             // Assemble data
-            let message = assemble_hash_message(&self);
+            let message = assemble_message(&self);
 
             // Hash data
             let hash = crypto::hash_slice(&message);
@@ -33,14 +31,11 @@ macro_rules! impl_hash {
 
         /// Computes the message that is passed to the
         /// hash function of this transaction.
-        ///
-        /// This function will panic if the signature field is missing.
-        pub fn compute_hash_message(&self) -> Vec<u8> { assemble_hash_message(&self) }
+        pub fn compute_hash_message(&self) -> Vec<u8> { assemble_message(&self) }
 
         /// Verifies the correctness of the hash of the transaction.
         ///
-        /// This function will panic if the hash field or if the
-        /// signature field is missing.
+        /// This function will panic if the hash field is missing.
         pub fn verify_hash(&mut self) -> bool {
             let hash = if let Some(hash) = &self.hash {
                 hash.0
@@ -48,7 +43,7 @@ macro_rules! impl_hash {
                 panic!("Hash field is missing!");
             };
 
-            let oracle_message = assemble_hash_message(&self);
+            let oracle_message = assemble_message(&self);
             let oracle_hash = crypto::hash_slice(&oracle_message);
 
             hash == oracle_hash.0

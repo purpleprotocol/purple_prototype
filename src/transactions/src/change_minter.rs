@@ -50,7 +50,7 @@ impl ChangeMinter {
     /// Signs the transaction with the given secret key.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data
-        let message = assemble_sign_message(&self);
+        let message = assemble_message(&self);
 
         // Sign data
         let signature = crypto::sign(&message, &skey);
@@ -61,7 +61,7 @@ impl ChangeMinter {
     ///
     /// Returns `false` if the signature field is missing.
     pub fn verify_sig(&mut self) -> bool {
-        let message = assemble_sign_message(&self);
+        let message = assemble_message(&self);
 
         match self.signature {
             Some(ref sig) => {
@@ -74,32 +74,7 @@ impl ChangeMinter {
     impl_hash!();
 }
 
-fn assemble_hash_message(obj: &ChangeMinter) -> Vec<u8> {
-    let mut signature = if let Some(ref sig) = obj.signature {
-        sig.to_bytes()
-    } else {
-        panic!("Signature field is missing!");
-    };
-
-    let mut buf: Vec<u8> = Vec::new();
-    let mut minter = obj.minter.to_bytes();
-    let mut new_minter = obj.new_minter.to_bytes();
-    let mut fee = obj.fee.to_bytes();
-    let asset_hash = obj.asset_hash.0;
-    let fee_hash = obj.fee_hash.0;
-
-    // Compose data to hash
-    buf.append(&mut minter);
-    buf.append(&mut new_minter);
-    buf.append(&mut asset_hash.to_vec());
-    buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut fee);
-    buf.append(&mut signature);
-
-    buf
-}
-
-fn assemble_sign_message(obj: &ChangeMinter) -> Vec<u8> {
+fn assemble_message(obj: &ChangeMinter) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut minter = obj.minter.to_bytes();
     let mut new_minter = obj.new_minter.to_bytes();

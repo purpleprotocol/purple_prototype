@@ -88,7 +88,7 @@ impl Heartbeat {
     /// the signature type.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data
-        let message = assemble_sign_message(&self);
+        let message = assemble_message(&self);
 
         // Sign data
         let signature = crypto::sign(&message, &skey);
@@ -376,11 +376,7 @@ impl Heartbeat {
     impl_hash!();
 }
 
-fn assemble_hash_message(obj: &Heartbeat) -> Vec<u8> {
-    unimplemented!();
-}
-
-fn assemble_sign_message(obj: &Heartbeat) -> Vec<u8> {
+fn assemble_message(obj: &Heartbeat) -> Vec<u8> {
     unimplemented!();
 }
 

@@ -62,7 +62,7 @@ impl CreateUnique {
     /// Signs the transaction with the given secret key.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data
-        let message = assemble_sign_message(&self);
+        let message = assemble_message(&self);
 
         // Sign data
         let signature = crypto::sign(&message, &skey);
@@ -74,7 +74,7 @@ impl CreateUnique {
     ///
     /// Returns `false` if the signature field is missing.
     pub fn verify_sig(&self) -> bool {
-        let message = assemble_sign_message(&self);
+        let message = assemble_message(&self);
 
         match self.signature {
             Some(ref sig) => crypto::verify(&message, sig, &self.creator.pkey()),
@@ -85,56 +85,7 @@ impl CreateUnique {
     impl_hash!();
 }
 
-fn assemble_hash_message(obj: &CreateUnique) -> Vec<u8> {
-    let mut signature = if let Some(ref sig) = obj.signature {
-        sig.to_bytes()
-    } else {
-        panic!("Signature field is missing!");
-    };
-
-    let mut buf: Vec<u8> = Vec::new();
-    let mut creator = obj.creator.to_bytes();
-    let mut receiver = obj.receiver.to_bytes();
-    let mut name = obj.name;
-    let mut fee = obj.fee.to_bytes();
-    let asset_hash = obj.asset_hash.0;
-    let fee_hash = obj.fee_hash.0;
-
-    // Compose data to hash
-    buf.append(&mut creator);
-    buf.append(&mut receiver);
-    buf.append(&mut name.to_vec());
-
-    // Write meta if present
-    if let Some(meta) = obj.meta1 {
-        buf.append(&mut meta.to_vec());
-    }
-
-    if let Some(meta) = obj.meta2 {
-        buf.append(&mut meta.to_vec());
-    }
-
-    if let Some(meta) = obj.meta3 {
-        buf.append(&mut meta.to_vec());
-    }
-
-    if let Some(meta) = obj.meta4 {
-        buf.append(&mut meta.to_vec());
-    }
-
-    if let Some(meta) = obj.meta5 {
-        buf.append(&mut meta.to_vec());
-    }
-
-    buf.append(&mut asset_hash.to_vec());
-    buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut fee);
-    buf.append(&mut signature);
-
-    buf
-}
-
-fn assemble_sign_message(obj: &CreateUnique) -> Vec<u8> {
+fn assemble_message(obj: &CreateUnique) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     let mut creator = obj.creator.to_bytes();
     let mut receiver = obj.receiver.to_bytes();
