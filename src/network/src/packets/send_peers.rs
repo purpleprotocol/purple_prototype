@@ -436,7 +436,7 @@ mod tests {
             network2_c.lock().connect(&addr1).unwrap();
         }
 
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(600));
 
         // Send request peers packet from Peer2 to Peer1
         {
@@ -455,7 +455,7 @@ mod tests {
 
         // Pause main thread for a bit before
         // making assertions.
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(600));
 
         let network1 = network1_cc.lock();
         let network2 = network2_cc.lock();
