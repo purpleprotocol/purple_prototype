@@ -308,7 +308,7 @@ impl Mint {
     ///
     /// Returns `false` if the signature field is missing.
     pub fn verify_sig(&self) -> bool {
-        let message = assemble_sign_message(&self);
+        let message = assemble_message(&self);
 
         match self.signature {
             Some(ref sig) => crypto::verify(&message, sig, &self.minter.pkey()),
