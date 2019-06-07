@@ -208,7 +208,7 @@ impl Packet for RequestPeers {
             .collect();
 
         let mut send_peers = SendPeers::new(our_node_id.clone(), addresses);
-        network.send_unsigned::<SendPeers>(our_node_id, &mut send_peers)?;
+        network.send_unsigned::<SendPeers>(&requester, &mut send_peers)?;
 
         Ok(())
     }

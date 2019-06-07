@@ -247,7 +247,7 @@ impl Packet for SendPeers {
 
             // Check if we have received more peers than we have asked
             if let Some(num_of_peers) = peer.requested_peers {
-                if (num_of_peers as usize) < packet.peers.len() {
+                if (num_of_peers as usize) <= packet.peers.len() {
                     peer.requested_peers = None;
                 } else {
                     return Err(NetworkErr::TooManyPeers);

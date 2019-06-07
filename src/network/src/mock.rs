@@ -130,6 +130,10 @@ impl NetworkInterface for MockNetwork {
     }
 
     fn process_packet(&mut self, addr: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+        if addr == &self.ip {
+            panic!("We received a packet from ourselves! This is illegal");
+        }
+
         // Insert to peer table if this is the first received packet.
         if self.peers.get(addr).is_none() {
             self.peers.insert(addr.clone(), Peer::new(None, addr.clone(), ConnectionType::Server));
@@ -245,7 +249,9 @@ impl MockNetwork {
                             network.disconnect_from_ip(&addr).unwrap();
                             network.ban_ip(&addr).unwrap();
                         },
-                        _ => { }
+                        err => { 
+                            debug!("Packet error: {:?}", err);
+                        }
                     }
                 }
             }
