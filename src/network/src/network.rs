@@ -111,11 +111,15 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
-    fn disconnect(&self, peer: &NodeId) -> Result<(), NetworkErr> {
+    fn is_connected_to(&self, address: &SocketAddr) -> bool {
+        self.peers.get(address).is_some()
+    }
+
+    fn disconnect(&mut self, peer: &NodeId) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
-    fn disconnect_from_ip(&self, ip: &SocketAddr) -> Result<(), NetworkErr> {
+    fn disconnect_from_ip(&mut self, ip: &SocketAddr) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 

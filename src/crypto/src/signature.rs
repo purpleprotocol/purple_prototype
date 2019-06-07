@@ -20,7 +20,7 @@ use quickcheck::Arbitrary;
 use rand::Rng;
 use rust_sodium::crypto::sign::Signature as PrimitiveSig;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Signature(PrimitiveSig);
 
 impl Signature {
@@ -52,6 +52,12 @@ impl Signature {
         } else {
             Err("Bad signature length")
         }
+    }
+}
+
+impl std::fmt::Debug for Signature {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Signature({})", hex::encode(self.0))
     }
 }
 

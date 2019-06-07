@@ -194,6 +194,7 @@ impl Packet for Connect {
         let mut our_pk = None;
         
         {
+            let node_id = node_id.clone();
             let peer = network.fetch_peer_mut(addr)?;
             let kx_key = packet.kx_key.clone();
 
@@ -219,6 +220,9 @@ impl Packet for Connect {
 
             // Mark peer as having sent a connect packet
             peer.sent_connect = true;
+
+            // Set node id
+            peer.id = Some(node_id);
 
             our_pk = Some(peer.pk.clone());
         }
@@ -276,8 +280,6 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
-    use std::collections::VecDeque;
-    use std::cell::RefCell;
     use std::sync::mpsc::channel;
     use parking_lot::Mutex;
     use hashbrown::HashMap;
@@ -347,6 +349,10 @@ mod tests {
         // Check if the peers have the same session keys
         assert_eq!(peer1.rx.as_ref().unwrap(), peer2.tx.as_ref().unwrap());
         assert_eq!(peer2.rx.as_ref().unwrap(), peer1.tx.as_ref().unwrap());
+
+        // Check if the peers have the correct node ids
+        assert_eq!(peer1.id.unwrap(), n1);
+        assert_eq!(peer2.id.unwrap(), n2);
     }
 
     quickcheck! {

@@ -56,6 +56,10 @@ pub struct Peer {
     /// Wether the peer has send a `Connect` packet or not.
     pub sent_connect: bool,
 
+    /// Wether we have asked the peer to send us a peer list 
+    /// and the number of peers that we have requested.
+    pub requested_peers: Option<u8>,
+
     /// Buffer storing packets that are to be 
     /// sent to the peer.
     pub outbound_buffer: VecDeque<Vec<u8>>,
@@ -85,6 +89,7 @@ impl Peer {
             sk: sk,
             rx: None,
             tx: None,
+            requested_peers: None,
             sent_connect: false,
             connection_type,
             outbound_buffer,

@@ -18,7 +18,7 @@
 
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
-use crate::packets::connect::Connect;
+use crate::packets::*;
 use crate::peer::{Peer, ConnectionType};
 use crate::packet::Packet;
 use std::net::SocketAddr;
@@ -63,6 +63,8 @@ pub struct MockNetwork {
 
 impl NetworkInterface for MockNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
+        info!("Connecting to {:?}", address);
+
         let mut peer = Peer::new(None, address.clone(), ConnectionType::Client);
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key); 
@@ -81,12 +83,18 @@ impl NetworkInterface for MockNetwork {
         unimplemented!();
     }
 
-    fn disconnect(&self, peer: &NodeId) -> Result<(), NetworkErr> {
-        unimplemented!();
+    fn is_connected_to(&self, address: &SocketAddr) -> bool {
+        self.peers.get(address).is_some()
     }
 
-    fn disconnect_from_ip(&self, ip: &SocketAddr) -> Result<(), NetworkErr> {
-        unimplemented!();
+    fn disconnect(&mut self, peer: &NodeId) -> Result<(), NetworkErr> {
+        self.peers.retain(|_, p| p.id.as_ref() != Some(peer));
+        Ok(())
+    }
+
+    fn disconnect_from_ip(&mut self, ip: &SocketAddr) -> Result<(), NetworkErr> {
+        self.peers.remove(ip);
+        Ok(())
     }
 
     fn send_to_peer(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr> {
@@ -154,7 +162,27 @@ impl NetworkInterface for MockNetwork {
                 }
             }
         } else {
-            info!("{}: {}", addr, hex::encode(packet));
+            debug!("Received packet from {}: {}", addr, hex::encode(packet));
+
+            let packet_type = packet[0];
+            
+            match packet_type {
+                RequestPeers::PACKET_TYPE => match RequestPeers::from_bytes(packet) {
+                    Ok(packet) => RequestPeers::handle(self, addr, &packet, conn_type)?,
+                    _ => return Err(NetworkErr::PacketParseErr)
+                }
+                    
+                SendPeers::PACKET_TYPE => match SendPeers::from_bytes(packet) {
+                    Ok(packet) => SendPeers::handle(self, addr, &packet, conn_type)?,
+                    _ => return Err(NetworkErr::PacketParseErr)
+                }
+
+                _ => {
+                    debug!("Could not parse packet from {}", addr);
+                    return Err(NetworkErr::PacketParseErr);
+                }
+            }
+
             Ok(())
         }
     }

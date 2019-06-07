@@ -27,6 +27,9 @@ pub enum NetworkErr {
     /// The received `Connect` packet is invalid
     InvalidConnectPacket,
 
+    /// The received packet could not be parsed
+    PacketParseErr,
+
     /// We are not connected to the given peer
     PeerNotFound,
 
@@ -36,4 +39,10 @@ pub enum NetworkErr {
 
     /// We are not connected to any peer.
     NoPeers,
+
+    /// We have received a `SendPeers` packet but we didn't ask for it
+    DidntAskForPeers,
+
+    /// We have received more peers than we have requested
+    TooManyPeers,
 }
