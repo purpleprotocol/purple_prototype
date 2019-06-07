@@ -20,7 +20,7 @@ use crypto::PublicKey;
 use quickcheck::Arbitrary;
 use rand::Rng;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NodeId(pub PublicKey);
 
 impl NodeId {
@@ -30,6 +30,12 @@ impl NodeId {
 
     pub fn from_pkey(pk: PublicKey) -> NodeId {
         NodeId(pk)
+    }
+}
+
+impl std::fmt::Debug for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "NodeId({})", hex::encode(self.0))
     }
 }
 

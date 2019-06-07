@@ -141,7 +141,7 @@ fn process_connection(
             if let ConnectionType::Client = client_or_server {
                 if !peer.sent_connect {
                     // Send `Connect` packet.
-                    let mut connect = Connect::new(node_id.0, peer.pk);
+                    let mut connect = Connect::new(node_id.clone(), peer.pk);
                     connect.sign(&skey);
 
                     let packet = connect.to_bytes();

@@ -30,11 +30,14 @@ pub trait NetworkInterface {
     /// Attempts to connect to a previously encountered peer 
     fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr>;
 
+    /// Returns true if the network has the given address in its peer list.
+    fn is_connected_to(&self, address: &SocketAddr) -> bool;
+
     /// Disconnects from the peer with the given `NodeId`.
-    fn disconnect(&self, peer: &NodeId) -> Result<(), NetworkErr>;
+    fn disconnect(&mut self, peer: &NodeId) -> Result<(), NetworkErr>;
 
     /// Disconnects from the peer with the given ip address.
-    fn disconnect_from_ip(&self, ip: &SocketAddr) -> Result<(), NetworkErr>;
+    fn disconnect_from_ip(&mut self, ip: &SocketAddr) -> Result<(), NetworkErr>;
 
     /// Sends a packet to a specific peer.
     fn send_to_peer(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr>;
@@ -66,4 +69,7 @@ pub trait NetworkInterface {
 
     /// Returns a reference to our node id.
     fn our_node_id(&self) -> &NodeId;
+
+    /// Returns an iterator on the listed peers
+    fn peers<'a>(&'a self) -> Box<dyn Iterator<Item = (&SocketAddr, &Peer)> + 'a>;
 }
