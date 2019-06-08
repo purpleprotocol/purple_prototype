@@ -453,7 +453,7 @@ impl CreateMintable {
     /// Serializes the transaction struct to a binary format.
     ///
     /// Fields:
-    /// 1) Transaction type(9)  - 8bits
+    /// 1) Transaction type(5)  - 8bits
     /// 2) Fee length           - 8bits
     /// 3) Precision            - 8bits
     /// 4) Coin supply          - 64bits
