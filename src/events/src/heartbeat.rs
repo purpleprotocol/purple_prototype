@@ -339,14 +339,14 @@ impl Heartbeat {
 
                         //     Ok(Box::new(Tx::ChangeMinter(deserialized)))
                         // },
-                        // 9 => {
-                        //     let deserialized = match CreateUnique::from_bytes(&tx) {
-                        //         Ok(result) => result,
-                        //         Err(_) => return Err("Invalid `CreateUnique` transaction"),
-                        //     };
+                        9 => {
+                            let deserialized = match CreateUnique::from_bytes(&tx) {
+                                Ok(result) => result,
+                                Err(_) => return Err("Invalid `CreateUnique` transaction"),
+                            };
 
-                        //     Ok(Box::new(Tx::CreateUnique(deserialized)))
-                        // },
+                            Ok(Box::new(Tx::CreateUnique(deserialized)))
+                        },
                         _ => return Err("Bad transaction type"),
                     }
                 })

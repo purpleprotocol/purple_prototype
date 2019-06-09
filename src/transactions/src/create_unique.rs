@@ -16,9 +16,13 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, Address, Balance};
+use account::{Address, Balance, NormalAddress};
+use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, Signature, PublicKey as Pk, SecretKey as Sk};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
+use std::io::Cursor;
+use patricia_trie::{TrieDBMut, TrieMut};
+use persistence::{BlakeDbHasher, Codec};
 
 pub const ASSET_NAME_SIZE: usize = 32;
 pub const META_FIELD_SIZE: usize = 32;
@@ -80,6 +84,319 @@ impl CreateUnique {
             Some(ref sig) => crypto::verify(&message, sig, &self.creator.pkey()),
             None => false,
         }
+    }
+
+    /// Serializes the transaction struct to a binary format.
+    ///
+    /// Fields:
+    /// 1) Transaction type(9)  - 8bits
+    /// 2) Fee length           - 8bits
+    /// 3) Meta Exist BitMask   - 8bits
+    /// 4) Creator              - 33byte binary
+    /// 5) Receiver             - 33byte binary
+    /// 6) Asset hash           - 32byte binary
+    /// 7) Fee hash             - 32byte binary
+    /// 8) Name                 - 32byte binary
+    /// 9) Hash                 - 32byte binary
+    /// 10) Signature           - 64byte binary
+    /// 11) Fee                 - Binary of fee length
+    /// 12) Meta1 (Optional)    - 32byte binary
+    /// 13) Meta2 (Optional)    - 32byte binary
+    /// 14) Meta3 (Optional)    - 32byte binary
+    /// 15) Meta4 (Optional)    - 32byte binary
+    /// 16) Meta5 (Optional)    - 32byte binary
+    pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
+        let mut buf: Vec<u8> = Vec::new();
+        let mut bitmask: u8 = 0;
+
+        // Prepare the fields
+        let hash = if let Some(hash) = &self.hash {
+            &hash.0
+        } else {
+            return Err("Hash field is missing");
+        };
+
+        let mut signature = if let Some(signature) = &self.signature {
+            signature.to_bytes()
+        } else {
+            return Err("Signature field is missing");
+        };
+
+        if let Some(_meta1) = &self.meta1 {
+            bitmask.set(0, true);
+        };
+        if let Some(_meta2) = &self.meta2 {
+            bitmask.set(1, true);
+        };
+        if let Some(_meta3) = &self.meta3 {
+            bitmask.set(2, true);
+        };
+        if let Some(_meta4) = &self.meta4 {
+            bitmask.set(3, true);
+        };
+        if let Some(_meta5) = &self.meta5 {
+            bitmask.set(4, true);
+        };
+
+        let tx_type: u8 = Self::TX_TYPE;
+        let creator = &self.creator.to_bytes();
+        let receiver = &self.receiver.to_bytes();
+        let asset_hash = &&self.asset_hash.0;
+        let fee_hash = &&self.fee_hash.0;
+        let name = &self.name;
+        let fee = &self.fee.to_bytes();
+        let fee_len = fee.len();
+
+        // Write to buffer
+        buf.write_u8(tx_type).unwrap();
+        buf.write_u8(fee_len as u8).unwrap();
+        buf.write_u8(bitmask).unwrap();
+        buf.append(&mut creator.to_vec());
+        buf.append(&mut receiver.to_vec());
+
+        buf.append(&mut asset_hash.to_vec());
+        buf.append(&mut fee_hash.to_vec());
+        buf.append(&mut name.to_vec());
+        buf.append(&mut hash.to_vec());
+        buf.append(&mut signature);
+        buf.append(&mut fee.to_vec());
+
+        if bitmask.get(0) {
+            let meta1 = &self.meta1.unwrap();
+            buf.append(&mut meta1.to_vec());
+        };
+        if bitmask.get(1) {
+            let meta2 = &self.meta2.unwrap();
+            buf.append(&mut meta2.to_vec());
+        };
+        if bitmask.get(2) {
+            let meta3 = &self.meta3.unwrap();
+            buf.append(&mut meta3.to_vec());
+        };
+        if bitmask.get(3) {
+            let meta4 = &self.meta4.unwrap();
+            buf.append(&mut meta4.to_vec());
+        };
+        if bitmask.get(4) {
+            let meta5 = &self.meta5.unwrap();
+            buf.append(&mut meta5.to_vec());
+        };
+
+        Ok(buf)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<CreateUnique, &'static str> {
+        let mut rdr = Cursor::new(bytes.to_vec());
+        let tx_type = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad transaction type");
+        };
+
+        if tx_type != Self::TX_TYPE {
+            return Err("Bad transation type");
+        }
+
+        rdr.set_position(1);
+
+        let fee_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad fee len");
+        };
+
+        rdr.set_position(2);
+
+        let bitmask = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad bitmask");
+        };
+
+        let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..3).collect();
+
+        let creator = if buf.len() > 33 as usize {
+            let creator_vec: Vec<u8> = buf.drain(..33).collect();
+
+            match NormalAddress::from_bytes(&creator_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let receiver = if buf.len() > 33 as usize {
+            let receiver_vec: Vec<u8> = buf.drain(..33).collect();
+
+            match Address::from_bytes(&receiver_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let asset_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let name = if buf.len() > 32 as usize {
+            let mut name_vec = [0; ASSET_NAME_SIZE];
+            let name_vec_from_buf: Vec<u8> = buf.drain(..32).collect();
+
+            name_vec.copy_from_slice(&name_vec_from_buf);
+            name_vec
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64).collect();
+
+            match Signature::from_bytes(&sig_vec) {
+                Ok(sig) => sig,
+                Err(_) => return Err("Bad signature"),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee = if buf.len() >= fee_len as usize {
+            let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
+
+            match Balance::from_bytes(&fee_vec) {
+                Ok(result) => result,
+                Err(_) => return Err("Bad gas price"),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        // From this point, data can be missing (None values are not serialized)
+        let mut meta1: Option<[u8; META_FIELD_SIZE]> = None;
+        let mut meta2: Option<[u8; META_FIELD_SIZE]> = None;
+        let mut meta3: Option<[u8; META_FIELD_SIZE]> = None;
+        let mut meta4: Option<[u8; META_FIELD_SIZE]> = None;
+        let mut meta5: Option<[u8; META_FIELD_SIZE]> = None;
+
+        if bitmask.get(0) {
+            if buf.len() >= META_FIELD_SIZE as usize {
+                let mut meta_vec = [0; META_FIELD_SIZE];
+                let meta_from_buf: Vec<u8> = buf.drain(..32).collect();
+
+                meta_vec.copy_from_slice(&meta_from_buf);
+                meta1 = Some(meta_vec);
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        }
+
+        if bitmask.get(1) {
+            if buf.len() >= META_FIELD_SIZE as usize {
+                let mut meta_vec = [0; META_FIELD_SIZE];
+                let meta_from_buf: Vec<u8> = buf.drain(..32).collect();
+
+                meta_vec.copy_from_slice(&meta_from_buf);
+                meta2 = Some(meta_vec);
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        }
+
+        if bitmask.get(2) {
+            if buf.len() >= META_FIELD_SIZE as usize {
+                let mut meta_vec = [0; META_FIELD_SIZE];
+                let meta_from_buf: Vec<u8> = buf.drain(..32).collect();
+
+                meta_vec.copy_from_slice(&meta_from_buf);
+                meta3 = Some(meta_vec);
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        }
+
+        if bitmask.get(3) {
+            if buf.len() >= META_FIELD_SIZE as usize {
+                let mut meta_vec = [0; META_FIELD_SIZE];
+                let meta_from_buf: Vec<u8> = buf.drain(..32).collect();
+
+                meta_vec.copy_from_slice(&meta_from_buf);
+                meta4 = Some(meta_vec);
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        }
+
+        if bitmask.get(4) {
+            if buf.len() >= META_FIELD_SIZE as usize {
+                let mut meta_vec = [0; META_FIELD_SIZE];
+                let meta_from_buf: Vec<u8> = buf.drain(..32).collect();
+
+                meta_vec.copy_from_slice(&meta_from_buf);
+                meta5 = Some(meta_vec);
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        }
+
+        // Make sure no data remained
+        if buf.len() > 0 {
+            return Err("Incorrect packet structure. Buffer still has data after all fields were deserialized");
+        };
+
+        let create_unique = CreateUnique {
+            creator: creator,
+            receiver: receiver,
+            asset_hash: asset_hash,
+            fee_hash: fee_hash,
+            name: name,
+            meta1: meta1,
+            meta2: meta2,
+            meta3: meta3,
+            meta4: meta4,
+            meta5: meta5,
+            fee: fee,
+            hash: Some(hash),
+            signature: Some(signature),
+        };
+
+        Ok(create_unique)
+    }
+
+    /// Returns a random valid transaction for the provided state.
+    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Self {
+        unimplemented!();
     }
 
     impl_hash!();
@@ -203,9 +520,9 @@ mod tests {
     use crypto::Identity;
 
     quickcheck! {
-        // fn serialize_deserialize(tx: CreateUnique) -> bool {
-        //     tx == CreateUnique::from_bytes(&CreateUnique::to_bytes(&tx).unwrap()).unwrap()
-        // }
+        fn serialize_deserialize(tx: CreateUnique) -> bool {
+            tx == CreateUnique::from_bytes(&CreateUnique::to_bytes(&tx).unwrap()).unwrap()
+        }
 
         fn verify_hash(tx: CreateUnique) -> bool {
             let mut tx = tx;
