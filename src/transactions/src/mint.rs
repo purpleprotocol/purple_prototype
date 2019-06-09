@@ -294,12 +294,12 @@ impl Mint {
     }
 
     /// Signs the transaction with the given secret key.
-    pub fn sign(&mut self, skey: Sk) {
+    pub fn sign(&mut self, skey: &Sk) {
         // Assemble data
         let message = assemble_message(&self);
 
         // Sign data
-        let signature = crypto::sign(&message, &skey);
+        let signature = crypto::sign(&message, skey, &self.minter.pkey());
 
         self.signature = Some(signature);
     }
@@ -604,7 +604,7 @@ mod tests {
             hash: None,
         };
 
-        create_mintable.sign(id2.skey().clone());
+        create_mintable.sign(id2.skey());
         create_mintable.hash();
         create_mintable.apply(&mut trie);
 
@@ -619,7 +619,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id2.skey().clone());
+        tx.sign(id2.skey());
         tx.hash();
 
         assert!(tx.validate(&trie));
@@ -659,7 +659,7 @@ mod tests {
             hash: None,
         };
 
-        create_mintable.sign(id2.skey().clone());
+        create_mintable.sign(id2.skey());
         create_mintable.hash();
         create_mintable.apply(&mut trie);
 
@@ -674,7 +674,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id2.skey().clone());
+        tx.sign(id2.skey());
         tx.hash();
 
         assert!(!tx.validate(&trie));
@@ -714,7 +714,7 @@ mod tests {
             hash: None,
         };
 
-        create_mintable.sign(id2.skey().clone());
+        create_mintable.sign(id2.skey());
         create_mintable.hash();
         create_mintable.apply(&mut trie);
 
@@ -729,7 +729,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id2.skey().clone());
+        tx.sign(id2.skey());
         tx.hash();
 
         assert!(!tx.validate(&trie));
@@ -765,7 +765,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id2.skey().clone());
+        tx.sign(id2.skey());
         tx.hash();
 
         assert!(!tx.validate(&trie));
@@ -803,7 +803,7 @@ mod tests {
             hash: None,
         };
 
-        create_mintable.sign(id2.skey().clone());
+        create_mintable.sign(id2.skey());
         create_mintable.hash();
         create_mintable.apply(&mut trie);
 
@@ -818,7 +818,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id2.skey().clone());
+        tx.sign(id2.skey());
         tx.hash();
 
         assert!(!tx.validate(&trie));
@@ -858,7 +858,7 @@ mod tests {
             hash: None,
         };
 
-        create_mintable.sign(id2.skey().clone());
+        create_mintable.sign(id2.skey());
         create_mintable.hash();
         create_mintable.apply(&mut trie);
 
@@ -873,7 +873,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id2.skey().clone());
+        tx.sign(id2.skey());
         tx.hash();
         tx.apply(&mut trie);
 
@@ -952,7 +952,7 @@ mod tests {
             hash: None,
         };
 
-        create_mintable.sign(id2.skey().clone());
+        create_mintable.sign(id2.skey());
         create_mintable.hash();
         create_mintable.apply(&mut trie);
 
@@ -967,7 +967,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id2.skey().clone());
+        tx.sign(id2.skey());
         tx.hash();
         tx.apply(&mut trie);
 
@@ -1046,7 +1046,7 @@ mod tests {
             hash: None,
         };
 
-        create_mintable.sign(id2.skey().clone());
+        create_mintable.sign(id2.skey());
         create_mintable.hash();
         create_mintable.apply(&mut trie);
 
@@ -1061,7 +1061,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id2.skey().clone());
+        tx.sign(id2.skey());
         tx.hash();
         tx.apply(&mut trie);
 
@@ -1134,7 +1134,7 @@ mod tests {
                 hash: None
             };
 
-            tx.sign(id.skey().clone());
+            tx.sign(id.skey());
             tx.verify_sig()
         }
     }

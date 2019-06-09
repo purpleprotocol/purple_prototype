@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::str;
 use chrono::prelude::*;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use crypto::{PublicKey as Pk, SecretKey as Sk, Signature, KxPublicKey as KxPk};
+use crypto::{PublicKey as Pk, ExpandedSecretKey as Sk, Signature, KxPublicKey as KxPk};
 use std::io::Cursor;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -51,12 +51,12 @@ impl Connect {
 }
 
 impl Packet for Connect {
-    fn sign(&mut self, skey: &Sk) {
+    fn sign(&mut self, skey: &Sk, pkey: &Pk) {
         // Assemble data
         let message = assemble_message(&self);
 
         // Sign data
-        let signature = crypto::sign(&message, skey);
+        let signature = crypto::sign_expanded(&message, skey, pkey);
 
         // Attach signature to struct
         self.signature = Some(signature);
@@ -66,7 +66,7 @@ impl Packet for Connect {
         let message = assemble_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.node_id.0),
+            Some(ref sig) => crypto::verify(&message, sig, &self.node_id.to_pkey()),
             None => false,
         }
     }
@@ -100,7 +100,7 @@ impl Packet for Connect {
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u8(timestamp_length).unwrap();
         buffer.extend_from_slice(kx_key);
-        buffer.extend_from_slice(&node_id.0);
+        buffer.extend_from_slice(node_id);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(timestamp.as_bytes());
 
@@ -147,8 +147,13 @@ impl Packet for Connect {
             let mut b = [0; 32];
 
             b.copy_from_slice(&node_id_vec);
+            let is_valid_pk = Pk::from_bytes(&b).is_ok();
 
-            NodeId(Pk(b))
+            if is_valid_pk {
+                NodeId(b)
+            } else {
+                return Err(NetworkErr::BadFormat);
+            }
         } else {
             return Err(NetworkErr::BadFormat);
         };
@@ -241,7 +246,7 @@ fn assemble_message(obj: &Connect) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::with_capacity(64);
 
     let kx_key = obj.kx_key.0;
-    let node_id = (obj.node_id.0).0;
+    let node_id = obj.node_id.0;
     let timestamp = obj.timestamp.to_rfc3339();
 
     buf.extend_from_slice(&[Connect::PACKET_TYPE]);
@@ -266,7 +271,7 @@ impl Arbitrary for Connect {
         let timestamp = Utc::now();
 
         Connect {
-            node_id: NodeId(*id.pkey()),
+            node_id: NodeId::from_pkey(*id.pkey()),
             kx_key: pk,
             timestamp,
             signature: Some(Arbitrary::arbitrary(g)),
@@ -283,6 +288,7 @@ mod tests {
     use std::sync::mpsc::channel;
     use parking_lot::Mutex;
     use hashbrown::HashMap;
+    use blake2::Blake2b;
     use crate::interface::NetworkInterface;
     use crate::mock::MockNetwork;
     use crate::node_id::NodeId;
@@ -294,6 +300,8 @@ mod tests {
         let addr2 = crate::random_socket_addr();
         let (pk1, sk1) = crypto::gen_keypair();
         let (pk2, sk2) = crypto::gen_keypair(); 
+        let sk1 = sk1.expand::<Blake2b>();
+        let sk2 = sk2.expand::<Blake2b>();
         let n1 = NodeId::from_pkey(pk1);
         let n2 = NodeId::from_pkey(pk2);
 
@@ -360,18 +368,19 @@ mod tests {
             tx == Connect::from_bytes(&Connect::to_bytes(&tx)).unwrap()
         }
 
-        fn verify_signature(id1: Identity, id2: Identity) -> bool {
+        fn verify_signature() -> bool {
             let id = Identity::new();
+            let sk = id.skey().expand::<Blake2b>();
             let (pk, _) = crypto::gen_kx_keypair();
             let timestamp = Utc::now();
             let mut packet = Connect {
-                node_id: NodeId(*id.pkey()),
+                node_id: NodeId::from_pkey(*id.pkey()),
                 kx_key: pk,
                 signature: None,
                 timestamp
             };
 
-            packet.sign(&id.skey());
+            packet.sign(&sk, id.pkey());
             packet.verify_sig()
         }
 

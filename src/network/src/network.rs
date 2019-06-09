@@ -21,14 +21,13 @@ use crate::interface::NetworkInterface;
 use crate::packets::connect::Connect;
 use crate::packet::Packet;
 use std::net::SocketAddr;
-use crypto::SecretKey as Sk;
+use crypto::ExpandedSecretKey as Sk;
 use hashbrown::{HashSet, HashMap};
 use std::sync::Arc;
 use parking_lot::Mutex;
 use NodeId;
 use Peer;
 
-#[derive(Debug, Clone)]
 pub struct Network {
     /// Mapping between connected ips and peer information
     pub(crate) peers: HashMap<SocketAddr, Peer>,
@@ -133,7 +132,7 @@ impl NetworkInterface for Network {
 
     fn send_unsigned<P: Packet>(&self, peer: &NodeId, packet: &mut P) -> Result<(), NetworkErr> {
         if packet.signature().is_none() {
-            packet.sign(&self.secret_key);
+            packet.sign(&self.secret_key, &self.node_id.to_pkey());
         }
 
         let packet = packet.to_bytes();

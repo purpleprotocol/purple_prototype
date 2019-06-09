@@ -29,7 +29,7 @@ use std::str;
 use std::io::Cursor;
 use std::str::FromStr;
 use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
-use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{PublicKey as Pk, ExpandedSecretKey as Sk, Signature};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendPeers {
@@ -72,12 +72,12 @@ impl SendPeers {
 }
 
 impl Packet for SendPeers {
-    fn sign(&mut self, skey: &Sk) {
+    fn sign(&mut self, skey: &Sk, pkey: &Pk) {
         // Assemble data
         let message = assemble_sign_message(&self);
 
         // Sign data
-        let signature = crypto::sign(&message, skey);
+        let signature = crypto::sign_expanded(&message, skey, pkey);
 
         // Attach signature to struct
         self.signature = Some(signature);
@@ -87,7 +87,7 @@ impl Packet for SendPeers {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.node_id.0),
+            Some(ref sig) => crypto::verify(&message, sig, &self.node_id.to_pkey()),
             None => false,
         }
     }
@@ -127,7 +127,7 @@ impl Packet for SendPeers {
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u8(timestamp_len).unwrap();
         buffer.write_u16::<BigEndian>(peers_len as u16).unwrap();
-        buffer.extend_from_slice(&node_id.0);
+        buffer.extend_from_slice(node_id);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(timestamp.as_bytes());
         buffer.extend_from_slice(&peers);
@@ -172,8 +172,13 @@ impl Packet for SendPeers {
             let mut b = [0; 32];
 
             b.copy_from_slice(&node_id_vec);
+            let is_valid_pk = Pk::from_bytes(&b).is_ok();
 
-            NodeId(Pk(b))
+            if is_valid_pk {
+                NodeId(b)
+            } else {
+                return Err(NetworkErr::BadFormat);
+            }
         } else {
             return Err(NetworkErr::BadFormat);
         };
@@ -277,7 +282,7 @@ impl Packet for SendPeers {
 
 fn assemble_sign_message(obj: &SendPeers) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
-    let node_id = (obj.node_id.0).0;
+    let node_id = obj.node_id.0;
     let timestamp = obj.timestamp.to_rfc3339();
     let peers = obj.encode_peers();
 
@@ -302,7 +307,7 @@ impl Arbitrary for SendPeers {
         let timestamp = Utc::now();
 
         SendPeers {
-            node_id: NodeId(*id.pkey()),
+            node_id: NodeId::from_pkey(*id.pkey()),
             timestamp,
             peers: Arbitrary::arbitrary(g),
             signature: Some(Arbitrary::arbitrary(g)),
@@ -319,6 +324,7 @@ mod tests {
     use std::sync::mpsc::channel;
     use parking_lot::Mutex;
     use hashbrown::HashMap;
+    use blake2::Blake2b;
     use crate::packets::RequestPeers;
     use crate::interface::NetworkInterface;
     use crate::mock::MockNetwork;
@@ -337,6 +343,11 @@ mod tests {
         let (pk3, sk3) = crypto::gen_keypair();
         let (pk4, sk4) = crypto::gen_keypair();
         let (pk5, sk5) = crypto::gen_keypair();
+        let sk1 = sk1.expand::<Blake2b>();
+        let sk2 = sk2.expand::<Blake2b>();
+        let sk3 = sk3.expand::<Blake2b>();
+        let sk4 = sk4.expand::<Blake2b>();
+        let sk5 = sk5.expand::<Blake2b>();
         let n1 = NodeId::from_pkey(pk1);
         let n2 = NodeId::from_pkey(pk2);
         let n3 = NodeId::from_pkey(pk3);
@@ -475,17 +486,18 @@ mod tests {
             tx == SendPeers::from_bytes(&SendPeers::to_bytes(&tx)).unwrap()
         }
 
-        fn verify_signature(id1: Identity, id2: Identity, peers: Vec<SocketAddr>) -> bool {
+        fn verify_signature(peers: Vec<SocketAddr>) -> bool {
             let id = Identity::new();
+            let skey = id.skey().expand::<Blake2b>();
             let timestamp = Utc::now();
             let mut packet = SendPeers {
-                node_id: NodeId(*id.pkey()),
+                node_id: NodeId::from_pkey(*id.pkey()),
                 peers,
                 signature: None,
                 timestamp
             };
 
-            packet.sign(&id.skey());
+            packet.sign(&skey, id.pkey());
             packet.verify_sig()
         }
 

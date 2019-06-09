@@ -48,12 +48,12 @@ impl Call {
     /// This function will panic if there already exists
     /// a signature and the address type doesn't match
     /// the signature type.
-    pub fn sign(&mut self, skey: Sk) {
+    pub fn sign(&mut self, skey: &Sk) {
         // Assemble data
         let message = assemble_message(&self);
 
         // Sign data
-        let signature = crypto::sign(&message, &skey);
+        let signature = crypto::sign(&message, skey, &self.from.pkey());
         self.signature = Some(signature);
     }
 
@@ -434,7 +434,7 @@ mod tests {
                 hash: None
             };
 
-            tx.sign(id.skey().clone());
+            tx.sign(id.skey());
             tx.verify_sig()
         }
     }

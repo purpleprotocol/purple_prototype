@@ -226,9 +226,9 @@ mod tests {
         let i1 = Identity::new();
         let i2 = Identity::new();
         let i3 = Identity::new();
-        let n1 = NodeId(*i1.pkey());
-        let n2 = NodeId(*i2.pkey());
-        let n3 = NodeId(*i3.pkey());
+        let n1 = NodeId::from_pkey(*i1.pkey());
+        let n2 = NodeId::from_pkey(*i2.pkey());
+        let n3 = NodeId::from_pkey(*i3.pkey());
         let seed = Stamp::seed();
         let (s_a, s_b) = seed.fork();
         let (s_b, s_c) = s_b.fork();
@@ -347,9 +347,9 @@ mod tests {
         let i1 = Identity::new();
         let i2 = Identity::new();
         let i3 = Identity::new();
-        let n1 = NodeId(*i1.pkey());
-        let n2 = NodeId(*i2.pkey());
-        let n3 = NodeId(*i3.pkey());
+        let n1 = NodeId::from_pkey(*i1.pkey());
+        let n2 = NodeId::from_pkey(*i2.pkey());
+        let n3 = NodeId::from_pkey(*i3.pkey());
         let seed = Stamp::seed();
         let (s_a, s_b) = seed.fork();
         let (s_b, s_c) = s_b.fork();
@@ -449,9 +449,9 @@ mod tests {
         //     let i1 = Identity::new();
         //     let i2 = Identity::new();
         //     let i3 = Identity::new();
-        //     let n1 = NodeId(*i1.pkey());
-        //     let n2 = NodeId(*i2.pkey());
-        //     let n3 = NodeId(*i3.pkey());
+        //     let n1 = NodeId::from_pkey(*i1.pkey());
+        //     let n2 = NodeId::from_pkey(*i2.pkey());
+        //     let n3 = NodeId::from_pkey(*i3.pkey());
         // }
 
         /// Causal graph structure:
@@ -465,9 +465,9 @@ mod tests {
             let i1 = Identity::new();
             let i2 = Identity::new();
             let i3 = Identity::new();
-            let n1 = NodeId(*i1.pkey());
-            let n2 = NodeId(*i2.pkey());
-            let n3 = NodeId(*i3.pkey());
+            let n1 = NodeId::from_pkey(*i1.pkey());
+            let n2 = NodeId::from_pkey(*i2.pkey());
+            let n3 = NodeId::from_pkey(*i3.pkey());
             let seed = Stamp::seed();
             let (s_a, s_b) = seed.fork();
             let (s_b, s_c) = s_b.fork();

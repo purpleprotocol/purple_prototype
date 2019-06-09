@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use std::str;
 use std::io::Cursor;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{PublicKey as Pk, ExpandedSecretKey as Sk, Signature};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestPeers {
@@ -59,12 +59,12 @@ impl RequestPeers {
 }
 
 impl Packet for RequestPeers {
-    fn sign(&mut self, skey: &Sk) {
+    fn sign(&mut self, skey: &Sk, pkey: &Pk) {
         // Assemble data
         let message = assemble_sign_message(&self);
 
         // Sign data
-        let signature = crypto::sign(&message, skey);
+        let signature = crypto::sign_expanded(&message, skey, pkey);
 
         // Attach signature to struct
         self.signature = Some(signature);
@@ -74,7 +74,7 @@ impl Packet for RequestPeers {
         let message = assemble_sign_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.node_id.0),
+            Some(ref sig) => crypto::verify(&message, sig, &self.node_id.to_pkey()),
             None => false,
         }
     }
@@ -111,7 +111,7 @@ impl Packet for RequestPeers {
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u8(timestamp_length).unwrap();
         buffer.write_u8(self.requested_peers).unwrap();
-        buffer.extend_from_slice(&node_id.0);
+        buffer.extend_from_slice(node_id);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(timestamp.as_bytes());
 
@@ -155,8 +155,13 @@ impl Packet for RequestPeers {
             let mut b = [0; 32];
 
             b.copy_from_slice(&node_id_vec);
+            let is_valid_pk = Pk::from_bytes(&b).is_ok();
 
-            NodeId(Pk(b))
+            if is_valid_pk {
+                NodeId(b)
+            } else {
+                return Err(NetworkErr::BadFormat);
+            }
         } else {
             return Err(NetworkErr::BadFormat);
         };
@@ -216,7 +221,7 @@ impl Packet for RequestPeers {
 
 fn assemble_sign_message(obj: &RequestPeers) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
-    let node_id = (obj.node_id.0).0;
+    let node_id = obj.node_id.0;
     let timestamp = obj.timestamp.to_rfc3339();
 
     buf.extend_from_slice(&[RequestPeers::PACKET_TYPE, obj.requested_peers]);
@@ -239,7 +244,7 @@ impl Arbitrary for RequestPeers {
         let timestamp = Utc::now();
 
         RequestPeers {
-            node_id: NodeId(*id.pkey()),
+            node_id: NodeId::from_pkey(*id.pkey()),
             timestamp,
             requested_peers: Arbitrary::arbitrary(g),
             signature: Some(Arbitrary::arbitrary(g)),
@@ -250,23 +255,25 @@ impl Arbitrary for RequestPeers {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use blake2::Blake2b;
 
     quickcheck! {
         fn serialize_deserialize(tx: Arc<RequestPeers>) -> bool {
             tx == RequestPeers::from_bytes(&RequestPeers::to_bytes(&tx)).unwrap()
         }
 
-        fn verify_signature(id1: Identity, id2: Identity) -> bool {
+        fn verify_signature() -> bool {
             let id = Identity::new();
+            let skey = id.skey().expand::<Blake2b>();
             let timestamp = Utc::now();
             let mut packet = RequestPeers {
-                node_id: NodeId(*id.pkey()),
+                node_id: NodeId::from_pkey(*id.pkey()),
                 requested_peers: 10,
                 signature: None,
                 timestamp
             };
 
-            packet.sign(&id.skey());
+            packet.sign(&skey, id.pkey());
             packet.verify_sig()
         }
 

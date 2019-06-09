@@ -22,12 +22,12 @@ use crate::peer::ConnectionType;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use chrono::prelude::*;
-use crypto::{Signature, SecretKey as Sk};
+use crypto::{Signature, PublicKey as Pk, ExpandedSecretKey as Sk};
 
 /// Generic packet interface
 pub trait Packet {
     /// Signs the packet with the given `SecretKey`.
-    fn sign(&mut self, sk: &Sk);
+    fn sign(&mut self, sk: &Sk, pk: &Pk);
 
     /// Verifies the validity of the packet's signature.
     fn verify_sig(&self) -> bool;

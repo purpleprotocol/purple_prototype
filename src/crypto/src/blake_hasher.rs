@@ -18,6 +18,7 @@
 
 use hash::*;
 use merkle_light::hash::Algorithm;
+use digest::Digest;
 use std::default::Default;
 use std::hash::Hasher;
 use std::u64;
@@ -61,6 +62,6 @@ impl Algorithm<Hash> for BlakeHasher {
 
     #[inline]
     fn reset(&mut self) {
-        self.buffer = Vec::new();
+        self.buffer.clear();
     }
 }

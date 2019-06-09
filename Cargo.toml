@@ -23,6 +23,7 @@ jsonrpc-macros = "9.0.0"
 hashdb = "0.3.0"
 kvdb = "0.1.0"
 kvdb-rocksdb = "0.1.0"
+blake2 = "0.8.0"
 account = { path = "src/account" }
 purple_vm = { path = "src/purple_vm" }
 crypto = { path = "src/crypto" } 

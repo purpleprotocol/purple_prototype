@@ -35,6 +35,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::future::ok;
 use tokio::prelude::*;
 use tokio_io_timeout::TimeoutStream;
+use crypto::ExpandedSecretKey as Sk;
 
 /// Purple network port
 pub const PORT: u16 = 44034;
@@ -113,7 +114,7 @@ fn process_connection(
             accept_connections.store(false, Ordering::Relaxed);
         }
 
-        (network.node_id.clone(), network.secret_key.clone())
+        (network.node_id.clone(), Sk::from_bytes(&network.secret_key.to_bytes()).unwrap())
     };
 
     // Split up the reading and writing parts of the
@@ -142,7 +143,7 @@ fn process_connection(
                 if !peer.sent_connect {
                     // Send `Connect` packet.
                     let mut connect = Connect::new(node_id.clone(), peer.pk);
-                    connect.sign(&skey);
+                    connect.sign(&skey, &node_id.to_pkey());
 
                     let packet = connect.to_bytes();
 

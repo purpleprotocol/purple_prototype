@@ -23,6 +23,7 @@ extern crate unwrap;
 #[macro_use]
 extern crate jsonrpc_macros;
 
+extern crate blake2;
 extern crate chain;
 extern crate clap;
 extern crate crypto;
@@ -41,8 +42,9 @@ extern crate parking_lot;
 extern crate persistence;
 extern crate tokio;
 
+use blake2::Blake2b;
 use clap::{App, Arg};
-use crypto::{Identity, SecretKey as Sk};
+use crypto::{Identity, ExpandedSecretKey as Sk};
 use elastic_array::ElasticArray128;
 use futures::future::ok;
 use futures::Future;
@@ -106,24 +108,21 @@ fn fetch_credentials(db: &mut PersistentDb) -> (NodeId, Sk) {
     match (db.get(&node_id_key), db.get(&node_skey_key)) {
         (Some(id), Some(skey)) => {
             let mut id_buf = [0; 32];
-            let mut skey_buf = [0; 64];
-
             id_buf.copy_from_slice(&id);
-            skey_buf.copy_from_slice(&skey);
 
-            (NodeId::new(id_buf), Sk(skey_buf))
+            (NodeId::new(id_buf), Sk::from_bytes(&skey).unwrap())
         }
         _ => {
             // Create new identity and write keys to database
             let identity = Identity::new();
 
-            let bin_pkey = identity.pkey().0;
-            let bin_skey = identity.skey().0;
+            let bin_pkey = identity.pkey().to_bytes();
+            let bin_skey = identity.skey().expand::<Blake2b>().to_bytes();
 
             db.emplace(node_id_key, ElasticArray128::<u8>::from_slice(&bin_pkey));
             db.emplace(node_skey_key, ElasticArray128::<u8>::from_slice(&bin_skey));
 
-           (NodeId::new(bin_pkey), identity.skey().clone())
+           (NodeId::new(bin_pkey), Sk::from_bytes(&bin_skey).unwrap())
         }
     }
 }

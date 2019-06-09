@@ -18,17 +18,14 @@
 
 use quickcheck::Arbitrary;
 use rand::Rng;
-use rust_sodium::crypto::sign::Signature as PrimitiveSig;
+use ed25519_dalek::Signature as PrimitiveSig;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
-pub struct Signature(PrimitiveSig);
+pub struct Signature(pub(crate) PrimitiveSig);
 
 impl Signature {
     pub fn new(bin: &[u8]) -> Signature {
-        let mut sig = [0; 64];
-        sig.copy_from_slice(bin);
-
-        Signature(PrimitiveSig(sig))
+        Signature(PrimitiveSig::from_bytes(bin).unwrap())
     }
 
     pub fn inner(&self) -> PrimitiveSig {
@@ -36,19 +33,19 @@ impl Signature {
     }
 
     pub fn inner_bytes(&self) -> Vec<u8> {
-        (self.0).0.to_vec()
+        self.0.to_bytes().to_vec()
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        (self.0).0.to_vec()
+        self.0.to_bytes().to_vec()
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<Signature, &'static str> {
         if bin.len() == 64 {
-            let mut sig = [0; 64];
-            sig.copy_from_slice(bin);
-
-            Ok(Signature(PrimitiveSig(sig)))
+            match PrimitiveSig::from_bytes(&bin) {
+                Ok(result) => Ok(Signature(result)),
+                _ => Err("Bad signature")
+            }
         } else {
             Err("Bad signature length")
         }
@@ -57,18 +54,14 @@ impl Signature {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Signature({})", hex::encode(self.0))
+        write!(f, "Signature({})", hex::encode(self.0.to_bytes().to_vec()))
     }
 }
 
 impl Arbitrary for Signature {
-    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> Signature {
-        let mut rng = rand::thread_rng();
-        let bytes: Vec<u8> = (0..64).map(|_| rng.gen_range(1, 255)).collect();
-
-        let mut result = [0; 64];
-        result.copy_from_slice(&bytes);
-
-        Signature(PrimitiveSig(result))
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Signature {
+        let id = crate::Identity::new();
+        let message: Vec<u8> = Arbitrary::arbitrary(g);
+        crate::sign(&message, id.skey(), id.pkey())
     }
 }

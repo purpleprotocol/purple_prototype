@@ -41,11 +41,9 @@ extern crate transactions;
 #[macro_use]
 mod macros;
 mod heartbeat;
-mod join;
 mod leave;
 
 pub use heartbeat::*;
-pub use join::*;
 pub use leave::*;
 
 use causality::Stamp;
@@ -57,7 +55,6 @@ use std::hash::Hasher;
 #[derive(Clone, Debug)]
 pub enum Event {
     Heartbeat(Heartbeat),
-    Join(Join),
     Leave(Leave),
 
     /// Dummy event used for testing
@@ -91,7 +88,6 @@ impl Event {
     pub fn stamp(&self) -> Stamp {
         match *self {
             Event::Heartbeat(ref event) => event.stamp.clone(),
-            Event::Join(ref event) => event.stamp.clone(),
             Event::Leave(ref event) => event.stamp.clone(),
             Event::Dummy(_, _, _, ref stamp) => stamp.clone(),
             Event::Root => Stamp::seed(),
@@ -101,7 +97,6 @@ impl Event {
     pub fn node_id(&self) -> NodeId {
         match *self {
             Event::Heartbeat(ref event) => event.node_id.clone(),
-            Event::Join(ref event) => event.node_id.clone(),
             Event::Leave(ref event) => event.node_id.clone(),
             Event::Dummy(ref node_id, _, _, _) => node_id.clone(),
             Event::Root => unimplemented!(),
@@ -111,7 +106,6 @@ impl Event {
     pub fn event_hash(&self) -> Option<Hash> {
         match *self {
             Event::Heartbeat(ref event) => event.hash.clone(),
-            Event::Join(ref event) => event.hash.clone(),
             Event::Leave(ref event) => event.hash.clone(),
             Event::Dummy(ref node_id, ref hash, _, _) => Some(hash.clone()),
             Event::Root => Some(Hash::NULL),
@@ -121,7 +115,6 @@ impl Event {
     pub fn parent_hash(&self) -> Option<Hash> {
         match *self {
             Event::Heartbeat(ref event) => Some(event.parent_hash.clone()),
-            Event::Join(ref event) => event.parent_cg_hash.clone(),
             Event::Leave(ref event) => Some(event.parent_hash.clone()),
             Event::Dummy(ref node_id, _, ref parent_hash, _) => parent_hash.clone(),
             Event::Root => None,

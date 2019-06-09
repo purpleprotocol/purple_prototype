@@ -16,12 +16,12 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::{FromBase58, PublicKey, ToBase58};
+use crypto::{Identity, FromBase58, PublicKey, ToBase58};
 use quickcheck::Arbitrary;
 use rand::Rng;
 
 #[derive(Hash, Copy, PartialEq, Eq, Serialize, Deserialize, Clone, Debug, PartialOrd, Ord)]
-pub struct NormalAddress(PublicKey);
+pub struct NormalAddress([u8; 32]);
 
 impl NormalAddress {
     pub const ADDR_TYPE: u8 = 1;
@@ -39,11 +39,15 @@ impl NormalAddress {
     }
 
     pub fn from_pkey(pkey: PublicKey) -> NormalAddress {
-        NormalAddress(pkey)
+        let pkey = pkey.to_bytes();
+        let mut inner = [0; 32];
+        inner.copy_from_slice(&pkey);
+
+        NormalAddress(inner)
     }
 
     pub fn pkey(&self) -> PublicKey {
-        self.0.clone()
+        PublicKey::from_bytes(&self.0).unwrap()
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<NormalAddress, &'static str> {
@@ -54,7 +58,13 @@ impl NormalAddress {
             let mut pkey = [0; 32];
             pkey.copy_from_slice(&tail);
 
-            Ok(NormalAddress(PublicKey(pkey)))
+            let is_valid_pk = PublicKey::from_bytes(&tail).is_ok();
+
+            if is_valid_pk {
+                Ok(NormalAddress(pkey))
+            } else {
+                Err("Invalid public key!")
+            }
         } else if addr_type != Self::ADDR_TYPE {
             Err("Bad address type")
         } else {
@@ -64,7 +74,7 @@ impl NormalAddress {
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::new();
-        let bytes = (&&self.0).0;
+        let bytes = &&self.0;
 
         // Push address type
         result.push(Self::ADDR_TYPE);
@@ -79,22 +89,8 @@ impl NormalAddress {
 
 impl Arbitrary for NormalAddress {
     fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> NormalAddress {
-        let mut rng = rand::thread_rng();
-        let bytes: Vec<u8> = (0..32).map(|_| rng.gen_range(1, 255)).collect();
-
-        let mut result = [0; 32];
-        result.copy_from_slice(&bytes);
-
-        NormalAddress(PublicKey(result))
-    }
-
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        Box::new((&(&self.0).0).to_vec().shrink().map(|p| {
-            let mut result = [0; 32];
-            result.copy_from_slice(&p);
-
-            NormalAddress(PublicKey(result))
-        }))
+        let id = Identity::new();
+        NormalAddress::from_pkey(id.pkey().clone())
     }
 }
 

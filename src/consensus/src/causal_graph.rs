@@ -611,8 +611,8 @@ mod tests {
     fn highest_exclusive() {
         let i1 = Identity::new();
         let i2 = Identity::new();
-        let n1 = NodeId(*i1.pkey());
-        let n2 = NodeId(*i2.pkey());
+        let n1 = NodeId::from_pkey(*i1.pkey());
+        let n2 = NodeId::from_pkey(*i2.pkey());
         let A_hash = Hash::random();
         let A = Arc::new(Event::Dummy(
             n1.clone(),
@@ -630,8 +630,8 @@ mod tests {
     fn highest_following_with_byzantine_events() {
         let i1 = Identity::new();
         let i2 = Identity::new();
-        let n1 = NodeId(*i1.pkey());
-        let n2 = NodeId(*i2.pkey());
+        let n1 = NodeId::from_pkey(*i1.pkey());
+        let n2 = NodeId::from_pkey(*i2.pkey());
         let A_hash = Hash::random();
         let B_hash = Hash::random();
         let C1_hash = Hash::random();
@@ -699,8 +699,8 @@ mod tests {
         fn is_direct_follower() -> bool {
             let i1 = Identity::new();
             let i2 = Identity::new();
-            let n1 = NodeId(*i1.pkey());
-            let n2 = NodeId(*i2.pkey());
+            let n1 = NodeId::from_pkey(*i1.pkey());
+            let n2 = NodeId::from_pkey(*i2.pkey());
             let A_hash = Hash::random();
             let B_hash = Hash::random();
             let C_hash = Hash::random();
@@ -750,7 +750,7 @@ mod tests {
 
         fn is_direct_follower_mul_paths() -> bool {
             let i = Identity::new();
-            let n = NodeId(*i.pkey());
+            let n = NodeId::from_pkey(*i.pkey());
             let A_hash = Hash::random();
             let B_hash = Hash::random();
             let C_hash = Hash::random();

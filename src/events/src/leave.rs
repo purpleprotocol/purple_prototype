@@ -70,7 +70,7 @@ impl Leave {
             return Err("Signature field is missing");
         };
 
-        let node_id = &(&&self.node_id.0).0;
+        let node_id = &self.node_id.0;
         let parent_hash = &self.parent_hash.0;
         let mut stamp: Vec<u8> = self.stamp.to_bytes();
 
@@ -118,7 +118,13 @@ impl Leave {
 
             node_id.copy_from_slice(&node_id_vec);
 
-            NodeId(PublicKey(node_id))
+            let is_valid_pk = PublicKey::from_bytes(&node_id).is_ok();
+
+            if is_valid_pk {
+                NodeId(node_id)
+            } else {
+                return Err("Invalid node id");
+            }
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the node id");
         };

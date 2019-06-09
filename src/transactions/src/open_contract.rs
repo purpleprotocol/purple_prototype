@@ -223,12 +223,12 @@ impl OpenContract {
     }
 
     /// Signs the transaction with the given secret key.
-    pub fn sign(&mut self, skey: Sk) {
+    pub fn sign(&mut self, skey: &Sk) {
         // Assemble data
         let message = assemble_message(&self);
 
         // Sign data
-        let signature = crypto::sign(&message, &skey);
+        let signature = crypto::sign(&message, skey, &self.owner.pkey());
 
         self.signature = Some(signature);
     }
@@ -607,7 +607,7 @@ mod tests {
         };
 
         tx.compute_address();
-        tx.sign(id.skey().clone());
+        tx.sign(id.skey());
         tx.hash();
 
         // Apply transaction
@@ -702,7 +702,7 @@ mod tests {
             };
 
             tx.compute_address();
-            tx.sign(id.skey().clone());
+            tx.sign(id.skey());
             tx.verify_sig()
         }
     }

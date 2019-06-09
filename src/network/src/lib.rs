@@ -23,6 +23,7 @@ extern crate quickcheck;
 #[macro_use]
 extern crate log;
 
+extern crate blake2;
 extern crate byteorder;
 extern crate crypto;
 extern crate env_logger;

@@ -243,12 +243,12 @@ impl Burn {
     /// This function will panic if there already exists
     /// a signature and the address type doesn't match
     /// the signature type.
-    pub fn sign(&mut self, skey: Sk) {
+    pub fn sign(&mut self, skey: &Sk) {
         // Assemble data
         let message = assemble_message(&self);
 
         // Sign data
-        let signature = crypto::sign(&message, &skey);
+        let signature = crypto::sign(&message, skey, &self.burner.pkey());
         self.signature = Some(signature);
     }
 
@@ -519,7 +519,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id.skey().clone());
+        tx.sign(id.skey());
         tx.hash();
 
         assert!(tx.validate(&trie));
@@ -551,7 +551,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id.skey().clone());
+        tx.sign(id.skey());
         tx.hash();
 
         assert!(!tx.validate(&trie));
@@ -585,7 +585,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id.skey().clone());
+        tx.sign(id.skey());
         tx.hash();
 
         assert!(tx.validate(&trie));
@@ -619,7 +619,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id.skey().clone());
+        tx.sign(id.skey());
         tx.hash();
 
         assert!(!tx.validate(&trie));
@@ -653,7 +653,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id.skey().clone());
+        tx.sign(id.skey());
         tx.hash();
 
         assert!(!tx.validate(&trie));
@@ -685,7 +685,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id.skey().clone());
+        tx.sign(id.skey());
         tx.hash();
 
         assert!(!tx.validate(&trie));
@@ -717,7 +717,7 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id.skey().clone());
+        tx.sign(id.skey());
         tx.hash();
 
         // Apply transaction
@@ -769,7 +769,8 @@ mod tests {
             tx.verify_hash()
         }
 
-        fn verify_signature(id: Identity, amount: Balance, fee: Balance, asset_hash: Hash, fee_hash: Hash) -> bool {
+        fn verify_signature(amount: Balance, fee: Balance, asset_hash: Hash, fee_hash: Hash) -> bool {
+            let id = Identity::new();
             let mut tx = Burn {
                 burner: NormalAddress::from_pkey(*id.pkey()),
                 amount: amount,
@@ -780,7 +781,7 @@ mod tests {
                 hash: None
             };
 
-            tx.sign(id.skey().clone());
+            tx.sign(id.skey());
             tx.verify_sig()
         }
     }

@@ -71,7 +71,7 @@ pub use mint::*;
 pub use open_contract::*;
 pub use send::*;
 
-use crypto::Identity;
+use crypto::{Identity, SecretKey as Sk};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use quickcheck::Arbitrary;
@@ -125,14 +125,14 @@ impl Tx {
         let id = Identity::new();
 
         match random {
-            0 => Tx::OpenContract(OpenContract::arbitrary_valid(trie, id.skey().clone())),
-            1 => Tx::Send(Send::arbitrary_valid(trie, id.skey().clone())),
-            2 => Tx::Burn(Burn::arbitrary_valid(trie, id.skey().clone())),
-            3 => Tx::CreateCurrency(CreateCurrency::arbitrary_valid(trie, id.skey().clone())),
-            4 => Tx::CreateMintable(CreateMintable::arbitrary_valid(trie, id.skey().clone())),
-            5 => Tx::Mint(Mint::arbitrary_valid(trie, id.skey().clone())),
-            6 => Tx::CreateUnique(CreateUnique::arbitrary_valid(trie, id.skey().clone())),
-            7 => Tx::ChangeMinter(ChangeMinter::arbitrary_valid(trie, id.skey().clone())),
+            0 => Tx::OpenContract(OpenContract::arbitrary_valid(trie, Sk::from_bytes(&id.skey().to_bytes()).unwrap())),
+            1 => Tx::Send(Send::arbitrary_valid(trie, Sk::from_bytes(&id.skey().to_bytes()).unwrap())),
+            2 => Tx::Burn(Burn::arbitrary_valid(trie, Sk::from_bytes(&id.skey().to_bytes()).unwrap())),
+            3 => Tx::CreateCurrency(CreateCurrency::arbitrary_valid(trie, Sk::from_bytes(&id.skey().to_bytes()).unwrap())),
+            4 => Tx::CreateMintable(CreateMintable::arbitrary_valid(trie, Sk::from_bytes(&id.skey().to_bytes()).unwrap())),
+            5 => Tx::Mint(Mint::arbitrary_valid(trie, Sk::from_bytes(&id.skey().to_bytes()).unwrap())),
+            6 => Tx::CreateUnique(CreateUnique::arbitrary_valid(trie, Sk::from_bytes(&id.skey().to_bytes()).unwrap())),
+            7 => Tx::ChangeMinter(ChangeMinter::arbitrary_valid(trie, Sk::from_bytes(&id.skey().to_bytes()).unwrap())),
             _ => panic!(),
         }
     }

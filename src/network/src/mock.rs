@@ -26,12 +26,11 @@ use std::sync::Arc;
 use std::collections::VecDeque;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Sender, Receiver};
-use crypto::SecretKey as Sk;
+use crypto::ExpandedSecretKey as Sk;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
 use NodeId;
 
-#[derive(Debug)]
 /// Mock network layer used for testing.
 pub struct MockNetwork {
     /// Mapping between node ids and their mailboxes
@@ -67,7 +66,7 @@ impl NetworkInterface for MockNetwork {
 
         let mut peer = Peer::new(None, address.clone(), ConnectionType::Client);
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
-        connect_packet.sign(&self.secret_key); 
+        connect_packet.sign(&self.secret_key, &self.node_id.to_pkey()); 
         let connect = connect_packet.to_bytes();
         
         peer.sent_connect = true;
@@ -120,7 +119,7 @@ impl NetworkInterface for MockNetwork {
 
     fn send_unsigned<P: Packet>(&self, peer: &NodeId, packet: &mut P) -> Result<(), NetworkErr> {
         if packet.signature().is_none() {
-            packet.sign(&self.secret_key);
+            packet.sign(&self.secret_key, &self.node_id.to_pkey());
         }
 
         let packet = packet.to_bytes();

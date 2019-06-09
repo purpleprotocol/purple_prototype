@@ -86,12 +86,12 @@ impl Heartbeat {
     /// This function will panic if there already exists
     /// a signature and the address type doesn't match
     /// the signature type.
-    pub fn sign(&mut self, skey: Sk) {
+    pub fn sign(&mut self, skey: &Sk) {
         // Assemble data
         let message = assemble_message(&self);
 
         // Sign data
-        let signature = crypto::sign(&message, &skey);
+        let signature = crypto::sign(&message, skey, &self.node_id.to_pkey());
 
         self.signature = Some(signature);
     }
@@ -147,7 +147,7 @@ impl Heartbeat {
             return Err(err);
         }
 
-        let node_id = &(&&self.node_id.0).0;
+        let node_id = &self.node_id.0;
         let parent_hash = &self.parent_hash.0;
         let mut transactions: Vec<u8> = rlp::encode_list::<Vec<u8>, _>(&transactions.unwrap());
         let mut stamp: Vec<u8> = self.stamp.to_bytes();
@@ -209,7 +209,13 @@ impl Heartbeat {
 
             node_id.copy_from_slice(&node_id_vec);
 
-            NodeId(PublicKey(node_id))
+            let is_valid_pk = PublicKey::from_bytes(&node_id).is_ok();
+
+            if is_valid_pk {
+                NodeId(node_id)
+            } else {
+                return Err("Invalid node id");
+            }
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the minimum size for the node id");
         };
