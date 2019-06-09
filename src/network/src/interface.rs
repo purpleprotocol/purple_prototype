@@ -40,7 +40,7 @@ pub trait NetworkInterface {
     fn disconnect_from_ip(&mut self, ip: &SocketAddr) -> Result<(), NetworkErr>;
 
     /// Sends a packet to a specific peer.
-    fn send_to_peer(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr>;
+    fn send_to_peer(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
 
     /// Sends a packet to all peers.
     fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr>;
@@ -48,7 +48,14 @@ pub trait NetworkInterface {
     /// Attempts to send a packet to the specific peer. This
     /// function will also sign the packet if it does not yet
     /// have a signature and it will also serialize it to binary.
-    fn send_unsigned<P: Packet>(&self, peer: &NodeId, packet: &mut P) -> Result<(), NetworkErr>;
+    fn send_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr>;
+
+    /// Sends a raw packet to a specific peer. This 
+    /// means that the packet will be un-encrypted.
+    fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
+
+    /// This behaves similarly to `send_unsigned()` but it sends a raw packet.
+    fn send_raw_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr>;
 
     /// Callback that processes each packet that is received from any peer.
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;

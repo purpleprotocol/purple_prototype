@@ -21,6 +21,9 @@ pub enum NetworkErr {
     /// The format of the packet is invalid
     BadFormat,
 
+    /// The packet has an invalid signature
+    BadSignature,
+
     /// The connection attempt has failed
     ConnectFailed,
 
@@ -45,4 +48,13 @@ pub enum NetworkErr {
 
     /// We have received more peers than we have requested
     TooManyPeers,
+
+    /// The encryption was not valid
+    EncryptionErr,
+
+    /// The CRC32 checksum was invalid
+    BadCRC32,
+
+    /// The network version found in the packet is invalid
+    BadVersion,
 }

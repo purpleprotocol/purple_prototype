@@ -193,22 +193,25 @@ impl Packet for RequestPeers {
     }
 
     fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &RequestPeers, _conn_type: ConnectionType) -> Result<(), NetworkErr> {
-        debug!("Received RequestPeers packet from: {:?}", addr);
+        if !packet.verify_sig() {
+            return Err(NetworkErr::BadSignature);
+        }
         
+        debug!("Received RequestPeers packet from: {:?}", addr);
+
         let num_of_peers = packet.requested_peers as usize;
-        let requester = packet.node_id.clone();
         let our_node_id = network.our_node_id();
         let addresses: Vec<SocketAddr> = network
             .peers()
             // Don't send the address of the requester
-            .filter(|(peer_addr, peer)| peer.id.is_some() && peer.id != Some(requester.clone()) && *peer_addr != addr)
+            .filter(|(peer_addr, peer)| peer.id.is_some() && peer.id != Some(packet.node_id.clone()) && *peer_addr != addr)
             .take(num_of_peers)
             .map(|(addr, _)| addr)
             .cloned()
             .collect();
 
         let mut send_peers = SendPeers::new(our_node_id.clone(), addresses);
-        network.send_unsigned::<SendPeers>(&requester, &mut send_peers)?;
+        network.send_unsigned::<SendPeers>(addr, &mut send_peers)?;
 
         Ok(())
     }

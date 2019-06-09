@@ -72,9 +72,7 @@ impl NetworkInterface for MockNetwork {
         
         peer.sent_connect = true;
         self.peers.insert(address.clone(), peer);
-
-        let id = self.address_mappings.get(address).unwrap();
-        self.send_to_peer(id, &connect).unwrap();
+        self.send_raw(address, &connect).unwrap();
 
         Ok(())
     }
@@ -97,8 +95,32 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
-    fn send_to_peer(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr> {
-        if let Some(mailbox) = self.mailboxes.get(peer) {
+    fn send_to_peer(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+        let id = if let Some(id) = self.address_mappings.get(peer) {
+            id
+        } else {
+            return Err(NetworkErr::PeerNotFound);
+        };
+
+        if let Some(mailbox) = self.mailboxes.get(&id) {
+            let peer = self.peers.get(peer).unwrap();
+            let key = peer.rx.as_ref().unwrap();
+            let packet = crate::common::wrap_packet(packet, key);
+            mailbox.send((self.ip.clone(), packet)).unwrap();
+            Ok(())
+        } else {
+            Err(NetworkErr::PeerNotFound)
+        }
+    }
+
+    fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+        let id = if let Some(id) = self.address_mappings.get(peer) {
+            id
+        } else {
+            return Err(NetworkErr::PeerNotFound);
+        };
+        
+        if let Some(mailbox) = self.mailboxes.get(&id) {
             mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
             Ok(())
         } else {
@@ -118,13 +140,24 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
-    fn send_unsigned<P: Packet>(&self, peer: &NodeId, packet: &mut P) -> Result<(), NetworkErr> {
+    fn send_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
         if packet.signature().is_none() {
             packet.sign(&self.secret_key);
         }
 
         let packet = packet.to_bytes();
         self.send_to_peer(peer, &packet)?;
+
+        Ok(())
+    }
+
+    fn send_raw_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
+        if packet.signature().is_none() {
+            packet.sign(&self.secret_key);
+        }
+
+        let packet = packet.to_bytes();
+        self.send_raw(peer, &packet)?;
 
         Ok(())
     }
@@ -139,9 +172,9 @@ impl NetworkInterface for MockNetwork {
             self.peers.insert(addr.clone(), Peer::new(None, addr.clone(), ConnectionType::Server));
         }
 
-        let (is_none_id, conn_type) = {
+        let (tx, is_none_id, conn_type) = {
             let peer = self.peers.get(addr).unwrap();
-            (peer.id.is_none(), peer.connection_type)
+            (peer.tx.clone(), peer.id.is_none(), peer.connection_type)
         };
 
         // We should receive a connect packet
@@ -168,15 +201,16 @@ impl NetworkInterface for MockNetwork {
         } else {
             debug!("Received packet from {}: {}", addr, hex::encode(packet));
 
+            let packet = crate::common::unwrap_packet(packet, tx.as_ref().unwrap())?;
             let packet_type = packet[0];
             
             match packet_type {
-                RequestPeers::PACKET_TYPE => match RequestPeers::from_bytes(packet) {
+                RequestPeers::PACKET_TYPE => match RequestPeers::from_bytes(&packet) {
                     Ok(packet) => RequestPeers::handle(self, addr, &packet, conn_type)?,
                     _ => return Err(NetworkErr::PacketParseErr)
                 }
                     
-                SendPeers::PACKET_TYPE => match SendPeers::from_bytes(packet) {
+                SendPeers::PACKET_TYPE => match SendPeers::from_bytes(&packet) {
                     Ok(packet) => SendPeers::handle(self, addr, &packet, conn_type)?,
                     _ => return Err(NetworkErr::PacketParseErr)
                 }

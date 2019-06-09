@@ -19,6 +19,7 @@
 #[macro_use]
 extern crate serde_derive;
 
+pub extern crate crc32fast;
 extern crate blake2_rfc;
 extern crate hashdb;
 extern crate hex;
@@ -27,7 +28,6 @@ extern crate quickcheck;
 extern crate rand;
 extern crate rlp;
 extern crate byteorder;
-extern crate crc32fast;
 extern crate rust_base58;
 extern crate rust_sodium;
 
@@ -43,6 +43,8 @@ pub use rust_sodium::crypto::kx::{
     server_session_keys as server_sk,
 };
 pub use rust_sodium::crypto::sign::{gen_keypair, PublicKey, SecretKey};
+pub use rust_sodium::crypto::aead;
+pub use rust_sodium::crypto::aead::Nonce;
 pub use signature::*;
 
 mod blake_hasher;
@@ -58,6 +60,23 @@ pub fn sign(message: &[u8], skey: &SecretKey) -> Signature {
 
 pub fn verify(message: &[u8], signature: &Signature, pkey: &PublicKey) -> bool {
     verify_detached(&signature.inner(), message, pkey)
+}
+
+pub fn seal(message: &[u8], key: &SessionKey) -> (Vec<u8>, Nonce) {
+    let n = aead::gen_nonce();
+    let key = aead::Key::from_slice(&key.0).unwrap();
+    let ciphertext = aead::seal(message, None, &n, &key);
+    
+    (ciphertext, n)
+}
+
+pub fn open(ciphertext: &[u8], key: &SessionKey, nonce: &Nonce) -> Result<Vec<u8>, ()> {
+    let key = aead::Key::from_slice(&key.0).unwrap();
+    
+    match aead::open(ciphertext, None, nonce, &key) {
+        Ok(result) => Ok(result),
+        _ => Err(())
+    }
 }
 
 #[derive(Clone, Debug)]
