@@ -87,6 +87,7 @@ pub enum Tx {
     CreateMintable(CreateMintable),
     Mint(Mint),
     CreateUnique(CreateUnique),
+    ChangeMinter(ChangeMinter),
 }
 
 impl Tx {
@@ -100,6 +101,7 @@ impl Tx {
             Tx::CreateMintable(ref tx) => tx.to_bytes(),
             Tx::Mint(ref tx) => tx.to_bytes(),
             Tx::CreateUnique(ref tx) => tx.to_bytes(),
+            Tx::ChangeMinter(ref tx) => tx.to_bytes(),
         }
     }
 
@@ -113,12 +115,13 @@ impl Tx {
             Tx::CreateMintable(ref tx) => tx.compute_hash_message(),
             Tx::Mint(ref tx) => tx.compute_hash_message(),
             Tx::CreateUnique(ref tx) => tx.compute_hash_message(),
+            Tx::ChangeMinter(ref tx) => tx.compute_hash_message(),
         }
     }
 
     pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>) -> Tx {
         let mut rng = rand::thread_rng();
-        let random = rng.gen_range(0, 7);
+        let random = rng.gen_range(0, 8);
         let id = Identity::new();
 
         match random {
@@ -129,6 +132,7 @@ impl Tx {
             4 => Tx::CreateMintable(CreateMintable::arbitrary_valid(trie, id.skey().clone())),
             5 => Tx::Mint(Mint::arbitrary_valid(trie, id.skey().clone())),
             6 => Tx::CreateUnique(CreateUnique::arbitrary_valid(trie, id.skey().clone())),
+            7 => Tx::ChangeMinter(ChangeMinter::arbitrary_valid(trie, id.skey().clone())),
             _ => panic!(),
         }
     }
@@ -137,7 +141,7 @@ impl Tx {
 impl Arbitrary for Tx {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Tx {
         let mut rng = rand::thread_rng();
-        let random = rng.gen_range(0, 8);
+        let random = rng.gen_range(0, 9);
 
         match random {
             0 => Tx::Call(Arbitrary::arbitrary(g)),
@@ -148,6 +152,7 @@ impl Arbitrary for Tx {
             5 => Tx::CreateMintable(Arbitrary::arbitrary(g)),
             6 => Tx::Mint(Arbitrary::arbitrary(g)),
             7 => Tx::CreateUnique(Arbitrary::arbitrary(g)),
+            8 => Tx::ChangeMinter(Arbitrary::arbitrary(g)),
             _ => panic!(),
         }
     }
