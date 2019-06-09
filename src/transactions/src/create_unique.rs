@@ -21,6 +21,8 @@ use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
+use patricia_trie::{TrieDBMut, TrieMut};
+use persistence::{BlakeDbHasher, Codec};
 
 pub const ASSET_NAME_SIZE: usize = 32;
 pub const META_FIELD_SIZE: usize = 32;
@@ -390,6 +392,11 @@ impl CreateUnique {
         };
 
         Ok(create_unique)
+    }
+
+    /// Returns a random valid transaction for the provided state.
+    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Self {
+        unimplemented!();
     }
 
     impl_hash!();

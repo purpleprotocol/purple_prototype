@@ -32,6 +32,7 @@ extern crate serde_derive;
 extern crate bin_tools;
 
 extern crate account;
+extern crate bitvec;
 extern crate byteorder;
 extern crate crypto;
 extern crate elastic_array;
@@ -44,7 +45,6 @@ extern crate purple_vm;
 extern crate rand;
 extern crate rust_decimal;
 extern crate serde;
-extern crate bitvec;
 
 #[macro_use]
 mod macros;
@@ -62,9 +62,9 @@ mod send;
 
 pub use burn::*;
 pub use call::*;
+pub use change_minter::*;
 pub use create_currency::*;
 pub use create_mintable::*;
-pub use change_minter::*;
 pub use create_unique::*;
 pub use genesis::*;
 pub use mint::*;
@@ -86,6 +86,7 @@ pub enum Tx {
     CreateCurrency(CreateCurrency),
     CreateMintable(CreateMintable),
     Mint(Mint),
+    CreateUnique(CreateUnique),
 }
 
 impl Tx {
@@ -98,6 +99,7 @@ impl Tx {
             Tx::CreateCurrency(ref tx) => tx.to_bytes(),
             Tx::CreateMintable(ref tx) => tx.to_bytes(),
             Tx::Mint(ref tx) => tx.to_bytes(),
+            Tx::CreateUnique(ref tx) => tx.to_bytes(),
         }
     }
 
@@ -110,12 +112,13 @@ impl Tx {
             Tx::CreateCurrency(ref tx) => tx.compute_hash_message(),
             Tx::CreateMintable(ref tx) => tx.compute_hash_message(),
             Tx::Mint(ref tx) => tx.compute_hash_message(),
+            Tx::CreateUnique(ref tx) => tx.compute_hash_message(),
         }
     }
 
     pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>) -> Tx {
         let mut rng = rand::thread_rng();
-        let random = rng.gen_range(0, 6);
+        let random = rng.gen_range(0, 7);
         let id = Identity::new();
 
         match random {
@@ -125,6 +128,7 @@ impl Tx {
             3 => Tx::CreateCurrency(CreateCurrency::arbitrary_valid(trie, id.skey().clone())),
             4 => Tx::CreateMintable(CreateMintable::arbitrary_valid(trie, id.skey().clone())),
             5 => Tx::Mint(Mint::arbitrary_valid(trie, id.skey().clone())),
+            6 => Tx::CreateUnique(CreateUnique::arbitrary_valid(trie, id.skey().clone())),
             _ => panic!(),
         }
     }
@@ -133,7 +137,7 @@ impl Tx {
 impl Arbitrary for Tx {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Tx {
         let mut rng = rand::thread_rng();
-        let random = rng.gen_range(0, 7);
+        let random = rng.gen_range(0, 8);
 
         match random {
             0 => Tx::Call(Arbitrary::arbitrary(g)),
@@ -143,6 +147,7 @@ impl Arbitrary for Tx {
             4 => Tx::CreateCurrency(Arbitrary::arbitrary(g)),
             5 => Tx::CreateMintable(Arbitrary::arbitrary(g)),
             6 => Tx::Mint(Arbitrary::arbitrary(g)),
+            7 => Tx::CreateUnique(Arbitrary::arbitrary(g)),
             _ => panic!(),
         }
     }
