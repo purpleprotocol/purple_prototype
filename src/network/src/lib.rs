@@ -51,6 +51,7 @@ mod node_id;
 pub mod packets;
 mod peer;
 mod packet;
+mod common;
 
 pub use packet::*;
 pub use bootstrap::*;
