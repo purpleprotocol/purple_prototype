@@ -17,6 +17,7 @@
 */
 
 use account::{Address, Balance, NormalAddress};
+use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
@@ -88,7 +89,7 @@ impl CreateUnique {
     /// Fields:
     /// 1) Transaction type(9)  - 8bits
     /// 2) Fee length           - 8bits
-    /// 3) Meta Existence Map   - 5byte binary
+    /// 3) Meta Exist BitMask   - 8bits
     /// 4) Creator              - 33byte binary
     /// 5) Receiver             - 33byte binary
     /// 6) Asset hash           - 32byte binary
@@ -104,7 +105,7 @@ impl CreateUnique {
     /// 16) Meta5 (Optional)    - 32byte binary
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buf: Vec<u8> = Vec::new();
-        let mut meta_exist: Vec<u8> = vec![0, 0, 0, 0, 0];
+        let mut bitmask: u8 = 0;
 
         // Prepare the fields
         let hash = if let Some(hash) = &self.hash {
@@ -120,19 +121,19 @@ impl CreateUnique {
         };
 
         if let Some(_meta1) = &self.meta1 {
-            meta_exist[0] = 1;
+            bitmask.set(0, true);
         };
         if let Some(_meta2) = &self.meta2 {
-            meta_exist[1] = 1;
+            bitmask.set(1, true);
         };
         if let Some(_meta3) = &self.meta3 {
-            meta_exist[2] = 1;
+            bitmask.set(2, true);
         };
         if let Some(_meta4) = &self.meta4 {
-            meta_exist[3] = 1;
+            bitmask.set(3, true);
         };
         if let Some(_meta5) = &self.meta5 {
-            meta_exist[4] = 1;
+            bitmask.set(4, true);
         };
 
         let tx_type: u8 = Self::TX_TYPE;
@@ -147,7 +148,7 @@ impl CreateUnique {
         // Write to buffer
         buf.write_u8(tx_type).unwrap();
         buf.write_u8(fee_len as u8).unwrap();
-        buf.extend_from_slice(&mut meta_exist);
+        buf.write_u8(bitmask).unwrap();
         buf.append(&mut creator.to_vec());
         buf.append(&mut receiver.to_vec());
 
@@ -158,23 +159,23 @@ impl CreateUnique {
         buf.append(&mut signature);
         buf.append(&mut fee.to_vec());
 
-        if meta_exist[0] == 1 {
+        if bitmask.get(0) {
             let meta1 = &self.meta1.unwrap();
             buf.append(&mut meta1.to_vec());
         };
-        if meta_exist[1] == 1 {
+        if bitmask.get(1) {
             let meta2 = &self.meta2.unwrap();
             buf.append(&mut meta2.to_vec());
         };
-        if meta_exist[2] == 1 {
+        if bitmask.get(2) {
             let meta3 = &self.meta3.unwrap();
             buf.append(&mut meta3.to_vec());
         };
-        if meta_exist[3] == 1 {
+        if bitmask.get(3) {
             let meta4 = &self.meta4.unwrap();
             buf.append(&mut meta4.to_vec());
         };
-        if meta_exist[4] == 1 {
+        if bitmask.get(4) {
             let meta5 = &self.meta5.unwrap();
             buf.append(&mut meta5.to_vec());
         };
@@ -202,18 +203,16 @@ impl CreateUnique {
             return Err("Bad fee len");
         };
 
-        let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..2).collect();
+        rdr.set_position(2);
 
-        let meta_exist = if buf.len() > 5 as usize {
-            let mut meta_existence = [0; 5];
-            let meta_exist_vec: Vec<u8> = buf.drain(..5).collect();
-
-            meta_existence.copy_from_slice(&meta_exist_vec);
-            meta_existence
+        let bitmask = if let Ok(result) = rdr.read_u8() {
+            result
         } else {
-            return Err("Bad meta existence information");
+            return Err("Bad bitmask");
         };
+
+        let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..3).collect();
 
         let creator = if buf.len() > 33 as usize {
             let creator_vec: Vec<u8> = buf.drain(..33).collect();
@@ -309,7 +308,7 @@ impl CreateUnique {
         let mut meta4: Option<[u8; META_FIELD_SIZE]> = None;
         let mut meta5: Option<[u8; META_FIELD_SIZE]> = None;
 
-        if meta_exist[0] == 1 {
+        if bitmask.get(0) {
             if buf.len() >= META_FIELD_SIZE as usize {
                 let mut meta_vec = [0; META_FIELD_SIZE];
                 let meta_from_buf: Vec<u8> = buf.drain(..32).collect();
@@ -321,7 +320,7 @@ impl CreateUnique {
             }
         }
 
-        if meta_exist[1] == 1 {
+        if bitmask.get(1) {
             if buf.len() >= META_FIELD_SIZE as usize {
                 let mut meta_vec = [0; META_FIELD_SIZE];
                 let meta_from_buf: Vec<u8> = buf.drain(..32).collect();
@@ -333,7 +332,7 @@ impl CreateUnique {
             }
         }
 
-        if meta_exist[2] == 1 {
+        if bitmask.get(2) {
             if buf.len() >= META_FIELD_SIZE as usize {
                 let mut meta_vec = [0; META_FIELD_SIZE];
                 let meta_from_buf: Vec<u8> = buf.drain(..32).collect();
@@ -345,7 +344,7 @@ impl CreateUnique {
             }
         }
 
-        if meta_exist[3] == 1 {
+        if bitmask.get(3) {
             if buf.len() >= META_FIELD_SIZE as usize {
                 let mut meta_vec = [0; META_FIELD_SIZE];
                 let meta_from_buf: Vec<u8> = buf.drain(..32).collect();
@@ -357,7 +356,7 @@ impl CreateUnique {
             }
         }
 
-        if meta_exist[4] == 1 {
+        if bitmask.get(4) {
             if buf.len() >= META_FIELD_SIZE as usize {
                 let mut meta_vec = [0; META_FIELD_SIZE];
                 let meta_from_buf: Vec<u8> = buf.drain(..32).collect();
@@ -371,7 +370,7 @@ impl CreateUnique {
 
         // Make sure no data remained
         if buf.len() > 0 {
-            return Err("Buffer still has data after all fields were deserialized");
+            return Err("Incorrect packet structure. Buffer still has data after all fields were deserialized");
         };
 
         let create_unique = CreateUnique {

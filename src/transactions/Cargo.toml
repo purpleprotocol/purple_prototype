@@ -23,6 +23,7 @@ quickcheck = "0.7.2"
 rust_decimal = "0.9.0"
 purple_vm = { path = "../purple_vm" }
 bin-tools = { path = "../util/bin-tools/" }
+bitvec = "0.9.0"
 
 [dev-dependencies]
 tempfile = "3.0.5"

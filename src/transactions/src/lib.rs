@@ -44,6 +44,7 @@ extern crate purple_vm;
 extern crate rand;
 extern crate rust_decimal;
 extern crate serde;
+extern crate bitvec;
 
 #[macro_use]
 mod macros;
