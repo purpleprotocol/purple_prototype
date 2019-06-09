@@ -189,6 +189,10 @@ impl Packet for Connect {
     }
 
     fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &Connect, conn_type: ConnectionType) -> Result<(), NetworkErr> {
+        if !packet.verify_sig() {
+            return Err(NetworkErr::BadSignature);
+        }
+        
         let our_node_id = network.our_node_id().clone();
         let node_id = packet.node_id.clone();
         let mut our_pk = None;
@@ -230,7 +234,7 @@ impl Packet for Connect {
         // If we are the server, also send a connect packet back
         if let ConnectionType::Server = conn_type {
             let mut packet = Connect::new(our_node_id,  our_pk.unwrap());
-            network.send_unsigned::<Connect>(&node_id, &mut packet)?;
+            network.send_raw_unsigned::<Connect>(addr, &mut packet)?;
         }
 
         Ok(())

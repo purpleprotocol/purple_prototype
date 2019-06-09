@@ -62,7 +62,7 @@ pub fn verify(message: &[u8], signature: &Signature, pkey: &PublicKey) -> bool {
     verify_detached(&signature.inner(), message, pkey)
 }
 
-pub fn seal(message: &[u8], key: &KxPublicKey) -> (Vec<u8>, Nonce) {
+pub fn seal(message: &[u8], key: &SessionKey) -> (Vec<u8>, Nonce) {
     let n = aead::gen_nonce();
     let key = aead::Key::from_slice(&key.0).unwrap();
     let ciphertext = aead::seal(message, None, &n, &key);
@@ -70,7 +70,7 @@ pub fn seal(message: &[u8], key: &KxPublicKey) -> (Vec<u8>, Nonce) {
     (ciphertext, n)
 }
 
-pub fn open(ciphertext: &[u8], key: &KxPublicKey, nonce: &Nonce) -> Result<Vec<u8>, ()> {
+pub fn open(ciphertext: &[u8], key: &SessionKey, nonce: &Nonce) -> Result<Vec<u8>, ()> {
     let key = aead::Key::from_slice(&key.0).unwrap();
     
     match aead::open(ciphertext, None, nonce, &key) {

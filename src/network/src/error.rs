@@ -21,6 +21,9 @@ pub enum NetworkErr {
     /// The format of the packet is invalid
     BadFormat,
 
+    /// The packet has an invalid signature
+    BadSignature,
+
     /// The connection attempt has failed
     ConnectFailed,
 

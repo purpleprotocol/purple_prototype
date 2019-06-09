@@ -240,6 +240,10 @@ impl Packet for SendPeers {
     }
 
     fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &SendPeers, conn_type: ConnectionType) -> Result<(), NetworkErr> {
+        if !packet.verify_sig() {
+            return Err(NetworkErr::BadSignature);
+        }
+        
         debug!("Received SendPeers packet from: {:?}", addr);
 
         {
@@ -450,7 +454,7 @@ mod tests {
             };
 
             let mut packet = RequestPeers::new(node_id, 3);
-            network.send_unsigned::<RequestPeers>(&peer_id, &mut packet).unwrap();
+            network.send_unsigned::<RequestPeers>(&addr1, &mut packet).unwrap();
         }
 
         // Pause main thread for a bit before

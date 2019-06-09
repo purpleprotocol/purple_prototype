@@ -17,7 +17,7 @@
 */
 
 use crate::error::NetworkErr;
-use crypto::{Nonce, KxPublicKey};
+use crypto::{Nonce, SessionKey};
 use crypto::crc32fast::Hasher;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
@@ -32,7 +32,7 @@ pub const NETWORK_VERSION: u8 = 0;
 /// 3) CRC32 of packet + nonce - 32bits
 /// 4) Nonce                   - 12bytes
 /// 5) Packet                  - Binary of packet length
-pub fn wrap_packet(packet: &[u8], key: &KxPublicKey) -> Vec<u8> {
+pub fn wrap_packet(packet: &[u8], key: &SessionKey) -> Vec<u8> {
     let (encrypted, nonce) = crypto::seal(packet, key);
     let packet_len = encrypted.len();
     let mut buf: Vec<u8> = Vec::with_capacity(21 + packet_len);
@@ -53,7 +53,7 @@ pub fn wrap_packet(packet: &[u8], key: &KxPublicKey) -> Vec<u8> {
 
 
 /// Attempts to decrypt a packet
-pub fn unwrap_packet(packet: &[u8], key: &KxPublicKey) -> Result<Vec<u8>, NetworkErr> {
+pub fn unwrap_packet(packet: &[u8], key: &SessionKey) -> Result<Vec<u8>, NetworkErr> {
     let mut rdr = Cursor::new(packet.to_vec());
     let version = if let Ok(result) = rdr.read_u8() {
         result
@@ -125,7 +125,7 @@ mod tests {
 
     quickcheck! {
         fn wrap_unwrap(packet: Vec<u8>) -> bool {
-            let key = KxPublicKey([0; 32]);
+            let key = SessionKey([0; 32]);
 
             assert_eq!(packet, unwrap_packet(&wrap_packet(&packet, &key), &key).unwrap());
             true

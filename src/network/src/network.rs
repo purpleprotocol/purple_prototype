@@ -123,7 +123,7 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
-    fn send_to_peer(&self, peer: &NodeId, packet: &[u8]) -> Result<(), NetworkErr> {
+    fn send_to_peer(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
@@ -131,13 +131,28 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
-    fn send_unsigned<P: Packet>(&self, peer: &NodeId, packet: &mut P) -> Result<(), NetworkErr> {
+    fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn send_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
         if packet.signature().is_none() {
             packet.sign(&self.secret_key);
         }
 
         let packet = packet.to_bytes();
         self.send_to_peer(peer, &packet)?;
+
+        Ok(())
+    }
+
+    fn send_raw_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
+        if packet.signature().is_none() {
+            packet.sign(&self.secret_key);
+        }
+
+        let packet = packet.to_bytes();
+        self.send_raw(peer, &packet)?;
 
         Ok(())
     }
