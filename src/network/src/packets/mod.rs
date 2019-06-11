@@ -19,6 +19,8 @@
 pub mod connect;
 pub mod request_peers;
 pub mod send_peers;
+pub mod forward_block;
 pub use self::connect::*;
 pub use self::request_peers::*;
 pub use self::send_peers::*;
+pub use self::forward_block::*;
