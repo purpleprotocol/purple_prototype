@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, NormalAddress, Balance, ContractAddress};
+use account::{Address, Balance, ContractAddress, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Signature, Hash, PublicKey as Pk, SecretKey as Sk};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
@@ -45,6 +45,105 @@ pub struct OpenContract {
 
 impl OpenContract {
     pub const TX_TYPE: u8 = 2;
+
+    /// Validates the transaction against the provided state.
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        let zero = Balance::from_bytes(b"0.0").unwrap();
+
+        // Invalidate if 0 coins are set as amount
+        if self.amount == zero {
+            return false;
+        }
+
+        // TODO: Check if code is valid
+
+        // Invalidate if signature is not valid
+        if !self.verify_sig() {
+            return false;
+        }
+
+        // Unwrap deployer address
+        let deployer_address = match &self.address {
+            Some(address) => address,
+            None => return false,
+        };
+
+        // To binary
+        let bin_owner = &self.owner.to_bytes();
+        let bin_deployer = deployer_address.to_bytes();
+        let bin_asset_hash = &self.asset_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+
+        // To hex
+        let owner = hex::encode(bin_owner);
+        let deployer = hex::encode(bin_deployer);
+        let asset_hash = hex::encode(bin_asset_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        // Check if deployer address exists
+        let nonce_key = format!("{}.n", &deployer).as_bytes();
+        let _ = match trie.get(&nonce_key) {
+            Ok(Some(nonce)) => nonce,
+            Ok(None) => return false,
+            Err(err) => panic!(err),
+        };
+
+        // Calculate currency keys
+        //
+        // The key of a currency entry has the following format:
+        // `<account-address>.<currency-hash>`
+        let cur_key = format!("{}.{}", owner, asset_hash);
+        let fee_key = format!("{}.{}", owner, fee_hash);
+
+        if fee_hash == asset_hash {
+            // The transaction's fee is paid in the same currency
+            // that is being sent, so we only retrieve one balance.
+            let mut balance = match trie.get(&cur_key.as_bytes()) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err) => panic!(err),
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err),
+            };
+
+            // Subtract fee from balance
+            balance -= self.fee.clone();
+
+            // Subtract amount transferred from balance
+            balance -= self.amount.clone();
+
+            balance >= zero
+        } else {
+            // The transaction's fee is paid in a different currency
+            // than the one being transferred so we retrieve both balances.
+            let mut cur_balance = match trie.get(&cur_key.as_bytes()) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err) => panic!(err),
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err),
+            };
+
+            let mut fee_balance = match trie.get(&fee_key.as_bytes()) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err) => panic!(err),
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err),
+            };
+
+            // Subtract fee from sender
+            fee_balance -= self.fee.clone();
+
+            // Subtract amount transferred from sender
+            cur_balance -= self.amount.clone();
+
+            cur_balance >= zero && fee_balance >= zero
+        }
+    }
 
     /// Applies the open contract transaction to the provided database.
     ///
