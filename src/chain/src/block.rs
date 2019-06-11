@@ -64,8 +64,8 @@ impl BlockWrapper {
         let first_byte = bytes[0];
 
         match first_byte {
-            EasyBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::HardBlock(HardBlock::from_bytes(bytes)?))),
-            HardBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::EasyBlock(EasyBlock::from_bytes(bytes)?))),
+            EasyBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::EasyBlock(EasyBlock::from_bytes(bytes)?))),
+            HardBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::HardBlock(HardBlock::from_bytes(bytes)?))),
             _ => return Err("Invalid block type")
         }
     }
@@ -88,7 +88,7 @@ impl BlockWrapper {
 impl quickcheck::Arbitrary for BlockWrapper {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> BlockWrapper {
         use rand::Rng;
-        
+
         let mut rng = rand::thread_rng();
         let random = rng.gen_range(0, 2);
 
@@ -96,6 +96,20 @@ impl quickcheck::Arbitrary for BlockWrapper {
             0 => BlockWrapper::EasyBlock(quickcheck::Arbitrary::arbitrary(g)),
             1 => BlockWrapper::HardBlock(quickcheck::Arbitrary::arbitrary(g)),
             _ => panic!(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck::*;
+
+    quickcheck! {
+        fn wrapper_serialize_deserialize(block: BlockWrapper) -> bool {
+            BlockWrapper::from_bytes(&BlockWrapper::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
+
+            true
         }
     }
 }

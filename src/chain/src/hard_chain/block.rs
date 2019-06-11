@@ -124,14 +124,18 @@ impl Block for HardBlock {
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
+        let ts = self.timestamp.to_rfc3339();
+        let timestamp = ts.as_bytes();
+        let timestamp_len = timestamp.len() as u8;
 
         buf.write_u8(Self::BLOCK_TYPE).unwrap();
+        buf.write_u8(timestamp_len).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
         buf.extend_from_slice(&self.hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.easy_block_hash.0.to_vec());
         buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
-        buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
+        buf.extend_from_slice(&timestamp);
         buf
     }
 
@@ -149,6 +153,14 @@ impl Block for HardBlock {
 
         rdr.set_position(1);
 
+        let timestamp_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad transaction type");
+        };
+
+        rdr.set_position(2);
+
         let height = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
         } else {
@@ -157,7 +169,7 @@ impl Block for HardBlock {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        buf.drain(..9);
+        buf.drain(..10);
 
         let hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
@@ -203,12 +215,16 @@ impl Block for HardBlock {
             return Err("Incorrect packet structure 4");
         };
 
-        let timestamp = match std::str::from_utf8(&buf) {
-            Ok(utf8) => match DateTime::<Utc>::from_str(utf8) {
-                Ok(timestamp) => timestamp,
+        let timestamp = if buf.len() == timestamp_len as usize {
+            match std::str::from_utf8(&buf) {
+                Ok(utf8) => match DateTime::<Utc>::from_str(utf8) {
+                    Ok(timestamp) => timestamp,
+                    Err(_) => return Err("Invalid block timestamp"),
+                },
                 Err(_) => return Err("Invalid block timestamp"),
-            },
-            Err(_) => return Err("Invalid block timestamp"),
+            }
+        } else {
+            return Err("Invalid block timestamp");
         };
 
         Ok(Arc::new(HardBlock {
