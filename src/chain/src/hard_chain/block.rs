@@ -223,7 +223,7 @@ impl Block for HardBlock {
 }
 
 impl HardBlock {
-    pub const BLOCK_TYPE: u8 = 0;
+    pub const BLOCK_TYPE: u8 = 1;
 
     pub fn new(parent_hash: Option<Hash>, height: u64, easy_block_hash: Hash) -> HardBlock {
         HardBlock {
@@ -272,10 +272,8 @@ impl HardBlock {
     }
 }
 
-#[cfg(test)]
 use quickcheck::*;
 
-#[cfg(test)]
 impl Arbitrary for HardBlock {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> HardBlock {
         HardBlock {

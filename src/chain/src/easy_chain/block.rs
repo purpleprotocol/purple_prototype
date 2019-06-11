@@ -43,7 +43,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A block belonging to the `EasyChain`.
 pub struct EasyBlock {
     /// The height of the block.
@@ -119,6 +119,8 @@ impl Block for EasyBlock {
 }
 
 impl EasyBlock {
+    pub const BLOCK_TYPE: u8 = 2;
+
     pub fn new(parent_hash: Option<Hash>, height: u64) -> EasyBlock {
         EasyBlock {
             parent_hash,
@@ -157,6 +159,20 @@ impl EasyBlock {
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
 
         buf
+    }
+}
+
+impl quickcheck::Arbitrary for EasyBlock {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> EasyBlock {
+        let timestamp = Utc::now();
+
+        EasyBlock {
+            height: quickcheck::Arbitrary::arbitrary(g),
+            parent_hash: quickcheck::Arbitrary::arbitrary(g),
+            hash: Some(quickcheck::Arbitrary::arbitrary(g)),
+            merkle_root: Some(quickcheck::Arbitrary::arbitrary(g)),
+            timestamp,
+        }
     }
 }
 

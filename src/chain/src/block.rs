@@ -16,6 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::{EasyBlock, HardBlock};
 use chrono::prelude::*;
 use crypto::Hash;
 use std::boxed::Box;
@@ -49,4 +50,52 @@ pub trait Block {
 
     /// Deserializes the block
     fn from_bytes(bytes: &[u8]) -> Result<Arc<Self>, &'static str>;
+}
+
+/// Wrapper enum used **only** for serialization/deserialization
+#[derive(Clone, Debug, PartialEq)]
+pub enum BlockWrapper {
+    EasyBlock(Arc<EasyBlock>),
+    HardBlock(Arc<HardBlock>)
+}
+
+impl BlockWrapper {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Arc<BlockWrapper>, &'static str> {
+        let first_byte = bytes[0];
+
+        match first_byte {
+            EasyBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::HardBlock(HardBlock::from_bytes(bytes)?))),
+            HardBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::EasyBlock(EasyBlock::from_bytes(bytes)?))),
+            _ => return Err("Invalid block type")
+        }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            BlockWrapper::EasyBlock(block) => block.to_bytes(),
+            BlockWrapper::HardBlock(block) => block.to_bytes(),
+        }
+    }
+
+    pub fn block_hash(&self) -> Option<Hash> {
+        match self {
+            BlockWrapper::EasyBlock(block) => block.block_hash(),
+            BlockWrapper::HardBlock(block) => block.block_hash(),
+        }
+    }
+}
+
+impl quickcheck::Arbitrary for BlockWrapper {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> BlockWrapper {
+        use rand::Rng;
+        
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(0, 2);
+
+        match random {
+            0 => BlockWrapper::EasyBlock(quickcheck::Arbitrary::arbitrary(g)),
+            1 => BlockWrapper::HardBlock(quickcheck::Arbitrary::arbitrary(g)),
+            _ => panic!(),
+        }
+    }
 }
