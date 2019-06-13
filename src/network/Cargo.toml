@@ -25,3 +25,6 @@ crypto = { path = "../crypto" }
 persistence = { path = "../persistence" }
 quickcheck = "0.7.2"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["rayon", "serde"] }
+
+[dev-dependencies]
+test-helpers = { path = "../util/test-helpers" }

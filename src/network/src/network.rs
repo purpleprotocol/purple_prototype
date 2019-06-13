@@ -30,7 +30,6 @@ use parking_lot::Mutex;
 use NodeId;
 use Peer;
 
-#[derive(Debug, Clone)]
 pub struct Network {
     /// Mapping between connected ips and peer information
     pub(crate) peers: HashMap<SocketAddr, Peer>,
@@ -41,6 +40,18 @@ pub struct Network {
     /// Our secret key
     pub(crate) secret_key: Sk,
 
+    /// Reference to the `EasyChain`
+    easy_chain_ref: EasyChainRef,
+
+    /// Reference to the `HardChain`
+    hard_chain_ref: HardChainRef,
+
+    /// Sender to `HardChain` block buffer
+    hard_chain_sender: Sender<Arc<HardBlock>>,
+
+    /// Sender to `EasyChain` block buffer
+    easy_chain_sender: Sender<Arc<EasyBlock>>,
+
     /// The name of the network we are on
     network_name: String,
 
@@ -49,13 +60,26 @@ pub struct Network {
 }
 
 impl Network {
-    pub fn new(node_id: NodeId, network_name: String, secret_key: Sk, max_peers: usize) -> Network {
+    pub fn new(
+        node_id: NodeId, 
+        network_name: String, 
+        secret_key: Sk, 
+        max_peers: usize,
+        easy_chain_sender: Sender<Arc<EasyBlock>>,
+        hard_chain_sender: Sender<Arc<HardBlock>>,
+        easy_chain_ref: EasyChainRef,
+        hard_chain_ref: HardChainRef,
+    ) -> Network {
         Network {
             peers: HashMap::with_capacity(max_peers),
             node_id,
             network_name,
             secret_key,
-            max_peers
+            max_peers,
+            easy_chain_sender,
+            hard_chain_sender,
+            easy_chain_ref,
+            hard_chain_ref,
         }
     }
 

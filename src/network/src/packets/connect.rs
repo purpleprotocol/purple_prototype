@@ -293,30 +293,14 @@ mod tests {
 
     #[test]
     fn it_successfuly_performs_connect_handshake() {
-        let mut mailboxes = HashMap::new();
-        let addr1 = crate::random_socket_addr();
-        let addr2 = crate::random_socket_addr();
-        let (pk1, sk1) = crypto::gen_keypair();
-        let (pk2, sk2) = crypto::gen_keypair(); 
-        let n1 = NodeId::from_pkey(pk1);
-        let n2 = NodeId::from_pkey(pk2);
-
-        let (rx1, tx1) = channel();
-        let (rx2, tx2) = channel();
-
-        let mut address_mappings = HashMap::new();
-
-        address_mappings.insert(addr1.clone(), n1.clone());
-        address_mappings.insert(addr2.clone(), n2.clone());
-
-        mailboxes.insert(n1.clone(), rx1);
-        mailboxes.insert(n2.clone(), rx2);
-
-        let network1 = MockNetwork::new(n1.clone(), addr1, "test_network".to_owned(), sk1, tx1, mailboxes.clone(), address_mappings.clone());
-        let network2 = MockNetwork::new(n2.clone(), addr2, "test_network".to_owned(), sk2, tx2, mailboxes.clone(), address_mappings.clone());
-        let network1 = Arc::new(Mutex::new(network1));
+        let networks = crate::init_test_networks(2);
+        let addr1 = networks[0].1;
+        let addr2 = networks[1].1;
+        let n1 = networks[0].2.clone();
+        let n2 = networks[1].2.clone();
+        let network1 = networks[0].0.clone();
         let network1_c = network1.clone();
-        let network2 = Arc::new(Mutex::new(network2));
+        let network2 = networks[1].0.clone();
         let network2_c = network2.clone();
 
         // Peer 1 listener thread

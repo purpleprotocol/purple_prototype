@@ -32,19 +32,30 @@ use hashbrown::HashMap;
 use parking_lot::Mutex;
 use NodeId;
 
-#[derive(Debug)]
 /// Mock network layer used for testing.
 pub struct MockNetwork {
     /// Mapping between node ids and their mailboxes
     /// An entry in the mailbox is a tuple of two elements
     /// containing the sender's address and the received packet.
-    mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>,
+    pub(crate) mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>,
 
     /// Our receiver
     rx: Receiver<(SocketAddr, Vec<u8>)>,
 
+    /// Reference to the `EasyChain`
+    easy_chain_ref: EasyChainRef,
+
+    /// Reference to the `HardChain`
+    hard_chain_ref: HardChainRef,
+
+    /// Sender to `HardChain` block buffer
+    hard_chain_sender: Sender<Arc<HardBlock>>,
+
+    /// Sender to `EasyChain` block buffer
+    easy_chain_sender: Sender<Arc<EasyBlock>>,
+
     /// Mapping between ips and node ids.
-    address_mappings: HashMap<SocketAddr, NodeId>, 
+    pub(crate) address_mappings: HashMap<SocketAddr, NodeId>, 
 
     /// Mapping between connected peers and their information
     pub(crate) peers: HashMap<SocketAddr, Peer>,
@@ -283,12 +294,20 @@ impl MockNetwork {
         secret_key: Sk, 
         rx: Receiver<(SocketAddr, Vec<u8>)>, 
         mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>, 
-        address_mappings: HashMap<SocketAddr, NodeId>
+        address_mappings: HashMap<SocketAddr, NodeId>,
+        easy_chain_sender: Sender<Arc<EasyBlock>>,
+        hard_chain_sender: Sender<Arc<HardBlock>>,
+        easy_chain_ref: EasyChainRef,
+        hard_chain_ref: HardChainRef,
     ) -> MockNetwork {
         MockNetwork {
             rx,
             mailboxes,
             address_mappings,
+            easy_chain_sender,
+            hard_chain_sender,
+            easy_chain_ref,
+            hard_chain_ref,
             peers: HashMap::new(),
             node_id,
             secret_key,
