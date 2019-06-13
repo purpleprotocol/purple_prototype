@@ -26,6 +26,7 @@ use std::sync::Arc;
 use std::collections::VecDeque;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Sender, Receiver};
+use chain::{HardChainRef, EasyChainRef, HardBlock, EasyBlock};
 use crypto::SecretKey as Sk;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
@@ -162,6 +163,22 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
+    fn easy_chain_ref(&self) -> EasyChainRef {
+        unimplemented!();
+    }
+
+    fn hard_chain_ref(&self) -> HardChainRef {
+        unimplemented!();
+    }
+
+    fn easy_chain_sender(&self) -> &Sender<Arc<EasyBlock>> {
+        unimplemented!();
+    }
+
+    fn hard_chain_sender(&self) -> &Sender<Arc<HardBlock>> {
+        unimplemented!();
+    }
+
     fn process_packet(&mut self, addr: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         if addr == &self.ip {
             panic!("We received a packet from ourselves! This is illegal");
@@ -259,7 +276,15 @@ impl NetworkInterface for MockNetwork {
 }
 
 impl MockNetwork {
-    pub fn new(node_id: NodeId, ip: SocketAddr, network_name: String, secret_key: Sk, rx: Receiver<(SocketAddr, Vec<u8>)>, mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>, address_mappings: HashMap<SocketAddr, NodeId>) -> MockNetwork {
+    pub fn new(
+        node_id: NodeId, 
+        ip: SocketAddr, 
+        network_name: String, 
+        secret_key: Sk, 
+        rx: Receiver<(SocketAddr, Vec<u8>)>, 
+        mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>, 
+        address_mappings: HashMap<SocketAddr, NodeId>
+    ) -> MockNetwork {
         MockNetwork {
             rx,
             mailboxes,

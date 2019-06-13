@@ -20,7 +20,10 @@ use crate::error::NetworkErr;
 use crate::peer::Peer;
 use crate::packet::Packet;
 use crate::node_id::NodeId;
+use crate::chain::{EasyChainRef, HardChainRef, HardBlock, EasyBlock};
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::sync::mpsc::Sender;
 
 /// Generic network layer interface.
 pub trait NetworkInterface {
@@ -79,4 +82,20 @@ pub trait NetworkInterface {
 
     /// Returns an iterator on the listed peers
     fn peers<'a>(&'a self) -> Box<dyn Iterator<Item = (&SocketAddr, &Peer)> + 'a>;
+
+    /// Returns a reference to the `EasyChain`.
+    fn easy_chain_ref(&self) -> EasyChainRef;
+
+    /// Returns a reference to the `HardChain`.
+    fn hard_chain_ref(&self) -> HardChainRef;
+
+    /// Returns a reference to a `EasyChain` mpsc sender.
+    /// Use this to buffer blocks that are to be appended
+    /// to the chain.
+    fn easy_chain_sender(&self) -> &Sender<Arc<EasyBlock>>;
+
+    /// Returns a reference to a `HardChain` mpsc sender.
+    /// Use this to buffer blocks that are to be appended
+    /// to the chain.
+    fn hard_chain_sender(&self) -> &Sender<Arc<HardBlock>>;
 }

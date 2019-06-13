@@ -22,6 +22,8 @@ use crate::packets::connect::Connect;
 use crate::packet::Packet;
 use std::net::SocketAddr;
 use crypto::SecretKey as Sk;
+use chain::{HardChainRef, EasyChainRef, HardBlock, EasyBlock};
+use std::sync::mpsc::Sender;
 use hashbrown::{HashSet, HashMap};
 use std::sync::Arc;
 use parking_lot::Mutex;
@@ -156,6 +158,23 @@ impl NetworkInterface for Network {
 
         Ok(())
     }
+
+    fn easy_chain_ref(&self) -> EasyChainRef {
+        unimplemented!();
+    }
+
+    fn hard_chain_ref(&self) -> HardChainRef {
+        unimplemented!();
+    }
+
+    fn easy_chain_sender(&self) -> &Sender<Arc<EasyBlock>> {
+        unimplemented!();
+    }
+
+    fn hard_chain_sender(&self) -> &Sender<Arc<HardBlock>> {
+        unimplemented!();
+    }
+
 
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         let (is_none_id, conn_type) = {
