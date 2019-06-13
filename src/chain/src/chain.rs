@@ -1259,6 +1259,9 @@ mod tests {
     use chrono::prelude::*;
     use quickcheck::*;
     use rand::*;
+    use byteorder::WriteBytesExt;
+    use std::str::FromStr;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     macro_rules! count {
         () => (0);
@@ -1290,10 +1293,11 @@ mod tests {
         hash: Hash,
         parent_hash: Hash,
         height: u64,
+        ip: SocketAddr,
     }
 
     impl DummyBlock {
-        pub fn new(parent_hash: Option<Hash>, height: u64) -> DummyBlock {
+        pub fn new(parent_hash: Option<Hash>, ip: SocketAddr, height: u64) -> DummyBlock {
             let hash =
                 crypto::hash_slice(&format!("block-{}", NONCE.load(Ordering::Relaxed)).as_bytes());
             NONCE.fetch_add(1, Ordering::Relaxed);
@@ -1303,6 +1307,7 @@ mod tests {
                 hash,
                 parent_hash,
                 height,
+                ip,
             }
         }
     }
@@ -1326,6 +1331,7 @@ mod tests {
             let genesis = DummyBlock {
                 hash: Hash::NULL,
                 parent_hash: Hash::NULL,
+                ip: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 44034),
                 height: 0,
             };
 
@@ -1352,6 +1358,10 @@ mod tests {
             self.height
         }
 
+        fn address(&self) -> Option<&SocketAddr> {
+            Some(&self.ip)
+        }
+
         fn after_write() -> Option<Box<FnMut(Arc<Self>)>> {
             None
         }
@@ -1359,20 +1369,29 @@ mod tests {
         fn to_bytes(&self) -> Vec<u8> {
             let mut buf = Vec::new();
             let height = encode_be_u64!(self.height);
+            let ip = format!("{}", self.ip);
+            let ip = ip.as_bytes();
 
+            buf.write_u8(ip.len() as u8).unwrap();
             buf.extend_from_slice(&height);
             buf.extend_from_slice(&self.hash.0.to_vec());
             buf.extend_from_slice(&self.parent_hash.0.to_vec());
+            buf.extend_from_slice(ip);
 
             buf
         }
 
         fn from_bytes(bytes: &[u8]) -> Result<Arc<Self>, &'static str> {
             let mut buf = bytes.to_vec();
+            let ip_len = buf[0];
+            let _: Vec<u8> = buf.drain(..1).collect();
             let height_bytes: Vec<u8> = buf.drain(..8).collect();
             let height = decode_be_u64!(&height_bytes).unwrap();
             let hash_bytes: Vec<u8> = buf.drain(..32).collect();
-            let parent_hash_bytes = buf;
+            let parent_hash_bytes: Vec<u8> = buf.drain(..32).collect();
+            let ip: Vec<u8> = buf.drain(..ip_len as usize).collect();
+            let ip = std::str::from_utf8(&ip).unwrap();
+            let ip = SocketAddr::from_str(&ip).unwrap();
             let mut hash = [0; 32];
             let mut parent_hash = [0; 32];
 
@@ -1385,6 +1404,7 @@ mod tests {
             Ok(Arc::new(DummyBlock {
                 height,
                 hash,
+                ip,
                 parent_hash,
             }))
         }
@@ -1395,52 +1415,52 @@ mod tests {
         let db = test_helpers::init_tempdb();
         let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-        let mut A = DummyBlock::new(Some(Hash::NULL), 1);
+        let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
 
-        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
         let B = Arc::new(B);
 
-        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C = Arc::new(C);
 
-        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D = Arc::new(D);
 
-        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E = Arc::new(E);
 
-        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
         let F = Arc::new(F);
 
-        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
         let G = Arc::new(G);
 
-        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
         let B_prime = Arc::new(B_prime);
 
-        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C_prime = Arc::new(C_prime);
 
-        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_prime = Arc::new(D_prime);
 
-        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E_prime = Arc::new(E_prime);
 
-        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C_second = Arc::new(C_second);
 
-        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_second = Arc::new(D_second);
 
-        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E_second = Arc::new(E_second);
 
-        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
         let F_second = Arc::new(F_second);
 
-        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_tertiary = Arc::new(D_tertiary);
 
         hard_chain.append_block(E_second.clone()).unwrap();
@@ -1537,52 +1557,52 @@ mod tests {
         let db = test_helpers::init_tempdb();
         let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-        let mut A = DummyBlock::new(Some(Hash::NULL), 1);
+        let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
 
-        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
         let B = Arc::new(B);
 
-        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C = Arc::new(C);
 
-        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D = Arc::new(D);
 
-        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E = Arc::new(E);
 
-        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
         let F = Arc::new(F);
 
-        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
         let G = Arc::new(G);
 
-        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
         let B_prime = Arc::new(B_prime);
 
-        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C_prime = Arc::new(C_prime);
 
-        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_prime = Arc::new(D_prime);
 
-        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E_prime = Arc::new(E_prime);
 
-        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C_second = Arc::new(C_second);
 
-        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_second = Arc::new(D_second);
 
-        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E_second = Arc::new(E_second);
 
-        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
         let F_second = Arc::new(F_second);
 
-        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_tertiary = Arc::new(D_tertiary);
 
         hard_chain.append_block(A.clone()).unwrap();
@@ -1734,52 +1754,52 @@ mod tests {
         let db = test_helpers::init_tempdb();
         let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-        let mut A = DummyBlock::new(Some(Hash::NULL), 1);
+        let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
 
-        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
         let B = Arc::new(B);
 
-        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C = Arc::new(C);
 
-        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D = Arc::new(D);
 
-        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E = Arc::new(E);
 
-        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
         let F = Arc::new(F);
 
-        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
         let G = Arc::new(G);
 
-        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
         let B_prime = Arc::new(B_prime);
 
-        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C_prime = Arc::new(C_prime);
 
-        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_prime = Arc::new(D_prime);
 
-        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E_prime = Arc::new(E_prime);
 
-        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C_second = Arc::new(C_second);
 
-        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_second = Arc::new(D_second);
 
-        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E_second = Arc::new(E_second);
 
-        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
         let F_second = Arc::new(F_second);
 
-        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_tertiary = Arc::new(D_tertiary);
 
         hard_chain.append_block(C_second.clone()).unwrap();
@@ -3407,52 +3427,52 @@ mod tests {
         let db = test_helpers::init_tempdb();
         let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-        let mut A = DummyBlock::new(Some(Hash::NULL), 1);
+        let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
 
-        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
         let B = Arc::new(B);
 
-        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C = Arc::new(C);
 
-        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D = Arc::new(D);
 
-        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E = Arc::new(E);
 
-        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
         let F = Arc::new(F);
 
-        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
         let G = Arc::new(G);
 
-        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
         let B_prime = Arc::new(B_prime);
 
-        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C_prime = Arc::new(C_prime);
 
-        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_prime = Arc::new(D_prime);
 
-        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E_prime = Arc::new(E_prime);
 
-        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
         let C_second = Arc::new(C_second);
 
-        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_second = Arc::new(D_second);
 
-        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
         let E_second = Arc::new(E_second);
 
-        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
         let F_second = Arc::new(F_second);
 
-        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
         let D_tertiary = Arc::new(D_tertiary);
 
         hard_chain.append_block(D_second.clone()).unwrap();
@@ -6165,52 +6185,52 @@ mod tests {
             let db = test_helpers::init_tempdb();
             let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-            let mut A = DummyBlock::new(Some(Hash::NULL), 1);
+            let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
 
-            let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+            let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
             let B = Arc::new(B);
 
-            let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
+            let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
             let C = Arc::new(C);
 
-            let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
+            let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
             let D = Arc::new(D);
 
-            let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
+            let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
             let E = Arc::new(E);
 
-            let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
+            let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
             let F = Arc::new(F);
 
-            let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
+            let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
             let G = Arc::new(G);
 
-            let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+            let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
             let B_prime = Arc::new(B_prime);
 
-            let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+            let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
             let C_prime = Arc::new(C_prime);
 
-            let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+            let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
             let D_prime = Arc::new(D_prime);
 
-            let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
+            let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
             let E_prime = Arc::new(E_prime);
 
-            let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+            let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
             let C_second = Arc::new(C_second);
 
-            let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
+            let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
             let D_second = Arc::new(D_second);
 
-            let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
+            let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
             let E_second = Arc::new(E_second);
 
-            let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
+            let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
             let F_second = Arc::new(F_second);
 
-            let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+            let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
             let D_tertiary = Arc::new(D_tertiary);
 
             let mut blocks = vec![
@@ -6268,25 +6288,25 @@ mod tests {
             let db = test_helpers::init_tempdb();
             let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-            let mut A = DummyBlock::new(Some(Hash::NULL), 1);
+            let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
 
-            let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+            let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
             let B = Arc::new(B);
 
-            let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
+            let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
             let C = Arc::new(C);
 
-            let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
+            let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
             let D = Arc::new(D);
 
-            let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
+            let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
             let E = Arc::new(E);
 
-            let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
+            let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
             let F = Arc::new(F);
 
-            let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
+            let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
             let G = Arc::new(G);
 
             let blocks = vec![
@@ -6344,52 +6364,52 @@ mod tests {
             let db = test_helpers::init_tempdb();
             let mut hard_chain = Chain::<DummyBlock>::new(db);
 
-            let mut A = DummyBlock::new(Some(Hash::NULL), 1);
+            let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
 
-            let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+            let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
             let B = Arc::new(B);
 
-            let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), 3);
+            let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
             let C = Arc::new(C);
 
-            let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), 4);
+            let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
             let D = Arc::new(D);
 
-            let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), 5);
+            let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
             let E = Arc::new(E);
 
-            let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), 6);
+            let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
             let F = Arc::new(F);
 
-            let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), 7);
+            let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
             let G = Arc::new(G);
 
-            let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), 2);
+            let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
             let B_prime = Arc::new(B_prime);
 
-            let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+            let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
             let C_prime = Arc::new(C_prime);
 
-            let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+            let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
             let D_prime = Arc::new(D_prime);
 
-            let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), 5);
+            let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
             let E_prime = Arc::new(E_prime);
 
-            let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), 3);
+            let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
             let C_second = Arc::new(C_second);
 
-            let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), 4);
+            let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
             let D_second = Arc::new(D_second);
 
-            let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), 5);
+            let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
             let E_second = Arc::new(E_second);
 
-            let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), 6);
+            let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
             let F_second = Arc::new(F_second);
 
-            let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), 4);
+            let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
             let D_tertiary = Arc::new(D_tertiary);
 
             let blocks = vec![
