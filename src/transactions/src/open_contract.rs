@@ -569,7 +569,7 @@ mod tests {
     use crypto::Identity;
 
     #[test]
-    fn apply_it_correctly_creates_a_shares_account() {
+    fn apply_it_opens_a_contract() {
         let id = Identity::new();
         let owner_addr = NormalAddress::from_pkey(*id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");

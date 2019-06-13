@@ -23,10 +23,8 @@ use crate::peer::{Peer, ConnectionType};
 use crate::packet::Packet;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::collections::VecDeque;
-use std::sync::mpsc::channel;
 use std::sync::mpsc::{Sender, Receiver};
-use chain::{HardChainRef, EasyChainRef, HardBlock, EasyBlock};
+use chain::*;
 use crypto::SecretKey as Sk;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
@@ -157,11 +155,10 @@ impl NetworkInterface for MockNetwork {
             return Err(NetworkErr::NoPeers);
         }
 
-        let ids_to_send_to: Vec<&NodeId> = self.address_mappings
+        let ids_to_send_to = self.address_mappings
             .iter()
             .filter(|(addr, _)| *addr != exception)
-            .map(|(_, id)| id)
-            .collect();
+            .map(|(_, id)| id);
 
         for id in ids_to_send_to {
             let mailbox = self.mailboxes.get(id).unwrap();
@@ -354,7 +351,11 @@ impl MockNetwork {
         }
     }
 
-    pub fn start_receive_loop(network: Arc<Mutex<Self>>) {
+    pub fn start_receive_loop(
+        network: Arc<Mutex<Self>>, 
+        easy_block_receiver: Arc<Mutex<Receiver<Arc<EasyBlock>>>>,
+        hard_block_receiver: Arc<Mutex<Receiver<Arc<HardBlock>>>>,
+    ) {
         loop {
             let mut network = network.lock();
 
@@ -367,7 +368,41 @@ impl MockNetwork {
                         },
                         err => { 
                             debug!("Packet error: {:?}", err);
+                            network.disconnect_from_ip(&addr).unwrap();
+                            network.ban_ip(&addr).unwrap();
                         }
+                    }
+                }
+            }
+
+            let easy_receiver = easy_block_receiver.lock();
+            let easy_iter = easy_receiver
+                .try_iter()
+                .map(|b| BlockWrapper::EasyBlock(b));
+
+            let hard_receiver = hard_block_receiver.lock();
+            let hard_iter = hard_receiver
+                .try_iter()
+                .map(|b| BlockWrapper::HardBlock(b));
+
+            let mut iter = easy_iter.chain(hard_iter);
+
+            while let Some(block) = iter.next() {
+                match block {
+                    BlockWrapper::EasyBlock(block) => {
+                        let easy_chain = network.easy_chain_ref().chain;
+                        let mut chain = easy_chain.write();
+                        
+                        // TODO: Handle chain result
+                        let _result = chain.append_block(block);
+                    }
+
+                    BlockWrapper::HardBlock(block) => {
+                        let hard_chain = network.hard_chain_ref().chain;
+                        let mut chain = hard_chain.write();
+                        
+                        // TODO: Handle chain result
+                        let _result = chain.append_block(block);
                     }
                 }
             }

@@ -80,8 +80,8 @@ fn main() {
     let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_db)));
     let easy_chain = EasyChainRef::new(easy_chain);
     let hard_chain = HardChainRef::new(hard_chain);
-    let (easy_tx, _easy_rx) = channel();
-    let (hard_tx, _hard_rx) = channel();
+    let (easy_tx, easy_rx) = channel();
+    let (hard_tx, hard_rx) = channel();
 
     info!("Setting up the network...");
 
@@ -93,13 +93,16 @@ fn main() {
         argv.max_peers,
         easy_tx,
         hard_tx,
-        easy_chain,
-        hard_chain,
+        easy_chain.clone(),
+        hard_chain.clone(),
     )));
     let accept_connections = Arc::new(AtomicBool::new(true));
 
     // Start the tokio runtime
     tokio::run(ok(()).and_then(move |_| {
+        // Start listening for blocks
+        start_block_listener(easy_chain, hard_chain, easy_rx, hard_rx);
+
         // Start listening to connections
         start_listener(network.clone(), accept_connections.clone());
 
