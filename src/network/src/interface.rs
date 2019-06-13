@@ -48,6 +48,16 @@ pub trait NetworkInterface {
     /// Sends a packet to all peers.
     fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr>;
 
+    /// Sends a packet to all peers except the given address.
+    fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
+
+    /// Signs a packet and sends it to all peers.
+    fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr>;
+
+    /// Signs a packet and sends it to all peers 
+    /// except the peer with the given address.
+    fn send_to_all_unsigned_except<P: Packet>(&self, exception: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr>;
+
     /// Attempts to send a packet to the specific peer. This
     /// function will also sign the packet if it does not yet
     /// have a signature and it will also serialize it to binary.

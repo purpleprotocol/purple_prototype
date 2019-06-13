@@ -157,6 +157,19 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
+    fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn send_to_all_unsigned_except<P: Packet>(&self, exception: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+
+    fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
     fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         unimplemented!();
     }

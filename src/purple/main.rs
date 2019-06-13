@@ -49,12 +49,14 @@ use futures::Future;
 use hashdb::HashDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use network::*;
-use parking_lot::Mutex;
+use parking_lot::{RwLock, Mutex};
+use chain::*;
 use persistence::PersistentDb;
 use std::alloc::System;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::mpsc::channel;
 
 // Enforce usage of system allocator.
 #[global_allocator]
@@ -65,12 +67,23 @@ const DEFAULT_NETWORK_NAME: &'static str = "purple";
 
 fn main() {
     env_logger::init();
+    
+    info!("Opening databases...");
 
     let argv = parse_cli_args();
     let db = Arc::new(open_database(&argv.network_name));
 
-    let mut node_storage = PersistentDb::new(db.clone(), Some(1));
-    let ledger = PersistentDb::new(db, Some(2));
+    let mut node_storage = PersistentDb::new(db.clone(), Some(0));
+    let easy_db = PersistentDb::new(db.clone(), Some(1));
+    let hard_db = PersistentDb::new(db.clone(), Some(2));
+    let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_db)));
+    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_db)));
+    let easy_chain = EasyChainRef::new(easy_chain);
+    let hard_chain = HardChainRef::new(hard_chain);
+    let (easy_tx, _easy_rx) = channel();
+    let (hard_tx, _hard_rx) = channel();
+
+    info!("Setting up the network...");
 
     let (node_id, skey) = fetch_credentials(&mut node_storage);
     let network = Arc::new(Mutex::new(Network::new(
@@ -78,6 +91,10 @@ fn main() {
         argv.network_name.to_owned(),
         skey,
         argv.max_peers,
+        easy_tx,
+        hard_tx,
+        easy_chain,
+        hard_chain,
     )));
     let accept_connections = Arc::new(AtomicBool::new(true));
 

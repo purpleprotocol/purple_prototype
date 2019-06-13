@@ -152,6 +152,44 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
+    fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+        if self.mailboxes.is_empty() {
+            return Err(NetworkErr::NoPeers);
+        }
+
+        let ids_to_send_to: Vec<&NodeId> = self.address_mappings
+            .iter()
+            .filter(|(addr, _)| *addr != exception)
+            .map(|(_, id)| id)
+            .collect();
+
+        for id in ids_to_send_to {
+            let mailbox = self.mailboxes.get(id).unwrap();
+            mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
+        }
+
+        Ok(())
+    }
+
+    fn send_to_all_unsigned_except<P: Packet>(&self, exception: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
+        if packet.signature().is_none() {
+            packet.sign(&self.secret_key);
+        }
+
+        let packet = packet.to_bytes();
+        self.send_to_all_except(exception, &packet)
+    }
+
+
+    fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr> {
+        if packet.signature().is_none() {
+            packet.sign(&self.secret_key);
+        }
+
+        let packet = packet.to_bytes();
+        self.send_to_all(&packet)
+    }
+
     fn send_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
         if packet.signature().is_none() {
             packet.sign(&self.secret_key);
