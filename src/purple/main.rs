@@ -162,11 +162,15 @@ struct Argv {
     network_name: String,
     mempool_size: u16,
     max_peers: usize,
+    no_mempool: bool,
+    interactive: bool,
     archival_mode: bool,
+    mine_easy: bool,
+    mine_hard: bool
 }
 
 fn parse_cli_args() -> Argv {
-    let matches = App::new("purple")
+    let matches = App::new(format!("Purple Protocol v{}", env!("CARGO_PKG_VERSION")))
         .arg(
             Arg::with_name("network_name")
                 .long("network-name")
@@ -182,18 +186,44 @@ fn parse_cli_args() -> Argv {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("no_mempool")
+                .long("no-mempool")
+                .conflicts_with("mempool_size")
+                .help("Start the node without a mempool")
+        )
+        .arg(
+            Arg::with_name("no_rpc")
+                .long("no-rpc")
+                .help("Start the node without the json-rpc interface")
+        )
+        .arg(
+            Arg::with_name("interactive")
+                .long("interactive")
+                .short("i")
+                .help("Start the node in interactive mode")
+        )
+        .arg(
+            Arg::with_name("mine_easy")
+                .long("mine-easy")
+                .conflicts_with("mine_hard")
+                .help("Start mining on the Easy Chain")
+        )
+        .arg(
+            Arg::with_name("mine_hard")
+                .long("mine-hard")
+                .help("Start mining on the Hard Chain")
+        )
+        .arg(
             Arg::with_name("max_peers")
                 .long("max-peers")
                 .value_name("MAX_PEERS")
-                .help("The maximum number of allowed peer connections")
+                .help("The maximum number of allowed peer connections. Default is 8")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("prune")
                 .long("prune")
-                .value_name("PRUNE")
-                .help("Wether to prune the ledger or to keep the entire transaction history")
-                .takes_value(true),
+                .help("Whether to prune the ledger or to keep the entire transaction history. False by default."),
         )
         .get_matches();
 
@@ -215,16 +245,19 @@ fn parse_cli_args() -> Argv {
         8
     };
 
-    let archival_mode: bool = if let Some(arg) = matches.value_of("prune") {
-        let result: bool = unwrap!(arg.parse(), "Bad value for <PRUNE>");
-        !result
-    } else {
-        true
-    };
+    let archival_mode: bool = !matches.is_present("prune");
+    let mine_easy: bool = matches.is_present("mine_easy");
+    let mine_hard: bool = matches.is_present("mine_hard");
+    let no_mempool: bool = matches.is_present("no_mempool");
+    let interactive: bool = matches.is_present("interactive");
 
     Argv {
         network_name,
+        mine_easy,
+        mine_hard,
         max_peers,
+        no_mempool,
+        interactive,
         mempool_size,
         archival_mode,
     }

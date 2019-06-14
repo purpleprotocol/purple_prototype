@@ -56,7 +56,11 @@ pub enum ChainErr {
 const BLOCK_CACHE_SIZE: usize = 20;
 
 /// Maximum orphans allowed.
+#[cfg(not(test))]
 const MAX_ORPHANS: usize = 100;
+
+#[cfg(test)]
+const MAX_ORPHANS: usize = 20;
 
 /// Blocks with height below the canonical height minus
 /// this number will be rejected.
