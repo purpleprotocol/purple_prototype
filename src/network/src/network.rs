@@ -22,13 +22,14 @@ use crate::packets::connect::Connect;
 use crate::packet::Packet;
 use std::net::SocketAddr;
 use crypto::SecretKey as Sk;
+use chain::{HardChainRef, EasyChainRef, HardBlock, EasyBlock};
+use std::sync::mpsc::Sender;
 use hashbrown::{HashSet, HashMap};
 use std::sync::Arc;
 use parking_lot::Mutex;
 use NodeId;
 use Peer;
 
-#[derive(Debug, Clone)]
 pub struct Network {
     /// Mapping between connected ips and peer information
     pub(crate) peers: HashMap<SocketAddr, Peer>,
@@ -39,6 +40,18 @@ pub struct Network {
     /// Our secret key
     pub(crate) secret_key: Sk,
 
+    /// Reference to the `EasyChain`
+    easy_chain_ref: EasyChainRef,
+
+    /// Reference to the `HardChain`
+    hard_chain_ref: HardChainRef,
+
+    /// Sender to `HardChain` block buffer
+    hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
+
+    /// Sender to `EasyChain` block buffer
+    easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
+
     /// The name of the network we are on
     network_name: String,
 
@@ -47,13 +60,26 @@ pub struct Network {
 }
 
 impl Network {
-    pub fn new(node_id: NodeId, network_name: String, secret_key: Sk, max_peers: usize) -> Network {
+    pub fn new(
+        node_id: NodeId, 
+        network_name: String, 
+        secret_key: Sk, 
+        max_peers: usize,
+        easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
+        hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
+        easy_chain_ref: EasyChainRef,
+        hard_chain_ref: HardChainRef,
+    ) -> Network {
         Network {
             peers: HashMap::with_capacity(max_peers),
             node_id,
             network_name,
             secret_key,
-            max_peers
+            max_peers,
+            easy_chain_sender,
+            hard_chain_sender,
+            easy_chain_ref,
+            hard_chain_ref,
         }
     }
 
@@ -131,6 +157,19 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
+    fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn send_to_all_unsigned_except<P: Packet>(&self, exception: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+
+    fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
     fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         unimplemented!();
     }
@@ -156,6 +195,23 @@ impl NetworkInterface for Network {
 
         Ok(())
     }
+
+    fn easy_chain_ref(&self) -> EasyChainRef {
+        unimplemented!();
+    }
+
+    fn hard_chain_ref(&self) -> HardChainRef {
+        unimplemented!();
+    }
+
+    fn easy_chain_sender(&self) -> &Sender<(SocketAddr, Arc<EasyBlock>)> {
+        unimplemented!();
+    }
+
+    fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)> {
+        unimplemented!();
+    }
+
 
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         let (is_none_id, conn_type) = {

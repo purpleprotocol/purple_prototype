@@ -49,12 +49,14 @@ use futures::Future;
 use hashdb::HashDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use network::*;
-use parking_lot::Mutex;
+use parking_lot::{RwLock, Mutex};
+use chain::*;
 use persistence::PersistentDb;
 use std::alloc::System;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::mpsc::channel;
 
 // Enforce usage of system allocator.
 #[global_allocator]
@@ -65,12 +67,23 @@ const DEFAULT_NETWORK_NAME: &'static str = "purple";
 
 fn main() {
     env_logger::init();
+    
+    info!("Opening databases...");
 
     let argv = parse_cli_args();
     let db = Arc::new(open_database(&argv.network_name));
 
-    let mut node_storage = PersistentDb::new(db.clone(), Some(1));
-    let ledger = PersistentDb::new(db, Some(2));
+    let mut node_storage = PersistentDb::new(db.clone(), Some(0));
+    let easy_db = PersistentDb::new(db.clone(), Some(1));
+    let hard_db = PersistentDb::new(db.clone(), Some(2));
+    let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_db)));
+    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_db)));
+    let easy_chain = EasyChainRef::new(easy_chain);
+    let hard_chain = HardChainRef::new(hard_chain);
+    let (easy_tx, easy_rx) = channel();
+    let (hard_tx, hard_rx) = channel();
+
+    info!("Setting up the network...");
 
     let (node_id, skey) = fetch_credentials(&mut node_storage);
     let network = Arc::new(Mutex::new(Network::new(
@@ -78,11 +91,18 @@ fn main() {
         argv.network_name.to_owned(),
         skey,
         argv.max_peers,
+        easy_tx,
+        hard_tx,
+        easy_chain.clone(),
+        hard_chain.clone(),
     )));
     let accept_connections = Arc::new(AtomicBool::new(true));
 
     // Start the tokio runtime
     tokio::run(ok(()).and_then(move |_| {
+        // Start listening for blocks
+        start_block_listeners(network.clone(), easy_chain, hard_chain, easy_rx, hard_rx);
+
         // Start listening to connections
         start_listener(network.clone(), accept_connections.clone());
 
@@ -142,11 +162,15 @@ struct Argv {
     network_name: String,
     mempool_size: u16,
     max_peers: usize,
+    no_mempool: bool,
+    interactive: bool,
     archival_mode: bool,
+    mine_easy: bool,
+    mine_hard: bool
 }
 
 fn parse_cli_args() -> Argv {
-    let matches = App::new("purple")
+    let matches = App::new(format!("Purple Protocol v{}", env!("CARGO_PKG_VERSION")))
         .arg(
             Arg::with_name("network_name")
                 .long("network-name")
@@ -162,18 +186,44 @@ fn parse_cli_args() -> Argv {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("no_mempool")
+                .long("no-mempool")
+                .conflicts_with("mempool_size")
+                .help("Start the node without a mempool")
+        )
+        .arg(
+            Arg::with_name("no_rpc")
+                .long("no-rpc")
+                .help("Start the node without the json-rpc interface")
+        )
+        .arg(
+            Arg::with_name("interactive")
+                .long("interactive")
+                .short("i")
+                .help("Start the node in interactive mode")
+        )
+        .arg(
+            Arg::with_name("mine_easy")
+                .long("mine-easy")
+                .conflicts_with("mine_hard")
+                .help("Start mining on the Easy Chain")
+        )
+        .arg(
+            Arg::with_name("mine_hard")
+                .long("mine-hard")
+                .help("Start mining on the Hard Chain")
+        )
+        .arg(
             Arg::with_name("max_peers")
                 .long("max-peers")
                 .value_name("MAX_PEERS")
-                .help("The maximum number of allowed peer connections")
+                .help("The maximum number of allowed peer connections. Default is 8")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("prune")
                 .long("prune")
-                .value_name("PRUNE")
-                .help("Wether to prune the ledger or to keep the entire transaction history")
-                .takes_value(true),
+                .help("Whether to prune the ledger or to keep the entire transaction history. False by default."),
         )
         .get_matches();
 
@@ -195,16 +245,19 @@ fn parse_cli_args() -> Argv {
         8
     };
 
-    let archival_mode: bool = if let Some(arg) = matches.value_of("prune") {
-        let result: bool = unwrap!(arg.parse(), "Bad value for <PRUNE>");
-        !result
-    } else {
-        true
-    };
+    let archival_mode: bool = !matches.is_present("prune");
+    let mine_easy: bool = matches.is_present("mine_easy");
+    let mine_hard: bool = matches.is_present("mine_hard");
+    let no_mempool: bool = matches.is_present("no_mempool");
+    let interactive: bool = matches.is_present("interactive");
 
     Argv {
         network_name,
+        mine_easy,
+        mine_hard,
         max_peers,
+        no_mempool,
+        interactive,
         mempool_size,
         archival_mode,
     }

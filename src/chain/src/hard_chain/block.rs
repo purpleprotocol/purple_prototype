@@ -29,6 +29,8 @@ use std::hash::Hasher;
 use std::io::Cursor;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::str;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 /// The size of the hard block proof
 pub const HARD_PROOF_SIZE: usize = 42;
@@ -44,6 +46,7 @@ lazy_static! {
             merkle_root: Some(Hash::NULL),
             height: 0,
             hash: None,
+            ip: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 44034),
             timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
         };
 
@@ -73,6 +76,9 @@ pub struct HardBlock {
 
     /// The timestamp of the block.
     timestamp: DateTime<Utc>,
+
+    /// Ip of the miner
+    ip: SocketAddr,
 }
 
 impl PartialEq for HardBlock {
@@ -118,6 +124,10 @@ impl Block for HardBlock {
         self.timestamp.clone()
     }
 
+    fn address(&self) -> Option<&SocketAddr> {
+        Some(&self.ip)
+    }
+
     fn after_write() -> Option<Box<FnMut(Arc<HardBlock>)>> {
         None
     }
@@ -125,16 +135,21 @@ impl Block for HardBlock {
     fn to_bytes(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         let ts = self.timestamp.to_rfc3339();
+        let address = format!("{}", self.ip);
+        let address = address.as_bytes();
+        let address_len = address.len() as u8;
         let timestamp = ts.as_bytes();
         let timestamp_len = timestamp.len() as u8;
 
         buf.write_u8(Self::BLOCK_TYPE).unwrap();
+        buf.write_u8(address_len).unwrap();
         buf.write_u8(timestamp_len).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
         buf.extend_from_slice(&self.hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.easy_block_hash.0.to_vec());
         buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
+        buf.extend_from_slice(address);
         buf.extend_from_slice(&timestamp);
         buf
     }
@@ -153,13 +168,21 @@ impl Block for HardBlock {
 
         rdr.set_position(1);
 
-        let timestamp_len = if let Ok(result) = rdr.read_u8() {
+        let address_len = if let Ok(result) = rdr.read_u8() {
             result
         } else {
             return Err("Bad transaction type");
         };
 
         rdr.set_position(2);
+
+        let timestamp_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad transaction type");
+        };
+
+        rdr.set_position(3);
 
         let height = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
@@ -169,7 +192,7 @@ impl Block for HardBlock {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        buf.drain(..10);
+        buf.drain(..11);
 
         let hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
@@ -215,6 +238,20 @@ impl Block for HardBlock {
             return Err("Incorrect packet structure 4");
         };
 
+        let address = if buf.len() > address_len as usize {
+            let address_vec: Vec<u8> = buf.drain(..address_len as usize).collect();
+
+            match str::from_utf8(&address_vec) {
+                Ok(result) => match SocketAddr::from_str(result) {
+                    Ok(addr) => addr,
+                    Err(_) => return Err("Invalid ip address")
+                },
+                Err(_) => return Err("Invalid ip address")
+            }
+        } else {
+            return Err("Incorrect packet structure 5");
+        };
+
         let timestamp = if buf.len() == timestamp_len as usize {
             match std::str::from_utf8(&buf) {
                 Ok(utf8) => match DateTime::<Utc>::from_str(utf8) {
@@ -233,6 +270,7 @@ impl Block for HardBlock {
             easy_block_hash,
             hash: Some(hash),
             parent_hash: Some(parent_hash),
+            ip: address,
             height,
         }))
     }
@@ -241,13 +279,14 @@ impl Block for HardBlock {
 impl HardBlock {
     pub const BLOCK_TYPE: u8 = 1;
 
-    pub fn new(parent_hash: Option<Hash>, height: u64, easy_block_hash: Hash) -> HardBlock {
+    pub fn new(parent_hash: Option<Hash>, ip: SocketAddr, height: u64, easy_block_hash: Hash) -> HardBlock {
         HardBlock {
             parent_hash,
             easy_block_hash,
             merkle_root: None,
             height,
             hash: None,
+            ip,
             timestamp: Utc::now(),
         }
     }
@@ -298,6 +337,7 @@ impl Arbitrary for HardBlock {
             parent_hash: Some(Arbitrary::arbitrary(g)),
             merkle_root: Some(Arbitrary::arbitrary(g)),
             hash: Some(Arbitrary::arbitrary(g)),
+            ip: Arbitrary::arbitrary(g),
             timestamp: Utc::now(),
         }
     }

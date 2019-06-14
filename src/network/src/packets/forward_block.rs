@@ -21,7 +21,7 @@ use crate::interface::NetworkInterface;
 use crate::node_id::NodeId;
 use crate::error::NetworkErr;
 use crate::packet::Packet;
-use chain::BlockWrapper;
+use chain::{Block, BlockWrapper};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
 use chrono::prelude::*;
@@ -197,8 +197,38 @@ impl Packet for ForwardBlock {
         self.timestamp.clone()
     }
 
-    fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &ForwardBlock, conn_type: ConnectionType) -> Result<(), NetworkErr> {
-        unimplemented!();
+    fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &ForwardBlock, _conn_type: ConnectionType) -> Result<(), NetworkErr> {
+        match *packet.block {
+            BlockWrapper::EasyBlock(ref block) => {
+                let easy_chain = network.easy_chain_ref();
+
+                // Do not push block to queue if we already  
+                // have it stored in the chain.
+                if easy_chain.query(&block.block_hash().unwrap()).is_some() {
+                    Ok(())
+                } else {
+                    let sender = network.easy_chain_sender();
+                    sender.send((addr.clone(), block.clone())).unwrap();
+
+                    Ok(())
+                }
+            }
+
+            BlockWrapper::HardBlock(ref block) => {
+                let hard_chain = network.hard_chain_ref();
+
+                // Do not push block to queue if we already  
+                // have it stored in the chain.
+                if hard_chain.query(&block.block_hash().unwrap()).is_some() {
+                    Ok(())
+                } else {
+                    let sender = network.hard_chain_sender();
+                    sender.send((addr.clone(), block.clone())).unwrap();
+
+                    Ok(())
+                }
+            }
+        }
     }
 }
 

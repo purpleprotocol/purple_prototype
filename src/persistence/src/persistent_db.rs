@@ -101,11 +101,11 @@ impl PersistentDb {
         }
 
         // Wipe pending state
-        self.wipe();
+        self.wipe_memory();
     }
 
     /// Clears the added transactions
-    pub fn wipe(&mut self) {
+    pub fn wipe_memory(&mut self) {
         if let Some(ref mut reg) = self.reg {
             reg.clear();
         }
@@ -423,7 +423,7 @@ mod tests {
         let key = persistent_db.insert(data);
         let key2 = persistent_db.insert(data2);
         let key3 = persistent_db.insert(data3);
-        persistent_db.wipe();
+        persistent_db.wipe_memory();
 
         assert!(persistent_db.get(&key).is_none());
         assert!(persistent_db.get(&key2).is_none());

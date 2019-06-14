@@ -20,7 +20,10 @@ use crate::error::NetworkErr;
 use crate::peer::Peer;
 use crate::packet::Packet;
 use crate::node_id::NodeId;
+use crate::chain::{EasyChainRef, HardChainRef, HardBlock, EasyBlock};
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::sync::mpsc::Sender;
 
 /// Generic network layer interface.
 pub trait NetworkInterface {
@@ -44,6 +47,16 @@ pub trait NetworkInterface {
 
     /// Sends a packet to all peers.
     fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr>;
+
+    /// Sends a packet to all peers except the given address.
+    fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
+
+    /// Signs a packet and sends it to all peers.
+    fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr>;
+
+    /// Signs a packet and sends it to all peers 
+    /// except the peer with the given address.
+    fn send_to_all_unsigned_except<P: Packet>(&self, exception: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr>;
 
     /// Attempts to send a packet to the specific peer. This
     /// function will also sign the packet if it does not yet
@@ -79,4 +92,20 @@ pub trait NetworkInterface {
 
     /// Returns an iterator on the listed peers
     fn peers<'a>(&'a self) -> Box<dyn Iterator<Item = (&SocketAddr, &Peer)> + 'a>;
+
+    /// Returns a reference to the `EasyChain`.
+    fn easy_chain_ref(&self) -> EasyChainRef;
+
+    /// Returns a reference to the `HardChain`.
+    fn hard_chain_ref(&self) -> HardChainRef;
+
+    /// Returns a reference to a `EasyChain` mpsc sender.
+    /// Use this to buffer blocks that are to be appended
+    /// to the chain.
+    fn easy_chain_sender(&self) -> &Sender<(SocketAddr, Arc<EasyBlock>)>;
+
+    /// Returns a reference to a `HardChain` mpsc sender.
+    /// Use this to buffer blocks that are to be appended
+    /// to the chain.
+    fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)>;
 }

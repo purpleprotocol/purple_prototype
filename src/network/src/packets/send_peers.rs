@@ -321,8 +321,9 @@ mod tests {
     use std::thread;
     use std::time::Duration;
     use std::sync::mpsc::channel;
-    use parking_lot::Mutex;
+    use parking_lot::{RwLock, Mutex};
     use hashbrown::HashMap;
+    use chain::*;
     use crate::packets::RequestPeers;
     use crate::interface::NetworkInterface;
     use crate::mock::MockNetwork;
@@ -330,91 +331,65 @@ mod tests {
 
     #[test]
     fn it_sends_and_requests_peers() {
-        let mut mailboxes = HashMap::new();
-        let addr1 = crate::random_socket_addr();
-        let addr2 = crate::random_socket_addr();
-        let addr3 = crate::random_socket_addr();
-        let addr4 = crate::random_socket_addr();
-        let addr5 = crate::random_socket_addr();
-        let (pk1, sk1) = crypto::gen_keypair();
-        let (pk2, sk2) = crypto::gen_keypair(); 
-        let (pk3, sk3) = crypto::gen_keypair();
-        let (pk4, sk4) = crypto::gen_keypair();
-        let (pk5, sk5) = crypto::gen_keypair();
-        let n1 = NodeId::from_pkey(pk1);
-        let n2 = NodeId::from_pkey(pk2);
-        let n3 = NodeId::from_pkey(pk3);
-        let n4 = NodeId::from_pkey(pk4);
-        let n5 = NodeId::from_pkey(pk5);
-
-        let (rx1, tx1) = channel();
-        let (rx2, tx2) = channel();
-        let (rx3, tx3) = channel();
-        let (rx4, tx4) = channel();
-        let (rx5, tx5) = channel();
-
-        let mut address_mappings = HashMap::new();
-
-        address_mappings.insert(addr1.clone(), n1.clone());
-        address_mappings.insert(addr2.clone(), n2.clone());
-        address_mappings.insert(addr3.clone(), n3.clone());
-        address_mappings.insert(addr4.clone(), n4.clone());
-        address_mappings.insert(addr5.clone(), n5.clone());
-
-        mailboxes.insert(n1.clone(), rx1);
-        mailboxes.insert(n2.clone(), rx2);
-        mailboxes.insert(n3.clone(), rx3);
-        mailboxes.insert(n4.clone(), rx4);
-        mailboxes.insert(n5.clone(), rx5);
-
-        let network1 = MockNetwork::new(n1.clone(), addr1, "test_network".to_owned(), sk1, tx1, mailboxes.clone(), address_mappings.clone());
-        let network2 = MockNetwork::new(n2.clone(), addr2, "test_network".to_owned(), sk2, tx2, mailboxes.clone(), address_mappings.clone());
-        let network3 = MockNetwork::new(n3.clone(), addr3, "test_network".to_owned(), sk3, tx3, mailboxes.clone(), address_mappings.clone());
-        let network4 = MockNetwork::new(n4.clone(), addr4, "test_network".to_owned(), sk4, tx4, mailboxes.clone(), address_mappings.clone());
-        let network5 = MockNetwork::new(n5.clone(), addr5, "test_network".to_owned(), sk5, tx5, mailboxes.clone(), address_mappings.clone());
-        let network1 = Arc::new(Mutex::new(network1));
+        let networks = crate::init_test_networks(5);
+        let addr1 = networks[0].1;
+        let addr2 = networks[1].1;
+        let addr3 = networks[2].1;
+        let addr4 = networks[3].1;
+        let addr5 = networks[4].1;
+        let network1_easy_rec = networks[0].3.clone();
+        let network1_hard_rec = networks[0].4.clone();
+        let network1 = networks[0].0.clone();
         let network1_cc = network1.clone();
-        let network2 = Arc::new(Mutex::new(network2));
+        let network2_easy_rec = networks[1].3.clone();
+        let network2_hard_rec = networks[1].4.clone();
+        let network2 = networks[1].0.clone();
         let network2_c = network2.clone();
         let network2_cc = network2.clone();
-        let network3 = Arc::new(Mutex::new(network3));
+        let network3_easy_rec = networks[2].3.clone();
+        let network3_hard_rec = networks[2].4.clone();
+        let network3 = networks[2].0.clone();
         let network3_c = network3.clone();
         let network3_cc = network3.clone();
-        let network4 = Arc::new(Mutex::new(network4));
+        let network4_easy_rec = networks[3].3.clone();
+        let network4_hard_rec = networks[3].4.clone();
+        let network4 = networks[3].0.clone();
         let network4_c = network4.clone();
         let network4_cc = network4.clone();
-        let network5 = Arc::new(Mutex::new(network5));
+        let network5_easy_rec = networks[4].3.clone();
+        let network5_hard_rec = networks[4].4.clone();
+        let network5 = networks[4].0.clone();
         let network5_c = network5.clone();
         let network5_cc = network5.clone();
 
         // Peer 1 listener thread
         thread::Builder::new()
             .name("peer1".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network1))
+            .spawn(move || MockNetwork::start_receive_loop(network1, network1_easy_rec, network1_hard_rec))
             .unwrap();
 
         // Peer 2 listener thread
         thread::Builder::new()
             .name("peer2".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network2))
+            .spawn(move || MockNetwork::start_receive_loop(network2, network2_easy_rec, network2_hard_rec))
             .unwrap();
 
         // Peer 3 listener thread
         thread::Builder::new()
             .name("peer3".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network3))
+            .spawn(move || MockNetwork::start_receive_loop(network3, network3_easy_rec, network3_hard_rec))
             .unwrap();
 
         // Peer 4 listener thread
         thread::Builder::new()
             .name("peer4".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network4))
+            .spawn(move || MockNetwork::start_receive_loop(network4, network4_easy_rec, network4_hard_rec))
             .unwrap();
 
         // Peer 5 listener thread
         thread::Builder::new()
             .name("peer5".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network5))
+            .spawn(move || MockNetwork::start_receive_loop(network5, network5_easy_rec, network5_hard_rec))
             .unwrap();
 
         // Establish initial connections.

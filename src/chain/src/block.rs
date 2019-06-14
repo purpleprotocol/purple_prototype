@@ -21,6 +21,7 @@ use chrono::prelude::*;
 use crypto::Hash;
 use std::boxed::Box;
 use std::sync::Arc;
+use std::net::SocketAddr;
 
 /// Generic block interface
 pub trait Block {
@@ -41,6 +42,9 @@ pub trait Block {
 
     /// Returns the height of the block.
     fn height(&self) -> u64;
+
+    /// Returns the ip of the block's miner
+    fn address(&self) -> Option<&SocketAddr>;
 
     /// Callback that executes after a block is written to a chain.
     fn after_write() -> Option<Box<FnMut(Arc<Self>)>>;
