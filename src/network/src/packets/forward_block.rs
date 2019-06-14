@@ -208,16 +208,12 @@ impl Packet for ForwardBlock {
                     Ok(())
                 } else {
                     let sender = network.easy_chain_sender();
-                    sender.send(block.clone()).unwrap();
-
-                    // Forward block
-                    let mut packet = ForwardBlock::new(network.our_node_id().clone(), packet.block.clone());
-                    network.send_to_all_unsigned_except(addr, &mut packet)?;
+                    sender.send((addr.clone(), block.clone())).unwrap();
 
                     Ok(())
                 }
             }
-            
+
             BlockWrapper::HardBlock(ref block) => {
                 let hard_chain = network.hard_chain_ref();
 
@@ -227,11 +223,7 @@ impl Packet for ForwardBlock {
                     Ok(())
                 } else {
                     let sender = network.hard_chain_sender();
-                    sender.send(block.clone()).unwrap();
-
-                    // Forward block
-                    let mut packet = ForwardBlock::new(network.our_node_id().clone(), packet.block.clone());
-                    network.send_to_all_unsigned_except(addr, &mut packet)?;
+                    sender.send((addr.clone(), block.clone())).unwrap();
 
                     Ok(())
                 }

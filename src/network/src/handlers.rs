@@ -20,45 +20,66 @@ use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use tokio::executor::Spawn;
 use futures::prelude::*;
+use std::net::SocketAddr;
+use crate::{NetworkInterface, Network};
+use crate::packets::ForwardBlock;
+use parking_lot::Mutex;
 use futures::future::{self, ok, loop_fn, Loop, FutureResult};
 use chain::*;
 
 /// Listens for blocks on chain receivers and 
 /// forwards them to their respective chains.
 pub fn start_block_listeners(
+    network: Arc<Mutex<Network>>,
     easy_chain: EasyChainRef, 
     hard_chain: HardChainRef,
-    easy_receiver: Receiver<Arc<EasyBlock>>,
-    hard_receiver: Receiver<Arc<HardBlock>>,
+    easy_receiver: Receiver<(SocketAddr, Arc<EasyBlock>)>,
+    hard_receiver: Receiver<(SocketAddr, Arc<HardBlock>)>,
 ) {
-    let loop_fut_easy = loop_fn((easy_receiver, easy_chain), |state| {
+    let loop_fut_easy = loop_fn((network.clone(), easy_receiver, easy_chain), |state| {
         {
-            let (easy_rec, easy) = &state;
+            let (network, easy_rec, easy) = &state;
 
-            if let Ok(block) = easy_rec.try_recv() {
+            if let Ok((addr, block)) = easy_rec.try_recv() {
                 debug!("Received EasyBlock {:?}", block.block_hash().unwrap());
                 let easy_chain = &easy.chain;
                 let mut chain = easy_chain.write();
                 
-                // TODO: Handle chain result
-                let _result = chain.append_block(block);
+                match chain.append_block(block.clone()) {
+                    Ok(()) => {
+                        let network = network.lock();
+
+                        // Forward block
+                        let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::EasyBlock(block)));
+                        network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
+                    }
+                    Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)
+                }
             }
         }
 
         Ok(Loop::Continue(state))
     });
 
-    let loop_fut_hard = loop_fn((hard_receiver, hard_chain), |state| {
+    let loop_fut_hard = loop_fn((network, hard_receiver, hard_chain), |state| {
         {
-            let (hard_rec, hard) = &state;
+            let (network, hard_rec, hard) = &state;
 
-            if let Ok(block) = hard_rec.try_recv() {
+            if let Ok((addr, block)) = hard_rec.try_recv() {
                 debug!("Received HardBlock {:?}", block.block_hash().unwrap());
                 let hard_chain = &hard.chain;
                 let mut chain = hard_chain.write();
                 
-                // TODO: Handle chain result
-                let _result = chain.append_block(block);
+                match chain.append_block(block.clone()) {
+                    Ok(()) => {
+                        let network = network.lock();
+
+                        // Forward block
+                        let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::HardBlock(block)));
+                        network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
+                    }
+                    Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)
+                }
             }
         }
 

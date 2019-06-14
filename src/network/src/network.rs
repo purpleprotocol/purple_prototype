@@ -47,10 +47,10 @@ pub struct Network {
     hard_chain_ref: HardChainRef,
 
     /// Sender to `HardChain` block buffer
-    hard_chain_sender: Sender<Arc<HardBlock>>,
+    hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
 
     /// Sender to `EasyChain` block buffer
-    easy_chain_sender: Sender<Arc<EasyBlock>>,
+    easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
 
     /// The name of the network we are on
     network_name: String,
@@ -65,8 +65,8 @@ impl Network {
         network_name: String, 
         secret_key: Sk, 
         max_peers: usize,
-        easy_chain_sender: Sender<Arc<EasyBlock>>,
-        hard_chain_sender: Sender<Arc<HardBlock>>,
+        easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
+        hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
         easy_chain_ref: EasyChainRef,
         hard_chain_ref: HardChainRef,
     ) -> Network {
@@ -204,11 +204,11 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
-    fn easy_chain_sender(&self) -> &Sender<Arc<EasyBlock>> {
+    fn easy_chain_sender(&self) -> &Sender<(SocketAddr, Arc<EasyBlock>)> {
         unimplemented!();
     }
 
-    fn hard_chain_sender(&self) -> &Sender<Arc<HardBlock>> {
+    fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)> {
         unimplemented!();
     }
 

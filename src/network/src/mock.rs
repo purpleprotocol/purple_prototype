@@ -47,10 +47,10 @@ pub struct MockNetwork {
     hard_chain_ref: HardChainRef,
 
     /// Sender to `HardChain` block buffer
-    hard_chain_sender: Sender<Arc<HardBlock>>,
+    hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
 
     /// Sender to `EasyChain` block buffer
-    easy_chain_sender: Sender<Arc<EasyBlock>>,
+    easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
 
     /// Mapping between ips and node ids.
     pub(crate) address_mappings: HashMap<SocketAddr, NodeId>, 
@@ -217,12 +217,12 @@ impl NetworkInterface for MockNetwork {
         unimplemented!();
     }
 
-    fn easy_chain_sender(&self) -> &Sender<Arc<EasyBlock>> {
-        unimplemented!();
+    fn easy_chain_sender(&self) -> &Sender<(SocketAddr, Arc<EasyBlock>)> {
+        &self.easy_chain_sender
     }
 
-    fn hard_chain_sender(&self) -> &Sender<Arc<HardBlock>> {
-        unimplemented!();
+    fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)> {
+        &self.hard_chain_sender
     }
 
     fn process_packet(&mut self, addr: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
@@ -330,8 +330,8 @@ impl MockNetwork {
         rx: Receiver<(SocketAddr, Vec<u8>)>, 
         mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>, 
         address_mappings: HashMap<SocketAddr, NodeId>,
-        easy_chain_sender: Sender<Arc<EasyBlock>>,
-        hard_chain_sender: Sender<Arc<HardBlock>>,
+        easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
+        hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
         easy_chain_ref: EasyChainRef,
         hard_chain_ref: HardChainRef,
     ) -> MockNetwork {
@@ -353,8 +353,8 @@ impl MockNetwork {
 
     pub fn start_receive_loop(
         network: Arc<Mutex<Self>>, 
-        easy_block_receiver: Arc<Mutex<Receiver<Arc<EasyBlock>>>>,
-        hard_block_receiver: Arc<Mutex<Receiver<Arc<HardBlock>>>>,
+        easy_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<EasyBlock>)>>>,
+        hard_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>,
     ) {
         loop {
             let mut network = network.lock();
@@ -378,31 +378,43 @@ impl MockNetwork {
             let easy_receiver = easy_block_receiver.lock();
             let easy_iter = easy_receiver
                 .try_iter()
-                .map(|b| BlockWrapper::EasyBlock(b));
+                .map(|(a, b)| (a, BlockWrapper::EasyBlock(b)));
 
             let hard_receiver = hard_block_receiver.lock();
             let hard_iter = hard_receiver
                 .try_iter()
-                .map(|b| BlockWrapper::HardBlock(b));
+                .map(|(a, b)| (a, BlockWrapper::HardBlock(b)));
 
             let mut iter = easy_iter.chain(hard_iter);
 
-            while let Some(block) = iter.next() {
+            while let Some((addr, block)) = iter.next() {
                 match block {
                     BlockWrapper::EasyBlock(block) => {
                         let easy_chain = network.easy_chain_ref().chain;
                         let mut chain = easy_chain.write();
                         
-                        // TODO: Handle chain result
-                        let _result = chain.append_block(block);
+                        match chain.append_block(block.clone()) {
+                            Ok(()) => {
+                                // Forward block
+                                let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::EasyBlock(block)));
+                                network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
+                            }
+                            Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)
+                        }
                     }
 
                     BlockWrapper::HardBlock(block) => {
                         let hard_chain = network.hard_chain_ref().chain;
                         let mut chain = hard_chain.write();
                         
-                        // TODO: Handle chain result
-                        let _result = chain.append_block(block);
+                        match chain.append_block(block.clone()) {
+                            Ok(()) => {
+                                // Forward block
+                                let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::HardBlock(block)));
+                                network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
+                            }
+                            Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)
+                        }
                     }
                 }
             }

@@ -109,7 +109,7 @@ use crypto::SecretKey;
 
 #[cfg(test)]
 /// Test helper for initializing mock networks
-pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketAddr, NodeId, Arc<Mutex<Receiver<Arc<EasyBlock>>>>, Arc<Mutex<Receiver<Arc<HardBlock>>>>)> {
+pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketAddr, NodeId, Arc<Mutex<Receiver<(SocketAddr, Arc<EasyBlock>)>>>, Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>)> {
     let mut mailboxes = HashMap::new();
     let chains: Vec<(EasyChainRef, HardChainRef)> = (0..peers)
         .into_iter()
@@ -130,7 +130,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
         .collect();
 
     let mut address_mappings = HashMap::new();
-    let mut networks: Vec<(Arc<Mutex<MockNetwork>>, SocketAddr, NodeId, Arc<Mutex<Receiver<Arc<EasyBlock>>>>, Arc<Mutex<Receiver<Arc<HardBlock>>>>)> = Vec::with_capacity(peers);
+    let mut networks: Vec<(Arc<Mutex<MockNetwork>>, SocketAddr, NodeId, Arc<Mutex<Receiver<(SocketAddr, Arc<EasyBlock>)>>>, Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>)> = Vec::with_capacity(peers);
 
     for i in 0..peers {
         let (rx, tx) = channel();

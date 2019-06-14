@@ -102,10 +102,10 @@ pub trait NetworkInterface {
     /// Returns a reference to a `EasyChain` mpsc sender.
     /// Use this to buffer blocks that are to be appended
     /// to the chain.
-    fn easy_chain_sender(&self) -> &Sender<Arc<EasyBlock>>;
+    fn easy_chain_sender(&self) -> &Sender<(SocketAddr, Arc<EasyBlock>)>;
 
     /// Returns a reference to a `HardChain` mpsc sender.
     /// Use this to buffer blocks that are to be appended
     /// to the chain.
-    fn hard_chain_sender(&self) -> &Sender<Arc<HardBlock>>;
+    fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)>;
 }
