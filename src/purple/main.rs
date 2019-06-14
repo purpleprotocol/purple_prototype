@@ -101,7 +101,7 @@ fn main() {
     // Start the tokio runtime
     tokio::run(ok(()).and_then(move |_| {
         // Start listening for blocks
-        start_block_listener(easy_chain, hard_chain, easy_rx, hard_rx);
+        start_block_listeners(easy_chain, hard_chain, easy_rx, hard_rx);
 
         // Start listening to connections
         start_listener(network.clone(), accept_connections.clone());

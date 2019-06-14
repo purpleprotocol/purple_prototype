@@ -25,15 +25,15 @@ use chain::*;
 
 /// Listens for blocks on chain receivers and 
 /// forwards them to their respective chains.
-pub fn start_block_listener(
+pub fn start_block_listeners(
     easy_chain: EasyChainRef, 
     hard_chain: HardChainRef,
     easy_receiver: Receiver<Arc<EasyBlock>>,
     hard_receiver: Receiver<Arc<HardBlock>>,
-) -> Spawn {
-    let loop_fut = loop_fn((easy_receiver, hard_receiver, easy_chain, hard_chain), |state| {
+) {
+    let loop_fut_easy = loop_fn((easy_receiver, easy_chain), |state| {
         {
-            let (easy_rec, hard_rec, easy, hard) = &state;
+            let (easy_rec, easy) = &state;
 
             if let Ok(block) = easy_rec.try_recv() {
                 debug!("Received EasyBlock {:?}", block.block_hash().unwrap());
@@ -43,6 +43,14 @@ pub fn start_block_listener(
                 // TODO: Handle chain result
                 let _result = chain.append_block(block);
             }
+        }
+
+        Ok(Loop::Continue(state))
+    });
+
+    let loop_fut_hard = loop_fn((hard_receiver, hard_chain), |state| {
+        {
+            let (hard_rec, hard) = &state;
 
             if let Ok(block) = hard_rec.try_recv() {
                 debug!("Received HardBlock {:?}", block.block_hash().unwrap());
@@ -57,5 +65,6 @@ pub fn start_block_listener(
         Ok(Loop::Continue(state))
     });
 
-    tokio::spawn(loop_fut)
+    tokio::spawn(loop_fut_easy);
+    tokio::spawn(loop_fut_hard);
 }
