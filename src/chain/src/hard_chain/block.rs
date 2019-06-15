@@ -18,6 +18,8 @@
 
 use crate::block::Block;
 use crate::easy_chain::block::EasyBlock;
+use account::NormalAddress;
+use crypto::PublicKey;
 use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
@@ -44,6 +46,7 @@ lazy_static! {
             easy_block_hash,
             parent_hash: None,
             merkle_root: Some(Hash::NULL),
+            collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
             height: 0,
             hash: None,
             ip: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 44034),
@@ -64,6 +67,10 @@ pub struct HardBlock {
 
     /// The height of the block.
     height: u64,
+
+    /// The address that will collect the 
+    /// rewards earned by the miner.
+    collector_address: NormalAddress,
 
     /// The hash of the parent block.
     parent_hash: Option<Hash>,
@@ -149,6 +156,7 @@ impl Block for HardBlock {
         buf.extend_from_slice(&self.easy_block_hash.0.to_vec());
         buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
+        buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(address);
         buf.extend_from_slice(&timestamp);
         buf
@@ -238,6 +246,17 @@ impl Block for HardBlock {
             return Err("Incorrect packet structure 4");
         };
 
+        let collector_address = if buf.len() > 33 as usize {
+            let addr: Vec<u8> = buf.drain(..33).collect();
+
+            match NormalAddress::from_bytes(&addr) {
+                Ok(address) => address,
+                _ => return Err("Incorrect address field")
+            }
+        } else {
+            return Err("Incorrect packet structure 5");
+        };
+
         let address = if buf.len() > address_len as usize {
             let address_vec: Vec<u8> = buf.drain(..address_len as usize).collect();
 
@@ -268,6 +287,7 @@ impl Block for HardBlock {
             merkle_root: Some(merkle_root),
             timestamp,
             easy_block_hash,
+            collector_address,
             hash: Some(hash),
             parent_hash: Some(parent_hash),
             ip: address,
@@ -279,10 +299,11 @@ impl Block for HardBlock {
 impl HardBlock {
     pub const BLOCK_TYPE: u8 = 1;
 
-    pub fn new(parent_hash: Option<Hash>, ip: SocketAddr, height: u64, easy_block_hash: Hash) -> HardBlock {
+    pub fn new(parent_hash: Option<Hash>, collector_address: NormalAddress, ip: SocketAddr, height: u64, easy_block_hash: Hash) -> HardBlock {
         HardBlock {
             parent_hash,
             easy_block_hash,
+            collector_address,
             merkle_root: None,
             height,
             hash: None,
@@ -334,6 +355,7 @@ impl Arbitrary for HardBlock {
         HardBlock {
             easy_block_hash: Arbitrary::arbitrary(g),
             height: Arbitrary::arbitrary(g),
+            collector_address: Arbitrary::arbitrary(g),
             parent_hash: Some(Arbitrary::arbitrary(g)),
             merkle_root: Some(Arbitrary::arbitrary(g)),
             hash: Some(Arbitrary::arbitrary(g)),

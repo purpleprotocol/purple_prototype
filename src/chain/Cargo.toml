@@ -13,6 +13,7 @@ lru = "0.1.13"
 rlp = "0.3.0"
 parking_lot = "0.7.1"
 hex = "0.3.2"
+account = { path = "../account" }
 crypto = { path = "../crypto" }
 persistence = { path = "../persistence" }
 bin-tools = { path = "../util/bin-tools/" }

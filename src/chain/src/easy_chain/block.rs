@@ -18,6 +18,8 @@
 
 use crate::block::Block;
 use bin_tools::*;
+use account::NormalAddress;
+use crypto::PublicKey;
 use chrono::prelude::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::Hash;
@@ -39,6 +41,7 @@ lazy_static! {
             parent_hash: None,
             merkle_root: Some(Hash::NULL),
             height: 0,
+            collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
             hash: Some(hash),
             ip: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 44034),
             timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
@@ -57,6 +60,10 @@ pub struct EasyBlock {
 
     /// The hash of the parent block.
     parent_hash: Option<Hash>,
+
+    /// The address that will collect the 
+    /// rewards earned by the miner.
+    collector_address: NormalAddress,
 
     /// The merkle root hash of the block.
     merkle_root: Option<Hash>,
@@ -138,6 +145,7 @@ impl Block for EasyBlock {
         buf.extend_from_slice(&self.hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
+        buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(address);
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
         buf
@@ -216,6 +224,17 @@ impl Block for EasyBlock {
             return Err("Incorrect packet structure 4");
         };
 
+        let collector_address = if buf.len() > 33 as usize {
+            let addr: Vec<u8> = buf.drain(..33).collect();
+
+            match NormalAddress::from_bytes(&addr) {
+                Ok(address) => address,
+                _ => return Err("Incorrect address field")
+            }
+        } else {
+            return Err("Incorrect packet structure 5");
+        };
+
         let address = if buf.len() > address_len as usize {
             let address_vec: Vec<u8> = buf.drain(..address_len as usize).collect();
 
@@ -227,7 +246,7 @@ impl Block for EasyBlock {
                 Err(_) => return Err("Invalid ip address")
             }
         } else {
-            return Err("Incorrect packet structure 5");
+            return Err("Incorrect packet structure 6");
         };
 
         let timestamp = if buf.len() == timestamp_len as usize {
@@ -239,11 +258,12 @@ impl Block for EasyBlock {
                 Err(_) => return Err("Invalid block timestamp 2"),
             }
         } else {
-            return Err("Invalid block timestamp 6");
+            return Err("Invalid block timestamp 7");
         };
 
         Ok(Arc::new(EasyBlock {
             merkle_root: Some(merkle_root),
+            collector_address,
             timestamp,
             hash: Some(hash),
             parent_hash: Some(parent_hash),
@@ -256,9 +276,10 @@ impl Block for EasyBlock {
 impl EasyBlock {
     pub const BLOCK_TYPE: u8 = 2;
 
-    pub fn new(parent_hash: Option<Hash>, ip: SocketAddr, height: u64) -> EasyBlock {
+    pub fn new(parent_hash: Option<Hash>, collector_address: NormalAddress, ip: SocketAddr, height: u64) -> EasyBlock {
         EasyBlock {
             parent_hash,
+            collector_address,
             height,
             merkle_root: None,
             hash: None,
@@ -303,6 +324,7 @@ impl quickcheck::Arbitrary for EasyBlock {
         let timestamp = Utc::now();
 
         EasyBlock {
+            collector_address: quickcheck::Arbitrary::arbitrary(g),
             height: quickcheck::Arbitrary::arbitrary(g),
             parent_hash: Some(quickcheck::Arbitrary::arbitrary(g)),
             hash: Some(quickcheck::Arbitrary::arbitrary(g)),

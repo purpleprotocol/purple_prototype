@@ -218,6 +218,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "chain"
 version = "0.1.0"
 dependencies = [
+ "account 0.1.0",
  "bin-tools 0.1.0",
  "byteorder 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
