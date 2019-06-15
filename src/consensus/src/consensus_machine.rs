@@ -46,19 +46,24 @@ pub struct ConsensusMachine {
     /// Remaining number of blocks that the pool is allowed
     /// to produce during the current epoch.
     remaining_blocks: u64,
+
+    /// Our share of allocated events
+    allocated_events: u64,
 }
 
 impl ConsensusMachine {
     pub fn new(
         node_id: NodeId,
         epoch: u64,
-        allocated: u64,
+        remaining_blocks: u64,
+        allocated_events: u64,
         root_event: Arc<Event>,
     ) -> ConsensusMachine {
         ConsensusMachine {
             causal_graph: CausalGraph::new(node_id, root_event),
             epoch,
-            remaining_blocks: allocated,
+            remaining_blocks,
+            allocated_events
         }
     }
 
@@ -67,6 +72,7 @@ impl ConsensusMachine {
         ConsensusMachine {
             causal_graph: CausalGraph::new_with_test_mode(node_id, root_event),
             epoch: 0,
+            allocated_events: 1000,
             remaining_blocks: 1000,
         }
     }

@@ -43,9 +43,12 @@ pub fn start_block_listeners(
             if let Ok((addr, block)) = easy_rec.try_recv() {
                 debug!("Received EasyBlock {:?}", block.block_hash().unwrap());
                 let easy_chain = &easy.chain;
-                let mut chain = easy_chain.write();
-                
-                match chain.append_block(block.clone()) {
+                let chain_result = {
+                    let mut chain = easy_chain.write();
+                    chain.append_block(block.clone())
+                };
+
+                match chain_result {
                     Ok(()) => {
                         let network = network.lock();
 
@@ -68,9 +71,12 @@ pub fn start_block_listeners(
             if let Ok((addr, block)) = hard_rec.try_recv() {
                 debug!("Received HardBlock {:?}", block.block_hash().unwrap());
                 let hard_chain = &hard.chain;
-                let mut chain = hard_chain.write();
+                let chain_result = {
+                    let mut chain = hard_chain.write();
+                    chain.append_block(block.clone())
+                };
                 
-                match chain.append_block(block.clone()) {
+                match chain_result {
                     Ok(()) => {
                         let network = network.lock();
 

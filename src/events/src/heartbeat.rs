@@ -23,13 +23,14 @@ use merkle_light::hash::Algorithm;
 use merkle_light::merkle::MerkleTree;
 use network::NodeId;
 use rayon::prelude::*;
-use std::boxed::Box;
+use std::sync::Arc;
 use std::hash::Hasher;
 use std::io::Cursor;
 use std::iter::FromIterator;
 use transactions::*;
+use rlp::Rlp;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Heartbeat {
     /// The node id of the event sender
     pub node_id: NodeId,
@@ -37,24 +38,21 @@ pub struct Heartbeat {
     /// The current timestamp of the sender
     pub stamp: Stamp,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
     /// The root hash of the transactions contained
     /// by the heartbeat event.
     pub root_hash: Option<Hash>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
     /// The hash of the event
     pub hash: Option<Hash>,
 
     /// The hash of the parent event in the causal graph.
     pub parent_hash: Hash,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
     /// The signature of the sender
     pub signature: Option<Signature>,
 
     /// The transactions contained by the heartbeat event
-    pub transactions: Vec<Box<Tx>>,
+    pub transactions: Vec<Arc<Tx>>,
 }
 
 impl Heartbeat {
@@ -65,7 +63,7 @@ impl Heartbeat {
     /// in the heartbeat event.
     pub fn calculate_root_hash(&mut self) {
         let mut hasher = BlakeHasher::new();
-        let txs_hashes: Vec<Hash> = self
+        let txs_hashes = self
             .transactions
             .iter()
             .map(|tx| {
@@ -73,8 +71,7 @@ impl Heartbeat {
 
                 hasher.write(&message);
                 hasher.hash()
-            })
-            .collect();
+            });
 
         let mt: MerkleTree<Hash, BlakeHasher> = MerkleTree::from_iter(txs_hashes);
 
@@ -268,93 +265,107 @@ impl Heartbeat {
         };
 
         let transactions = if buf.len() == txs_len as usize {
-            let ser_txs: Vec<Vec<u8>> = rlp::decode_list(&buf);
-            let txs: Result<Vec<Box<Tx>>, _> = ser_txs
-                .par_iter()
-                .map(|tx| {
-                    let tx_type = &tx[0];
+            let rlp = Rlp::new(&buf);
 
-                    match *tx_type {
-                        1 => {
-                            let deserialized = match Call::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid call transaction"),
-                            };
+            if rlp.is_list() {
+                let txs: Result<Vec<Arc<Tx>>, _> = rlp
+                    .iter()
+                    .map(|data| {
+                        if data.is_data() {
+                            match data.data() {
+                                Ok(tx) => {
+                                    let tx_type = &tx[0];
 
-                            Ok(Box::new(Tx::Call(deserialized)))
+                                    match *tx_type {
+                                        1 => {
+                                            let deserialized = match Call::from_bytes(&tx) {
+                                                Ok(result) => result,
+                                                Err(_) => return Err("Invalid call transaction"),
+                                            };
+
+                                            Ok(Arc::new(Tx::Call(deserialized)))
+                                        }
+                                        2 => {
+                                            let deserialized = match OpenContract::from_bytes(&tx) {
+                                                Ok(result) => result,
+                                                Err(e) => return Err(e),
+                                            };
+
+                                            Ok(Arc::new(Tx::OpenContract(deserialized)))
+                                        }
+                                        3 => {
+                                            let deserialized = match Send::from_bytes(&tx) {
+                                                Ok(result) => result,
+                                                Err(_) => return Err("Invalid send transaction"),
+                                            };
+
+                                            Ok(Arc::new(Tx::Send(deserialized)))
+                                        }
+                                        4 => {
+                                            let deserialized = match CreateCurrency::from_bytes(&tx) {
+                                                Ok(result) => result,
+                                                Err(_) => return Err("Invalid create currency transaction"),
+                                            };
+
+                                            Ok(Arc::new(Tx::CreateCurrency(deserialized)))
+                                        }
+                                        5 => {
+                                            let deserialized = match CreateMintable::from_bytes(&tx) {
+                                                Ok(result) => result,
+                                                Err(_) => return Err("Invalid create mintable transaction"),
+                                            };
+
+                                            Ok(Arc::new(Tx::CreateMintable(deserialized)))
+                                        }
+                                        6 => {
+                                            let deserialized = match Mint::from_bytes(&tx) {
+                                                Ok(result) => result,
+                                                Err(_) => return Err("Invalid mint transaction"),
+                                            };
+
+                                            Ok(Arc::new(Tx::Mint(deserialized)))
+                                        }
+                                        7 => {
+                                            let deserialized = match Burn::from_bytes(&tx) {
+                                                Ok(result) => result,
+                                                Err(_) => return Err("Invalid burn transaction"),
+                                            };
+
+                                            Ok(Arc::new(Tx::Burn(deserialized)))
+                                        },
+                                        8 => {
+                                            let deserialized = match ChangeMinter::from_bytes(&tx) {
+                                                Ok(result) => result,
+                                                Err(_) => return Err("Invalid `ChangeMinter` transaction"),
+                                            };
+
+                                            Ok(Arc::new(Tx::ChangeMinter(deserialized)))
+                                        },
+                                        9 => {
+                                            let deserialized = match CreateUnique::from_bytes(&tx) {
+                                                Ok(result) => result,
+                                                Err(_) => return Err("Invalid `CreateUnique` transaction"),
+                                            };
+
+                                            Ok(Arc::new(Tx::CreateUnique(deserialized)))
+                                        },
+                                        _ => return Err("Bad transaction type"),
+                                    }
+                                }
+                                Err(_) => return Err("Invalid transaction")
+                            }
+                        } else {
+                            return Err("Invalid transaction")
                         }
-                        2 => {
-                            let deserialized = match OpenContract::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(e) => return Err(e),
-                            };
+                    })
+                    .collect();
 
-                            Ok(Box::new(Tx::OpenContract(deserialized)))
-                        }
-                        3 => {
-                            let deserialized = match Send::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid send transaction"),
-                            };
-
-                            Ok(Box::new(Tx::Send(deserialized)))
-                        }
-                        4 => {
-                            let deserialized = match CreateCurrency::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid create currency transaction"),
-                            };
-
-                            Ok(Box::new(Tx::CreateCurrency(deserialized)))
-                        }
-                        5 => {
-                            let deserialized = match CreateMintable::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid create mintable transaction"),
-                            };
-
-                            Ok(Box::new(Tx::CreateMintable(deserialized)))
-                        }
-                        6 => {
-                            let deserialized = match Mint::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid mint transaction"),
-                            };
-
-                            Ok(Box::new(Tx::Mint(deserialized)))
-                        }
-                        7 => {
-                            let deserialized = match Burn::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid burn transaction"),
-                            };
-
-                            Ok(Box::new(Tx::Burn(deserialized)))
-                        },
-                        8 => {
-                            let deserialized = match ChangeMinter::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid `ChangeMinter` transaction"),
-                            };
-
-                            Ok(Box::new(Tx::ChangeMinter(deserialized)))
-                        },
-                        9 => {
-                            let deserialized = match CreateUnique::from_bytes(&tx) {
-                                Ok(result) => result,
-                                Err(_) => return Err("Invalid `CreateUnique` transaction"),
-                            };
-
-                            Ok(Box::new(Tx::CreateUnique(deserialized)))
-                        },
-                        _ => return Err("Bad transaction type"),
-                    }
-                })
-                .collect();
-
-            match txs {
-                Ok(result) => result,
-                Err(err) => return Err(err),
+                match txs {
+                    Ok(result) => result,
+                    Err(err) => return Err(err),
+                }
+            } else {
+                return Err("Invalid transaction data");
             }
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the size of the transactions");
@@ -377,7 +388,30 @@ impl Heartbeat {
 }
 
 fn assemble_message(obj: &Heartbeat) -> Vec<u8> {
-    unimplemented!();
+    let mut buffer = Vec::new();
+    let transaction_hashes = obj
+        .transactions
+        .iter()
+        .map(|tx| tx.transaction_hash());
+
+    let node_id = &(&&obj.node_id.0).0;
+    let parent_hash = &obj.parent_hash.0;
+    let root_hash = &obj.root_hash.unwrap().0;
+    let mut stamp: Vec<u8> = obj.stamp.to_bytes();
+
+    let stamp_len = stamp.len();
+
+    buffer.write_u8(Heartbeat::EVENT_TYPE).unwrap();
+    buffer.extend_from_slice(node_id);
+    buffer.extend_from_slice(root_hash);
+    buffer.extend_from_slice(parent_hash);
+    buffer.extend_from_slice(&stamp);
+
+    for hash in transaction_hashes {
+        buffer.extend_from_slice(&hash.unwrap().0);
+    }
+
+    buffer
 }
 
 #[cfg(test)]
@@ -386,7 +420,7 @@ use quickcheck::Arbitrary;
 #[cfg(test)]
 impl Arbitrary for Heartbeat {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Heartbeat {
-        let mut txs: Vec<Box<Tx>> = Vec::with_capacity(30);
+        let mut txs: Vec<Arc<Tx>> = Vec::with_capacity(30);
 
         for _ in 0..30 {
             txs.push(Arbitrary::arbitrary(g));
