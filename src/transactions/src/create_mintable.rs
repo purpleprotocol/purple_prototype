@@ -35,6 +35,7 @@ pub struct CreateMintable {
     pub precision: u8,
     pub fee_hash: Hash,
     pub fee: Balance,
+    pub nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -131,6 +132,10 @@ impl CreateMintable {
 
         // Check nonce validity
         if nonce < MIN_CREATOR_NONCE {
+            return false;
+        }
+
+        if nonce + 1 != self.nonce {
             return false;
         }
 
@@ -458,14 +463,15 @@ impl CreateMintable {
     /// 3) Precision            - 8bits
     /// 4) Coin supply          - 64bits
     /// 5) Max supply           - 64bits
-    /// 6) Creator              - 33byte binary
-    /// 7) Receiver             - 33byte binary
-    /// 8) Minter address       - 33byte binary
-    /// 9) Currency hash        - 32byte binary
-    /// 10) Fee hash            - 32byte binary
-    /// 11) Hash                - 32byte binary
-    /// 12) Signature           - 64byte binary
-    /// 13) Fee                 - Binary of fee length
+    /// 6) Nonce                - 64bits
+    /// 7) Creator              - 33byte binary
+    /// 8) Receiver             - 33byte binary
+    /// 9) Minter address       - 33byte binary
+    /// 10) Currency hash       - 32byte binary
+    /// 11) Fee hash            - 32byte binary
+    /// 12) Hash                - 32byte binary
+    /// 13) Signature           - 64byte binary
+    /// 14) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
 
@@ -490,6 +496,7 @@ impl CreateMintable {
         let max_supply = &self.max_supply;
         let precision = &self.precision;
         let fee = &self.fee.to_bytes();
+        let nonce = &self.nonce;
 
         let fee_len = fee.len();
 
@@ -498,6 +505,7 @@ impl CreateMintable {
         buffer.write_u8(*precision).unwrap();
         buffer.write_u64::<BigEndian>(*coin_supply).unwrap();
         buffer.write_u64::<BigEndian>(*max_supply).unwrap();
+        buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
         buffer.append(&mut creator.to_vec());
         buffer.append(&mut receiver.to_vec());
@@ -555,9 +563,17 @@ impl CreateMintable {
             return Err("Bad max supply");
         };
 
+        rdr.set_position(19);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..19).collect();
+        let _: Vec<u8> = buf.drain(..27).collect();
 
         let creator = if buf.len() > 33 as usize {
             let creator_vec: Vec<u8> = buf.drain(..33).collect();
@@ -657,6 +673,7 @@ impl CreateMintable {
             fee: fee,
             precision: precision,
             asset_hash: asset_hash,
+            nonce: nonce,
             hash: Some(hash),
             signature: Some(signature),
         };
@@ -713,6 +730,7 @@ impl Arbitrary for CreateMintable {
             precision: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
+            nonce: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }
@@ -752,6 +770,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -790,6 +809,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -828,6 +848,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -866,6 +887,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -904,6 +926,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -938,6 +961,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -976,6 +1000,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -1016,6 +1041,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -1151,6 +1177,7 @@ mod tests {
                 fee: fee,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,
+                nonce: 1,
                 signature: None,
                 hash: None
             };

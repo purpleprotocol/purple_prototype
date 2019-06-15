@@ -34,6 +34,7 @@ pub struct Call {
     gas_limit: Gas,
     asset_hash: Hash,
     fee_hash: Hash,
+    nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -80,16 +81,17 @@ impl Call {
     /// 4) Amount length        - 8bits
     /// 5) Fee length           - 8bits
     /// 6) Inputs length        - 16bits
-    /// 7) From                 - 33byte binary
-    /// 8) To                   - 33byte binary
-    /// 9) Currency hash        - 32byte binary
-    /// 10) Fee hash            - 32byte binary
-    /// 11) Hash                - 32byte binary
-    /// 12) Signature           - 64byte binary
-    /// 13) Gas price           - Binary of gas price length
-    /// 14) Amount              - Binary of amount length
-    /// 15) Fee                 - Binary of fee length
-    /// 16) Inputs              - Binary of inputs length
+    /// 7) Nonce                - 64bits
+    /// 8) From                 - 33byte binary
+    /// 9) To                   - 33byte binary
+    /// 10) Currency hash        - 32byte binary
+    /// 11) Fee hash            - 32byte binary
+    /// 12) Hash                - 32byte binary
+    /// 13) Signature           - 64byte binary
+    /// 14) Gas price           - Binary of gas price length
+    /// 15) Amount              - Binary of amount length
+    /// 16) Fee                 - Binary of fee length
+    /// 17) Inputs              - Binary of inputs length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -115,6 +117,7 @@ impl Call {
         let gas_limit = &self.gas_limit.to_bytes();
         let fee = &self.fee.to_bytes();
         let inputs = &self.inputs.as_bytes();
+        let nonce = &self.nonce;
 
         let gas_limit_len = gas_limit.len();
         let gas_price_len = gas_price.len();
@@ -129,6 +132,7 @@ impl Call {
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u16::<BigEndian>(inputs_len as u16).unwrap();
+        buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
         buffer.append(&mut from.to_vec());
         buffer.append(&mut to.to_vec());
@@ -197,9 +201,17 @@ impl Call {
             return Err("Bad inputs len");
         };
 
+        rdr.set_position(7);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
         // Consume cursor
         let mut buf = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..7).collect();
+        let _: Vec<u8> = buf.drain(..15).collect();
 
         let from = if buf.len() > 33 as usize {
             let from_vec: Vec<u8> = buf.drain(..33).collect();
@@ -331,6 +343,7 @@ impl Call {
             inputs: inputs.to_string(),
             gas_price: gas_price,
             asset_hash: asset_hash,
+            nonce: nonce,
             hash: Some(hash),
             signature: Some(signature),
         };
@@ -381,6 +394,7 @@ impl Arbitrary for Call {
             inputs: Arbitrary::arbitrary(g),
             gas_price: Arbitrary::arbitrary(g),
             asset_hash: Arbitrary::arbitrary(g),
+            nonce: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }
@@ -430,6 +444,7 @@ mod tests {
                 gas_price: gas_price,
                 gas_limit: gas_limit,
                 inputs: inputs,
+                nonce: 1,
                 signature: None,
                 hash: None
             };

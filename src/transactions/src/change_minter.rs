@@ -41,6 +41,9 @@ pub struct ChangeMinter {
     /// The transaction's fee
     pub fee: Balance,
 
+    /// Nonce
+    pub nonce: u64,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -77,13 +80,14 @@ impl ChangeMinter {
     /// Fields:
     /// 1) Transaction type(8)  - 8bits
     /// 2) Fee length           - 8bits
-    /// 3) Minter               - 33byte binary
-    /// 4) New Minter           - 33byte binary
-    /// 5) Asset hash           - 32byte binary
-    /// 6) Fee hash             - 32byte binary
-    /// 7) Hash                 - 32byte binary
-    /// 8) Signature            - 64byte binary
-    /// 9) Fee                  - Binary of fee length
+    /// 3) Nonce                - 64bits
+    /// 4) Minter               - 33byte binary
+    /// 5) New Minter           - 33byte binary
+    /// 6) Asset hash           - 32byte binary
+    /// 7) Fee hash             - 32byte binary
+    /// 8) Hash                 - 32byte binary
+    /// 9) Signature            - 64byte binary
+    /// 10) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buf: Vec<u8> = Vec::new();
 
@@ -106,10 +110,12 @@ impl ChangeMinter {
         let fee_hash = &&self.fee_hash.0;
         let fee = &self.fee.to_bytes();
         let fee_len = fee.len();
+        let nonce = &self.nonce;
 
         // Write to buffer
         buf.write_u8(tx_type).unwrap();
         buf.write_u8(fee_len as u8).unwrap();
+        buf.write_u64::<BigEndian>(*nonce).unwrap();
 
         buf.append(&mut minter.to_vec());
         buf.append(&mut new_minter.to_vec());
@@ -142,8 +148,16 @@ impl ChangeMinter {
             return Err("Bad fee len");
         };
 
+        rdr.set_position(2);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..2).collect();
+        let _: Vec<u8> = buf.drain(..10).collect();
 
         let minter = if buf.len() > 33 as usize {
             let minter_vec: Vec<u8> = buf.drain(..33).collect();
@@ -228,6 +242,7 @@ impl ChangeMinter {
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             fee: fee,
+            nonce: nonce,
             hash: Some(hash),
             signature: Some(signature),
         };
@@ -271,6 +286,7 @@ impl Arbitrary for ChangeMinter {
             asset_hash: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
+            nonce: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }
@@ -312,6 +328,7 @@ mod tests {
                 fee: fee,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,
+                nonce: 1,
                 signature: None,
                 hash: None
             };

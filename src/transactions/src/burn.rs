@@ -32,6 +32,7 @@ pub struct Burn {
     fee: Balance,
     asset_hash: Hash,
     fee_hash: Hash,
+    nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -87,6 +88,11 @@ impl Burn {
             Ok(None) => return false,
             Err(err) => panic!(err),
         };
+
+        let stored_nonce = decode_be_u64!(bin_nonce).unwrap();
+        if stored_nonce + 1 != self.nonce {
+            return false;
+        }
 
         if fee_hash == asset_hash {
             // The transaction's fee is paid in the same currency
@@ -272,14 +278,15 @@ impl Burn {
     /// 1) Transaction type     - 8bits
     /// 2) Fee length           - 8bits
     /// 3) Amount length        - 8bits
-    /// 4) Burner               - 33byte binary
-    /// 5) Currency hash        - 32byte binary
-    /// 6) Fee hash             - 32byte binary
-    /// 7) Hash                 - 32byte binary
-    /// 8) Signature            - 64byte binary
-    /// 9) Amount               - Binary of amount length
-    /// 10) Fee                 - Binary of fee length
-    /// 11) Signature           - Binary of signature length
+    /// 4) Nonce                - 64bits
+    /// 5) Burner               - 33byte binary
+    /// 6) Currency hash        - 32byte binary
+    /// 7) Fee hash             - 32byte binary
+    /// 8) Hash                 - 32byte binary
+    /// 9) Signature            - 64byte binary
+    /// 10) Amount              - Binary of amount length
+    /// 11) Fee                 - Binary of fee length
+    /// 12) Signature           - Binary of signature length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -305,10 +312,12 @@ impl Burn {
         let amount_len = amount.len();
         let fee_len = fee.len();
         let signature_len = signature.len();
+        let nonce = &self.nonce;
 
         buffer.write_u8(tx_type).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
+        buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
         buffer.append(&mut burner.to_vec());
         buffer.append(&mut asset_hash.to_vec());
@@ -349,9 +358,17 @@ impl Burn {
             return Err("Bad amount len");
         };
 
+        rdr.set_position(3);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..3).collect();
+        let _: Vec<u8> = buf.drain(..11).collect();
 
         let burner = if buf.len() > 33 as usize {
             let burner_vec: Vec<u8> = buf.drain(..33).collect();
@@ -436,6 +453,7 @@ impl Burn {
             fee: fee,
             amount: amount,
             asset_hash: asset_hash,
+            nonce: nonce,
             hash: Some(hash),
             signature: Some(signature),
         };
@@ -479,6 +497,7 @@ impl Arbitrary for Burn {
             fee: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
             asset_hash: Arbitrary::arbitrary(g),
+            nonce: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }
@@ -515,6 +534,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -547,6 +567,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -581,6 +602,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -615,6 +637,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -649,6 +672,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -681,6 +705,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -713,6 +738,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -776,6 +802,7 @@ mod tests {
                 fee: fee,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,
+                nonce: 1,
                 signature: None,
                 hash: None
             };

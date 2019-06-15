@@ -54,6 +54,9 @@ pub struct CreateUnique {
     /// The fee of the transaction
     pub fee: Balance,
 
+    // Nonce
+    pub nonce: u64,
+    
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -92,19 +95,20 @@ impl CreateUnique {
     /// 1) Transaction type(9)  - 8bits
     /// 2) Fee length           - 8bits
     /// 3) Meta Exist BitMask   - 8bits
-    /// 4) Creator              - 33byte binary
-    /// 5) Receiver             - 33byte binary
-    /// 6) Asset hash           - 32byte binary
-    /// 7) Fee hash             - 32byte binary
-    /// 8) Name                 - 32byte binary
-    /// 9) Hash                 - 32byte binary
-    /// 10) Signature           - 64byte binary
-    /// 11) Fee                 - Binary of fee length
-    /// 12) Meta1 (Optional)    - 32byte binary
-    /// 13) Meta2 (Optional)    - 32byte binary
-    /// 14) Meta3 (Optional)    - 32byte binary
-    /// 15) Meta4 (Optional)    - 32byte binary
-    /// 16) Meta5 (Optional)    - 32byte binary
+    /// 4) Nonce                - 64bits
+    /// 5) Creator              - 33byte binary
+    /// 6) Receiver             - 33byte binary
+    /// 7) Asset hash           - 32byte binary
+    /// 8) Fee hash             - 32byte binary
+    /// 9) Name                 - 32byte binary
+    /// 10) Hash                - 32byte binary
+    /// 11) Signature           - 64byte binary
+    /// 12) Fee                 - Binary of fee length
+    /// 13) Meta1 (Optional)    - 32byte binary
+    /// 14) Meta2 (Optional)    - 32byte binary
+    /// 15) Meta3 (Optional)    - 32byte binary
+    /// 16) Meta4 (Optional)    - 32byte binary
+    /// 17) Meta5 (Optional)    - 32byte binary
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buf: Vec<u8> = Vec::new();
         let mut bitmask: u8 = 0;
@@ -146,11 +150,13 @@ impl CreateUnique {
         let name = &self.name;
         let fee = &self.fee.to_bytes();
         let fee_len = fee.len();
+        let nonce = &self.nonce;
 
         // Write to buffer
         buf.write_u8(tx_type).unwrap();
         buf.write_u8(fee_len as u8).unwrap();
         buf.write_u8(bitmask).unwrap();
+        buf.write_u64::<BigEndian>(*nonce).unwrap();
         buf.append(&mut creator.to_vec());
         buf.append(&mut receiver.to_vec());
 
@@ -213,8 +219,16 @@ impl CreateUnique {
             return Err("Bad bitmask");
         };
 
+        rdr.set_position(3);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..3).collect();
+        let _: Vec<u8> = buf.drain(..11).collect();
 
         let creator = if buf.len() > 33 as usize {
             let creator_vec: Vec<u8> = buf.drain(..33).collect();
@@ -387,6 +401,7 @@ impl CreateUnique {
             meta4: meta4,
             meta5: meta5,
             fee: fee,
+            nonce: nonce,
             hash: Some(hash),
             signature: Some(signature),
         };
@@ -507,6 +522,7 @@ impl Arbitrary for CreateUnique {
             meta5: meta5,
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
+            nonce: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }
@@ -593,6 +609,7 @@ mod tests {
                 fee: fee,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,
+                nonce: 1,
                 signature: None,
                 hash: None
             };
