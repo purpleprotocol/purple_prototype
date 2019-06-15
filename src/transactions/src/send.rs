@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, NormalAddress, Balance};
+use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Signature, Hash, PublicKey as Pk, SecretKey as Sk};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
@@ -32,6 +32,7 @@ pub struct Send {
     fee: Balance,
     asset_hash: Hash,
     fee_hash: Hash,
+    nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -82,11 +83,16 @@ impl Send {
         let fee_key = format!("{}.{}", sender, fee_hash);
 
         // Retrieve serialized nonce
-        let _bin_nonce = match trie.get(&nonce_key) {
+        let bin_nonce = match trie.get(&nonce_key) {
             Ok(Some(nonce)) => nonce,
             Ok(None) => return false,
             Err(err) => panic!(err),
         };
+
+        let mut stored_nonce = decode_be_u64!(bin_nonce).unwrap();
+        if stored_nonce + 1 != self.nonce {
+            return false;
+        }
 
         if fee_hash == asset_hash {
             // The transaction's fee is paid in the same currency
@@ -136,7 +142,6 @@ impl Send {
 
             cur_balance >= zero && fee_balance >= zero
         }
-
     }
 
     /// Applies the send transaction to the provided database.
@@ -377,7 +382,7 @@ impl Send {
     /// 1) Transaction type(3)      - 8bits
     /// 2) Amount length            - 8bits
     /// 3) Fee length               - 8bits
-    /// 4) Signature length         - 16bits
+    /// 4) Nonce                    - 64bits
     /// 5) From                     - 33byte binary
     /// 6) To                       - 33byte binary
     /// 7) Currency hash            - 32byte binary
@@ -408,6 +413,7 @@ impl Send {
         let asset_hash = &&self.asset_hash.0;
         let amount = &self.amount.to_bytes();
         let fee = &self.fee.to_bytes();
+        let nonce = &self.nonce;
 
         let fee_len = fee.len();
         let amount_len = amount.len();
@@ -415,6 +421,7 @@ impl Send {
         buffer.write_u8(tx_type).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
+        buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
         buffer.append(&mut from.to_vec());
         buffer.append(&mut to.to_vec());
@@ -456,9 +463,17 @@ impl Send {
             return Err("Bad fee len");
         };
 
+        rdr.set_position(3);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
         // Consume cursor
         let mut buf = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..3).collect();
+        let _: Vec<u8> = buf.drain(..11).collect();
 
         let from = if buf.len() > 33 as usize {
             let from_vec: Vec<u8> = buf.drain(..33).collect();
@@ -554,6 +569,7 @@ impl Send {
             fee_hash: fee_hash,
             fee: fee,
             amount: amount,
+            nonce: nonce,
             asset_hash: asset_hash,
             hash: Some(hash),
             signature: Some(signature),
@@ -601,6 +617,7 @@ impl Arbitrary for Send {
             fee: Arbitrary::arbitrary(g),
             asset_hash: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
+            nonce: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }
@@ -641,6 +658,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -677,6 +695,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -715,6 +734,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -753,6 +773,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -791,6 +812,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -827,6 +849,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -863,6 +886,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -940,6 +964,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -1024,6 +1049,7 @@ mod tests {
                 fee: fee,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,
+                nonce: 1,
                 signature: None,
                 hash: None
             };

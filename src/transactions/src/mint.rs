@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, Address, Balance};
+use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Signature, Hash, PublicKey as Pk, SecretKey as Sk};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
@@ -31,6 +31,7 @@ pub struct Mint {
     asset_hash: Hash,
     fee_hash: Hash,
     fee: Balance,
+    nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,6 +85,27 @@ impl Mint {
 
         let minter_addr_key = format!("{}.m", asset_hash);
         let minter_addr_key = minter_addr_key.as_bytes();
+
+        // Check nonce
+        let minter_nonce_key = format!("{}.n", minter);
+        let minter_nonce_key = minter_nonce_key.as_bytes();
+
+        let bin_minter_nonce = trie.get(&minter_nonce_key);
+
+        let next_nonce = match bin_minter_nonce {
+            Ok(Some(nonce)) => {
+                let mut nonce = decode_be_u64!(nonce).unwrap();
+                nonce += 1;
+
+                nonce
+            }
+            Ok(None) => decode_be_u64!(vec![0, 0, 0, 0, 0, 0, 0, 0]).unwrap(),
+            Err(err) => panic!(err),
+        };
+
+        if next_nonce != self.nonce {
+            return false;
+        }
 
         // Check for currency existence
         let _ = match trie.get(&minter_addr_key) {
@@ -323,14 +345,15 @@ impl Mint {
     /// 2) Fee length               - 8bits
     /// 3) Amount length            - 8bits
     /// 4) Signature length         - 16bits
-    /// 5) Minter                   - 33byte binary
-    /// 6) Receiver                 - 33byte binary
-    /// 7) Currency hash            - 32byte binary
-    /// 8) Fee hash                 - 32byte binary
-    /// 9) Hash                     - 32byte binary
-    /// 10) Signature               - 64byte binary
-    /// 11) Amount                  - Binary of amount length
-    /// 12) Fee                     - Binary of fee length
+    /// 5) Nonce                    - 64bits
+    /// 6) Minter                   - 33byte binary
+    /// 7) Receiver                 - 33byte binary
+    /// 8) Currency hash            - 32byte binary
+    /// 9) Fee hash                 - 32byte binary
+    /// 10) Hash                    - 32byte binary
+    /// 11) Signature               - 64byte binary
+    /// 12) Amount                  - Binary of amount length
+    /// 13) Fee                     - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -353,6 +376,7 @@ impl Mint {
         let fee_hash = &&self.fee_hash.0;
         let amount = &self.amount.to_bytes();
         let fee = &self.fee.to_bytes();
+        let nonce = &self.nonce;
 
         let fee_len = fee.len();
         let amount_len = amount.len();
@@ -362,6 +386,7 @@ impl Mint {
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
+        buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
         buffer.append(&mut minter.to_vec());
         buffer.append(&mut receiver.to_vec());
@@ -411,9 +436,17 @@ impl Mint {
             return Err("Bad signature len");
         };
 
+        rdr.set_position(5);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..5).collect();
+        let _: Vec<u8> = buf.drain(..13).collect();
 
         let minter = if buf.len() > 33 as usize {
             let minter_vec: Vec<u8> = buf.drain(..33).collect();
@@ -510,6 +543,7 @@ impl Mint {
             fee_hash: fee_hash,
             fee: fee,
             amount: amount,
+            nonce: nonce,
             hash: Some(hash),
             signature: Some(signature),
         };
@@ -556,6 +590,7 @@ impl Arbitrary for Mint {
             asset_hash: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
+            nonce: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }
@@ -600,6 +635,7 @@ mod tests {
             max_supply: 100000000,
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -615,6 +651,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -655,6 +692,7 @@ mod tests {
             max_supply: 10000,
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -670,6 +708,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -710,6 +749,7 @@ mod tests {
             max_supply: 10000,
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -725,6 +765,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -761,6 +802,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -799,6 +841,7 @@ mod tests {
             coin_supply: 100,
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -814,6 +857,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -854,6 +898,7 @@ mod tests {
             max_supply: 100000000,
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -869,6 +914,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -948,6 +994,7 @@ mod tests {
             max_supply: 100000000,
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -963,6 +1010,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -1042,6 +1090,7 @@ mod tests {
             max_supply: 100000000,
             precision: 18,
             fee: Balance::from_bytes(b"30.0").unwrap(),
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -1057,6 +1106,7 @@ mod tests {
             fee: Balance::from_bytes(b"10.0").unwrap(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -1130,6 +1180,7 @@ mod tests {
                 fee: fee,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,
+                nonce: 1,
                 signature: None,
                 hash: None
             };

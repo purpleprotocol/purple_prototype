@@ -43,6 +43,7 @@ pub struct CreateCurrency {
     pub precision: u8,
     pub fee_hash: Hash,
     pub fee: Balance,
+    pub nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -134,6 +135,10 @@ impl CreateCurrency {
 
         // Check nonce validity
         if nonce < MIN_CREATOR_NONCE {
+            return false;
+        }
+
+        if nonce + 1 != self.nonce {
             return false;
         }
 
@@ -408,13 +413,14 @@ impl CreateCurrency {
     /// 2) Fee length           - 8bits
     /// 3) Precision            - 8bits
     /// 4) Coin supply          - 64bits
-    /// 5) Creator              - 33byte binary
-    /// 6) Receiver             - 33byte binary
-    /// 7) Currency hash        - 32byte binary
-    /// 8) Fee hash             - 32byte binary
-    /// 9) Hash                 - 32byte binary
-    /// 10) Signature           - 65byte binary
-    /// 11) Fee                 - Binary of fee length
+    /// 5) Nonce                - 64bits
+    /// 6) Creator              - 33byte binary
+    /// 7) Receiver             - 33byte binary
+    /// 8) Currency hash        - 32byte binary
+    /// 9) Fee hash             - 32byte binary
+    /// 10) Hash                - 32byte binary
+    /// 11) Signature           - 65byte binary
+    /// 12) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -438,6 +444,7 @@ impl CreateCurrency {
         let coin_supply = &self.coin_supply;
         let precision = &self.precision;
         let fee = &self.fee.to_bytes();
+        let nonce = &self.nonce;
 
         let fee_len = fee.len();
 
@@ -445,6 +452,7 @@ impl CreateCurrency {
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u8(*precision).unwrap();
         buffer.write_u64::<BigEndian>(*coin_supply).unwrap();
+        buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
         buffer.append(&mut creator.to_vec());
         buffer.append(&mut receiver.to_vec());
@@ -493,9 +501,17 @@ impl CreateCurrency {
             return Err("Bad coin supply");
         };
 
+        rdr.set_position(11);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..11).collect();
+        let _: Vec<u8> = buf.drain(..19).collect();
 
         let creator = if buf.len() > 33 as usize {
             let creator_vec: Vec<u8> = buf.drain(..33).collect();
@@ -582,6 +598,7 @@ impl CreateCurrency {
             fee: fee,
             precision: precision,
             asset_hash: asset_hash,
+            nonce: nonce,
             hash: Some(hash),
             signature: Some(signature),
         };
@@ -632,6 +649,7 @@ impl Arbitrary for CreateCurrency {
             precision: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
+            nonce: Arbitrary::arbitrary(g),
             hash: Some(Arbitrary::arbitrary(g)),
             signature: Some(Arbitrary::arbitrary(g)),
         }
@@ -671,6 +689,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -707,6 +726,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -743,6 +763,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -779,6 +800,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -815,6 +837,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: asset_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -847,6 +870,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -883,6 +907,7 @@ mod tests {
             fee: fee.clone(),
             asset_hash: asset_hash,
             fee_hash: fee_hash,
+            nonce: 1,
             signature: None,
             hash: None,
         };
@@ -1005,6 +1030,7 @@ mod tests {
                 fee: fee,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,
+                nonce: 1,
                 signature: None,
                 hash: None
             };
