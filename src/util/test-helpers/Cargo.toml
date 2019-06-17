@@ -8,7 +8,6 @@ publish = false
 hex = "0.3.2"
 rlp = "0.3.0"
 tempdir = "0.3.7"
-kvdb-rocksdb = "0.1.0"
 patricia-trie = "0.3.0"
 account = { path = "../../account" }
 persistence = { path = "../../persistence" }

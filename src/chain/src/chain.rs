@@ -1370,6 +1370,10 @@ mod tests {
             None
         }
 
+        fn append_condition() -> Option<Box<(FnMut(Arc<DummyBlock>) -> bool)>> {
+            None
+        }
+
         fn to_bytes(&self) -> Vec<u8> {
             let mut buf = Vec::new();
             let height = encode_be_u64!(self.height);

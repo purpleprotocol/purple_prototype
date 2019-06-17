@@ -34,20 +34,19 @@ extern crate hashdb;
 extern crate itc;
 extern crate jsonrpc_core;
 extern crate jump;
-extern crate kvdb;
-extern crate kvdb_rocksdb;
 extern crate network;
 extern crate parking_lot;
 extern crate persistence;
 extern crate tokio;
+extern crate rocksdb;
 
+use rocksdb::DB;
 use clap::{App, Arg};
 use crypto::{Identity, SecretKey as Sk};
 use elastic_array::ElasticArray128;
 use futures::future::ok;
 use futures::Future;
 use hashdb::HashDB;
-use kvdb_rocksdb::{Database, DatabaseConfig};
 use network::*;
 use parking_lot::{RwLock, Mutex};
 use chain::*;
@@ -64,6 +63,10 @@ static GLOBAL: System = System;
 
 const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
+const COLUMN_FAMILIES: &'static [&'static str] = &[
+    "easy_chain",
+    "hard_chain",
+];
 
 fn main() {
     env_logger::init();
@@ -73,9 +76,9 @@ fn main() {
     let argv = parse_cli_args();
     let db = Arc::new(open_database(&argv.network_name));
 
-    let mut node_storage = PersistentDb::new(db.clone(), Some(0));
-    let easy_db = PersistentDb::new(db.clone(), Some(1));
-    let hard_db = PersistentDb::new(db.clone(), Some(2));
+    let mut node_storage = PersistentDb::new(db.clone(), None);
+    let easy_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[0]));
+    let hard_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[1]));
     let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_db)));
     let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_db)));
     let easy_chain = EasyChainRef::new(easy_chain);
@@ -148,14 +151,14 @@ fn fetch_credentials(db: &mut PersistentDb) -> (NodeId, Sk) {
     }
 }
 
-fn open_database(network_name: &str) -> Database {
-    let config = DatabaseConfig::with_columns(Some(NUM_OF_COLUMNS));
+// TODO: Add rocksdb config
+fn open_database(network_name: &str) -> DB {
     let path = Path::new(&dirs::home_dir().unwrap())
         .join("purple")
         .join(network_name)
         .join("db");
 
-    Database::open(&config, path.to_str().unwrap()).unwrap()
+    DB::open_default(path.to_str().unwrap()).unwrap()
 }
 
 struct Argv {

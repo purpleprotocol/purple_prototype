@@ -19,7 +19,6 @@
 extern crate account;
 extern crate crypto;
 extern crate hex;
-extern crate kvdb_rocksdb;
 extern crate patricia_trie;
 extern crate persistence;
 extern crate quicksort;
@@ -28,7 +27,6 @@ extern crate tempdir;
 
 use account::{Address, Balance};
 use crypto::Hash;
-use kvdb_rocksdb::{Database, DatabaseConfig};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec, PersistentDb};
 use quicksort::*;

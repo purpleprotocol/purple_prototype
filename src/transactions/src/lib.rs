@@ -19,9 +19,6 @@
 #[cfg(test)]
 extern crate tempfile;
 
-#[cfg(test)]
-extern crate kvdb_rocksdb;
-
 #[macro_use]
 extern crate unwrap;
 #[macro_use]

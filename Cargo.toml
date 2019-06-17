@@ -21,8 +21,7 @@ elastic-array = "0.10.0"
 jsonrpc-core = "9.0.0"
 jsonrpc-macros = "9.0.0"
 hashdb = "0.3.0"
-kvdb = "0.1.0"
-kvdb-rocksdb = "0.1.0"
+rocksdb = "0.12.2"
 account = { path = "src/account" }
 purple_vm = { path = "src/purple_vm" }
 crypto = { path = "src/crypto" } 

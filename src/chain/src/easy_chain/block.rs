@@ -126,6 +126,14 @@ impl Block for EasyBlock {
     }
 
     fn after_write() -> Option<Box<FnMut(Arc<EasyBlock>)>> {
+        let fun = |block| {
+
+        };
+        
+        Some(Box::new(fun))
+    }
+
+    fn append_condition() -> Option<Box<(FnMut(Arc<EasyBlock>) -> bool)>> {
         None
     }
 

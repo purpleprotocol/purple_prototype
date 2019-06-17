@@ -49,6 +49,10 @@ pub trait Block {
     /// Callback that executes after a block is written to a chain.
     fn after_write() -> Option<Box<FnMut(Arc<Self>)>>;
 
+    /// Condition that must result in `true` for a block to be appended
+    /// to the chain.
+    fn append_condition() -> Option<Box<(FnMut(Arc<Self>) -> bool)>>;
+
     /// Serializes the block.
     fn to_bytes(&self) -> Vec<u8>;
 

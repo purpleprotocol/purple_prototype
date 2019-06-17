@@ -136,6 +136,14 @@ impl Block for HardBlock {
     }
 
     fn after_write() -> Option<Box<FnMut(Arc<HardBlock>)>> {
+        let fun = |block| {
+
+        };
+        
+        Some(Box::new(fun))
+    }
+
+    fn append_condition() -> Option<Box<(FnMut(Arc<HardBlock>) -> bool)>> {
         None
     }
 
