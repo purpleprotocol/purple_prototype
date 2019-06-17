@@ -66,22 +66,26 @@ impl PersistentDb {
             // Initialize a new transaction
             let mut batch = WriteBatch::default();
 
+            let cf_handle = if let Some(cf) = self.cf_name {
+                Some(db_ref.cf_handle(cf).unwrap())
+            } else {
+                None
+            };
+
             // Load all the pending transactions into the DBTransaction
             for (key, val) in self.memory_db.iter() {
                 match val {
                     Operation::Put(ref value) => {
-                        if let Some(cf) = self.cf_name {
-                            let cf = db_ref.cf_handle(cf).unwrap();
-                            batch.put_cf(cf, &key, value).unwrap();
+                        if self.cf_name.is_some() {
+                            batch.put_cf(cf_handle.unwrap(), &key, value).unwrap();
                         } else {
                             batch.put(&key, value).unwrap();
                         }
                     }
 
                     Operation::Remove => {
-                        if let Some(cf) = self.cf_name {
-                            let cf = db_ref.cf_handle(cf).unwrap();
-                            batch.delete_cf(cf, key);
+                        if self.cf_name.is_some() {
+                            batch.delete_cf(cf_handle.unwrap(), key);
                         } else {
                             batch.delete(key);
                         }
