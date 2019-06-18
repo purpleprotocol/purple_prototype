@@ -18,7 +18,7 @@
 
 use crate::peer::ConnectionType;
 use crate::interface::NetworkInterface;
-use crate::node_id::NodeId;
+use crypto::NodeId;
 use crate::error::NetworkErr;
 use crate::packet::Packet;
 use chain::{Block, BlockWrapper};
@@ -223,6 +223,21 @@ impl Packet for ForwardBlock {
                     Ok(())
                 } else {
                     let sender = network.hard_chain_sender();
+                    sender.send((addr.clone(), block.clone())).unwrap();
+
+                    Ok(())
+                }
+            }
+
+            BlockWrapper::StateBlock(ref block) => {
+                let state_chain = network.state_chain_ref();
+
+                // Do not push block to queue if we already  
+                // have it stored in the chain.
+                if state_chain.query(&block.block_hash().unwrap()).is_some() {
+                    Ok(())
+                } else {
+                    let sender = network.state_chain_sender();
                     sender.send((addr.clone(), block.clone())).unwrap();
 
                     Ok(())

@@ -20,39 +20,53 @@ use crypto::Hash;
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
 use hashdb::{AsHashDB, HashDB};
-use kvdb::DBTransaction;
-use kvdb_rocksdb::Database;
+use rocksdb::{DBCompactionStyle, Options, WriteBatch, ColumnFamily, DB};
 use rlp::NULL_RLP;
 use std::sync::Arc;
 use BlakeDbHasher;
 
+pub fn db_options() -> Options {
+    let mut opts = Options::default();
+    opts.increase_parallelism(num_cpus::get() as i32);
+    opts.create_if_missing(true);
+    opts.create_missing_column_families(true);
+    opts.set_max_open_files(10000);
+    opts.set_use_fsync(false);
+    opts.set_bytes_per_sync(8388608);
+    opts.optimize_for_point_lookup(1024);
+    opts.set_table_cache_num_shard_bits(6);
+    opts.set_max_write_buffer_number(32);
+    opts.set_write_buffer_size(536870912);
+    opts.set_target_file_size_base(1073741824);
+    opts.set_min_write_buffer_number_to_merge(4);
+    opts.set_level_zero_stop_writes_trigger(2000);
+    opts.set_level_zero_slowdown_writes_trigger(0);
+    opts.set_compaction_style(DBCompactionStyle::Universal);
+    opts.set_max_background_compactions(4);
+    opts.set_max_background_flushes(4);
+    opts.set_disable_auto_compactions(true);
+    opts
+}
+
 #[derive(PartialEq, Clone)]
 enum Operation {
     Remove,
-    Put,
-}
-
-#[derive(Clone)]
-struct OperationInfo {
-    op: Operation,
-    val: Option<Vec<u8>>,
+    Put(Vec<u8>),
 }
 
 #[derive(Clone)]
 pub struct PersistentDb {
-    db_ref: Option<Arc<Database>>,
-    cf: Option<u32>,
-    reg: Option<HashMap<Vec<u8>, OperationInfo>>,
-    memory_db: Option<HashMap<Vec<u8>, Vec<u8>>>,
+    db_ref: Option<Arc<DB>>,
+    cf_name: Option<&'static str>,
+    memory_db: HashMap<Vec<u8>, Operation>,
 }
 
 impl PersistentDb {
-    pub fn new(db_ref: Arc<Database>, cf: Option<u32>) -> PersistentDb {
+    pub fn new(db_ref: Arc<DB>, cf_name: Option<&'static str>) -> PersistentDb {
         PersistentDb {
             db_ref: Some(db_ref),
-            cf: cf,
-            reg: None,
-            memory_db: None,
+            cf_name,
+            memory_db: HashMap::new(),
         }
     }
 
@@ -60,111 +74,98 @@ impl PersistentDb {
     pub fn new_in_memory() -> PersistentDb {
         PersistentDb {
             db_ref: None,
-            cf: None,
-            reg: None,
-            memory_db: Some(HashMap::new()),
+            cf_name: None,
+            memory_db: HashMap::new(),
         }
     }
 
     /// Commits the pending transactions to the db
     pub fn flush(&mut self) {
-        // The case when db_ref.is_none and reg.is_some is not a realistic one,
-        // because HashMap registry is not used for db_ref
-        match (&self.db_ref, &self.reg) {
-            (Some(db_ref), Some(reg)) => {
-                // Initialize a new transaction
-                let mut tx: DBTransaction = db_ref.transaction();
+        let mut wipe = false;
 
-                // Load all the pending transactions into the DBTransaction
-                for (key, val) in reg.iter() {
-                    match val.op {
-                        Operation::Put => match val.val {
-                            Some(ref value) => tx.put(self.cf, &key, value),
-                            None => {
-                                panic!("Tried to do an insert operation without providing value")
-                            }
-                        },
-                        Operation::Remove => tx.delete(self.cf, key),
+        if let Some(ref db_ref) = self.db_ref {
+            // Wipe memory if we have a database
+            wipe = true;
+
+            // Initialize a new transaction
+            let mut batch = WriteBatch::default();
+
+            let cf_handle = if let Some(cf) = self.cf_name {
+                Some(db_ref.cf_handle(cf).unwrap())
+            } else {
+                None
+            };
+
+            for (key, val) in self.memory_db.iter() {
+                match val {
+                    Operation::Put(ref value) => {
+                        if self.cf_name.is_some() {
+                            batch.put_cf(cf_handle.unwrap(), &key, value).unwrap();
+                        } else {
+                            batch.put(&key, value).unwrap();
+                        }
+                    }
+
+                    Operation::Remove => {
+                        if self.cf_name.is_some() {
+                            batch.delete_cf(cf_handle.unwrap(), key);
+                        } else {
+                            batch.delete(key);
+                        }
                     }
                 }
+            }
 
-                // Commit the transactions
-                db_ref.write(tx).unwrap()
-            }
-            (Some(_db_ref), None) => {
-                warn!("Unnecessarily called flush before doing any transaction")
-            }
-            (None, None) => {
-                warn!("Unnecessarily called flush because no db reference can be found")
-            }
-            (None, Some(_reg)) => panic!("Transactions cannot exist while the db is None"),
+            
+            // Commit the transactions
+            db_ref.write(batch).unwrap();
+        } 
+
+        if wipe {
+            // Wipe pending state
+            self.wipe_memory();
         }
-
-        // Wipe pending state
-        self.wipe_memory();
     }
 
     /// Clears the added transactions
     pub fn wipe_memory(&mut self) {
-        if let Some(ref mut reg) = self.reg {
-            reg.clear();
-        }
+        self.memory_db.clear();
     }
 
-    /// Gets the value directly from the db
-    /// # Remarks
-    /// Pending transactions will not be searched
+    /// Gets the value directly from the db. This
+    /// will not search pending transactions.
     pub fn retrieve_from_db(&self, key: &[u8]) -> Option<Vec<u8>> {
-        if let Some(db_ref) = &self.db_ref {
-            match db_ref.get(self.cf, &key) {
-                Ok(result) => match result {
-                    Some(res) => Some(res.into_vec()),
-                    None => None,
-                },
-                Err(err) => panic!(err),
-            }
+        if self.db_ref.is_some() {
+            self.get_db(key)
         } else {
-            let memory_db = self.memory_db.as_ref().unwrap();
-            let result = memory_db.get(&key.to_vec());
+            let result = self.memory_db.get(key);
 
-            result.cloned()
+            if let Some(Operation::Put(ref val)) = result {
+                Some(val.clone())
+            } else {
+                None
+            }
         }
     }
 
     /// Gets the value based on the provided key
     pub fn retrieve(&self, key: &[u8]) -> Option<Vec<u8>> {
         if let Some(db_ref) = &self.db_ref {
-            if let Some(reg) = &self.reg {
-                // A registry exists, need to check the value from there
-                match reg.get(&key.to_vec()) {
-                    Some(res) => match res.op {
-                        Operation::Put => res.val.as_ref().cloned(),
-                        Operation::Remove => None,
-                    },
-                    None => match db_ref.get(self.cf, &key) {
-                        Ok(result) => match result {
-                            Some(res) => Some(res.into_vec()),
-                            None => None,
-                        },
-
-                        Err(err) => panic!(err),
-                    },
-                }
-            } else {
-                match db_ref.get(self.cf, &key) {
-                    Ok(result) => match result {
-                        Some(res) => Some(res.into_vec()),
-                        None => None,
-                    },
-
-                    Err(err) => panic!(err),
-                }
+            match self.memory_db.get(key) {
+                Some(res) => match res {
+                    Operation::Put(ref val) => Some(val.clone()),
+                    Operation::Remove => None,
+                },
+                None => self.get_db(key),
             }
         } else {
-            let memory_db = self.memory_db.as_ref().unwrap();
-            let result = memory_db.get(&key.to_vec());
-
-            result.cloned()
+            let result = self.memory_db.get(key);
+            
+            if let Some(Operation::Put(ref val)) = result {
+                Some(val.clone())
+            } else {
+                None
+            }
         }
     }
 
@@ -172,52 +173,44 @@ impl PersistentDb {
     /// # Remarks
     /// Transactions will be commited when flush is called
     pub fn put(&mut self, key: &[u8], val: &[u8]) {
-        if let Some(_db_ref) = &self.db_ref {
-            if self.reg.is_none() {
-                self.reg = Some(HashMap::new());
-            }
-
-            // Add the pending insert to the registry HashMap
-            let value = OperationInfo {
-                op: Operation::Put,
-                val: Some(val.to_vec()),
-            };
-
-            self.reg.as_mut().unwrap().insert(key.to_vec(), value);
-        } else {
-            self.memory_db
-                .as_mut()
-                .unwrap()
-                .insert(key.to_vec(), val.to_vec());
-        }
+        self.memory_db.insert(key.to_vec(), Operation::Put(val.to_vec()));
     }
 
     /// Removes a value from the specified key
     /// # Remarks
     /// Transactions will be commited when flush is called
     pub fn delete(&mut self, key: &[u8]) {
-        if let Some(_db_ref) = &self.db_ref {
-            if self.reg.is_none() {
-                self.reg = Some(HashMap::new());
+        self.memory_db.insert(key.to_vec(), Operation::Remove);
+    }
+
+    fn get_db(&self, key: &[u8]) -> Option<Vec<u8>> {
+        let db_ref = self.db_ref.as_ref().unwrap();
+
+        if let Some(cf) = self.cf_name {
+            let cf = db_ref.cf_handle(cf).unwrap();
+
+            match db_ref.get_cf(cf, &key) {
+                Ok(result) => match result {
+                    Some(res) => Some(res.to_vec()),
+                    None => None,
+                },
+                Err(err) => panic!(err),
             }
-
-            // Add the pending delete to the registry HashMap
-            let value = OperationInfo {
-                op: Operation::Remove,
-                val: None,
-            };
-
-            self.reg.as_mut().unwrap().insert(key.to_vec(), value);
         } else {
-            let mut memory_db = self.memory_db.as_mut().unwrap();
-            memory_db.remove(&key.to_vec());
+            match db_ref.get(&key) {
+                Ok(result) => match result {
+                    Some(res) => Some(res.to_vec()),
+                    None => None,
+                },
+                Err(err) => panic!(err),
+            }
         }
     }
 }
 
 impl std::fmt::Debug for PersistentDb {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "PersistentDb {{ cf: {:?} }}", self.cf)
+        write!(f, "PersistentDb {{ cf: {:?} }}", self.cf_name)
     }
 }
 
@@ -287,14 +280,12 @@ impl AsHashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kvdb_rocksdb::DatabaseConfig;
     use tempdir::TempDir;
 
     #[test]
     fn it_inserts_data() {
-        let config = DatabaseConfig::with_columns(None);
         let dir = TempDir::new("purple_test").unwrap();
-        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -306,9 +297,8 @@ mod tests {
 
     #[test]
     fn it_emplaces_data() {
-        let config = DatabaseConfig::with_columns(None);
         let dir = TempDir::new("purple_test").unwrap();
-        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let key = crypto::hash_slice(b"the_key");
@@ -321,9 +311,8 @@ mod tests {
 
     #[test]
     fn contains() {
-        let config = DatabaseConfig::with_columns(None);
         let dir = TempDir::new("purple_test").unwrap();
-        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -335,9 +324,8 @@ mod tests {
 
     #[test]
     fn remove() {
-        let config = DatabaseConfig::with_columns(None);
         let dir = TempDir::new("purple_test").unwrap();
-        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -354,9 +342,8 @@ mod tests {
 
     #[test]
     fn it_keeps_last_operation_per_key() {
-        let config = DatabaseConfig::with_columns(None);
         let dir = TempDir::new("purple_test").unwrap();
-        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -373,9 +360,8 @@ mod tests {
 
     #[test]
     fn it_looks_into_pending_transactions() {
-        let config = DatabaseConfig::with_columns(None);
         let dir = TempDir::new("purple_test").unwrap();
-        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -395,9 +381,8 @@ mod tests {
 
     #[test]
     fn it_doesnt_write_until_flush() {
-        let config = DatabaseConfig::with_columns(None);
         let dir = TempDir::new("purple_test").unwrap();
-        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -411,9 +396,8 @@ mod tests {
 
     #[test]
     fn wipe_works() {
-        let config = DatabaseConfig::with_columns(None);
         let dir = TempDir::new("purple_test").unwrap();
-        let db = Database::open(&config, dir.path().to_str().unwrap()).unwrap();
+        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";

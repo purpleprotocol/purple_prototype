@@ -22,12 +22,12 @@ use crate::packets::connect::Connect;
 use crate::packet::Packet;
 use std::net::SocketAddr;
 use crypto::SecretKey as Sk;
-use chain::{HardChainRef, EasyChainRef, HardBlock, EasyBlock};
+use chain::*;
 use std::sync::mpsc::Sender;
 use hashbrown::{HashSet, HashMap};
 use std::sync::Arc;
 use parking_lot::Mutex;
-use NodeId;
+use crypto::NodeId;
 use Peer;
 
 pub struct Network {
@@ -45,6 +45,12 @@ pub struct Network {
 
     /// Reference to the `HardChain`
     hard_chain_ref: HardChainRef,
+
+    /// Reference to the `StateChain`
+    state_chain_ref: StateChainRef,
+
+    /// Sender to `StateChain` block buffer
+    state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
 
     /// Sender to `HardChain` block buffer
     hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
@@ -67,8 +73,10 @@ impl Network {
         max_peers: usize,
         easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
         hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
+        state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
         easy_chain_ref: EasyChainRef,
         hard_chain_ref: HardChainRef,
+        state_chain_ref: StateChainRef,
     ) -> Network {
         Network {
             peers: HashMap::with_capacity(max_peers),
@@ -78,8 +86,10 @@ impl Network {
             max_peers,
             easy_chain_sender,
             hard_chain_sender,
+            state_chain_sender,
             easy_chain_ref,
             hard_chain_ref,
+            state_chain_ref,
         }
     }
 
@@ -197,21 +207,28 @@ impl NetworkInterface for Network {
     }
 
     fn easy_chain_ref(&self) -> EasyChainRef {
-        unimplemented!();
+        self.easy_chain_ref.clone()
     }
 
     fn hard_chain_ref(&self) -> HardChainRef {
-        unimplemented!();
+        self.hard_chain_ref.clone()
+    }
+
+    fn state_chain_ref(&self) -> StateChainRef {
+        self.state_chain_ref.clone()
     }
 
     fn easy_chain_sender(&self) -> &Sender<(SocketAddr, Arc<EasyBlock>)> {
-        unimplemented!();
+        &self.easy_chain_sender
     }
 
     fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)> {
-        unimplemented!();
+        &self.hard_chain_sender
     }
 
+    fn state_chain_sender(&self) -> &Sender<(SocketAddr, Arc<StateBlock>)> {
+        &self.state_chain_sender
+    }
 
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         let (is_none_id, conn_type) = {

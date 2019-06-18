@@ -25,7 +25,7 @@ use crypto::Hash;
 use events::Event;
 use graphlib::{Graph, VertexId};
 use hashbrown::{HashMap, HashSet};
-use network::NodeId;
+use crypto::NodeId;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -66,12 +66,6 @@ pub struct CausalGraph {
     /// Mapping between validator nodes ids and their state.
     pub(crate) validators: HashMap<NodeId, ValidatorState>,
 
-    /// The id of the node that is next in line to be forked
-    /// when a node joins the pool. It should always be one
-    /// of the nodes with the largest share interval (assuming
-    /// there are multiple equal largest shares).
-    pub(crate) next_largest: NodeId,
-
     /// Current candidates
     pub(crate) candidates: HashSet<Candidate>,
 
@@ -92,7 +86,6 @@ impl CausalGraph {
         CausalGraph {
             graph,
             ends,
-            next_largest: node_id.clone(),
             node_id,
             lookup_table,
             pending: HashSet::new(),
@@ -118,7 +111,6 @@ impl CausalGraph {
         CausalGraph {
             graph,
             ends,
-            next_largest: node_id.clone(),
             node_id,
             lookup_table,
             pending: HashSet::new(),
@@ -603,7 +595,7 @@ impl CausalGraph {
 mod tests {
     use super::*;
     use crypto::{Hash, Identity};
-    use network::NodeId;
+    use crypto::NodeId;
     use quickcheck::*;
     use rand::*;
 

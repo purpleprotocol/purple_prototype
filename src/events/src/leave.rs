@@ -19,7 +19,7 @@
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use causality::Stamp;
 use crypto::{Hash, PublicKey, Signature};
-use network::NodeId;
+use crypto::NodeId;
 use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -177,10 +177,8 @@ impl Leave {
     }
 }
 
-#[cfg(test)]
 use quickcheck::Arbitrary;
 
-#[cfg(test)]
 impl Arbitrary for Leave {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Leave {
         Leave {

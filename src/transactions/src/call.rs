@@ -36,7 +36,7 @@ pub struct Call {
     fee_hash: Hash,
     nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<Hash>,
+    pub(crate) hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
     signature: Option<Signature>,
 }

@@ -16,25 +16,5 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[cfg(test)]
-extern crate tempdir;
-#[macro_use]
-extern crate log;
-
-extern crate num_cpus;
-extern crate crypto;
-extern crate elastic_array;
-extern crate hashbrown;
-extern crate hashdb;
-extern crate rocksdb;
-extern crate parking_lot;
-extern crate patricia_trie;
-extern crate rlp;
-
-pub use hasher::*;
-pub use node_codec::*;
-pub use persistent_db::*;
-
-mod hasher;
-mod node_codec;
-mod persistent_db;
+pub mod block;
+pub mod chain;

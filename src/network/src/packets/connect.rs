@@ -18,7 +18,7 @@
 
 use crate::peer::ConnectionType;
 use crate::interface::NetworkInterface;
-use crate::node_id::NodeId;
+use crypto::NodeId;
 use crate::error::NetworkErr;
 use crate::packet::Packet;
 use std::net::SocketAddr;
@@ -289,7 +289,7 @@ mod tests {
     use hashbrown::HashMap;
     use crate::interface::NetworkInterface;
     use crate::mock::MockNetwork;
-    use crate::node_id::NodeId;
+    use crypto::NodeId;
 
     #[test]
     fn it_successfuly_performs_connect_handshake() {
@@ -300,23 +300,25 @@ mod tests {
         let n2 = networks[1].2.clone();
         let network1_easy_rec = networks[0].3.clone();
         let network1_hard_rec = networks[0].4.clone();
+        let network1_state_rec = networks[0].5.clone();
         let network1 = networks[0].0.clone();
         let network1_c = network1.clone();
         let network2_easy_rec = networks[1].3.clone();
         let network2_hard_rec = networks[1].4.clone();
+        let network2_state_rec = networks[1].5.clone();
         let network2 = networks[1].0.clone();
         let network2_c = network2.clone();
 
         // Peer 1 listener thread
         thread::Builder::new()
             .name("peer1".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network1, network1_easy_rec, network1_hard_rec))
+            .spawn(move || MockNetwork::start_receive_loop(network1, network1_easy_rec, network1_hard_rec, network1_state_rec))
             .unwrap();
 
         // Peer 2 listener thread
         thread::Builder::new()
             .name("peer2".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network2, network2_easy_rec, network2_hard_rec))
+            .spawn(move || MockNetwork::start_receive_loop(network2, network2_easy_rec, network2_hard_rec, network2_state_rec))
             .unwrap();
 
         {

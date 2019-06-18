@@ -16,25 +16,15 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[cfg(test)]
-extern crate tempdir;
-#[macro_use]
-extern crate log;
+use crate::chain::{Chain, ChainRef};
+use crate::state_chain::block::StateBlock;
 
-extern crate num_cpus;
-extern crate crypto;
-extern crate elastic_array;
-extern crate hashbrown;
-extern crate hashdb;
-extern crate rocksdb;
-extern crate parking_lot;
-extern crate patricia_trie;
-extern crate rlp;
+pub type StateChainRef = ChainRef<StateBlock>;
 
-pub use hasher::*;
-pub use node_codec::*;
-pub use persistent_db::*;
-
-mod hasher;
-mod node_codec;
-mod persistent_db;
+/// The state chain is responsible for storing blocks
+/// that are produced by the validator pool and which
+/// contain transactions that modify the trie state.
+/// 
+/// A `StateBlock` contains multiple `Events`, which
+/// in turn, contain transactions.
+pub type StateChain = Chain<StateBlock>;

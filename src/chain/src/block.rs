@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::{EasyBlock, HardBlock};
+use crate::{EasyBlock, HardBlock, StateBlock};
 use chrono::prelude::*;
 use crypto::Hash;
 use std::boxed::Box;
@@ -30,9 +30,6 @@ pub trait Block {
 
     /// Returns the hash of the block.
     fn block_hash(&self) -> Option<Hash>;
-
-    /// Returns the merkle root hash of the block.
-    fn merkle_root(&self) -> Option<Hash>;
 
     /// Returns the parent hash of the block.
     fn parent_hash(&self) -> Option<Hash>;
@@ -49,6 +46,10 @@ pub trait Block {
     /// Callback that executes after a block is written to a chain.
     fn after_write() -> Option<Box<FnMut(Arc<Self>)>>;
 
+    /// Condition that must result in `true` for a block to be appended
+    /// to the chain.
+    fn append_condition() -> Option<Box<(FnMut(Arc<Self>) -> bool)>>;
+
     /// Serializes the block.
     fn to_bytes(&self) -> Vec<u8>;
 
@@ -60,7 +61,8 @@ pub trait Block {
 #[derive(Clone, Debug, PartialEq)]
 pub enum BlockWrapper {
     EasyBlock(Arc<EasyBlock>),
-    HardBlock(Arc<HardBlock>)
+    HardBlock(Arc<HardBlock>),
+    StateBlock(Arc<StateBlock>),
 }
 
 impl BlockWrapper {
@@ -70,6 +72,7 @@ impl BlockWrapper {
         match first_byte {
             EasyBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::EasyBlock(EasyBlock::from_bytes(bytes)?))),
             HardBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::HardBlock(HardBlock::from_bytes(bytes)?))),
+            StateBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::StateBlock(StateBlock::from_bytes(bytes)?))),
             _ => return Err("Invalid block type")
         }
     }
@@ -78,6 +81,7 @@ impl BlockWrapper {
         match self {
             BlockWrapper::EasyBlock(block) => block.to_bytes(),
             BlockWrapper::HardBlock(block) => block.to_bytes(),
+            BlockWrapper::StateBlock(block) => block.to_bytes(),
         }
     }
 
@@ -85,6 +89,7 @@ impl BlockWrapper {
         match self {
             BlockWrapper::EasyBlock(block) => block.block_hash(),
             BlockWrapper::HardBlock(block) => block.block_hash(),
+            BlockWrapper::StateBlock(block) => block.block_hash(),
         }
     }
 }
@@ -94,11 +99,12 @@ impl quickcheck::Arbitrary for BlockWrapper {
         use rand::Rng;
 
         let mut rng = rand::thread_rng();
-        let random = rng.gen_range(0, 2);
+        let random = rng.gen_range(0, 3);
 
         match random {
             0 => BlockWrapper::EasyBlock(quickcheck::Arbitrary::arbitrary(g)),
             1 => BlockWrapper::HardBlock(quickcheck::Arbitrary::arbitrary(g)),
+            2 => BlockWrapper::StateBlock(quickcheck::Arbitrary::arbitrary(g)),
             _ => panic!(),
         }
     }

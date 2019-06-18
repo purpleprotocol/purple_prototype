@@ -19,9 +19,6 @@
 #[cfg(test)]
 extern crate tempfile;
 
-#[cfg(test)]
-extern crate kvdb_rocksdb;
-
 #[macro_use]
 extern crate unwrap;
 #[macro_use]
@@ -38,7 +35,6 @@ extern crate crypto;
 extern crate elastic_array;
 extern crate hashdb;
 extern crate hex;
-extern crate network;
 extern crate patricia_trie;
 extern crate persistence;
 extern crate purple_vm;
@@ -71,7 +67,7 @@ pub use mint::*;
 pub use open_contract::*;
 pub use send::*;
 
-use crypto::Identity;
+use crypto::{Hash, Identity};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use quickcheck::Arbitrary;
@@ -116,6 +112,20 @@ impl Tx {
             Tx::Mint(ref tx) => tx.compute_hash_message(),
             Tx::CreateUnique(ref tx) => tx.compute_hash_message(),
             Tx::ChangeMinter(ref tx) => tx.compute_hash_message(),
+        }
+    }
+
+    pub fn transaction_hash(&self) -> Option<Hash> {
+        match *self {
+            Tx::Call(ref tx) => tx.hash,
+            Tx::OpenContract(ref tx) => tx.hash,
+            Tx::Send(ref tx) => tx.hash,
+            Tx::Burn(ref tx) => tx.hash,
+            Tx::CreateCurrency(ref tx) => tx.hash,
+            Tx::CreateMintable(ref tx) => tx.hash,
+            Tx::Mint(ref tx) => tx.hash,
+            Tx::CreateUnique(ref tx) => tx.hash,
+            Tx::ChangeMinter(ref tx) => tx.hash,
         }
     }
 

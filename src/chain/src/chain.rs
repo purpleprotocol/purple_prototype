@@ -1350,10 +1350,6 @@ mod tests {
             Some(self.hash.clone())
         }
 
-        fn merkle_root(&self) -> Option<Hash> {
-            unimplemented!();
-        }
-
         fn timestamp(&self) -> DateTime<Utc> {
             unimplemented!();
         }
@@ -1367,6 +1363,10 @@ mod tests {
         }
 
         fn after_write() -> Option<Box<FnMut(Arc<Self>)>> {
+            None
+        }
+
+        fn append_condition() -> Option<Box<(FnMut(Arc<DummyBlock>) -> bool)>> {
             None
         }
 

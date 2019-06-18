@@ -10,11 +10,18 @@ patricia-trie = "0.3.0"
 elastic-array = "0.10.0"
 rlp = "0.3.0"
 parking_lot = "0.7.1"
-kvdb = "0.1.0"
-kvdb-rocksdb = "0.1.0"
+rocksdb = "0.12.2"
+num_cpus = "1.10.1"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
 crypto = { path = "../crypto" }
 log = "0.4.0"
 
 [dev-dependencies]
+criterion = "0.2.1"
+rand = "^0.6.0"
 tempdir = "0.3.7"
+
+[[bench]]
+name = "db_benchmark"
+path = "bench/db_bench.rs"
+harness = false
