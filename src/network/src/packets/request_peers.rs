@@ -18,7 +18,7 @@
 
 use crate::peer::ConnectionType;
 use crate::interface::NetworkInterface;
-use crate::node_id::NodeId;
+use crypto::NodeId;
 use crate::error::NetworkErr;
 use crate::packet::Packet;
 use crate::packets::SendPeers;

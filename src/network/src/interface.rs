@@ -19,8 +19,8 @@
 use crate::error::NetworkErr;
 use crate::peer::Peer;
 use crate::packet::Packet;
-use crate::node_id::NodeId;
-use crate::chain::{EasyChainRef, HardChainRef, HardBlock, EasyBlock};
+use crypto::NodeId;
+use crate::chain::*;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
@@ -99,6 +99,9 @@ pub trait NetworkInterface {
     /// Returns a reference to the `HardChain`.
     fn hard_chain_ref(&self) -> HardChainRef;
 
+    /// Returns a reference to the `StateChain`.
+    fn state_chain_ref(&self) -> StateChainRef;
+
     /// Returns a reference to a `EasyChain` mpsc sender.
     /// Use this to buffer blocks that are to be appended
     /// to the chain.
@@ -108,4 +111,9 @@ pub trait NetworkInterface {
     /// Use this to buffer blocks that are to be appended
     /// to the chain.
     fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)>;
+
+    /// Returns a reference to a `StateChain` mpsc sender.
+    /// Use this to buffer blocks that are to be appended
+    /// to the chain.
+    fn state_chain_sender(&self) -> &Sender<(SocketAddr, Arc<StateBlock>)>;
 }

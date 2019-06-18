@@ -25,7 +25,7 @@ use crypto::Hash;
 use events::Event;
 use graphlib::{Graph, VertexId};
 use hashbrown::{HashMap, HashSet};
-use network::NodeId;
+use crypto::NodeId;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -595,7 +595,7 @@ impl CausalGraph {
 mod tests {
     use super::*;
     use crypto::{Hash, Identity};
-    use network::NodeId;
+    use crypto::NodeId;
     use quickcheck::*;
     use rand::*;
 

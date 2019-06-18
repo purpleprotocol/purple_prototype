@@ -21,7 +21,7 @@ use causality::Stamp;
 use crypto::{BlakeHasher, Hash, PublicKey, SecretKey as Sk, Signature};
 use merkle_light::hash::Algorithm;
 use merkle_light::merkle::MerkleTree;
-use network::NodeId;
+use crypto::NodeId;
 use rayon::prelude::*;
 use std::sync::Arc;
 use std::hash::Hasher;
@@ -414,10 +414,8 @@ fn assemble_message(obj: &Heartbeat) -> Vec<u8> {
     buffer
 }
 
-#[cfg(test)]
 use quickcheck::Arbitrary;
 
-#[cfg(test)]
 impl Arbitrary for Heartbeat {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Heartbeat {
         let mut txs: Vec<Arc<Tx>> = Vec::with_capacity(30);

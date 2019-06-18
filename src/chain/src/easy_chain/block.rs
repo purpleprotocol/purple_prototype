@@ -39,7 +39,6 @@ lazy_static! {
         let hash = Hash::random();
         let mut block = EasyBlock {
             parent_hash: None,
-            merkle_root: Some(Hash::NULL),
             height: 0,
             collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
             hash: Some(hash),
@@ -64,9 +63,6 @@ pub struct EasyBlock {
     /// The address that will collect the 
     /// rewards earned by the miner.
     collector_address: NormalAddress,
-
-    /// The merkle root hash of the block.
-    merkle_root: Option<Hash>,
 
     /// The hash of the block.
     hash: Option<Hash>,
@@ -113,10 +109,6 @@ impl Block for EasyBlock {
         self.parent_hash.clone()
     }
 
-    fn merkle_root(&self) -> Option<Hash> {
-        self.merkle_root.clone()
-    }
-
     fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp.clone()
     }
@@ -152,7 +144,6 @@ impl Block for EasyBlock {
         buf.write_u64::<BigEndian>(self.height).unwrap();
         buf.extend_from_slice(&self.hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
-        buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(address);
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
@@ -221,17 +212,6 @@ impl Block for EasyBlock {
             return Err("Incorrect packet structure 3");
         };
 
-        let merkle_root = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure 4");
-        };
-
         let collector_address = if buf.len() > 33 as usize {
             let addr: Vec<u8> = buf.drain(..33).collect();
 
@@ -270,7 +250,6 @@ impl Block for EasyBlock {
         };
 
         Ok(Arc::new(EasyBlock {
-            merkle_root: Some(merkle_root),
             collector_address,
             timestamp,
             hash: Some(hash),
@@ -289,7 +268,6 @@ impl EasyBlock {
             parent_hash,
             collector_address,
             height,
-            merkle_root: None,
             hash: None,
             ip,
             timestamp: Utc::now(),
@@ -320,7 +298,6 @@ impl EasyBlock {
             buf.extend_from_slice(&parent_hash.0.to_vec());
         }
 
-        buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
 
         buf
@@ -336,7 +313,6 @@ impl quickcheck::Arbitrary for EasyBlock {
             height: quickcheck::Arbitrary::arbitrary(g),
             parent_hash: Some(quickcheck::Arbitrary::arbitrary(g)),
             hash: Some(quickcheck::Arbitrary::arbitrary(g)),
-            merkle_root: Some(quickcheck::Arbitrary::arbitrary(g)),
             ip: quickcheck::Arbitrary::arbitrary(g),
             timestamp,
         }

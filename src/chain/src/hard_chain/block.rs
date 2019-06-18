@@ -45,7 +45,6 @@ lazy_static! {
         let mut block = HardBlock {
             easy_block_hash,
             parent_hash: None,
-            merkle_root: Some(Hash::NULL),
             collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
             height: 0,
             hash: None,
@@ -74,9 +73,6 @@ pub struct HardBlock {
 
     /// The hash of the parent block.
     parent_hash: Option<Hash>,
-
-    /// The merkle root hash of the block.
-    merkle_root: Option<Hash>,
 
     /// The hash of the block.
     hash: Option<Hash>,
@@ -123,10 +119,6 @@ impl Block for HardBlock {
         self.parent_hash.clone()
     }
 
-    fn merkle_root(&self) -> Option<Hash> {
-        self.merkle_root.clone()
-    }
-
     fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp.clone()
     }
@@ -163,7 +155,6 @@ impl Block for HardBlock {
         buf.extend_from_slice(&self.hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.easy_block_hash.0.to_vec());
         buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
-        buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(address);
         buf.extend_from_slice(&timestamp);
@@ -243,17 +234,6 @@ impl Block for HardBlock {
             return Err("Incorrect packet structure 3");
         };
 
-        let merkle_root = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure 4");
-        };
-
         let collector_address = if buf.len() > 33 as usize {
             let addr: Vec<u8> = buf.drain(..33).collect();
 
@@ -292,7 +272,6 @@ impl Block for HardBlock {
         };
 
         Ok(Arc::new(HardBlock {
-            merkle_root: Some(merkle_root),
             timestamp,
             easy_block_hash,
             collector_address,
@@ -312,17 +291,11 @@ impl HardBlock {
             parent_hash,
             easy_block_hash,
             collector_address,
-            merkle_root: None,
             height,
             hash: None,
             ip,
             timestamp: Utc::now(),
         }
-    }
-
-    pub fn calculate_merkle_root(&mut self) {
-        // TODO: Replace this
-        self.merkle_root = Some(Hash::NULL);
     }
 
     pub fn compute_hash(&mut self) {
@@ -349,7 +322,6 @@ impl HardBlock {
             buf.extend_from_slice(&parent_hash.0.to_vec());
         }
 
-        buf.extend_from_slice(&self.merkle_root.unwrap().0.to_vec());
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
 
         buf
@@ -365,7 +337,6 @@ impl Arbitrary for HardBlock {
             height: Arbitrary::arbitrary(g),
             collector_address: Arbitrary::arbitrary(g),
             parent_hash: Some(Arbitrary::arbitrary(g)),
-            merkle_root: Some(Arbitrary::arbitrary(g)),
             hash: Some(Arbitrary::arbitrary(g)),
             ip: Arbitrary::arbitrary(g),
             timestamp: Utc::now(),

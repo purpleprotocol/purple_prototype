@@ -22,7 +22,7 @@ use crate::validator_state::ValidatorState;
 use causality::Stamp;
 use events::Event;
 use hashbrown::HashMap;
-use network::NodeId;
+use crypto::NodeId;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]

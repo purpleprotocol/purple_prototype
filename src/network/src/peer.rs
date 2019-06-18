@@ -20,7 +20,7 @@ use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use std::net::SocketAddr;
 use std::hash::{Hash, Hasher};
 use std::collections::VecDeque;
-use NodeId;
+use crypto::NodeId;
 
 #[derive(Clone, Debug, Copy)]
 pub enum ConnectionType {

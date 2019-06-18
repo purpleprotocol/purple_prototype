@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::PublicKey;
+use crate::PublicKey;
 use quickcheck::Arbitrary;
 use rand::Rng;
 

@@ -35,7 +35,6 @@ extern crate crypto;
 extern crate elastic_array;
 extern crate hashdb;
 extern crate hex;
-extern crate network;
 extern crate patricia_trie;
 extern crate persistence;
 extern crate purple_vm;

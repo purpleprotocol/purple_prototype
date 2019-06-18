@@ -19,7 +19,7 @@ use causality::Stamp;
 use criterion::Criterion;
 use crypto::{Hash, Identity};
 use events::Heartbeat;
-use network::NodeId;
+use crypto::NodeId;
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use test::Bencher;

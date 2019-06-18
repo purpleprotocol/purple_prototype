@@ -1350,10 +1350,6 @@ mod tests {
             Some(self.hash.clone())
         }
 
-        fn merkle_root(&self) -> Option<Hash> {
-            unimplemented!();
-        }
-
         fn timestamp(&self) -> DateTime<Utc> {
             unimplemented!();
         }

@@ -42,7 +42,7 @@ extern crate rocksdb;
 
 use rocksdb::DB;
 use clap::{App, Arg};
-use crypto::{Identity, SecretKey as Sk};
+use crypto::{NodeId, Identity, SecretKey as Sk};
 use elastic_array::ElasticArray128;
 use futures::future::ok;
 use futures::Future;
@@ -66,6 +66,7 @@ const DEFAULT_NETWORK_NAME: &'static str = "purple";
 const COLUMN_FAMILIES: &'static [&'static str] = &[
     "easy_chain",
     "hard_chain",
+    "node_storage",
 ];
 
 fn main() {
@@ -76,15 +77,19 @@ fn main() {
     let argv = parse_cli_args();
     let db = Arc::new(open_database(&argv.network_name));
 
-    let mut node_storage = PersistentDb::new(db.clone(), None);
+    let mut node_storage = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[3]));
+    let state_db = PersistentDb::new(db.clone(), None);
     let easy_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[0]));
     let hard_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[1]));
     let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_db)));
     let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_db)));
+    let state_chain = Arc::new(RwLock::new(StateChain::new(state_db)));
     let easy_chain = EasyChainRef::new(easy_chain);
     let hard_chain = HardChainRef::new(hard_chain);
+    let state_chain = StateChainRef::new(state_chain);
     let (easy_tx, easy_rx) = channel();
     let (hard_tx, hard_rx) = channel();
+    let (state_tx, state_rx) = channel();
 
     info!("Setting up the network...");
 
@@ -96,15 +101,17 @@ fn main() {
         argv.max_peers,
         easy_tx,
         hard_tx,
+        state_tx,
         easy_chain.clone(),
         hard_chain.clone(),
+        state_chain.clone()
     )));
     let accept_connections = Arc::new(AtomicBool::new(true));
 
     // Start the tokio runtime
     tokio::run(ok(()).and_then(move |_| {
         // Start listening for blocks
-        start_block_listeners(network.clone(), easy_chain, hard_chain, easy_rx, hard_rx);
+        start_block_listeners(network.clone(), easy_chain, hard_chain, state_chain, easy_rx, hard_rx, state_rx);
 
         // Start listening to connections
         start_listener(network.clone(), accept_connections.clone());

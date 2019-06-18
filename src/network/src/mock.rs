@@ -28,7 +28,7 @@ use chain::*;
 use crypto::SecretKey as Sk;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
-use NodeId;
+use crypto::NodeId;
 
 /// Mock network layer used for testing.
 pub struct MockNetwork {
@@ -46,11 +46,17 @@ pub struct MockNetwork {
     /// Reference to the `HardChain`
     hard_chain_ref: HardChainRef,
 
+    /// Reference to the `StateChain`
+    state_chain_ref: StateChainRef,
+
     /// Sender to `HardChain` block buffer
     hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
 
     /// Sender to `EasyChain` block buffer
     easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
+
+    /// Sender to `StateChain` block buffer
+    state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
 
     /// Mapping between ips and node ids.
     pub(crate) address_mappings: HashMap<SocketAddr, NodeId>, 
@@ -210,11 +216,15 @@ impl NetworkInterface for MockNetwork {
     }
 
     fn easy_chain_ref(&self) -> EasyChainRef {
-        unimplemented!();
+        self.easy_chain_ref.clone()
     }
 
     fn hard_chain_ref(&self) -> HardChainRef {
-        unimplemented!();
+        self.hard_chain_ref.clone()
+    }
+
+    fn state_chain_ref(&self) -> StateChainRef {
+        self.state_chain_ref.clone()
     }
 
     fn easy_chain_sender(&self) -> &Sender<(SocketAddr, Arc<EasyBlock>)> {
@@ -223,6 +233,10 @@ impl NetworkInterface for MockNetwork {
 
     fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)> {
         &self.hard_chain_sender
+    }
+
+    fn state_chain_sender(&self) -> &Sender<(SocketAddr, Arc<StateBlock>)> {
+        &self.state_chain_sender
     }
 
     fn process_packet(&mut self, addr: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
@@ -332,8 +346,10 @@ impl MockNetwork {
         address_mappings: HashMap<SocketAddr, NodeId>,
         easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
         hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
+        state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
         easy_chain_ref: EasyChainRef,
         hard_chain_ref: HardChainRef,
+        state_chain_ref: StateChainRef,
     ) -> MockNetwork {
         MockNetwork {
             rx,
@@ -341,8 +357,10 @@ impl MockNetwork {
             address_mappings,
             easy_chain_sender,
             hard_chain_sender,
+            state_chain_sender,
             easy_chain_ref,
             hard_chain_ref,
+            state_chain_ref,
             peers: HashMap::new(),
             node_id,
             secret_key,
@@ -355,6 +373,7 @@ impl MockNetwork {
         network: Arc<Mutex<Self>>, 
         easy_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<EasyBlock>)>>>,
         hard_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>,
+        state_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<StateBlock>)>>>,
     ) {
         loop {
             let mut network = network.lock();
@@ -385,7 +404,14 @@ impl MockNetwork {
                 .try_iter()
                 .map(|(a, b)| (a, BlockWrapper::HardBlock(b)));
 
-            let mut iter = easy_iter.chain(hard_iter);
+            let state_receiver = state_block_receiver.lock();
+            let state_iter = state_receiver
+                .try_iter()
+                .map(|(a, b)| (a, BlockWrapper::StateBlock(b)));
+
+            let mut iter = easy_iter
+                .chain(hard_iter)
+                .chain(state_iter);
 
             while let Some((addr, block)) = iter.next() {
                 match block {
@@ -411,6 +437,20 @@ impl MockNetwork {
                             Ok(()) => {
                                 // Forward block
                                 let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::HardBlock(block)));
+                                network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
+                            }
+                            Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)
+                        }
+                    }
+
+                    BlockWrapper::StateBlock(block) => {
+                        let state_chain = network.state_chain_ref().chain;
+                        let mut chain = state_chain.write();
+                        
+                        match chain.append_block(block.clone()) {
+                            Ok(()) => {
+                                // Forward block
+                                let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::StateBlock(block)));
                                 network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
                             }
                             Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)

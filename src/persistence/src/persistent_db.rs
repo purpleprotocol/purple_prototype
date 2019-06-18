@@ -20,10 +20,33 @@ use crypto::Hash;
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
 use hashdb::{AsHashDB, HashDB};
-use rocksdb::{WriteBatch, ColumnFamily, DB};
+use rocksdb::{DBCompactionStyle, Options, WriteBatch, ColumnFamily, DB};
 use rlp::NULL_RLP;
 use std::sync::Arc;
 use BlakeDbHasher;
+
+pub fn db_options() -> Options {
+    let mut opts = Options::default();
+    opts.increase_parallelism(num_cpus::get() as i32);
+    opts.create_if_missing(true);
+    opts.create_missing_column_families(true);
+    opts.set_max_open_files(10000);
+    opts.set_use_fsync(false);
+    opts.set_bytes_per_sync(8388608);
+    opts.optimize_for_point_lookup(1024);
+    opts.set_table_cache_num_shard_bits(6);
+    opts.set_max_write_buffer_number(32);
+    opts.set_write_buffer_size(536870912);
+    opts.set_target_file_size_base(1073741824);
+    opts.set_min_write_buffer_number_to_merge(4);
+    opts.set_level_zero_stop_writes_trigger(2000);
+    opts.set_level_zero_slowdown_writes_trigger(0);
+    opts.set_compaction_style(DBCompactionStyle::Universal);
+    opts.set_max_background_compactions(4);
+    opts.set_max_background_flushes(4);
+    opts.set_disable_auto_compactions(true);
+    opts
+}
 
 #[derive(PartialEq, Clone)]
 enum Operation {
@@ -61,6 +84,7 @@ impl PersistentDb {
         let mut wipe = false;
 
         if let Some(ref db_ref) = self.db_ref {
+            // Wipe memory if we have a database
             wipe = true;
 
             // Initialize a new transaction
@@ -72,7 +96,6 @@ impl PersistentDb {
                 None
             };
 
-            // Load all the pending transactions into the DBTransaction
             for (key, val) in self.memory_db.iter() {
                 match val {
                     Operation::Put(ref value) => {

@@ -17,7 +17,6 @@ elastic-array = "0.10.0"
 rand = "0.6.0"
 rocksdb = "0.12.2"
 persistence = { path = "../persistence" }
-network = { path = "../network" }
 crypto = { path = "../crypto" }
 account = { path = "../account" }
 quickcheck = "0.7.2"

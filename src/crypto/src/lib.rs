@@ -46,10 +46,12 @@ pub use rust_sodium::crypto::sign::{gen_keypair, PublicKey, SecretKey};
 pub use rust_sodium::crypto::aead;
 pub use rust_sodium::crypto::aead::Nonce;
 pub use signature::*;
+pub use node_id::*;
 
 mod blake_hasher;
 mod hash;
 mod signature;
+mod node_id;
 
 use rust_sodium::crypto::sign::{sign_detached, verify_detached};
 
