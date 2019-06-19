@@ -19,9 +19,9 @@
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
-use std::io::Cursor;
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
+use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ChangeMinter {
@@ -52,6 +52,96 @@ pub struct ChangeMinter {
 
 impl ChangeMinter {
     pub const TX_TYPE: u8 = 8;
+
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        let bin_minter = &self.minter.to_bytes();
+        let bin_new_minter = &self.new_minter.to_bytes();
+        let bin_asset_hash = &self.asset_hash.to_vec();
+        let bin_fee_hash = &self.fee_hash.to_vec();
+
+        if bin_minter == bin_new_minter {
+            panic!("The new address of the minter should be different from the current!");
+        }
+
+        // Convert addresses to strings
+        let minter = hex::encode(bin_minter);
+        let new_minter = hex::encode(bin_new_minter);
+
+        // Convert hashes to strings
+        let asset_hash = hex::encode(bin_asset_hash);
+        let fee_hash = hex::encode(bin_fee_hash);
+
+        // Calculate nonce keys
+        //
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let minter_nonce_key = format!("{}.n", minter);
+        let minter_nonce_key = minter_nonce_key.as_bytes();
+        let new_minter_nonce_key = format!("{}.n", new_minter);
+        let new_minter_nonce_key = new_minter_nonce_key.as_bytes();
+
+        // Handle nonce
+        // Retrieve serialized nonce
+        let bin_minter_nonce = &trie.get(&minter_nonce_key).unwrap().unwrap();
+        let bin_new_minter_nonce = trie.get(&new_minter_nonce_key);
+
+        let mut nonce_rdr = Cursor::new(bin_minter_nonce);
+
+        // Read the nonce of the minter
+        let mut nonce = nonce_rdr.read_u64::<BigEndian>().unwrap();
+
+        // Increment minter nonce
+        nonce += 1;
+
+        // Create nonce buffer
+        let mut nonce_buf: Vec<u8> = Vec::with_capacity(8);
+
+        // Write new nonce to buffer
+        nonce_buf.write_u64::<BigEndian>(nonce).unwrap();
+
+        // Calculate minter address key
+        //
+        // The key of a currency's minter address has the following format:
+        // `<currency-hash>.m`
+        let asset_hash_minter_key = format!("{}.m", asset_hash);
+        let asset_hash_minter_key = asset_hash_minter_key.as_bytes();
+
+        // Calculate currency keys
+        //
+        // The key of a currency entry has the following format:
+        // `<account-address>.<currency-hash>`
+        // let minter_cur_key = format!("{}.{}", minter, asset_hash);
+        // let minter_cur_key = minter_cur_key.as_bytes();
+        let minter_fee_key = format!("{}.{}", minter, fee_hash);
+        let minter_fee_key = minter_fee_key.as_bytes();
+
+        match bin_new_minter_nonce {
+            // The new minter account exists
+            Ok(Some(_)) => {
+                let mut minter_fee_balance = unwrap!(
+                    Balance::from_bytes(&unwrap!(
+                        trie.get(&minter_fee_key).unwrap(),
+                        "The minter does not have an entry for the given currency"
+                    )),
+                    "Invalid stored balance format"
+                );
+
+                // Subtract fee from minter balance
+                minter_fee_balance -= self.fee.clone();
+
+                // Update trie
+                trie.insert(asset_hash_minter_key, &bin_new_minter).unwrap();
+                trie.insert(&minter_nonce_key, &nonce_buf).unwrap();
+                trie.insert(&minter_fee_key, &minter_fee_balance.to_bytes())
+                    .unwrap();
+            }
+            // The new minter account doesn't exist
+            Ok(None) => {
+                // TODO
+            }
+            Err(err) => panic!(err),
+        }
+    }
 
     /// Signs the transaction with the given secret key.
     pub fn sign(&mut self, skey: Sk) {
