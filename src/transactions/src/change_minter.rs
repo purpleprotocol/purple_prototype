@@ -53,6 +53,11 @@ pub struct ChangeMinter {
 impl ChangeMinter {
     pub const TX_TYPE: u8 = 8;
 
+    /// Applies the change minter transaction to the provided database.
+    /// 
+    /// # Remarks
+    /// 
+    /// It panics if the minter address doesn't exist
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         let bin_minter = &self.minter.to_bytes();
         let bin_new_minter = &self.new_minter.to_bytes();
@@ -110,8 +115,6 @@ impl ChangeMinter {
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        // let minter_cur_key = format!("{}.{}", minter, asset_hash);
-        // let minter_cur_key = minter_cur_key.as_bytes();
         let minter_fee_key = format!("{}.{}", minter, fee_hash);
         let minter_fee_key = minter_fee_key.as_bytes();
 
@@ -135,9 +138,26 @@ impl ChangeMinter {
                 trie.insert(&minter_fee_key, &minter_fee_balance.to_bytes())
                     .unwrap();
             }
-            // The new minter account doesn't exist
+            // The new minter account doesn't exist, so we create it
             Ok(None) => {
-                // TODO
+                let mut minter_fee_balance = unwrap!(
+                    Balance::from_bytes(&unwrap!(
+                        trie.get(&minter_fee_key).unwrap(),
+                        "The minter does not have an entry for the given currency"
+                    )),
+                    "Invalid stored balance format"
+                );
+
+                // Subtract fee from minter balance
+                minter_fee_balance -= self.fee.clone();
+
+                // Update trie
+                trie.insert(&minter_nonce_key, &nonce_buf).unwrap();
+                trie.insert(&new_minter_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
+                    .unwrap();
+                trie.insert(asset_hash_minter_key, &bin_new_minter).unwrap();
+                trie.insert(&minter_fee_key, &minter_fee_balance.to_bytes())
+                    .unwrap();
             }
             Err(err) => panic!(err),
         }
