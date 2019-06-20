@@ -103,6 +103,8 @@ impl HashTrait for HardBlock {
 }
 
 impl Block for HardBlock {
+    type TipState = ();
+
     fn genesis() -> Arc<HardBlock> {
         GENESIS_RC.clone()
     }
@@ -135,7 +137,7 @@ impl Block for HardBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(FnMut(Arc<HardBlock>) -> bool)>> {
+    fn append_condition() -> Option<Box<(FnMut(Arc<HardBlock>, Self::TipState) -> bool)>> {
         None
     }
 

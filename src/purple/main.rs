@@ -64,6 +64,7 @@ static GLOBAL: System = System;
 const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
 const COLUMN_FAMILIES: &'static [&'static str] = &[
+    "state_chain",
     "easy_chain",
     "hard_chain",
     "node_storage",
@@ -79,11 +80,12 @@ fn main() {
 
     let mut node_storage = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[3]));
     let state_db = PersistentDb::new(db.clone(), None);
-    let easy_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[0]));
-    let hard_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[1]));
-    let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_db)));
-    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_db)));
-    let state_chain = Arc::new(RwLock::new(StateChain::new(state_db)));
+    let state_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[0]));
+    let easy_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[1]));
+    let hard_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[2]));
+    let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_chain_db, ())));
+    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_chain_db, ())));
+    let state_chain = Arc::new(RwLock::new(StateChain::new(state_chain_db, state_db)));
     let easy_chain = EasyChainRef::new(easy_chain);
     let hard_chain = HardChainRef::new(hard_chain);
     let state_chain = StateChainRef::new(state_chain);

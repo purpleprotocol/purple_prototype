@@ -151,6 +151,9 @@ pub struct Chain<B: Block> {
     /// The tip block of the canonical chain.
     canonical_tip: Arc<B>,
 
+    /// The state associated with the canonical tip
+    canonical_tip_state: B::TipState,
+
     /// Memory pool of blocks that are not in the canonical chain.
     orphan_pool: HashMap<Hash, Arc<B>>,
 
@@ -177,10 +180,13 @@ pub struct Chain<B: Block> {
     /// Set containing tips of valid chains that descend
     /// from the canonical chain.
     valid_tips: HashSet<Hash>,
+
+    /// Validation states associated with the valid tips
+    valid_tips_states: HashMap<Hash, B::TipState>,
 }
 
 impl<B: Block> Chain<B> {
-    pub fn new(mut db_ref: PersistentDb) -> Chain<B> {
+    pub fn new(mut db_ref: PersistentDb, canonical_tip_state: B::TipState) -> Chain<B> {
         let tip_db_res = db_ref.get(&TIP_KEY);
         let canonical_tip = match tip_db_res.clone() {
             Some(tip) => {
@@ -212,6 +218,7 @@ impl<B: Block> Chain<B> {
 
         Chain {
             canonical_tip,
+            canonical_tip_state,
             orphan_pool: HashMap::with_capacity(MAX_ORPHANS),
             heights_mapping: HashMap::with_capacity(MAX_ORPHANS),
             validations_mapping: HashMap::with_capacity(MAX_ORPHANS),
@@ -219,6 +226,7 @@ impl<B: Block> Chain<B> {
             disconnected_heads_heights: HashMap::with_capacity(MAX_ORPHANS),
             disconnected_tips_mapping: HashMap::with_capacity(MAX_ORPHANS),
             valid_tips: HashSet::with_capacity(MAX_ORPHANS),
+            valid_tips_states: HashMap::with_capacity(MAX_ORPHANS),
             max_orphan_height: None,
             height,
             db: db_ref,
@@ -1331,6 +1339,8 @@ mod tests {
     }
 
     impl Block for DummyBlock {
+        type TipState = ();
+
         fn genesis() -> Arc<Self> {
             let genesis = DummyBlock {
                 hash: Hash::NULL,
@@ -1366,7 +1376,7 @@ mod tests {
             None
         }
 
-        fn append_condition() -> Option<Box<(FnMut(Arc<DummyBlock>) -> bool)>> {
+        fn append_condition() -> Option<Box<(FnMut(Arc<DummyBlock>, Self::TipState) -> bool)>> {
             None
         }
 
@@ -1417,7 +1427,7 @@ mod tests {
     #[test]
     fn it_rewinds_to_genesis() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, ());
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -1462,7 +1472,7 @@ mod tests {
     #[test]
     fn stages_append_test1() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, ());
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -1604,7 +1614,7 @@ mod tests {
     #[test]
     fn stages_append_test2() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, ());
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -1801,7 +1811,7 @@ mod tests {
     /// of appended blocks.
     fn stages_append_test3() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, ());
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -3474,7 +3484,7 @@ mod tests {
     /// tip instead of G at commit hash `d0ad0bd6a7422f6308b96a34a6f7725662c8b7d4`.
     fn stages_append_test4() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, ());
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -6232,7 +6242,7 @@ mod tests {
         /// the height of the chain must be that of `G` which is 7.
         fn append_stress_test() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db);
+            let mut hard_chain = Chain::<DummyBlock>::new(db, ());
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -6335,7 +6345,7 @@ mod tests {
 
         fn it_rewinds_correctly1() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db);
+            let mut hard_chain = Chain::<DummyBlock>::new(db, ());
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -6411,7 +6421,7 @@ mod tests {
 
         fn it_rewinds_correctly2() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db);
+            let mut hard_chain = Chain::<DummyBlock>::new(db, ());
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);

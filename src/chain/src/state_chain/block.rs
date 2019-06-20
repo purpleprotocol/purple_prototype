@@ -25,6 +25,7 @@ use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
 use crypto::Hash;
+use persistence::PersistentDb;
 use lazy_static::*;
 use std::boxed::Box;
 use std::hash::Hash as HashTrait;
@@ -106,6 +107,8 @@ impl HashTrait for StateBlock {
 }
 
 impl Block for StateBlock {
+    type TipState = PersistentDb;
+
     fn genesis() -> Arc<StateBlock> {
         GENESIS_RC.clone()
     }
@@ -138,7 +141,7 @@ impl Block for StateBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(FnMut(Arc<StateBlock>) -> bool)>> {
+    fn append_condition() -> Option<Box<(FnMut(Arc<StateBlock>, Self::TipState) -> bool)>> {
         None
     }
 

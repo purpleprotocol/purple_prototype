@@ -25,6 +25,9 @@ use std::net::SocketAddr;
 
 /// Generic block interface
 pub trait Block {
+    /// Per tip validation state
+    type TipState: Clone;
+
     /// Returns the genesis block.
     fn genesis() -> Arc<Self>;
 
@@ -48,7 +51,7 @@ pub trait Block {
 
     /// Condition that must result in `true` for a block to be appended
     /// to the chain.
-    fn append_condition() -> Option<Box<(FnMut(Arc<Self>) -> bool)>>;
+    fn append_condition() -> Option<Box<(FnMut(Arc<Self>, Self::TipState) -> bool)>>;
 
     /// Serializes the block.
     fn to_bytes(&self) -> Vec<u8>;

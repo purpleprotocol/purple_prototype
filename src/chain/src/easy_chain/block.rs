@@ -93,6 +93,8 @@ impl HashTrait for EasyBlock {
 }
 
 impl Block for EasyBlock {
+    type TipState = ();
+
     fn genesis() -> Arc<EasyBlock> {
         GENESIS_RC.clone()
     }
@@ -125,7 +127,7 @@ impl Block for EasyBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(FnMut(Arc<EasyBlock>) -> bool)>> {
+    fn append_condition() -> Option<Box<(FnMut(Arc<EasyBlock>, Self::TipState) -> bool)>> {
         None
     }
 
