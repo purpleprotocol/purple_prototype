@@ -137,7 +137,7 @@ impl Block for HardBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(FnMut(Arc<HardBlock>, Self::TipState) -> bool)>> {
+    fn append_condition() -> Option<Box<(Fn(Arc<HardBlock>, Self::TipState) -> Result<Self::TipState, ()>)>> {
         None
     }
 

@@ -28,6 +28,24 @@ pub trait Block {
     /// Per tip validation state
     type TipState: Clone;
 
+    /// Size of the block cache.
+    const BLOCK_CACHE_SIZE: usize = 20;
+
+    /// Maximum orphans allowed.
+    #[cfg(not(test))]
+    const MAX_ORPHANS: usize = 100;
+
+    #[cfg(test)]
+    const MAX_ORPHANS: usize = 20;
+
+    /// Blocks with height below the canonical height minus
+    /// this number will be rejected.
+    const MIN_HEIGHT: u64 = 10;
+
+    /// Blocks with height above the canonical height plus
+    /// this number will be rejected.
+    const MAX_HEIGHT: u64 = 10;
+
     /// Returns the genesis block.
     fn genesis() -> Arc<Self>;
 
@@ -49,9 +67,11 @@ pub trait Block {
     /// Callback that executes after a block is written to a chain.
     fn after_write() -> Option<Box<FnMut(Arc<Self>)>>;
 
-    /// Condition that must result in `true` for a block to be appended
-    /// to the chain.
-    fn append_condition() -> Option<Box<(FnMut(Arc<Self>, Self::TipState) -> bool)>>;
+    /// Condition that must result if successful, returns the state
+    /// that is to be associated with the new appended block.
+    /// 
+    /// If this functions returns an `Err`, the block will not be appended.
+    fn append_condition() -> Option<Box<(Fn(Arc<Self>, Self::TipState) -> Result<Self::TipState, ()>)>>;
 
     /// Serializes the block.
     fn to_bytes(&self) -> Vec<u8>;

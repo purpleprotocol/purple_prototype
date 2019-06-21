@@ -127,7 +127,7 @@ impl Block for EasyBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(FnMut(Arc<EasyBlock>, Self::TipState) -> bool)>> {
+    fn append_condition() -> Option<Box<(Fn(Arc<EasyBlock>, Self::TipState) -> Result<Self::TipState, ()>)>> {
         None
     }
 

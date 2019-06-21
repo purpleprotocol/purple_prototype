@@ -50,25 +50,10 @@ pub enum ChainErr {
 
     /// The orphan pool is full.
     TooManyOrphans,
+
+    /// The append condition returned false
+    BadAppendCondition,
 }
-
-/// Size of the block cache.
-const BLOCK_CACHE_SIZE: usize = 20;
-
-/// Maximum orphans allowed.
-#[cfg(not(test))]
-const MAX_ORPHANS: usize = 100;
-
-#[cfg(test)]
-const MAX_ORPHANS: usize = 20;
-
-/// Blocks with height below the canonical height minus
-/// this number will be rejected.
-const MIN_HEIGHT: u64 = 10;
-
-/// Blocks with height below the canonical height minus
-/// this number will be rejected.
-const MAX_HEIGHT: u64 = 10;
 
 lazy_static! {
     /// Canonical tip block key
@@ -92,7 +77,7 @@ impl<B: Block> ChainRef<B> {
     pub fn new(chain: Arc<RwLock<Chain<B>>>) -> ChainRef<B> {
         ChainRef {
             chain,
-            block_cache: Arc::new(Mutex::new(LruCache::new(BLOCK_CACHE_SIZE))),
+            block_cache: Arc::new(Mutex::new(LruCache::new(B::BLOCK_CACHE_SIZE))),
         }
     }
 
@@ -219,14 +204,14 @@ impl<B: Block> Chain<B> {
         Chain {
             canonical_tip,
             canonical_tip_state,
-            orphan_pool: HashMap::with_capacity(MAX_ORPHANS),
-            heights_mapping: HashMap::with_capacity(MAX_ORPHANS),
-            validations_mapping: HashMap::with_capacity(MAX_ORPHANS),
-            disconnected_heads_mapping: HashMap::with_capacity(MAX_ORPHANS),
-            disconnected_heads_heights: HashMap::with_capacity(MAX_ORPHANS),
-            disconnected_tips_mapping: HashMap::with_capacity(MAX_ORPHANS),
-            valid_tips: HashSet::with_capacity(MAX_ORPHANS),
-            valid_tips_states: HashMap::with_capacity(MAX_ORPHANS),
+            orphan_pool: HashMap::with_capacity(B::MAX_ORPHANS),
+            heights_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
+            validations_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
+            disconnected_heads_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
+            disconnected_heads_heights: HashMap::with_capacity(B::MAX_ORPHANS),
+            disconnected_tips_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
+            valid_tips: HashSet::with_capacity(B::MAX_ORPHANS),
+            valid_tips_states: HashMap::with_capacity(B::MAX_ORPHANS),
             max_orphan_height: None,
             height,
             db: db_ref,
@@ -530,10 +515,29 @@ impl<B: Block> Chain<B> {
 
                         // If the orphan directly follows the canonical
                         // tip, write it to the chain.
-                        if orphan.parent_hash().unwrap() == self.canonical_tip.block_hash().unwrap()
+                        if orphan.parent_hash().unwrap() == self.canonical_tip.block_hash().unwrap() 
                         {
+                            // Verify append condition
+                            let append_condition = if let Some(append_condition) = B::append_condition() {
+                                match append_condition(orphan.clone(), self.canonical_tip_state.clone()) {
+                                    // Set new tip state if the append can proceed
+                                    Ok(new_tip_state) => {
+                                        self.canonical_tip_state = new_tip_state;
+                                        true
+                                    },
+                                    _ => false
+                                }
+                            } else {
+                                true
+                            };
+
                             if !done {
-                                self.write_block(orphan.clone());
+                                // Verify append condition
+                                if append_condition {
+                                    self.write_block(orphan.clone());
+                                } else {
+                                    done = true;
+                                }
                             } else {
                                 break;
                             }
@@ -563,22 +567,59 @@ impl<B: Block> Chain<B> {
                             let canonical_tip = self.canonical_tip.block_hash().unwrap();
 
                             if orphan_parent == canonical_tip {
-                                buf.push((o.clone(), i_h.clone()));
+                                let append_condition = if let Some(append_condition) = B::append_condition() {
+                                    match append_condition(orphan.clone(), self.canonical_tip_state.clone()) {
+                                        // Set new tip state if the append can proceed
+                                        Ok(new_tip_state) => {
+                                            self.canonical_tip_state = new_tip_state;
+                                            true
+                                        },
+                                        _ => false
+                                    }
+                                } else {
+                                    true
+                                };
+
+                                if append_condition {
+                                    buf.push((o.clone(), i_h.clone()));
+                                } else {
+                                    // TODO: Maybe cleanup here?
+                                }
                             } else if prev_valid_tips.contains(&orphan_parent) {
-                                // Mark old tip as belonging to valid chain
-                                let parent_status =
-                                    self.validations_mapping.get_mut(&orphan_parent).unwrap();
-                                *parent_status = OrphanType::BelongsToValidChain;
+                                let append_condition = if let Some(append_condition) = B::append_condition() {
+                                    let parent_state = self.valid_tips_states.get(&orphan_parent).unwrap();
 
-                                // Mark new tip
-                                let status = self.validations_mapping.get_mut(&o).unwrap();
-                                *status = OrphanType::ValidChainTip;
+                                    match append_condition(orphan.clone(), parent_state.clone()) {
+                                        // Set new tip state if the append can proceed
+                                        Ok(new_tip_state) => {
+                                            self.valid_tips_states.remove(&orphan_parent);
+                                            self.valid_tips_states.insert(o.clone(), new_tip_state);
+                                            true
+                                        },
+                                        _ => false
+                                    }
+                                } else {
+                                    true
+                                };
 
-                                // Add to valid tips sets
-                                self.valid_tips.remove(&orphan_parent);
-                                self.valid_tips.insert(o.clone());
-                                prev_valid_tips.remove(&orphan_parent);
-                                prev_valid_tips.insert(o.clone());
+                                if append_condition {
+                                    // Mark old tip as belonging to valid chain
+                                    let parent_status =
+                                        self.validations_mapping.get_mut(&orphan_parent).unwrap();
+                                    *parent_status = OrphanType::BelongsToValidChain;
+
+                                    // Mark new tip
+                                    let status = self.validations_mapping.get_mut(&o).unwrap();
+                                    *status = OrphanType::ValidChainTip;
+
+                                    // Add to valid tips sets
+                                    self.valid_tips.remove(&orphan_parent);
+                                    self.valid_tips.insert(o.clone());
+                                    prev_valid_tips.remove(&orphan_parent);
+                                    prev_valid_tips.insert(o.clone());
+                                } else {
+                                    // TODO: Maybe cleanup here?
+                                }
                             }
                         }
 
@@ -678,7 +719,7 @@ impl<B: Block> Chain<B> {
     /// disconnected chains. Returns the final status of the tip.
     fn attempt_attach(&mut self, tip_hash: &Hash, initial_status: OrphanType) -> OrphanType {
         let mut status = initial_status;
-        let mut to_attach = Vec::with_capacity(MAX_ORPHANS);
+        let mut to_attach = Vec::with_capacity(B::MAX_ORPHANS);
         let our_head_hash = self.disconnected_tips_mapping.get(tip_hash).unwrap();
 
         // Find a matching disconnected chain head
@@ -931,13 +972,13 @@ impl<B: Block> Chain<B> {
     }
 
     pub fn append_block(&mut self, block: Arc<B>) -> Result<(), ChainErr> {
-        let min_height = if self.height > MIN_HEIGHT {
-            self.height - MIN_HEIGHT
+        let min_height = if self.height > B::MIN_HEIGHT {
+            self.height - B::MIN_HEIGHT
         } else {
             1
         };
 
-        if block.height() > self.height + MAX_HEIGHT || block.height() < min_height {
+        if block.height() > self.height + B::MAX_HEIGHT || block.height() < min_height {
             return Err(ChainErr::BadHeight);
         }
 
@@ -954,22 +995,39 @@ impl<B: Block> Chain<B> {
             // First attempt to place the block after the
             // tip canonical block.
             if parent_hash == tip.block_hash().unwrap() {
+                let height = block.height();
+                
                 // The height must be equal to that of the parent plus one
-                if block.height() != self.height + 1 {
+                if height != self.height + 1 {
                     return Err(ChainErr::BadHeight);
                 }
 
-                let height = block.height();
+                let append_condition = if let Some(append_condition) = B::append_condition() {
+                    match append_condition(block.clone(), self.canonical_tip_state.clone()) {
+                        // Set new tip state if the append can proceed
+                        Ok(new_tip_state) => {
+                            self.canonical_tip_state = new_tip_state;
+                            true
+                        },
+                        _ => false
+                    }
+                } else {
+                    true
+                };
 
-                // Write block to the chain
-                self.write_block(block);
+                if append_condition {
+                    // Write block to the chain
+                    self.write_block(block);
 
-                // Process orphans
-                self.process_orphans(height + 1);
+                    // Process orphans
+                    self.process_orphans(height + 1);
 
-                Ok(())
+                    Ok(())
+                } else {
+                    Err(ChainErr::BadAppendCondition)
+                }
             } else {
-                if self.orphan_pool.len() >= MAX_ORPHANS {
+                if self.orphan_pool.len() >= B::MAX_ORPHANS {
                     return Err(ChainErr::TooManyOrphans);
                 }
 
@@ -978,6 +1036,7 @@ impl<B: Block> Chain<B> {
                 // potential fork in the chain so we add it to the
                 // orphan pool.
                 match self.db.get(&parent_hash) {
+                    // TODO: If we have tip states, reload state from checkpoint here
                     Some(parent_block) => {
                         let height = block.height();
                         let parent_height = B::from_bytes(&parent_block).unwrap().height();
@@ -1069,37 +1128,56 @@ impl<B: Block> Chain<B> {
                                     }
                                 }
                                 OrphanType::ValidChainTip => {
-                                    // Change status of old tip
-                                    *parent_status = OrphanType::BelongsToValidChain;
+                                    let append_condition = if let Some(append_condition) = B::append_condition() {
+                                        let tip_state = self.valid_tips_states.get_mut(&parent_hash).unwrap();
 
-                                    let mut status = OrphanType::ValidChainTip;
-                                    let mut tip = block.clone();
-                                    let mut inverse_height = 0;
+                                        match append_condition(block.clone(), tip_state.clone()) {
+                                            // Set new tip state if the append can proceed
+                                            Ok(new_tip_state) => {
+                                                *tip_state = new_tip_state;
+                                                true
+                                            },
+                                            _ => false
+                                        }
+                                    } else {
+                                        true
+                                    };
 
-                                    // Mark orphan as the new tip
-                                    self.write_orphan(block.clone(), status, inverse_height);
+                                    if append_condition {
+                                        // Change status of old tip
+                                        *parent_status = OrphanType::BelongsToValidChain;
 
-                                    // Attempt to attach to disconnected chains
-                                    self.attempt_attach_valid(
-                                        &mut tip,
-                                        &mut inverse_height,
-                                        &mut status,
-                                    );
+                                        let mut status = OrphanType::ValidChainTip;
+                                        let mut tip = block.clone();
+                                        let mut inverse_height = 0;
 
-                                    // Recurse parents and modify their inverse heights
-                                    self.recurse_inverse(
-                                        block.clone(),
-                                        inverse_height,
-                                        inverse_height == 0,
-                                    );
+                                        // Mark orphan as the new tip
+                                        self.write_orphan(block.clone(), status, inverse_height);
 
-                                    // Update tips set
-                                    self.valid_tips.remove(&parent_hash);
-                                    self.valid_tips.insert(tip.block_hash().unwrap());
+                                        // Attempt to attach to disconnected chains
+                                        self.attempt_attach_valid(
+                                            &mut tip,
+                                            &mut inverse_height,
+                                            &mut status,
+                                        );
 
-                                    // Check if the new tip's height is greater than
-                                    // the canonical chain, and if so, switch chains.
-                                    self.attempt_switch(tip);
+                                        // Recurse parents and modify their inverse heights
+                                        self.recurse_inverse(
+                                            block.clone(),
+                                            inverse_height,
+                                            inverse_height == 0,
+                                        );
+
+                                        // Update tips set
+                                        self.valid_tips.remove(&parent_hash);
+                                        self.valid_tips.insert(tip.block_hash().unwrap());
+
+                                        // Check if the new tip's height is greater than
+                                        // the canonical chain, and if so, switch chains.
+                                        self.attempt_switch(tip);
+                                    } else {
+                                        return Err(ChainErr::BadAppendCondition);
+                                    }
                                 }
                                 OrphanType::BelongsToDisconnected => {
                                     self.write_orphan(
@@ -1160,6 +1238,9 @@ impl<B: Block> Chain<B> {
                                     }
                                 }
                                 OrphanType::BelongsToValidChain => {
+                                    // TODO: Add append condition and recalculate from 
+                                    // the head state of the branch.
+
                                     let mut status = OrphanType::ValidChainTip;
                                     let mut tip = block.clone();
                                     let mut inverse_height = 0;
@@ -1376,7 +1457,8 @@ mod tests {
             None
         }
 
-        fn append_condition() -> Option<Box<(FnMut(Arc<DummyBlock>, Self::TipState) -> bool)>> {
+        fn append_condition() -> Option<Box<(Fn(Arc<DummyBlock>, Self::TipState) -> Result<Self::TipState, ()>)>> {
+            //Some(Box::new(|_block, state: ()| Ok(state.clone())))
             None
         }
 

@@ -141,7 +141,7 @@ impl Block for StateBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(FnMut(Arc<StateBlock>, Self::TipState) -> bool)>> {
+    fn append_condition() -> Option<Box<(Fn(Arc<StateBlock>, Self::TipState) -> Result<Self::TipState, ()>)>> {
         None
     }
 
