@@ -18,6 +18,7 @@
 
 use crate::block::Block;
 use crate::orphan_type::OrphanType;
+use common::checkpointable::*;
 use bin_tools::*;
 use crypto::Hash;
 use elastic_array::ElasticArray128;
@@ -53,6 +54,9 @@ pub enum ChainErr {
 
     /// The append condition returned false
     BadAppendCondition,
+
+    /// Could not find a matching checkpoint
+    NoCheckpointFound,
 }
 
 lazy_static! {
@@ -61,6 +65,12 @@ lazy_static! {
 
     /// The key to the canonical height of the chain
     static ref CANONICAL_HEIGHT_KEY: Hash = { crypto::hash_slice(b"canonical_height") };
+
+    /// The key of the height that has the earliest checkpoint
+    static ref EARLIEST_CHECKPOINT_KEY: Hash = { crypto::hash_slice(b"earliest_checkpoint") };
+
+    /// The key of the height that has the last checkpoint
+    static ref LAST_CHECKPOINT_KEY: Hash = { crypto::hash_slice(b"last_checkpoint") };
 }
 
 #[derive(Clone)]
@@ -137,7 +147,7 @@ pub struct Chain<B: Block> {
     canonical_tip: Arc<B>,
 
     /// The state associated with the canonical tip
-    canonical_tip_state: B::TipState,
+    canonical_tip_state: B::ChainState,
 
     /// Memory pool of blocks that are not in the canonical chain.
     orphan_pool: HashMap<Hash, Arc<B>>,
@@ -148,6 +158,16 @@ pub struct Chain<B: Block> {
     /// Mapping between heights and their sets of
     /// orphans mapped to their inverse height.
     heights_mapping: HashMap<u64, HashMap<Hash, u64>>,
+
+    /// Mapping between heights that have checkpoints 
+    /// and the corresponding checkpoint id.
+    disk_heights_checkpoints: HashMap<u64, u64>,
+
+    /// Height of the last state that has a checkpoint
+    last_checkpoint_height: Option<u64>,
+
+    /// Earliest height to have a checkpoint
+    earliest_checkpoint_height: Option<u64>,
 
     /// Mapping between orphans and their orphan types/validation statuses.
     validations_mapping: HashMap<Hash, OrphanType>,
@@ -167,11 +187,14 @@ pub struct Chain<B: Block> {
     valid_tips: HashSet<Hash>,
 
     /// Validation states associated with the valid tips
-    valid_tips_states: HashMap<Hash, B::TipState>,
+    valid_tips_states: HashMap<Hash, B::ChainState>,
+
+    /// Whether the chain is in archival mode or not
+    archival_mode: bool,
 }
 
 impl<B: Block> Chain<B> {
-    pub fn new(mut db_ref: PersistentDb, canonical_tip_state: B::TipState) -> Chain<B> {
+    pub fn new(mut db_ref: PersistentDb, canonical_tip_state: B::ChainState, archival_mode: bool) -> Chain<B> {
         let tip_db_res = db_ref.get(&TIP_KEY);
         let canonical_tip = match tip_db_res.clone() {
             Some(tip) => {
@@ -199,6 +222,16 @@ impl<B: Block> Chain<B> {
             }
         };
 
+        let earliest_checkpoint_height = match db_ref.get(&EARLIEST_CHECKPOINT_KEY) {
+            Some(height) => Some(decode_be_u64!(&height).unwrap()),
+            None => None
+        };
+
+        let last_checkpoint_height = match db_ref.get(&LAST_CHECKPOINT_KEY) {
+            Some(height) => Some(decode_be_u64!(&height).unwrap()),
+            None => None
+        };
+
         let height = height;
 
         Chain {
@@ -212,7 +245,11 @@ impl<B: Block> Chain<B> {
             disconnected_tips_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
             valid_tips: HashSet::with_capacity(B::MAX_ORPHANS),
             valid_tips_states: HashMap::with_capacity(B::MAX_ORPHANS),
+            disk_heights_checkpoints: HashMap::with_capacity(B::MAX_CHECKPOINTS),
+            last_checkpoint_height,
+            earliest_checkpoint_height,
             max_orphan_height: None,
+            archival_mode,
             height,
             db: db_ref,
         }
@@ -365,6 +402,12 @@ impl<B: Block> Chain<B> {
         self.db.emplace(
             block_height_key,
             ElasticArray128::<u8>::from_slice(&encoded_height),
+        );
+
+        // Write height mapping
+        self.db.emplace(
+            crypto::hash_slice(&encoded_height),
+            ElasticArray128::<u8>::from_slice(&block_hash.0)
         );
 
         // Remove block from orphan pool
@@ -1046,20 +1089,92 @@ impl<B: Block> Chain<B> {
                             return Err(ChainErr::BadHeight);
                         }
 
-                        let mut status = OrphanType::ValidChainTip;
-                        let mut tip = block.clone();
-                        let mut _inverse_height = 0;
+                        if let Some(append_condition) = B::append_condition() {
+                            let parent_state: B::ChainState = if let (Some(earliest_checkpoint_height), Some(last_checkpoint_height)) = (self.earliest_checkpoint_height, self.last_checkpoint_height) {
+                                if parent_height < earliest_checkpoint_height {
+                                    return Err(ChainErr::NoCheckpointFound);
+                                }
 
-                        self.write_orphan(block, OrphanType::ValidChainTip, 0);
-                        self.attempt_attach_valid(&mut tip, &mut _inverse_height, &mut status);
+                                if parent_height == last_checkpoint_height {
+                                    // Simply retrieve checkpointed state in this case
+                                    let id = self.disk_heights_checkpoints.get(&parent_height).unwrap();
+                                    
+                                    // Load disk state
+                                    if let Ok(state) = B::ChainState::load_from_disk(*id) {
+                                        state
+                                    } else {
+                                        panic!("Could not find disk state!");
+                                    }
+                                } else if parent_height > last_checkpoint_height {
+                                    // Simply retrieve checkpointed state in this case
+                                    let id = self.disk_heights_checkpoints.get(&parent_height).unwrap();
+                                    
+                                    // Load disk state
+                                    let mut state = if let Ok(state) = B::ChainState::load_from_disk(*id) {
+                                        state
+                                    } else {
+                                        panic!("Could not find disk state!");
+                                    };
 
-                        if let OrphanType::ValidChainTip = status {
-                            // Do nothing
+                                    let mut cur_height = parent_height + 1;
+
+                                    // TODO: Calculate state from the last checkpoint state
+                                    loop {
+                                        unimplemented!();
+                                    }
+
+                                    state
+                                } else {
+                                    unimplemented!();
+                                }
+                            } else {
+                                return Err(ChainErr::NoCheckpointFound);
+                            };
+
+                            let tip_state = match append_condition(block.clone(), parent_state) {
+                                Ok(new_tip_state) => {
+                                    Some(new_tip_state)
+                                },
+                                _ => None
+                            };
+
+                            if let Some(tip_state) = tip_state {
+                                // Insert new state to valid tips mapping
+                                self.valid_tips_states.insert(block.block_hash().unwrap(), tip_state);
+                                
+                                let mut status = OrphanType::ValidChainTip;
+                                let mut tip = block.clone();
+                                let mut _inverse_height = 0;
+
+                                self.write_orphan(block, OrphanType::ValidChainTip, 0);
+                                self.attempt_attach_valid(&mut tip, &mut _inverse_height, &mut status);
+
+                                if let OrphanType::ValidChainTip = status {
+                                    // Do nothing
+                                } else {
+                                    self.attempt_switch(tip);
+                                }
+
+                                Ok(())
+                            } else {
+                                Err(ChainErr::BadAppendCondition)
+                            }
                         } else {
-                            self.attempt_switch(tip);
-                        }
+                            let mut status = OrphanType::ValidChainTip;
+                            let mut tip = block.clone();
+                            let mut _inverse_height = 0;
 
-                        Ok(())
+                            self.write_orphan(block, OrphanType::ValidChainTip, 0);
+                            self.attempt_attach_valid(&mut tip, &mut _inverse_height, &mut status);
+
+                            if let OrphanType::ValidChainTip = status {
+                                // Do nothing
+                            } else {
+                                self.attempt_switch(tip);
+                            }
+
+                            Ok(())
+                        }
                     }
                     None => {
                         // The parent is an orphan
@@ -1420,7 +1535,7 @@ mod tests {
     }
 
     impl Block for DummyBlock {
-        type TipState = ();
+        type ChainState = DummyCheckpoint;
 
         fn genesis() -> Arc<Self> {
             let genesis = DummyBlock {
@@ -1457,7 +1572,7 @@ mod tests {
             None
         }
 
-        fn append_condition() -> Option<Box<(Fn(Arc<DummyBlock>, Self::TipState) -> Result<Self::TipState, ()>)>> {
+        fn append_condition() -> Option<Box<(Fn(Arc<DummyBlock>, Self::ChainState) -> Result<Self::ChainState, ()>)>> {
             //Some(Box::new(|_block, state: ()| Ok(state.clone())))
             None
         }
@@ -1509,7 +1624,7 @@ mod tests {
     #[test]
     fn it_rewinds_to_genesis() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, ());
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -1554,7 +1669,7 @@ mod tests {
     #[test]
     fn stages_append_test1() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, ());
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -1696,7 +1811,7 @@ mod tests {
     #[test]
     fn stages_append_test2() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, ());
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -1893,7 +2008,7 @@ mod tests {
     /// of appended blocks.
     fn stages_append_test3() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, ());
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -3566,7 +3681,7 @@ mod tests {
     /// tip instead of G at commit hash `d0ad0bd6a7422f6308b96a34a6f7725662c8b7d4`.
     fn stages_append_test4() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, ());
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -6324,7 +6439,7 @@ mod tests {
         /// the height of the chain must be that of `G` which is 7.
         fn append_stress_test() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, ());
+            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -6427,7 +6542,7 @@ mod tests {
 
         fn it_rewinds_correctly1() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, ());
+            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -6503,7 +6618,7 @@ mod tests {
 
         fn it_rewinds_correctly2() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, ());
+            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);

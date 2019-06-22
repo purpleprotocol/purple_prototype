@@ -17,6 +17,7 @@
 */
 
 use crypto::Hash;
+use common::{Checkpointable, StorageLocation};
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
 use hashdb::{AsHashDB, HashDB};
@@ -205,6 +206,20 @@ impl PersistentDb {
                 Err(err) => panic!(err),
             }
         }
+    }
+}
+
+impl Checkpointable for PersistentDb {
+    fn checkpoint(&self) -> u64 {
+        unimplemented!();
+    }
+
+    fn load_from_disk(id: u64) -> Result<PersistentDb, ()> {
+        unimplemented!();
+    }
+
+    fn storage_location(&self) -> StorageLocation {
+        unimplemented!();
     }
 }
 

@@ -39,7 +39,9 @@ extern crate parking_lot;
 extern crate persistence;
 extern crate tokio;
 extern crate rocksdb;
+extern crate common;
 
+use common::checkpointable::DummyCheckpoint;
 use rocksdb::DB;
 use clap::{App, Arg};
 use crypto::{NodeId, Identity, SecretKey as Sk};
@@ -83,9 +85,9 @@ fn main() {
     let state_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[0]));
     let easy_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[1]));
     let hard_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[2]));
-    let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_chain_db, ())));
-    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_chain_db, ())));
-    let state_chain = Arc::new(RwLock::new(StateChain::new(state_chain_db, state_db)));
+    let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_chain_db, DummyCheckpoint::new(StorageLocation::Disk), argv.archival_mode)));
+    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_chain_db, DummyCheckpoint::new(StorageLocation::Disk), argv.archival_mode)));
+    let state_chain = Arc::new(RwLock::new(StateChain::new(state_chain_db, state_db, argv.archival_mode)));
     let easy_chain = EasyChainRef::new(easy_chain);
     let hard_chain = HardChainRef::new(hard_chain);
     let state_chain = StateChainRef::new(state_chain);

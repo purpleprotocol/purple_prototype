@@ -17,6 +17,7 @@
 */
 
 use crate::{EasyBlock, HardBlock, StateBlock};
+use common::Checkpointable;
 use chrono::prelude::*;
 use crypto::Hash;
 use std::boxed::Box;
@@ -26,7 +27,7 @@ use std::net::SocketAddr;
 /// Generic block interface
 pub trait Block {
     /// Per tip validation state
-    type TipState: Clone;
+    type ChainState: Clone + Checkpointable;
 
     /// Size of the block cache.
     const BLOCK_CACHE_SIZE: usize = 20;
@@ -45,6 +46,18 @@ pub trait Block {
     /// Blocks with height above the canonical height plus
     /// this number will be rejected.
     const MAX_HEIGHT: u64 = 10;
+
+    /// The number of blocks after which a state checkpoint will be made.
+    /// 
+    /// This number **MUST** be less or equal than the minimum accepted height.
+    const CHECKPOINT_INTERVAL: usize = 10;
+
+    /// Max checkpoints to keep.
+    const MAX_CHECKPOINTS: usize = 10;
+
+    /// How many blocks to keep behind the canonical chain
+    /// when it is in archival mode i.e. pruning is not enabled.
+    const BLOCKS_TO_KEEP: usize = 100;
 
     /// Returns the genesis block.
     fn genesis() -> Arc<Self>;
@@ -71,7 +84,7 @@ pub trait Block {
     /// that is to be associated with the new appended block.
     /// 
     /// If this functions returns an `Err`, the block will not be appended.
-    fn append_condition() -> Option<Box<(Fn(Arc<Self>, Self::TipState) -> Result<Self::TipState, ()>)>>;
+    fn append_condition() -> Option<Box<(Fn(Arc<Self>, Self::ChainState) -> Result<Self::ChainState, ()>)>>;
 
     /// Serializes the block.
     fn to_bytes(&self) -> Vec<u8>;

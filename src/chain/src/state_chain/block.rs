@@ -107,7 +107,7 @@ impl HashTrait for StateBlock {
 }
 
 impl Block for StateBlock {
-    type TipState = PersistentDb;
+    type ChainState = PersistentDb;
 
     fn genesis() -> Arc<StateBlock> {
         GENESIS_RC.clone()
@@ -141,7 +141,7 @@ impl Block for StateBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(Fn(Arc<StateBlock>, Self::TipState) -> Result<Self::TipState, ()>)>> {
+    fn append_condition() -> Option<Box<(Fn(Arc<StateBlock>, Self::ChainState) -> Result<Self::ChainState, ()>)>> {
         None
     }
 
