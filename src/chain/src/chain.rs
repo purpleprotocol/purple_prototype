@@ -276,6 +276,10 @@ impl<B: Block> Chain<B> {
         // and mark it as a valid chain tip.
         self.db.remove(&current.block_hash().unwrap());
 
+        // Remove current height entry
+        let current_height_key = crypto::hash_slice(&encode_be_u64!(current.height()));
+        self.db.remove(&current_height_key);
+
         // Add the old tip to the orphan pool
         self.orphan_pool
             .insert(current.block_hash().unwrap(), current.clone());
@@ -313,6 +317,10 @@ impl<B: Block> Chain<B> {
 
                 // Remove parent from db
                 self.db.remove(&parent_hash);
+
+                // Remove current height entry
+                let current_height_key = crypto::hash_slice(&encode_be_u64!(cur_height));
+                self.db.remove(&current_height_key);
 
                 // Add the parent to the orphan pool
                 self.orphan_pool
@@ -1647,6 +1655,14 @@ mod tests {
         let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
         let G = Arc::new(G);
 
+        let height_1_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 1]);
+        let height_2_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 2]);
+        let height_3_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 3]);
+        let height_4_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 4]);
+        let height_5_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 5]);
+        let height_6_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 6]);
+        let height_7_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 7]);
+
         hard_chain.append_block(A.clone()).unwrap();
         hard_chain.append_block(B.clone()).unwrap();
         hard_chain.append_block(C.clone()).unwrap();
@@ -1654,6 +1670,14 @@ mod tests {
         hard_chain.append_block(E.clone()).unwrap();
         hard_chain.append_block(F.clone()).unwrap();
         hard_chain.append_block(G.clone()).unwrap();
+
+        assert_eq!(hard_chain.db.get(&height_1_key).unwrap().to_vec(), A.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_2_key).unwrap().to_vec(), B.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_3_key).unwrap().to_vec(), C.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_4_key).unwrap().to_vec(), D.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_5_key).unwrap().to_vec(), E.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_6_key).unwrap().to_vec(), F.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_7_key).unwrap().to_vec(), G.block_hash().unwrap().0.to_vec());
 
         hard_chain.rewind(&DummyBlock::genesis().block_hash().unwrap()).unwrap();
 
@@ -1664,6 +1688,15 @@ mod tests {
         assert!(hard_chain.orphan_pool.get(&E.block_hash().unwrap()).is_some());
         assert!(hard_chain.orphan_pool.get(&F.block_hash().unwrap()).is_some());
         assert!(hard_chain.orphan_pool.get(&G.block_hash().unwrap()).is_some());
+
+        // Check for heights cleanup
+        assert!(hard_chain.db.get(&height_1_key).is_none());
+        assert!(hard_chain.db.get(&height_2_key).is_none());
+        assert!(hard_chain.db.get(&height_3_key).is_none());
+        assert!(hard_chain.db.get(&height_4_key).is_none());
+        assert!(hard_chain.db.get(&height_5_key).is_none());
+        assert!(hard_chain.db.get(&height_6_key).is_none());
+        assert!(hard_chain.db.get(&height_7_key).is_none());
     }
 
     #[test]
