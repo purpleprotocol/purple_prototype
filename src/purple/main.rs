@@ -23,6 +23,7 @@ extern crate unwrap;
 #[macro_use]
 extern crate jsonrpc_macros;
 
+extern crate mimalloc;
 extern crate chain;
 extern crate clap;
 extern crate crypto;
@@ -41,6 +42,7 @@ extern crate tokio;
 extern crate rocksdb;
 extern crate common;
 
+use mimalloc::MiMalloc;
 use common::checkpointable::DummyCheckpoint;
 use rocksdb::DB;
 use clap::{App, Arg};
@@ -61,7 +63,7 @@ use std::sync::mpsc::channel;
 
 // Enforce usage of system allocator.
 #[global_allocator]
-static GLOBAL: System = System;
+static GLOBAL: MiMalloc = MiMalloc;
 
 const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
