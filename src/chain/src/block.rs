@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::{EasyBlock, HardBlock, StateBlock};
+use crate::{ChainErr, EasyBlock, HardBlock, StateBlock};
 use common::Checkpointable;
 use chrono::prelude::*;
 use crypto::Hash;
@@ -84,7 +84,7 @@ pub trait Block {
     /// that is to be associated with the new appended block.
     /// 
     /// If this functions returns an `Err`, the block will not be appended.
-    fn append_condition() -> Option<Box<(Fn(Arc<Self>, Self::ChainState) -> Result<Self::ChainState, ()>)>>;
+    fn append_condition(block: Arc<Self>, chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr>;
 
     /// Serializes the block.
     fn to_bytes(&self) -> Vec<u8>;

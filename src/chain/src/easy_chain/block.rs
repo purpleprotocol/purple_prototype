@@ -17,6 +17,7 @@
 */
 
 use crate::block::Block;
+use crate::chain::ChainErr;
 use common::checkpointable::DummyCheckpoint;
 use bin_tools::*;
 use account::NormalAddress;
@@ -128,8 +129,8 @@ impl Block for EasyBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(Fn(Arc<EasyBlock>, Self::ChainState) -> Result<Self::ChainState, ()>)>> {
-        None
+    fn append_condition(_block: Arc<EasyBlock>, chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
+        Ok(chain_state)
     }
 
     fn to_bytes(&self) -> Vec<u8> {

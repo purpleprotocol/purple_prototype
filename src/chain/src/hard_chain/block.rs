@@ -17,6 +17,7 @@
 */
 
 use crate::block::Block;
+use crate::chain::ChainErr;
 use crate::easy_chain::block::EasyBlock;
 use common::checkpointable::DummyCheckpoint;
 use account::NormalAddress;
@@ -138,8 +139,8 @@ impl Block for HardBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(Fn(Arc<HardBlock>, Self::ChainState) -> Result<Self::ChainState, ()>)>> {
-        None
+    fn append_condition(_block: Arc<HardBlock>, chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
+        Ok(chain_state)
     }
 
     fn to_bytes(&self) -> Vec<u8> {

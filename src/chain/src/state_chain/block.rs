@@ -17,6 +17,7 @@
 */
 
 use crate::block::Block;
+use crate::chain::ChainErr;
 use crate::hard_chain::block::HardBlock;
 use events::Event;
 use account::NormalAddress;
@@ -141,8 +142,8 @@ impl Block for StateBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(Fn(Arc<StateBlock>, Self::ChainState) -> Result<Self::ChainState, ()>)>> {
-        None
+    fn append_condition(_block: Arc<StateBlock>, chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
+        Ok(chain_state)
     }
 
     fn to_bytes(&self) -> Vec<u8> {
