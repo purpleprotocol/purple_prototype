@@ -23,7 +23,7 @@ extern crate unwrap;
 #[macro_use]
 extern crate jsonrpc_macros;
 
-extern crate mimalloc;
+//extern crate mimalloc;
 extern crate chain;
 extern crate clap;
 extern crate crypto;
@@ -42,9 +42,9 @@ extern crate tokio;
 extern crate rocksdb;
 extern crate common;
 
-use mimalloc::MiMalloc;
+//use mimalloc::MiMalloc;
 use common::checkpointable::DummyCheckpoint;
-use rocksdb::DB;
+use rocksdb::{ColumnFamilyDescriptor, DB};
 use clap::{App, Arg};
 use crypto::{NodeId, Identity, SecretKey as Sk};
 use elastic_array::ElasticArray128;
@@ -61,9 +61,13 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::mpsc::channel;
 
+// Use mimalloc allocator
+// #[global_allocator]
+// static GLOBAL: MiMalloc = MiMalloc;
+
 // Enforce usage of system allocator.
 #[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
+static GLOBAL: System = System;
 
 const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
@@ -171,7 +175,13 @@ fn open_database(network_name: &str) -> DB {
         .join(network_name)
         .join("db");
 
-    DB::open_default(path.to_str().unwrap()).unwrap()
+    let mut cfs: Vec<ColumnFamilyDescriptor> = Vec::with_capacity(COLUMN_FAMILIES.len());
+
+    for cf in COLUMN_FAMILIES {
+        cfs.push(ColumnFamilyDescriptor::new(cf.to_owned(), persistence::cf_options()));
+    }
+
+    DB::open_cf_descriptors(&persistence::db_options(), path.to_str().unwrap(), cfs).unwrap()
 }
 
 struct Argv {

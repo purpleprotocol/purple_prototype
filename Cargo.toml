@@ -34,7 +34,7 @@ transactions = { path = "src/transactions" }
 common = { path = "src/common" }
 chain = { path = "src/chain" }
 miner = { path = "src/miner" }
-mimalloc = "0.1.0"
+mimalloc = "0.1.1"
 
 [[bin]]
 path = "src/purple/main.rs"

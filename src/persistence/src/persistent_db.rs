@@ -26,6 +26,12 @@ use rlp::NULL_RLP;
 use std::sync::Arc;
 use BlakeDbHasher;
 
+pub fn cf_options() -> Options {
+    let mut opts = Options::default();
+    opts.set_max_write_buffer_number(16);
+    opts
+}
+
 pub fn db_options() -> Options {
     let mut opts = Options::default();
     opts.increase_parallelism(num_cpus::get() as i32);
