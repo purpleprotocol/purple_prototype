@@ -803,7 +803,7 @@ impl<B: Block> Chain<B> {
                     self.disconnected_heads_mapping.get_mut(&cur_head).unwrap()
                 };
 
-            let mut to_recurse = Vec::with_capacity(tips.len());
+            let mut to_traverse = Vec::with_capacity(tips.len());
 
             // Clear our the head from tips set if it exists
             cur_tips.remove(&cur_head);
@@ -827,13 +827,13 @@ impl<B: Block> Chain<B> {
                         .insert(cur_head.clone(), (tip.height(), tip.block_hash().unwrap()));
                 }
 
-                to_recurse.push(tip.clone());
+                to_traverse.push(tip.clone());
                 cur_tips.insert(tip_hash.clone());
             }
 
             // Update inverse heights starting from pushed tips
-            for tip in to_recurse {
-                self.recurse_inverse(tip, 0, false);
+            for tip in to_traverse {
+                self.traverse_inverse(tip, 0, false);
             }
         }
 
@@ -893,7 +893,7 @@ impl<B: Block> Chain<B> {
         }
 
         // Update inverse heights
-        self.recurse_inverse(tip.clone(), 0, true);
+        self.traverse_inverse(tip.clone(), 0, true);
     }
 
     /// Recursively changes the validation status of the tips
@@ -982,11 +982,11 @@ impl<B: Block> Chain<B> {
         }
     }
 
-    /// Recurses the parents of the orphan and updates their
+    /// Traverses the parents of the orphan and updates their
     /// inverse heights according to the provided start height
     /// of the orphan. The third argument specifies if we should
-    /// mark the recursed chain as a valid canonical chain.
-    fn recurse_inverse(&mut self, orphan: Arc<B>, start_height: u64, make_valid: bool) {
+    /// mark the traversed chain as a valid canonical chain.
+    fn traverse_inverse(&mut self, orphan: Arc<B>, start_height: u64, make_valid: bool) {
         let mut cur_inverse = start_height;
         let mut current = orphan.clone();
 
@@ -1235,7 +1235,7 @@ impl<B: Block> Chain<B> {
                                         .attempt_attach(&block_hash, OrphanType::DisconnectedTip);
 
                                     if let OrphanType::DisconnectedTip = status {
-                                        self.recurse_inverse(block, 0, false);
+                                        self.traverse_inverse(block, 0, false);
                                     } else {
                                         // Write final status
                                         self.validations_mapping.insert(block_hash.clone(), status);
@@ -1281,7 +1281,7 @@ impl<B: Block> Chain<B> {
                                         );
 
                                         // Recurse parents and modify their inverse heights
-                                        self.recurse_inverse(
+                                        self.traverse_inverse(
                                             block.clone(),
                                             inverse_height,
                                             inverse_height == 0,
@@ -1344,7 +1344,7 @@ impl<B: Block> Chain<B> {
                                     if let OrphanType::DisconnectedTip = status {
                                         self.disconnected_tips_mapping
                                             .insert(block_hash.clone(), head);
-                                        self.recurse_inverse(block.clone(), 0, false);
+                                        self.traverse_inverse(block.clone(), 0, false);
                                     } else {
                                         // Write final status
                                         self.validations_mapping.insert(block_hash.clone(), status);
@@ -1357,10 +1357,58 @@ impl<B: Block> Chain<B> {
                                     }
                                 }
                                 OrphanType::BelongsToValidChain => {
-                                    // TODO: Add append condition and recalculate from 
-                                    // the head state of the branch.
+                                    // TODO: Maybe cache intermediate states? 
                                     let tip_state = {
-                                        unimplemented!();
+                                        let head = {
+                                            let mut current = parent_hash.clone();
+
+                                            // Traverse parents until we find a canonical block
+                                            loop {
+                                                let cur = self.orphan_pool.get(&current).unwrap();
+                                                let parent_hash = cur.parent_hash().unwrap();
+
+                                                if self.db.get(&parent_hash).is_some() {
+                                                    break;
+                                                }
+
+                                                current = parent_hash;
+                                            }
+
+                                            B::from_bytes(&self.db.get(&current).unwrap()).unwrap()
+                                        };
+
+                                        // Retrieve state associated with the head's parent
+                                        let state = self.search_fetch_next_state(head.height() - 1);
+                                        let mut state = B::append_condition(head.clone(), state)?;
+                                        let mut height = head.height() + 1;
+                                        let mut current = head;
+
+                                        // Compute state starting from head
+                                        loop {
+                                            let height_entry = self.heights_mapping.get(&height).unwrap();
+                                            let child = height_entry
+                                                .keys()
+                                                .find_map(|h| {
+                                                    let block = self.orphan_pool.get(h).unwrap();
+                                                    
+                                                    if block.parent_hash().unwrap() == current.block_hash().unwrap() {
+                                                        Some(block)
+                                                    } else {
+                                                        None
+                                                    }
+                                                })
+                                                .unwrap();
+
+                                            state = B::append_condition(child.clone(), state)?;
+                                            height += 1;
+                                            current = child.clone();
+
+                                            if child.block_hash().unwrap() == parent_hash {
+                                                break;
+                                            }
+                                        }
+ 
+                                        state
                                     };
 
                                     let mut status = OrphanType::ValidChainTip;
@@ -1371,7 +1419,7 @@ impl<B: Block> Chain<B> {
 
                                     // Write tip to valid tips set
                                     self.valid_tips.insert(tip_hash.clone());
-                                    self.valid_tips_states.insert(tip_hash, tip_state);
+                                    self.valid_tips_states.insert(tip_hash, tip_state.clone());
 
                                     // Attempt to attach disconnected chains
                                     // to the new valid tip.
@@ -1382,10 +1430,10 @@ impl<B: Block> Chain<B> {
                                         &mut status,
                                     );
 
-                                    // Write orphan, recurse and update inverse heights,
+                                    // Write orphan, traverse and update inverse heights,
                                     // then attempt to switch the canonical chain.
                                     self.write_orphan(block, status, inverse_height);
-                                    self.recurse_inverse(
+                                    self.traverse_inverse(
                                         tip.clone(),
                                         inverse_height,
                                         inverse_height == 0,
