@@ -573,6 +573,17 @@ impl<B: Block> Chain<B> {
                                 match B::append_condition(orphan.clone(), self.canonical_tip_state.clone()) {
                                     // Set new tip state if the append can proceed
                                     Ok(new_tip_state) => {
+                                        let height = self.height + 1;
+                                        let last_checkpoint_height = self.last_checkpoint_height.unwrap_or(0);
+
+                                        // Checkpoint state if we have reached the quota
+                                        if height - last_checkpoint_height == B::CHECKPOINT_INTERVAL as u64 {
+                                            let checkpoint_id = new_tip_state.checkpoint();
+
+                                            // Store checkpoint id
+                                            self.disk_heights_checkpoints.insert(height, checkpoint_id);
+                                        }
+
                                         self.canonical_tip_state = new_tip_state;
                                         true
                                     },
@@ -606,7 +617,7 @@ impl<B: Block> Chain<B> {
                             }
                         }
                     } else {
-                        let mut buf: Vec<(Hash, u64)> = Vec::with_capacity(orphans.len());
+                        let mut buf: Vec<(Hash, u64, B::ChainState)> = Vec::with_capacity(orphans.len());
 
                         for (o, i_h) in orphans.iter() {
                             // Filter out orphans that do not follow
@@ -616,19 +627,16 @@ impl<B: Block> Chain<B> {
                             let canonical_tip = self.canonical_tip.block_hash().unwrap();
 
                             if orphan_parent == canonical_tip {
-                                let append_condition = {
+                                let new_state = {
                                     match B::append_condition(orphan.clone(), self.canonical_tip_state.clone()) {
                                         // Set new tip state if the append can proceed
-                                        Ok(new_tip_state) => {
-                                            self.canonical_tip_state = new_tip_state;
-                                            true
-                                        },
-                                        _ => false
+                                        Ok(new_tip_state) => Some(new_tip_state),
+                                        _ => None
                                     }
                                 };
 
-                                if append_condition {
-                                    buf.push((o.clone(), i_h.clone()));
+                                if let Some(new_state) = new_state {
+                                    buf.push((o.clone(), i_h.clone(), new_state));
                                 } else {
                                     // TODO: Maybe cleanup here?
                                 }
@@ -684,22 +692,36 @@ impl<B: Block> Chain<B> {
                         }
 
                         // Write the orphan with the greatest inverse height
-                        buf.sort_unstable_by(|(_, a), (_, b)| a.cmp(&b));
+                        buf.sort_unstable_by(|(_, a, _), (_, b, _)| a.cmp(&b));
 
                         if !done {
-                            if let Some((to_write, _)) = buf.pop() {
+                            if let Some((to_write, _, state)) = buf.pop() {
                                 let to_write = self.orphan_pool.get(&to_write).unwrap();
+                                let height = to_write.height();
+                                let last_checkpoint_height = self.last_checkpoint_height.unwrap_or(0);
+
+                                // Checkpoint state if we have reached the quota
+                                if height - last_checkpoint_height == B::CHECKPOINT_INTERVAL as u64 {
+                                    let checkpoint_id = state.checkpoint();
+
+                                    // Store checkpoint id
+                                    self.disk_heights_checkpoints.insert(height, checkpoint_id);
+                                    self.last_checkpoint_height = Some(height);
+                                }
+
+                                self.canonical_tip_state = state;
                                 self.write_block(to_write.clone());
                             }
                         }
 
                         // Place remaining tips in valid tips set
                         // and mark them as valid chain tips.
-                        for (o, _) in buf {
+                        for (o, _, state) in buf {
                             let status = self.validations_mapping.get_mut(&o).unwrap();
                             *status = OrphanType::ValidChainTip;
                             prev_valid_tips.insert(o);
                             self.valid_tips.insert(o.clone());
+                            self.valid_tips_states.insert(o.clone(), state);
                         }
                     }
                 }
@@ -906,10 +928,12 @@ impl<B: Block> Chain<B> {
     /// state transition.
     fn make_valid_tips(&mut self, head: &Hash, head_state: B::ChainState) {
         let mut cur_height = self.orphan_pool.get(head).unwrap().height() + 1;
-        let mut previous = HashSet::new();
+        let mut previous: HashMap<Hash, B::ChainState> = HashMap::new();
 
         self.valid_tips.insert(head.clone());
-        previous.insert(head.clone());
+        self.valid_tips_states.insert(head.clone(), head_state.clone());
+
+        previous.insert(head.clone(), head_state);
         self.disconnected_heads_mapping.remove(head);
         self.disconnected_heads_heights.remove(head);
 
@@ -921,7 +945,7 @@ impl<B: Block> Chain<B> {
 
             if let Some(heights_entry) = heights_entry {
                 let mut matched_set = HashSet::new();
-                let mut new_previous_set = HashSet::with_capacity(previous.len());
+                let mut new_previous_set = HashMap::with_capacity(previous.len());
 
                 // Find entries in the next height that have
                 // parents in the previous events set.
@@ -934,47 +958,56 @@ impl<B: Block> Chain<B> {
                     let e = self.orphan_pool.get(m).unwrap();
                     let parent_hash = e.parent_hash().unwrap();
                         
-                    if previous.contains(&parent_hash) {
-                        let block_hash = e.block_hash().unwrap();
-                        self.valid_tips.remove(&parent_hash);
-                        new_previous_set.insert(block_hash);
-                        matched_set.insert(parent_hash);
+                    if let Some(state) = previous.get(&parent_hash) {
+                        // TODO: Reduce number of state clones
+                        if let Ok(state) = B::append_condition(e.clone(), state.clone()) {
+                            let block_hash = e.block_hash().unwrap();
+                            self.valid_tips.remove(&parent_hash);
+                            new_previous_set.insert(block_hash, state);
+                            matched_set.insert(parent_hash);
 
-                        let status = self
-                            .validations_mapping
-                            .get_mut(m)
-                            .unwrap();
+                            let status = self
+                                .validations_mapping
+                                .get_mut(m)
+                                .unwrap();
 
-                        *status = OrphanType::BelongsToValidChain;
-                    }
+                            *status = OrphanType::BelongsToValidChain;
+                        } else {
+                            // TODO: Maybe cleanup here?
+                        }
+                    } 
                 }
 
+                let previous_keys: HashSet<Hash> = previous.keys().cloned().collect();
+
                 // Make non matched valid tips
-                for tip_hash in previous.difference(&matched_set) {
-                    let tip = self.orphan_pool.get(tip_hash).unwrap();
+                for tip_hash in previous_keys.difference(&matched_set) {
+                    let state = previous.get(tip_hash).unwrap();
 
                     // Update status
                     let status = self.validations_mapping.get_mut(tip_hash).unwrap();
                     *status = OrphanType::ValidChainTip;
 
                     // Update mappings
-                    self.disconnected_tips_mapping.remove(tip_hash);
+                    self.disconnected_tips_mapping.remove(&tip_hash);
                     self.valid_tips.insert(tip_hash.clone());
+                    self.valid_tips_states.insert(tip_hash.clone(), state.clone());
                 }
 
                 previous = new_previous_set;
                 cur_height += 1;
             } else {
-                for tip_hash in previous.iter() {
-                    let tip = self.orphan_pool.get(tip_hash).unwrap();
+                for (tip_hash, state) in previous {
+                    let tip = self.orphan_pool.get(&tip_hash).unwrap();
 
                     // Update status
-                    let status = self.validations_mapping.get_mut(tip_hash).unwrap();
+                    let status = self.validations_mapping.get_mut(&tip_hash).unwrap();
                     *status = OrphanType::ValidChainTip;
 
                     // Update mappings
-                    self.disconnected_tips_mapping.remove(tip_hash);
+                    self.disconnected_tips_mapping.remove(&tip_hash);
                     self.valid_tips.insert(tip_hash.clone());
+                    self.valid_tips_states.insert(tip_hash, state);
                 }
 
                 break;
