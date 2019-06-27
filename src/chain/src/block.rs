@@ -55,12 +55,16 @@ pub trait Block {
     /// Max checkpoints to keep.
     const MAX_CHECKPOINTS: usize = 10;
 
-    /// How many blocks to keep behind the canonical chain
-    /// when it is in archival mode i.e. pruning is not enabled.
+    /// How many blocks to keep behind the canonical 
+    /// chain when pruning is enabled. This number should
+    /// be equal to `CHECKPOINT_INTERVAL * MAX_CHECKPOINTS`.
     const BLOCKS_TO_KEEP: usize = 100;
 
     /// Returns the genesis block.
     fn genesis() -> Arc<Self>;
+
+    /// Returns the genesis state of the chain
+    fn genesis_state() -> Self::ChainState;
 
     /// Returns the hash of the block.
     fn block_hash(&self) -> Option<Hash>;

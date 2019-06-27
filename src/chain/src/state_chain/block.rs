@@ -114,6 +114,10 @@ impl Block for StateBlock {
         GENESIS_RC.clone()
     }
 
+    fn genesis_state() -> PersistentDb {
+        unimplemented!();
+    }
+
     fn height(&self) -> u64 {
         self.height
     }

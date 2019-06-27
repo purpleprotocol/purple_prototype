@@ -19,7 +19,7 @@
 use crate::block::Block;
 use crate::chain::ChainErr;
 use crate::easy_chain::block::EasyBlock;
-use common::checkpointable::DummyCheckpoint;
+use common::checkpointable::*;
 use account::NormalAddress;
 use crypto::PublicKey;
 use bin_tools::*;
@@ -109,6 +109,10 @@ impl Block for HardBlock {
 
     fn genesis() -> Arc<HardBlock> {
         GENESIS_RC.clone()
+    }
+
+    fn genesis_state() -> DummyCheckpoint {
+        DummyCheckpoint::new(StorageLocation::Disk)
     }
 
     fn height(&self) -> u64 {

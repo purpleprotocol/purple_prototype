@@ -269,6 +269,7 @@ impl<B: Block> Chain<B> {
             return Err(ChainErr::NoSuchBlock);
         };
 
+        let canonical_state = self.search_fetch_next_state(self.height);
         let mut current = self.canonical_tip.clone();
         let mut inverse_height = 1;
 
@@ -288,6 +289,7 @@ impl<B: Block> Chain<B> {
         self.validations_mapping
             .insert(current.block_hash().unwrap(), OrphanType::ValidChainTip);
         self.valid_tips.insert(current.block_hash().unwrap());
+        self.valid_tips_states.insert(current.block_hash().unwrap(), canonical_state);
 
         let cur_height = current.height();
 
@@ -428,6 +430,7 @@ impl<B: Block> Chain<B> {
 
         // Remove from valid tips
         self.valid_tips.remove(&block_hash);
+        self.valid_tips_states.remove(&block_hash);
 
         // Update max orphan height if this is the case
         if let Some(max_height) = self.max_orphan_height {
@@ -962,6 +965,7 @@ impl<B: Block> Chain<B> {
                         // TODO: Reduce number of state clones
                         if let Ok(state) = B::append_condition(e.clone(), state.clone()) {
                             let block_hash = e.block_hash().unwrap();
+                            self.valid_tips_states.remove(&parent_hash);
                             self.valid_tips.remove(&parent_hash);
                             new_previous_set.insert(block_hash, state);
                             matched_set.insert(parent_hash);
@@ -1022,6 +1026,7 @@ impl<B: Block> Chain<B> {
     fn traverse_inverse(&mut self, orphan: Arc<B>, start_height: u64, make_valid: bool) {
         let mut cur_inverse = start_height;
         let mut current = orphan.clone();
+        let mut branch_stack = Vec::new();
 
         // This flag only makes sense when the
         // starting inverse height is 0.
@@ -1063,9 +1068,21 @@ impl<B: Block> Chain<B> {
                 }
             }
 
+            branch_stack.push(parent.clone());
             current = parent.clone();
             cur_inverse += 1;
         }
+
+        // // Compute state starting from the current block's parent
+        // if make_valid {
+        //     let mut state = self.search_fetch_next_state(current.height() - 1);
+
+        //     while let Some(next_block) = branch_stack.pop() {
+        //         state = B::append_condition(next_block.clone(), state.clone()).unwrap();
+        //     }
+
+        //     self.valid_tips_states.insert(orphan.block_hash().unwrap(), state);
+        // }
     }
 
     /// Returns an atomic reference to the genesis block in the chain.
@@ -1182,14 +1199,12 @@ impl<B: Block> Chain<B> {
                                 self.search_fetch_next_state(parent_height)
                             }
                         } else {
-                            return Err(ChainErr::NoCheckpointFound);
+                            self.search_fetch_next_state(parent_height)
                         };
 
                         let tip_state = match B::append_condition(block.clone(), parent_state) {
-                            Ok(new_tip_state) => {
-                                Some(new_tip_state)
-                            },
-                            _ => None
+                            Ok(new_tip_state) => Some(new_tip_state),
+                            Err(_) => None
                         };
 
                         if let Some(tip_state) = tip_state {
@@ -1308,7 +1323,7 @@ impl<B: Block> Chain<B> {
                                         // Attempt to attach to disconnected chains
                                         self.attempt_attach_valid(
                                             &mut tip,
-                                            tip_state,
+                                            tip_state.clone(),
                                             &mut inverse_height,
                                             &mut status,
                                         );
@@ -1322,7 +1337,11 @@ impl<B: Block> Chain<B> {
 
                                         // Update tips set
                                         self.valid_tips.remove(&parent_hash);
-                                        self.valid_tips.insert(tip.block_hash().unwrap());
+
+                                        if let OrphanType::ValidChainTip = status {
+                                            self.valid_tips.insert(tip.block_hash().unwrap());
+                                            self.valid_tips_states.insert(tip.block_hash().unwrap(), tip_state);
+                                        }
 
                                         // Check if the new tip's height is greater than
                                         // the canonical chain, and if so, switch chains.
@@ -1401,6 +1420,7 @@ impl<B: Block> Chain<B> {
                                                 let parent_hash = cur.parent_hash().unwrap();
 
                                                 if self.db.get(&parent_hash).is_some() {
+                                                    current = parent_hash;
                                                     break;
                                                 }
 
@@ -1557,18 +1577,22 @@ impl<B: Block> Chain<B> {
         // Find a height with an earlier checkpoint
         // than the target height.
         let height = {
-            let mut current = self.last_checkpoint_height.unwrap();
-            let interval = B::CHECKPOINT_INTERVAL as u64;
+            if let Some(last_checkpoint_height) = self.last_checkpoint_height {
+                let mut current = last_checkpoint_height;
+                let interval = B::CHECKPOINT_INTERVAL as u64;
 
-            loop {
-                if current - interval < target_height {
-                    break;
+                loop {
+                    if current - interval < target_height {
+                        break;
+                    }
+
+                    current -= interval;
                 }
 
-                current -= interval;
+                current
+            } else {
+                0
             }
-
-            current
         };
 
         self.fetch_next_state(height, target_height)
@@ -1576,39 +1600,52 @@ impl<B: Block> Chain<B> {
 
     /// Fetches the matching state of target height, starting from height.
     fn fetch_next_state(&self, height: u64, target_height: u64) -> B::ChainState {
-        let id = self.disk_heights_checkpoints.get(&height).unwrap();
+        assert!(target_height <= self.height);
+        assert!(height <= target_height);
 
-        // Load disk state
-        let mut state = if let Ok(state) = B::ChainState::load_from_disk(*id) {
-            state
-        } else {
-            panic!("Could not find disk state!");
+        let mut state = {
+            if height == 0 {
+                B::genesis_state()
+            } else {
+                // Load disk state
+                let id = self.disk_heights_checkpoints.get(&height).unwrap();
+
+                if let Ok(state) = B::ChainState::load_from_disk(*id) {
+                    state
+                } else {
+                    panic!("Could not find disk state!");
+                }
+            }
         };
 
-        let mut cur_height = height + 1;
+        if height == target_height {
+            state
+        } else {
+            let mut cur_height = height + 1;
+            
+            loop {
+                // Retrieve block key via height
+                let height_key = crypto::hash_slice(&encode_be_u64!(cur_height));
+                let block_hash = self.db.get(&height_key).unwrap();
+                let mut hash = [0; 32];
+                hash.copy_from_slice(&block_hash);
 
-        loop {
-            // Retrieve block key via height
-            let height_key = crypto::hash_slice(&encode_be_u64!(cur_height));
-            let block_hash = self.db.get(&height_key).unwrap();
-            let mut hash = [0; 32];
-            hash.copy_from_slice(&block_hash);
+                // Retrieve block
+                let hash = Hash(hash);
+                let block = B::from_bytes(&self.db.get(&hash).unwrap()).unwrap();
 
-            // Retrieve block
-            let hash = Hash(hash);
-            let block = B::from_bytes(&self.db.get(&hash).unwrap()).unwrap();
+                // Compute next state
+                state = B::append_condition(block, state.clone()).unwrap();
 
-            // Compute next state
-            state = B::append_condition(block, state.clone()).unwrap();
+                if cur_height == target_height {
+                    break;
+                }
 
-            if cur_height == target_height {
-                break;
+                cur_height += 1;
             }
 
-            cur_height += 1;
+            state
         }
-
-        state
     }
 }
 
@@ -1698,6 +1735,10 @@ mod tests {
             };
 
             Arc::new(genesis)
+        }
+
+        fn genesis_state() -> DummyCheckpoint {
+            DummyCheckpoint::new(StorageLocation::Disk)
         }
 
         fn parent_hash(&self) -> Option<Hash> {

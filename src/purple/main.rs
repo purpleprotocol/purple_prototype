@@ -23,7 +23,7 @@ extern crate unwrap;
 #[macro_use]
 extern crate jsonrpc_macros;
 
-//extern crate mimalloc;
+extern crate mimalloc;
 extern crate chain;
 extern crate clap;
 extern crate crypto;
@@ -42,7 +42,7 @@ extern crate tokio;
 extern crate rocksdb;
 extern crate common;
 
-//use mimalloc::MiMalloc;
+use mimalloc::MiMalloc;
 use common::checkpointable::DummyCheckpoint;
 use rocksdb::{ColumnFamilyDescriptor, DB};
 use clap::{App, Arg};
@@ -55,19 +55,14 @@ use network::*;
 use parking_lot::{RwLock, Mutex};
 use chain::*;
 use persistence::PersistentDb;
-use std::alloc::System;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::mpsc::channel;
 
 // Use mimalloc allocator
-// #[global_allocator]
-// static GLOBAL: MiMalloc = MiMalloc;
-
-// Enforce usage of system allocator.
 #[global_allocator]
-static GLOBAL: System = System;
+static GLOBAL: MiMalloc = MiMalloc;
 
 const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
@@ -168,7 +163,6 @@ fn fetch_credentials(db: &mut PersistentDb) -> (NodeId, Sk) {
     }
 }
 
-// TODO: Add rocksdb config
 fn open_database(network_name: &str) -> DB {
     let path = Path::new(&dirs::home_dir().unwrap())
         .join("purple")
