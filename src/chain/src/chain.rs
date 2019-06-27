@@ -581,6 +581,11 @@ impl<B: Block> Chain<B> {
 
                                         // Checkpoint state if we have reached the quota
                                         if height - last_checkpoint_height == B::CHECKPOINT_INTERVAL as u64 {
+                                            if let None = self.earliest_checkpoint_height {
+                                                self.earliest_checkpoint_height = Some(height);
+                                            }
+
+                                            self.last_checkpoint_height = Some(height);
                                             let checkpoint_id = new_tip_state.checkpoint();
 
                                             // Store checkpoint id
@@ -705,6 +710,11 @@ impl<B: Block> Chain<B> {
 
                                 // Checkpoint state if we have reached the quota
                                 if height - last_checkpoint_height == B::CHECKPOINT_INTERVAL as u64 {
+                                    if let None = self.earliest_checkpoint_height {
+                                        self.earliest_checkpoint_height = Some(height);
+                                    }
+
+                                    self.last_checkpoint_height = Some(height);
                                     let checkpoint_id = state.checkpoint();
 
                                     // Store checkpoint id
@@ -1107,6 +1117,9 @@ impl<B: Block> Chain<B> {
     }
 
     pub fn append_block(&mut self, block: Arc<B>) -> Result<(), ChainErr> {
+        #[cfg(test)]
+        println!("APPENDING BLOCK: {:?}", block.block_hash().unwrap());
+
         let min_height = if self.height > B::MIN_HEIGHT {
             self.height - B::MIN_HEIGHT
         } else {
@@ -1438,25 +1451,31 @@ impl<B: Block> Chain<B> {
 
                                         // Compute state starting from head
                                         loop {
-                                            let height_entry = self.heights_mapping.get(&height).unwrap();
-                                            let child = height_entry
-                                                .keys()
-                                                .find_map(|h| {
-                                                    let block = self.orphan_pool.get(h).unwrap();
-                                                    
-                                                    if block.parent_hash().unwrap() == current.block_hash().unwrap() {
-                                                        Some(block)
-                                                    } else {
-                                                        None
+                                            if let Some(height_entry) = self.heights_mapping.get(&height) {
+                                                let child = height_entry
+                                                    .keys()
+                                                    .find_map(|h| {
+                                                        let block = self.orphan_pool.get(h).unwrap();
+                                                        
+                                                        if block.parent_hash().unwrap() == current.block_hash().unwrap() {
+                                                            Some(block)
+                                                        } else {
+                                                            None
+                                                        }
+                                                    });
+
+                                                if let Some(child) = child {
+                                                    state = B::append_condition(child.clone(), state)?;
+                                                    height += 1;
+                                                    current = child.clone();
+
+                                                    if child.block_hash().unwrap() == parent_hash {
+                                                        break;
                                                     }
-                                                })
-                                                .unwrap();
-
-                                            state = B::append_condition(child.clone(), state)?;
-                                            height += 1;
-                                            current = child.clone();
-
-                                            if child.block_hash().unwrap() == parent_hash {
+                                                } else {
+                                                    break;
+                                                }
+                                            } else {
                                                 break;
                                             }
                                         }
@@ -1738,7 +1757,7 @@ mod tests {
         }
 
         fn genesis_state() -> DummyCheckpoint {
-            DummyCheckpoint::new(StorageLocation::Disk)
+            DummyCheckpoint::genesis()
         }
 
         fn parent_hash(&self) -> Option<Hash> {
@@ -1765,8 +1784,17 @@ mod tests {
             None
         }
 
-        fn append_condition(_block: Arc<DummyBlock>, _chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
-            Ok(DummyCheckpoint::new(StorageLocation::Disk))
+        fn append_condition(block: Arc<DummyBlock>, mut chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
+            let valid = chain_state.height() == block.height() - 1;
+            
+            println!("DEBUG VALID: {}, CHAIN_STATE_HEIGHT: {}, BLOCK_HEIGHT: {}", valid, chain_state.height(), block.height());
+
+            if valid {
+                chain_state.increment();
+                Ok(chain_state)
+            } else {
+                Err(ChainErr::BadAppendCondition)
+            }
         }
 
         fn to_bytes(&self) -> Vec<u8> {
@@ -1816,7 +1844,7 @@ mod tests {
     #[test]
     fn it_rewinds_to_genesis() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -1886,7 +1914,7 @@ mod tests {
     #[test]
     fn stages_append_test1() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -2028,7 +2056,7 @@ mod tests {
     #[test]
     fn stages_append_test2() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -2225,7 +2253,7 @@ mod tests {
     /// of appended blocks.
     fn stages_append_test3() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -3898,7 +3926,7 @@ mod tests {
     /// tip instead of G at commit hash `d0ad0bd6a7422f6308b96a34a6f7725662c8b7d4`.
     fn stages_append_test4() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -6636,6 +6664,104 @@ mod tests {
         assert_eq!(hard_chain.max_orphan_height, Some(6));
     }
 
+    #[test]
+    /// Assertions in stages on random order
+    /// of appended blocks.
+    ///
+    /// The order is the following:
+    /// G, C', C'', E', C, B', F'', E'', B, A, D', F, D''', E, D, D'',
+    fn stages_append_test5() {
+        let db = test_helpers::init_tempdb();
+        let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+
+        let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
+        let A = Arc::new(A);
+
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B = Arc::new(B);
+
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C = Arc::new(C);
+
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D = Arc::new(D);
+
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E = Arc::new(E);
+
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F = Arc::new(F);
+
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
+        let G = Arc::new(G);
+
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B_prime = Arc::new(B_prime);
+
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_prime = Arc::new(C_prime);
+
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_prime = Arc::new(D_prime);
+
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_prime = Arc::new(E_prime);
+
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_second = Arc::new(C_second);
+
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_second = Arc::new(D_second);
+
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_second = Arc::new(E_second);
+
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F_second = Arc::new(F_second);
+
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_tertiary = Arc::new(D_tertiary);
+
+        let mut blocks = vec![
+            G.clone(),
+            C_prime.clone(),
+            C_second.clone(),
+            E_prime.clone(),
+            C.clone(),
+            B_prime.clone(),
+            F_second.clone(),
+            E_second.clone(),
+            B.clone(),
+            A.clone(),
+            D_prime.clone(),
+            F.clone(),
+            D_tertiary.clone(),
+            E.clone(),
+            D.clone(),
+            D_second.clone(),
+        ];
+
+        chain.append_block(blocks.remove(0)).unwrap(); // G
+        chain.append_block(blocks.remove(0)).unwrap(); // C_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // C_second
+        chain.append_block(blocks.remove(0)).unwrap(); // E_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // C
+        chain.append_block(blocks.remove(0)).unwrap(); // B_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // F_second
+        chain.append_block(blocks.remove(0)).unwrap(); // E_second
+        chain.append_block(blocks.remove(0)).unwrap(); // B
+        chain.append_block(blocks.remove(0)).unwrap(); // A
+        chain.append_block(blocks.remove(0)).unwrap(); // D_prime
+
+        assert_eq!(chain.height(), 4);
+        assert_eq!(chain.canonical_tip, D_prime.clone());
+        assert_eq!(chain.valid_tips, set![C.block_hash().unwrap(), C_prime.block_hash().unwrap()]);
+        
+        for b in blocks {
+            chain.append_block(b).unwrap();
+        }
+    }
+
     quickcheck! {
         /// Stress test of chain append.
         ///
@@ -6656,7 +6782,7 @@ mod tests {
         /// the height of the chain must be that of `G` which is 7.
         fn append_stress_test() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
+            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -6747,6 +6873,18 @@ mod tests {
             block_letters.insert(F_second.block_hash().unwrap(), "F''");
             block_letters.insert(D_tertiary.block_hash().unwrap(), "D'''");
 
+            // Uncomment this for printing a failed order
+            // let blocks_clone = blocks.clone();
+
+            // std::panic::set_hook(Box::new(move |_| {
+            //     print!("Failed block ordering: ");
+            //     for b in blocks_clone.clone() {
+            //         print!("{}, ", block_letters.get(&b.block_hash().unwrap()).unwrap());
+            //     }
+            //     print!("\n");
+            //     println!("Custom panic hook");
+            // }));
+
             for b in blocks {
                 hard_chain.append_block(b).unwrap();
             }
@@ -6759,7 +6897,7 @@ mod tests {
 
         fn it_rewinds_correctly1() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
+            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -6835,7 +6973,7 @@ mod tests {
 
         fn it_rewinds_correctly2() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::new(StorageLocation::Disk), true);
+            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);

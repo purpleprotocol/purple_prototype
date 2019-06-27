@@ -16,6 +16,12 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use lazy_static::*;
+use hashbrown::HashMap;
+use parking_lot::Mutex;
+use std::sync::Arc;
+use std::sync::atomic::{Ordering, AtomicUsize};
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StorageLocation {
     Disk,
@@ -29,6 +35,9 @@ pub trait Checkpointable: Sized {
     /// returns the checkpoint id associated with it.
     fn checkpoint(&self) -> u64;
 
+    /// Deletes the checkpoint with the given id
+    fn delete_checkpoint(id: u64) -> Result<(), ()>;
+
     /// Reloads the state from the disk checkpoint with the given id.
     fn load_from_disk(id: u64) -> Result<Self, ()>;
 
@@ -36,28 +45,79 @@ pub trait Checkpointable: Sized {
     fn storage_location(&self) -> StorageLocation;
 }
 
+lazy_static! {
+    static ref DUMMY_BACKEND: Mutex<HashMap<u64, DummyCheckpoint>> = Mutex::new(HashMap::new());
+    static ref CHECKPOINT_ID: AtomicUsize = AtomicUsize::new(1);
+    static ref GENESIS_DUMMY: DummyCheckpoint = DummyCheckpoint::new(StorageLocation::Disk, 0);
+}
+
 #[derive(Clone)]
 /// Placeholder checkpoint type
 pub struct DummyCheckpoint {
-    location: StorageLocation
+    id: Arc<Mutex<u64>>,
+    location: Arc<Mutex<StorageLocation>>,
+    height: Arc<Mutex<u64>>,
 }
 
 impl DummyCheckpoint {
-    pub fn new(location: StorageLocation) -> DummyCheckpoint {
-        DummyCheckpoint { location }
+    pub fn new(location: StorageLocation, height: u64) -> DummyCheckpoint {
+        let id = CHECKPOINT_ID.fetch_add(1, Ordering::Relaxed) as u64;
+        DummyCheckpoint { 
+            location: Arc::new(Mutex::new(location)), 
+            height: Arc::new(Mutex::new(height)), 
+            id: Arc::new(Mutex::new(id))
+        }
+    }
+
+    pub fn genesis() -> DummyCheckpoint {
+        GENESIS_DUMMY.clone()
+    }
+
+    pub fn increment(&mut self) {
+        let mut height = self.height.lock();
+        let mut location = self.location.lock();
+
+        *height += 1;
+        *location = StorageLocation::Memory;
+    }
+
+    pub fn height(&self) -> u64 {
+        let height = self.height.lock();
+        height.clone()
     }
 }
 
 impl Checkpointable for DummyCheckpoint {
     fn checkpoint(&self) -> u64 {
-        0
+        let mut id = self.id.lock();
+        let mut location = self.location.lock();
+        *id = CHECKPOINT_ID.fetch_add(1, Ordering::Relaxed) as u64;
+        *location = StorageLocation::Disk;
+        id.clone()
     }
 
-    fn load_from_disk(_id: u64) -> Result<DummyCheckpoint, ()> {
-        Ok(DummyCheckpoint::new(StorageLocation::Disk))
+    fn delete_checkpoint(id: u64) -> Result<(), ()> {
+        let mut db = DUMMY_BACKEND.lock();
+
+        if let Some(_) = db.remove(&id) {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    fn load_from_disk(id: u64) -> Result<DummyCheckpoint, ()> {
+        let db = DUMMY_BACKEND.lock();
+
+        if let Some(result) = db.get(&id) {
+            Ok(result.clone())
+        } else {
+            Err(())
+        }
     }
 
     fn storage_location(&self) -> StorageLocation {
-        self.location
+        let location = self.location.lock();
+        location.clone()
     }
 }

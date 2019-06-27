@@ -86,8 +86,8 @@ fn main() {
     let state_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[0]));
     let easy_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[1]));
     let hard_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[2]));
-    let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_chain_db, DummyCheckpoint::new(StorageLocation::Disk), argv.archival_mode)));
-    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_chain_db, DummyCheckpoint::new(StorageLocation::Disk), argv.archival_mode)));
+    let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_chain_db, DummyCheckpoint::genesis(), argv.archival_mode)));
+    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_chain_db, DummyCheckpoint::genesis(), argv.archival_mode)));
     let state_chain = Arc::new(RwLock::new(StateChain::new(state_chain_db, state_db, argv.archival_mode)));
     let easy_chain = EasyChainRef::new(easy_chain);
     let hard_chain = HardChainRef::new(hard_chain);

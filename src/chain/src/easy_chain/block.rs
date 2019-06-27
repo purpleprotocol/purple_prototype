@@ -102,7 +102,7 @@ impl Block for EasyBlock {
     }
 
     fn genesis_state() -> DummyCheckpoint {
-        DummyCheckpoint::new(StorageLocation::Disk)
+        DummyCheckpoint::genesis()
     }
 
     fn height(&self) -> u64 {

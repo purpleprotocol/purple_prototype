@@ -121,7 +121,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
     let chains: Vec<(EasyChainRef, HardChainRef, StateChainRef)> = (0..peers)
         .into_iter()
         .map(|_| (test_helpers::init_tempdb(), test_helpers::init_tempdb(), test_helpers::init_tempdb(), test_helpers::init_tempdb()))
-        .map(|(db1, db2, db3, db4)| (Arc::new(RwLock::new(EasyChain::new(db1, DummyCheckpoint::new(StorageLocation::Disk), true))), Arc::new(RwLock::new(HardChain::new(db2, DummyCheckpoint::new(StorageLocation::Disk), true))), Arc::new(RwLock::new(StateChain::new(db3, db4, true)))))
+        .map(|(db1, db2, db3, db4)| (Arc::new(RwLock::new(EasyChain::new(db1, DummyCheckpoint::genesis(), true))), Arc::new(RwLock::new(HardChain::new(db2, DummyCheckpoint::genesis(), true))), Arc::new(RwLock::new(StateChain::new(db3, db4, true)))))
         .map(|(easy, hard, state)| (EasyChainRef::new(easy), HardChainRef::new(hard), StateChainRef::new(state)))
         .collect();
 

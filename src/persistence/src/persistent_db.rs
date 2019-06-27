@@ -220,6 +220,10 @@ impl Checkpointable for PersistentDb {
         unimplemented!();
     }
 
+    fn delete_checkpoint(id: u64) -> Result<(), ()> {
+        unimplemented!();
+    }
+
     fn load_from_disk(id: u64) -> Result<PersistentDb, ()> {
         unimplemented!();
     }
