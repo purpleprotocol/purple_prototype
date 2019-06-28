@@ -46,31 +46,33 @@ pub trait Checkpointable: Sized {
 }
 
 lazy_static! {
-    static ref DUMMY_BACKEND: Mutex<HashMap<u64, DummyCheckpoint>> = Mutex::new(HashMap::new());
     static ref CHECKPOINT_ID: AtomicUsize = AtomicUsize::new(1);
-    static ref GENESIS_DUMMY: DummyCheckpoint = DummyCheckpoint::new(StorageLocation::Disk, 0);
+    static ref BACKEND_ID: AtomicUsize = AtomicUsize::new(0);
+    static ref DUMMY_BACKEND: Mutex<HashMap<u64, HashMap<u64, DummyCheckpoint>>> = Mutex::new(HashMap::new());
 }
 
 #[derive(Clone)]
 /// Placeholder checkpoint type
 pub struct DummyCheckpoint {
     id: Arc<Mutex<u64>>,
+    backend_id: u64,
     location: Arc<Mutex<StorageLocation>>,
     height: Arc<Mutex<u64>>,
 }
 
 impl DummyCheckpoint {
-    pub fn new(location: StorageLocation, height: u64) -> DummyCheckpoint {
+    pub fn new(location: StorageLocation, height: u64, backend_id: u64) -> DummyCheckpoint {
         let id = CHECKPOINT_ID.fetch_add(1, Ordering::Relaxed) as u64;
         DummyCheckpoint { 
             location: Arc::new(Mutex::new(location)), 
             height: Arc::new(Mutex::new(height)), 
-            id: Arc::new(Mutex::new(id))
+            id: Arc::new(Mutex::new(id)),
+            backend_id,
         }
     }
 
     pub fn genesis() -> DummyCheckpoint {
-        GENESIS_DUMMY.clone()
+        DummyCheckpoint::new(StorageLocation::Disk, 0, BACKEND_ID.fetch_add(1, Ordering::Relaxed) as u64)
     }
 
     pub fn increment(&mut self) {
@@ -85,6 +87,11 @@ impl DummyCheckpoint {
         let height = self.height.lock();
         height.clone()
     }
+
+    pub fn clear_checkpoints() {
+        let mut db = DUMMY_BACKEND.lock();
+        db.clear();
+    }
 }
 
 impl Checkpointable for DummyCheckpoint {
@@ -93,11 +100,17 @@ impl Checkpointable for DummyCheckpoint {
         let mut location = self.location.lock();
         *id = CHECKPOINT_ID.fetch_add(1, Ordering::Relaxed) as u64;
         *location = StorageLocation::Disk;
+
+        let mut db = DUMMY_BACKEND.lock();
+        let mut db = db.get_mut(&self.backend_id).unwrap();
+        db.insert(id.clone(), self.clone());
+
         id.clone()
     }
 
     fn delete_checkpoint(id: u64) -> Result<(), ()> {
         let mut db = DUMMY_BACKEND.lock();
+        let mut db = db.get_mut(&id).unwrap();
 
         if let Some(_) = db.remove(&id) {
             Ok(())
@@ -108,6 +121,7 @@ impl Checkpointable for DummyCheckpoint {
 
     fn load_from_disk(id: u64) -> Result<DummyCheckpoint, ()> {
         let db = DUMMY_BACKEND.lock();
+        let db = db.get(&id).unwrap();
 
         if let Some(result) = db.get(&id) {
             Ok(result.clone())

@@ -23,9 +23,10 @@ use crypto::Hash;
 use std::boxed::Box;
 use std::sync::Arc;
 use std::net::SocketAddr;
+use std::fmt::Debug;
 
 /// Generic block interface
-pub trait Block {
+pub trait Block: Debug {
     /// Per tip validation state
     type ChainState: Clone + Checkpointable;
 
@@ -38,6 +39,11 @@ pub trait Block {
 
     #[cfg(test)]
     const MAX_ORPHANS: usize = 20;
+
+    /// Number of blocks between a valid chain and
+    /// the canonical in order for the valid chain
+    /// to become canonical
+    const SWITCH_OFFSET: usize = 2;
 
     /// Blocks with height below the canonical height minus
     /// this number will be rejected.
