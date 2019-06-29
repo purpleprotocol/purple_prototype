@@ -43,7 +43,7 @@ pub trait Block: Debug {
     /// Number of blocks between a valid chain and
     /// the canonical in order for the valid chain
     /// to become canonical
-    const SWITCH_OFFSET: usize = 2;
+    const SWITCH_OFFSET: usize = 0;
 
     /// Blocks with height below the canonical height minus
     /// this number will be rejected.

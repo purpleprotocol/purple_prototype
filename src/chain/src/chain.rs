@@ -576,7 +576,6 @@ impl<B: Block> Chain<B> {
     /// Attempts to attach orphans to the canonical chain
     /// starting with the given height.
     fn process_orphans(&mut self, start_height: u64) {
-        println!("DEBUG ENTERED 2");
         if let Some(max_orphan_height) = self.max_orphan_height {
             let mut h = start_height;
             let mut done = false;
@@ -589,7 +588,6 @@ impl<B: Block> Chain<B> {
 
                 if let Some(orphans) = self.heights_mapping.get(&h) {
                     if orphans.len() == 1 {
-                        println!("DEBUG ENTERED 3");
                         // HACK: Maybe we can find a better/faster way to get the only item of a set?
                         let (orphan_hash, _) = orphans.iter().find(|_| true).unwrap();
                         let orphan = self.orphan_pool.get(orphan_hash).unwrap();
@@ -1163,8 +1161,6 @@ impl<B: Block> Chain<B> {
             // First attempt to place the block after the
             // tip canonical block.
             if parent_hash == tip.block_hash().unwrap() {
-                println!("DEBUG ENTERED 1");
-
                 let height = block.height();
                 
                 // The height must be equal to that of the parent plus one
@@ -1210,7 +1206,6 @@ impl<B: Block> Chain<B> {
 
                     Ok(())
                 } else {
-                    println!("DEBUG 1: BLOCK: {:?}, HEIGHT: {}", block, self.height);
                     Err(ChainErr::BadAppendCondition)
                 }
             } else {
@@ -1280,7 +1275,6 @@ impl<B: Block> Chain<B> {
 
                             Ok(())
                         } else {
-                            println!("DEBUG 2");
                             Err(ChainErr::BadAppendCondition)
                         }
                     }
@@ -1402,7 +1396,6 @@ impl<B: Block> Chain<B> {
                                         // the canonical chain, and if so, switch chains.
                                         self.attempt_switch(tip);
                                     } else {
-                                        println!("DEBUG 3");
                                         return Err(ChainErr::BadAppendCondition);
                                     }
                                 }
@@ -1467,6 +1460,7 @@ impl<B: Block> Chain<B> {
                                 OrphanType::BelongsToValidChain => {
                                     // TODO: Maybe cache intermediate states? 
                                     let tip_state = {
+                                        let mut visited_stack = Vec::new();
                                         let head = {
                                             let mut current = parent_hash.clone();
 
@@ -1474,6 +1468,8 @@ impl<B: Block> Chain<B> {
                                             loop {
                                                 let cur = self.orphan_pool.get(&current).unwrap();
                                                 let parent_hash = cur.parent_hash().unwrap();
+
+                                                visited_stack.push(cur.clone());
 
                                                 if self.db.get(&parent_hash).is_some() {
                                                     current = parent_hash;
@@ -1489,41 +1485,13 @@ impl<B: Block> Chain<B> {
                                         // Retrieve state associated with the head's parent
                                         let state = self.search_fetch_next_state(head.height() - 1);
                                         let mut state = B::append_condition(head.clone(), state)?;
-                                        let mut height = head.height() + 1;
-                                        let mut current = head;
 
-                                        // Compute state starting from head
-                                        loop {
-                                            if let Some(height_entry) = self.heights_mapping.get(&height) {
-                                                let child = height_entry
-                                                    .keys()
-                                                    .find_map(|h| {
-                                                        let block = self.orphan_pool.get(h).unwrap();
-                                                        
-                                                        if block.parent_hash().unwrap() == current.block_hash().unwrap() {
-                                                            Some(block)
-                                                        } else {
-                                                            None
-                                                        }
-                                                    });
-
-                                                if let Some(child) = child {
-                                                    state = B::append_condition(child.clone(), state)?;
-                                                    height += 1;
-                                                    current = child.clone();
-
-                                                    if child.block_hash().unwrap() == parent_hash {
-                                                        break;
-                                                    }
-                                                } else {
-                                                    break;
-                                                }
-                                            } else {
-                                                break;
-                                            }
+                                        // Compute tip state
+                                        while let Some(b) = visited_stack.pop() {
+                                            state = B::append_condition(b, state)?;
                                         }
  
-                                        state
+                                        B::append_condition(block.clone(), state)?
                                     };
 
                                     let mut status = OrphanType::ValidChainTip;
@@ -1653,7 +1621,7 @@ impl<B: Block> Chain<B> {
 
                 current
             } else {
-                0
+                target_height
             }
         };
 
