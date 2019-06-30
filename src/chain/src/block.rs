@@ -24,11 +24,12 @@ use std::boxed::Box;
 use std::sync::Arc;
 use std::net::SocketAddr;
 use std::fmt::Debug;
+use std::hash::Hash as HashTrait;
 
 /// Generic block interface
-pub trait Block: Debug {
+pub trait Block: Debug + PartialEq + Eq + HashTrait {
     /// Per tip validation state
-    type ChainState: Clone + Checkpointable;
+    type ChainState: Clone + Checkpointable + Debug;
 
     /// Size of the block cache.
     const BLOCK_CACHE_SIZE: usize = 20;
@@ -43,6 +44,10 @@ pub trait Block: Debug {
     /// Number of blocks between a valid chain and
     /// the canonical in order for the valid chain
     /// to become canonical
+    #[cfg(not(test))]
+    const SWITCH_OFFSET: usize = 2;
+    
+    #[cfg(test)]
     const SWITCH_OFFSET: usize = 0;
 
     /// Blocks with height below the canonical height minus

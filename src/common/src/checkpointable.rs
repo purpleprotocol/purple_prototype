@@ -19,6 +19,7 @@
 use lazy_static::*;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::atomic::{Ordering, AtomicUsize};
 
@@ -30,7 +31,7 @@ pub enum StorageLocation {
 
 /// Trait for any state that can be checkpointed
 /// and that can be reloaded from checkpoints.
-pub trait Checkpointable: Sized {
+pub trait Checkpointable: Sized + Debug + Clone {
     /// Creates a checkpoint of the current state and 
     /// returns the checkpoint id associated with it.
     fn checkpoint(&self) -> u64;
@@ -51,13 +52,28 @@ lazy_static! {
     static ref DUMMY_BACKEND: Mutex<HashMap<u64, HashMap<u64, DummyCheckpoint>>> = Mutex::new(HashMap::new());
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 /// Placeholder checkpoint type
 pub struct DummyCheckpoint {
     id: Arc<Mutex<u64>>,
     backend_id: u64,
     location: Arc<Mutex<StorageLocation>>,
     height: Arc<Mutex<u64>>,
+}
+
+impl Clone for DummyCheckpoint {
+    fn clone(&self) -> Self {
+        let id = self.id.lock();
+        let location = self.location.lock();
+        let height = self.height.lock();
+        
+        DummyCheckpoint {
+            id: Arc::new(Mutex::new(id.clone())),
+            backend_id: self.backend_id,
+            location: Arc::new(Mutex::new(location.clone())),
+            height: Arc::new(Mutex::new(height.clone())),
+        }
+    }
 }
 
 impl DummyCheckpoint {
