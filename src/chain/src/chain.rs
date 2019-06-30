@@ -442,6 +442,8 @@ impl<B: Block> Chain<B> {
             ElasticArray128::<u8>::from_slice(&block_hash.0)
         );
 
+        self.orphan_pool.remove(&block_hash);
+
         // Remove from height mappings
         if let Some(orphans) = self.heights_mapping.get_mut(&block.height()) {
             orphans.remove(&block_hash);
@@ -750,9 +752,10 @@ impl<B: Block> Chain<B> {
     /// which has the given canidate tip. Do nothing if this is not
     /// possible.
     fn attempt_switch(&mut self, candidate_tip: Arc<B>) {
-        assert!(self
-            .valid_tips
-            .contains(&candidate_tip.block_hash().unwrap()));
+        let candidate_hash = candidate_tip.block_hash().unwrap();
+        assert!(self.valid_tips.contains(&candidate_hash));
+        assert!(self.disconnected_heads_mapping.get(&candidate_hash).is_none());
+        assert!(self.disconnected_tips_mapping.get(&candidate_hash).is_none());
 
         if candidate_tip.height() > self.height + B::SWITCH_OFFSET as u64 {
             let mut to_write: VecDeque<Arc<B>> = VecDeque::new();
@@ -782,12 +785,20 @@ impl<B: Block> Chain<B> {
             // Rewind to horizon
             self.rewind(&horizon).unwrap();
 
+            // Set the canonical tip state as the one belonging to the new tip
+            self.canonical_tip_state = self.valid_tips_states.remove(&candidate_hash).unwrap();
+
             // Write the blocks from the candidate chain
             for block in to_write {
+                let block_hash = block.block_hash().unwrap();
                 // Don't write the horizon
-                if block.block_hash().unwrap() == horizon {
+                if block_hash == horizon {
                     continue;
                 }
+
+                self.disconnected_heads_mapping.remove(&block_hash);
+                self.disconnected_tips_mapping.remove(&block_hash);
+                self.disconnected_heads_heights.remove(&block_hash);
 
                 self.write_block(block);
             }
@@ -884,7 +895,10 @@ impl<B: Block> Chain<B> {
         inverse_height: &mut u64,
         status: &mut OrphanType,
     ) {
-        assert!(self.valid_tips.contains(&tip.block_hash().unwrap()));
+        let block_hash = tip.block_hash().unwrap();
+        assert!(self.valid_tips.contains(&block_hash));
+        assert!(self.disconnected_heads_mapping.get(&block_hash).is_none());
+        assert!(self.disconnected_tips_mapping.get(&block_hash).is_none());
 
         let iterable = self
             .disconnected_heads_heights
@@ -996,6 +1010,8 @@ impl<B: Block> Chain<B> {
                                 let block_hash = e.block_hash().unwrap();
                                 self.valid_tips_states.remove(&parent_hash);
                                 self.valid_tips.remove(&parent_hash);
+                                self.disconnected_heads_mapping.remove(&parent_hash);
+                                self.disconnected_tips_mapping.remove(&parent_hash);
                                 new_previous_set.insert(block_hash, state);
                                 matched_set.insert(parent_hash);
 
@@ -1024,6 +1040,7 @@ impl<B: Block> Chain<B> {
 
                         // Update mappings
                         self.disconnected_tips_mapping.remove(&tip_hash);
+                        self.disconnected_heads_mapping.remove(&tip_hash);
                         self.valid_tips.insert(tip_hash.clone());
                         self.valid_tips_states.insert(tip_hash.clone(), state.clone());
                     }
@@ -1038,6 +1055,7 @@ impl<B: Block> Chain<B> {
 
                         // Update mappings
                         self.disconnected_tips_mapping.remove(&tip_hash);
+                        self.disconnected_heads_mapping.remove(&tip_hash);
                         self.valid_tips.insert(tip_hash.clone());
                         self.valid_tips_states.insert(tip_hash, state);
                     }
@@ -1157,7 +1175,7 @@ impl<B: Block> Chain<B> {
                     return Err(ChainErr::BadHeight);
                 }
 
-                println!("DEBUG APPEND 1");
+                println!("DEBUG APPEND 1 CANONICAL TIP: {:?}, BLOCK: {:?}, CHAIN STATE: {:?}", self.canonical_tip, block, self.canonical_tip_state);
                 let append_condition = {
                     match B::append_condition(block.clone(), self.canonical_tip_state.clone()) {
                         // Set new tip state if the append can proceed
@@ -6784,13 +6802,19 @@ mod tests {
         chain.append_block(blocks.remove(0)).unwrap(); // A
         chain.append_block(blocks.remove(0)).unwrap(); // D_prime
 
-        assert_eq!(chain.height(), 4);
-        assert_eq!(chain.canonical_tip, D_prime.clone());
-        assert_eq!(chain.valid_tips, set![C.block_hash().unwrap(), C_prime.block_hash().unwrap()]);
-        
-        for b in blocks {
-            chain.append_block(b).unwrap();
-        }
+        assert_eq!(chain.height(), 5);
+        assert_eq!(chain.canonical_tip, E_prime.clone());
+        assert_eq!(chain.valid_tips, set![C_second.block_hash().unwrap(), C.block_hash().unwrap()]);
+
+        chain.append_block(blocks.remove(0)).unwrap(); // F
+        chain.append_block(blocks.remove(0)).unwrap(); // D_tertiary
+        chain.append_block(blocks.remove(0)).unwrap(); // E
+        chain.append_block(blocks.remove(0)).unwrap(); // D
+        chain.append_block(blocks.remove(0)).unwrap(); // D_second
+
+        assert_eq!(chain.height(), 7);
+        assert_eq!(chain.canonical_tip, G);
+        assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
     }
 
     quickcheck! {
@@ -6921,7 +6945,8 @@ mod tests {
             }
 
             assert_eq!(hard_chain.height(), 7);
-            assert_eq!(hard_chain.canonical_tip(), G);
+            assert_eq!(hard_chain.canonical_tip, G);
+            assert_eq!(hard_chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
 
             true
         }
