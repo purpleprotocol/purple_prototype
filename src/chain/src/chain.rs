@@ -547,7 +547,6 @@ impl<B: Block> Chain<B> {
 
                 if let Some(orphans) = self.heights_mapping.get(&h) {
                     if orphans.len() == 1 {
-                        println!("DEBUG A1");
                         // HACK: Maybe we can find a better/faster way to get the only item of a set?
                         let (orphan_hash, _) = orphans.iter().find(|_| true).unwrap();
                         let orphan = self.orphan_pool.get(orphan_hash).unwrap();
@@ -598,7 +597,6 @@ impl<B: Block> Chain<B> {
                             break;
                         }
                     } else if orphans.is_empty() {
-                        println!("DEBUG A2");
                         if prev_valid_tips.is_empty() {
                             break;
                         } else {
@@ -611,7 +609,8 @@ impl<B: Block> Chain<B> {
                             }
                         }
                     } else {
-                        println!("DEBUG A3");
+                        let mut new_prev_valid_tips = prev_valid_tips.clone();
+                        let mut obsolete = HashSet::new();
                         let mut buf: Vec<(Hash, u64, B::ChainState)> = Vec::with_capacity(orphans.len());
 
                         for (o, i_h) in orphans.iter() {
@@ -622,9 +621,7 @@ impl<B: Block> Chain<B> {
                             let canonical_tip = self.canonical_tip.block_hash().unwrap();
 
                             if orphan_parent == canonical_tip {
-                                println!("DEBUG A4");
                                 let new_state = {
-                                    println!("DEBUG 1 ORPHAN: {:?}, CHAIN_STATE: {:?}", orphan, self.canonical_tip_state);
                                     match B::append_condition(orphan.clone(), self.canonical_tip_state.clone()) {
                                         // Set new tip state if the append can proceed
                                         Ok(new_tip_state) => Some(new_tip_state),
@@ -632,16 +629,12 @@ impl<B: Block> Chain<B> {
                                     }
                                 };
 
-                                println!("DEBUG 2 NEW STATE: {:?}", new_state);
-
                                 if let Some(new_state) = new_state {
                                     buf.push((o.clone(), i_h.clone(), new_state));
                                 } else {
-                                    println!("DEBUG A11");
                                     // TODO: Maybe cleanup here?
                                 }
                             } else if prev_valid_tips.contains(&orphan_parent) {
-                                println!("DEBUG A5");
                                 let append_condition = {
                                     let parent_state = self.valid_tips_states.get(&orphan_parent).unwrap();
 
@@ -651,7 +644,6 @@ impl<B: Block> Chain<B> {
                                         _ => None
                                     }
                                 };
-                                println!("DEBUG A6");
 
                                 if let Some(new_tip_state) = append_condition {
                                     // Mark old tip as belonging to valid chain
@@ -663,20 +655,27 @@ impl<B: Block> Chain<B> {
                                     let status = self.validations_mapping.get_mut(&o).unwrap();
                                     *status = OrphanType::ValidChainTip;
 
-                                    self.valid_tips_states.remove(&orphan_parent);
+                                    obsolete.insert(orphan_parent.clone());
                                     self.valid_tips_states.insert(o.clone(), new_tip_state);
 
                                     // Add to valid tips sets
-                                    self.valid_tips.remove(&orphan_parent);
                                     self.valid_tips.insert(o.clone());
-                                    prev_valid_tips.remove(&orphan_parent);
-                                    prev_valid_tips.insert(o.clone());
+                                    new_prev_valid_tips.remove(&orphan_parent);
+                                    new_prev_valid_tips.insert(o.clone());
                                 } else {
-                                    println!("DEBUG A8");
                                     // TODO: Maybe cleanup here?
                                 }
+                            } else {
                             }
                         }
+
+                        // Remove obsolete tips
+                        for b in obsolete.iter() {
+                            self.valid_tips.remove(&b);
+                            self.valid_tips_states.remove(&b);
+                        }
+
+                        prev_valid_tips = new_prev_valid_tips;
 
                         if buf.is_empty() {
                             if prev_valid_tips.is_empty() {
@@ -698,7 +697,6 @@ impl<B: Block> Chain<B> {
 
                         if !done {
                             if let Some((to_write, _, state)) = buf.pop() {
-                                println!("DEBUG A7 CHAIN STATE: {:?}", state);
                                 let to_write = self.orphan_pool.get(&to_write).unwrap().clone();
                                 let block_hash = to_write.block_hash().unwrap();
                                 let height = to_write.height();
@@ -718,14 +716,9 @@ impl<B: Block> Chain<B> {
                                     self.last_checkpoint_height = Some(height);
                                 }
 
-                                println!("DEBGU A7B CHAIN STATE: {:?}", state);
-
                                 self.make_valid_tips(&block_hash, state.clone());
-
-                                println!("DEBUG A9 CHAIN_STATE: {:?}", state);
                                 self.canonical_tip_state = state;
                                 self.write_block(to_write.clone());
-                                println!("DEBGU A10");
                             }
                         }
 
@@ -739,9 +732,8 @@ impl<B: Block> Chain<B> {
                             self.valid_tips_states.insert(o.clone(), state);
                         }
                     }
-                } else {
-                    break;
-                }
+                } 
+
 
                 h += 1;
             }
@@ -941,6 +933,12 @@ impl<B: Block> Chain<B> {
                 *inverse_height = largest_height - tip_height;
                 *tip = largest_tip;
 
+                // Remove old tip if we found a match
+                self.valid_tips.remove(&block_hash);
+                self.valid_tips_states.remove(&block_hash);
+                let old_tip_status = self.validations_mapping.get_mut(&block_hash).unwrap();
+                *old_tip_status = OrphanType::BelongsToValidChain;
+
                 self.make_valid_tips(&head_hash.clone(), tip_state);
             } else {
                 // TODO: Maybe cleanup here?
@@ -962,7 +960,6 @@ impl<B: Block> Chain<B> {
     fn make_valid_tips(&mut self, head: &Hash, head_state: B::ChainState) {
         if self.disconnected_heads_mapping.remove(head).is_some() {
             let head_block = self.orphan_pool.get(head).unwrap();
-            println!("DEBUG HEAD BLOCK: {:?}, STATE: {:?}", head_block, head_state);
             let mut cur_height = head_block.height() + 1;
             let mut previous: HashMap<Hash, B::ChainState> = HashMap::new();
 
@@ -1004,9 +1001,7 @@ impl<B: Block> Chain<B> {
                             
                         if let Some(state) = previous.get(&parent_hash) {
                             // TODO: Reduce number of state clones
-                            println!("DEBUG !7 BLOCK: {:?}, STATE: {:?}", e, state);
                             if let Ok(state) = B::append_condition(e.clone(), state.clone()) {
-                                println!("DEBUG !8");
                                 let block_hash = e.block_hash().unwrap();
                                 self.valid_tips_states.remove(&parent_hash);
                                 self.valid_tips.remove(&parent_hash);
@@ -1022,7 +1017,6 @@ impl<B: Block> Chain<B> {
 
                                 *status = OrphanType::BelongsToValidChain;
                             } else {
-                                println!("DEBUG !9");
                                 // TODO: Maybe cleanup here?
                             }
                         } 
@@ -1143,6 +1137,7 @@ impl<B: Block> Chain<B> {
     }
 
     pub fn append_block(&mut self, block: Arc<B>) -> Result<(), ChainErr> {
+
         let min_height = if self.height > B::MIN_HEIGHT {
             self.height - B::MIN_HEIGHT
         } else {
@@ -1166,8 +1161,6 @@ impl<B: Block> Chain<B> {
             // First attempt to place the block after the
             // tip canonical block.
             if parent_hash == tip.block_hash().unwrap() {
-                println!("DEBUG ENTERED 1");
-
                 let height = block.height();
                 
                 // The height must be equal to that of the parent plus one
@@ -1175,7 +1168,6 @@ impl<B: Block> Chain<B> {
                     return Err(ChainErr::BadHeight);
                 }
 
-                println!("DEBUG APPEND 1 CANONICAL TIP: {:?}, BLOCK: {:?}, CHAIN STATE: {:?}", self.canonical_tip, block, self.canonical_tip_state);
                 let append_condition = {
                     match B::append_condition(block.clone(), self.canonical_tip_state.clone()) {
                         // Set new tip state if the append can proceed
@@ -1184,14 +1176,9 @@ impl<B: Block> Chain<B> {
                     }
                 };
 
-                println!("DEBUG APPEND 2");
-
                 if let Some(new_tip_state) = append_condition {
-                    println!("DEBUG APPEND 3");
                     // Write block to the chain
                     self.write_block(block);
-
-                    println!("DEBUG APPEND 4");
 
                     // Perform checkpoint
                     {
@@ -1214,16 +1201,11 @@ impl<B: Block> Chain<B> {
 
                     self.canonical_tip_state = new_tip_state;
 
-                    println!("DEBUG APPEND 5");
-
                     // Process orphans
                     self.process_orphans(height + 1);
 
-                    println!("DEBUG APPEND 6");
-
                     Ok(())
                 } else {
-                    println!("DEBUG 1: BLOCK: {:?}, HEIGHT: {}", block, self.height);
                     Err(ChainErr::BadAppendCondition)
                 }
             } else {
@@ -1237,7 +1219,6 @@ impl<B: Block> Chain<B> {
                 // orphan pool.
                 match self.db.get(&parent_hash) {
                     Some(parent_block) => {
-                        println!("DEBUG ENTERED 2");
                         let height = block.height();
                         let parent_height = B::from_bytes(&parent_block).unwrap().height();
 
@@ -1252,7 +1233,6 @@ impl<B: Block> Chain<B> {
                             }
 
                             if parent_height == last_checkpoint_height {
-                                println!("DEBUG ENTERED A1");
                                 // Simply retrieve checkpointed state in this case
                                 let id = self.disk_heights_checkpoints.get(&parent_height).unwrap();
                                 
@@ -1263,25 +1243,18 @@ impl<B: Block> Chain<B> {
                                     panic!("Could not find disk state!");
                                 }
                             } else if parent_height > last_checkpoint_height {
-                                println!("DEBUG A2");
                                 self.fetch_next_state(last_checkpoint_height, parent_height)
                             } else {
-                                println!("DEBUG A3");
                                 self.search_fetch_next_state(parent_height)
                             }
                         } else {
-                            println!("DEBUG A4: PARENT HEIGHT: {}", parent_height);
                             self.search_fetch_next_state(parent_height)
                         };
-
-                        println!("DEBUG !1");
 
                         let tip_state = match B::append_condition(block.clone(), parent_state) {
                             Ok(new_tip_state) => Some(new_tip_state),
                             Err(_) => None
                         };
-
-                        println!("DEBUG !2 BLOCK: {:?}, TIP STATE: {:?}", block, tip_state);
 
                         if let Some(tip_state) = tip_state {
                             // Insert new state to valid tips mapping
@@ -1302,7 +1275,6 @@ impl<B: Block> Chain<B> {
 
                             Ok(())
                         } else {
-                            println!("DEBUG 2");
                             Err(ChainErr::BadAppendCondition)
                         }
                     }
@@ -1373,7 +1345,6 @@ impl<B: Block> Chain<B> {
                                     }
                                 }
                                 OrphanType::ValidChainTip => {
-                                    println!("DEBUG !3");
                                     let append_condition = {
                                         let tip_state = self.valid_tips_states.get_mut(&parent_hash).unwrap();
 
@@ -1386,7 +1357,6 @@ impl<B: Block> Chain<B> {
                                             _ => None
                                         }
                                     };
-                                    println!("DEBUG !4");
 
                                     if let Some(tip_state) = append_condition {
                                         // Change status of old tip
@@ -1399,6 +1369,7 @@ impl<B: Block> Chain<B> {
                                         // Mark orphan as the new tip
                                         self.write_orphan(block.clone(), status, inverse_height);
 
+
                                         // Attempt to attach to disconnected chains
                                         self.attempt_attach_valid(
                                             &mut tip,
@@ -1406,6 +1377,7 @@ impl<B: Block> Chain<B> {
                                             &mut inverse_height,
                                             &mut status,
                                         );
+
 
                                         // Traverse parents and modify their inverse heights
                                         self.traverse_inverse(
@@ -1426,7 +1398,6 @@ impl<B: Block> Chain<B> {
                                         // the canonical chain, and if so, switch chains.
                                         self.attempt_switch(tip);
                                     } else {
-                                        println!("DEBUG 3");
                                         return Err(ChainErr::BadAppendCondition);
                                     }
                                 }
@@ -1832,7 +1803,6 @@ mod tests {
         fn append_condition(block: Arc<DummyBlock>, mut chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
             let valid = chain_state.height() == block.height() - 1;
             
-            //println!("DEBUG VALID: {}, CHAIN_STATE_HEIGHT: {}, BLOCK_HEIGHT: {}", valid, chain_state.height(), block.height());
 
             if valid {
                 chain_state.increment();
@@ -2272,18 +2242,15 @@ mod tests {
         );
 
         assert_eq!(hard_chain.height(), 1);
-        println!("DEBUG PUSHING A");
         assert_eq!(hard_chain.canonical_tip(), A);
 
         // We now append `B'` and the canonical tip should be `B'`
-        println!("DEBUG PUSHING B'");
         hard_chain.append_block(B_prime.clone()).unwrap();
         assert_eq!(hard_chain.valid_tips_states.len(), 0);
 
         assert_eq!(hard_chain.height(), 2);
         assert_eq!(hard_chain.canonical_tip(), B_prime);
 
-        println!("DEBUG PUSHING C''");
         hard_chain.append_block(C_second.clone()).unwrap();
 
         // The chain should now be pointing to `F''` as being the canonical tip
@@ -6929,16 +6896,15 @@ mod tests {
             block_letters.insert(D_tertiary.block_hash().unwrap(), "D'''");
 
             // Uncomment this for printing a failed order
-            // let blocks_clone = blocks.clone();
+            let blocks_clone = blocks.clone();
 
-            // std::panic::set_hook(Box::new(move |_| {
-            //     print!("Failed block ordering: ");
-            //     for b in blocks_clone.clone() {
-            //         print!("{}, ", block_letters.get(&b.block_hash().unwrap()).unwrap());
-            //     }
-            //     print!("\n");
-            //     println!("Custom panic hook");
-            // }));
+            std::panic::set_hook(Box::new(move |_| {
+                print!("Failed block ordering: ");
+                for b in blocks_clone.clone() {
+                    print!("{}, ", block_letters.get(&b.block_hash().unwrap()).unwrap());
+                }
+                print!("\n");
+            }));
 
             for b in blocks {
                 hard_chain.append_block(b).unwrap();
@@ -7117,7 +7083,6 @@ mod tests {
             block_letters.insert(D_tertiary.block_hash().unwrap(), "D'''");
 
             for b in blocks {
-                println!("DEBUG BLOCK: {}", block_letters.get(&b.block_hash().unwrap()).unwrap());
                 hard_chain.append_block(b).unwrap();
             }
 
