@@ -3,10 +3,10 @@
 #[macro_use]
 extern crate criterion;
 
+extern crate mimalloc;
 extern crate causality;
 extern crate crypto;
 extern crate events;
-extern crate network;
 extern crate patricia_trie;
 extern crate persistence;
 extern crate test;
@@ -15,6 +15,7 @@ extern crate transactions;
 extern crate quickcheck;
 extern crate rand;
 
+use mimalloc::MiMalloc;
 use causality::Stamp;
 use criterion::Criterion;
 use crypto::{Hash, Identity};
@@ -25,6 +26,9 @@ use persistence::{BlakeDbHasher, Codec};
 use test::Bencher;
 use transactions::Tx;
 use std::sync::Arc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("calculate root hash 30", |b| {

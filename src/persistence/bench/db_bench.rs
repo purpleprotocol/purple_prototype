@@ -6,12 +6,17 @@ extern crate persistence;
 extern crate rocksdb;
 extern crate tempdir;
 extern crate rand;
+extern crate mimalloc;
 
+use mimalloc::MiMalloc;
 use criterion::Criterion;
 use rocksdb::{Options, DB};
 use rand::Rng;
 use std::sync::Arc;
 use persistence::PersistentDb;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("default options flush no cf - 10 items", |b| {

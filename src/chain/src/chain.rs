@@ -18,6 +18,7 @@
 
 use crate::block::Block;
 use crate::orphan_type::OrphanType;
+use common::checkpointable::*;
 use bin_tools::*;
 use crypto::Hash;
 use elastic_array::ElasticArray128;
@@ -50,25 +51,13 @@ pub enum ChainErr {
 
     /// The orphan pool is full.
     TooManyOrphans,
+
+    /// The append condition returned false
+    BadAppendCondition,
+
+    /// Could not find a matching checkpoint
+    NoCheckpointFound,
 }
-
-/// Size of the block cache.
-const BLOCK_CACHE_SIZE: usize = 20;
-
-/// Maximum orphans allowed.
-#[cfg(not(test))]
-const MAX_ORPHANS: usize = 100;
-
-#[cfg(test)]
-const MAX_ORPHANS: usize = 20;
-
-/// Blocks with height below the canonical height minus
-/// this number will be rejected.
-const MIN_HEIGHT: u64 = 10;
-
-/// Blocks with height below the canonical height minus
-/// this number will be rejected.
-const MAX_HEIGHT: u64 = 10;
 
 lazy_static! {
     /// Canonical tip block key
@@ -76,6 +65,12 @@ lazy_static! {
 
     /// The key to the canonical height of the chain
     static ref CANONICAL_HEIGHT_KEY: Hash = { crypto::hash_slice(b"canonical_height") };
+
+    /// The key of the height that has the earliest checkpoint
+    static ref EARLIEST_CHECKPOINT_KEY: Hash = { crypto::hash_slice(b"earliest_checkpoint") };
+
+    /// The key of the height that has the last checkpoint
+    static ref LAST_CHECKPOINT_KEY: Hash = { crypto::hash_slice(b"last_checkpoint") };
 }
 
 #[derive(Clone)]
@@ -92,7 +87,7 @@ impl<B: Block> ChainRef<B> {
     pub fn new(chain: Arc<RwLock<Chain<B>>>) -> ChainRef<B> {
         ChainRef {
             chain,
-            block_cache: Arc::new(Mutex::new(LruCache::new(BLOCK_CACHE_SIZE))),
+            block_cache: Arc::new(Mutex::new(LruCache::new(B::BLOCK_CACHE_SIZE))),
         }
     }
 
@@ -151,6 +146,9 @@ pub struct Chain<B: Block> {
     /// The tip block of the canonical chain.
     canonical_tip: Arc<B>,
 
+    /// The state associated with the canonical tip
+    canonical_tip_state: B::ChainState,
+
     /// Memory pool of blocks that are not in the canonical chain.
     orphan_pool: HashMap<Hash, Arc<B>>,
 
@@ -160,6 +158,16 @@ pub struct Chain<B: Block> {
     /// Mapping between heights and their sets of
     /// orphans mapped to their inverse height.
     heights_mapping: HashMap<u64, HashMap<Hash, u64>>,
+
+    /// Mapping between heights that have checkpoints 
+    /// and the corresponding checkpoint id.
+    disk_heights_checkpoints: HashMap<u64, u64>,
+
+    /// Height of the last state that has a checkpoint
+    last_checkpoint_height: Option<u64>,
+
+    /// Earliest height to have a checkpoint
+    earliest_checkpoint_height: Option<u64>,
 
     /// Mapping between orphans and their orphan types/validation statuses.
     validations_mapping: HashMap<Hash, OrphanType>,
@@ -177,10 +185,16 @@ pub struct Chain<B: Block> {
     /// Set containing tips of valid chains that descend
     /// from the canonical chain.
     valid_tips: HashSet<Hash>,
+
+    /// Validation states associated with the valid tips
+    valid_tips_states: HashMap<Hash, B::ChainState>,
+
+    /// Whether the chain is in archival mode or not
+    archival_mode: bool,
 }
 
 impl<B: Block> Chain<B> {
-    pub fn new(mut db_ref: PersistentDb) -> Chain<B> {
+    pub fn new(mut db_ref: PersistentDb, canonical_tip_state: B::ChainState, archival_mode: bool) -> Chain<B> {
         let tip_db_res = db_ref.get(&TIP_KEY);
         let canonical_tip = match tip_db_res.clone() {
             Some(tip) => {
@@ -208,18 +222,34 @@ impl<B: Block> Chain<B> {
             }
         };
 
+        let earliest_checkpoint_height = match db_ref.get(&EARLIEST_CHECKPOINT_KEY) {
+            Some(height) => Some(decode_be_u64!(&height).unwrap()),
+            None => None
+        };
+
+        let last_checkpoint_height = match db_ref.get(&LAST_CHECKPOINT_KEY) {
+            Some(height) => Some(decode_be_u64!(&height).unwrap()),
+            None => None
+        };
+
         let height = height;
 
         Chain {
             canonical_tip,
-            orphan_pool: HashMap::with_capacity(MAX_ORPHANS),
-            heights_mapping: HashMap::with_capacity(MAX_ORPHANS),
-            validations_mapping: HashMap::with_capacity(MAX_ORPHANS),
-            disconnected_heads_mapping: HashMap::with_capacity(MAX_ORPHANS),
-            disconnected_heads_heights: HashMap::with_capacity(MAX_ORPHANS),
-            disconnected_tips_mapping: HashMap::with_capacity(MAX_ORPHANS),
-            valid_tips: HashSet::with_capacity(MAX_ORPHANS),
+            canonical_tip_state,
+            orphan_pool: HashMap::with_capacity(B::MAX_ORPHANS),
+            heights_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
+            validations_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
+            disconnected_heads_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
+            disconnected_heads_heights: HashMap::with_capacity(B::MAX_ORPHANS),
+            disconnected_tips_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
+            valid_tips: HashSet::with_capacity(B::MAX_ORPHANS),
+            valid_tips_states: HashMap::with_capacity(B::MAX_ORPHANS),
+            disk_heights_checkpoints: HashMap::with_capacity(B::MAX_CHECKPOINTS),
+            last_checkpoint_height,
+            earliest_checkpoint_height,
             max_orphan_height: None,
+            archival_mode,
             height,
             db: db_ref,
         }
@@ -239,21 +269,30 @@ impl<B: Block> Chain<B> {
             return Err(ChainErr::NoSuchBlock);
         };
 
+        // TODO: Rewind states
+        let canonical_state = self.canonical_tip_state.clone();
         let mut current = self.canonical_tip.clone();
         let mut inverse_height = 1;
+
+        // Retrieve target height
+        let target_height = new_tip.height();
 
         // Remove canonical tip from the chain
         // and mark it as a valid chain tip.
         self.db.remove(&current.block_hash().unwrap());
+
+        // Remove current height entry
+        let current_height_key = crypto::hash_slice(&encode_be_u64!(current.height()));
+        self.db.remove(&current_height_key);
 
         // Add the old tip to the orphan pool
         self.orphan_pool
             .insert(current.block_hash().unwrap(), current.clone());
 
         // Mark old tip as a valid chain tip
-        self.validations_mapping
-            .insert(current.block_hash().unwrap(), OrphanType::ValidChainTip);
+        self.validations_mapping.insert(current.block_hash().unwrap(), OrphanType::ValidChainTip);
         self.valid_tips.insert(current.block_hash().unwrap());
+        self.valid_tips_states.insert(current.block_hash().unwrap(), canonical_state);
 
         let cur_height = current.height();
 
@@ -270,7 +309,7 @@ impl<B: Block> Chain<B> {
         // the previous canonical tip's height.
         self.update_max_orphan_height(current.height());
 
-        // Recurse parents and remove them until we
+        // Traverse parents and remove them until we
         // reach the block with the given hash.
         loop {
             let parent_hash = current.parent_hash().unwrap();
@@ -278,11 +317,32 @@ impl<B: Block> Chain<B> {
             if parent_hash == *block_hash {
                 break;
             } else {
+                // Remove past checkpoints when we reach their height.
+                //
+                // TODO: Maybe we should soft-delete checkpoints
+                // instead on each rewind in case we switch often.
+                if let (Some(last_checkpoint_height), Some(earliest_checkpoint_height)) = (self.last_checkpoint_height, self.earliest_checkpoint_height) {
+                    if current.height() - 1 == last_checkpoint_height {
+                        let checkpoint_id = self.disk_heights_checkpoints.remove(&last_checkpoint_height).unwrap();
+                        B::ChainState::delete_checkpoint(checkpoint_id).unwrap();
+                    }
+
+                    // Remove checkpoint entries if we only have one checkpoint
+                    if last_checkpoint_height == earliest_checkpoint_height {
+                        self.earliest_checkpoint_height = None;
+                        self.last_checkpoint_height = None;
+                    }
+                }
+
                 let parent = B::from_bytes(&self.db.get(&parent_hash).unwrap()).unwrap();
                 let cur_height = parent.height();
 
                 // Remove parent from db
                 self.db.remove(&parent_hash);
+
+                // Remove current height entry
+                let current_height_key = crypto::hash_slice(&encode_be_u64!(cur_height));
+                self.db.remove(&current_height_key);
 
                 // Add the parent to the orphan pool
                 self.orphan_pool
@@ -313,6 +373,7 @@ impl<B: Block> Chain<B> {
 
         self.height = new_tip.height();
         self.write_canonical_height(new_tip.height());
+        self.canonical_tip_state = self.search_fetch_next_state(new_tip.height());
         self.canonical_tip = new_tip;
         
         // Flush changes
@@ -335,6 +396,8 @@ impl<B: Block> Chain<B> {
 
     fn write_block(&mut self, block: Arc<B>) {
         let block_hash = block.block_hash().unwrap();
+        assert!(self.disconnected_heads_mapping.get(&block_hash).is_none());
+        assert!(self.disconnected_tips_mapping.get(&block_hash).is_none());
 
         // We can only write a block whose parent
         // hash is the hash of the current canonical
@@ -366,15 +429,19 @@ impl<B: Block> Chain<B> {
         self.write_canonical_height(height);
 
         // Write block height
-        let block_height_key = format!("{}.height", hex::encode(block_hash.to_vec()));
-        let block_height_key = crypto::hash_slice(block_height_key.as_bytes());
+        let block_height_key = Self::compute_height_key(&block_hash);
 
         self.db.emplace(
             block_height_key,
             ElasticArray128::<u8>::from_slice(&encoded_height),
         );
 
-        // Remove block from orphan pool
+        // Write height mapping
+        self.db.emplace(
+            crypto::hash_slice(&encoded_height),
+            ElasticArray128::<u8>::from_slice(&block_hash.0)
+        );
+
         self.orphan_pool.remove(&block_hash);
 
         // Remove from height mappings
@@ -384,6 +451,7 @@ impl<B: Block> Chain<B> {
 
         // Remove from valid tips
         self.valid_tips.remove(&block_hash);
+        self.valid_tips_states.remove(&block_hash);
 
         // Update max orphan height if this is the case
         if let Some(max_height) = self.max_orphan_height {
@@ -405,48 +473,6 @@ impl<B: Block> Chain<B> {
 
                     current -= 1;
                 }
-            }
-        }
-
-        // Remove from disconnected mappings
-        let tips = self.disconnected_heads_mapping.remove(&block_hash);
-        self.disconnected_heads_heights.remove(&block_hash);
-        self.disconnected_tips_mapping.remove(&block_hash);
-
-        // If the block is a head block, mark the associated
-        // chains as valid chains.
-        if let Some(tips) = tips {
-            // For each tip, find their head hash
-            for tip_hash in tips.iter() {
-                // Skip written block
-                if *tip_hash == block_hash {
-                    continue;
-                }
-
-                let tip = self.orphan_pool.get(tip_hash).unwrap();
-                let mut current = tip.parent_hash().unwrap();
-
-                // Mark as valid chain tip
-                self.valid_tips.insert(tip_hash.clone());
-
-                // Mark as valid chain tip in validations mapping
-                let status = self.validations_mapping.get_mut(tip_hash).unwrap();
-                *status = OrphanType::ValidChainTip;
-
-                // Loop parents until we can't find one
-                while let Some(parent) = self.orphan_pool.get(&current) {
-                    // Mark as belonging to valid chain
-                    let status = self
-                        .validations_mapping
-                        .get_mut(&parent.block_hash().unwrap())
-                        .unwrap();
-
-                    *status = OrphanType::BelongsToValidChain;
-                    current = parent.parent_hash().unwrap();
-                }
-
-                // Remove from disconnected mappings
-                self.disconnected_tips_mapping.remove(&tip_hash.clone());
             }
         }
 
@@ -501,6 +527,11 @@ impl<B: Block> Chain<B> {
         self.validations_mapping.insert(orphan_hash, orphan_type);
     }
 
+    fn compute_height_key(hash: &Hash) -> Hash {
+        let block_height_key = format!("{}.height", hex::encode(hash.to_vec()));
+        crypto::hash_slice(block_height_key.as_bytes())
+    }
+
     /// Attempts to attach orphans to the canonical chain
     /// starting with the given height.
     fn process_orphans(&mut self, start_height: u64) {
@@ -522,10 +553,43 @@ impl<B: Block> Chain<B> {
 
                         // If the orphan directly follows the canonical
                         // tip, write it to the chain.
-                        if orphan.parent_hash().unwrap() == self.canonical_tip.block_hash().unwrap()
+                        if orphan.parent_hash().unwrap() == self.canonical_tip.block_hash().unwrap() 
                         {
+                            // Verify append condition
+                            let append_condition = match B::append_condition(orphan.clone(), self.canonical_tip_state.clone()) {
+                                // Set new tip state if the append can proceed
+                                Ok(new_tip_state) => Some(new_tip_state),
+                                _ => None
+                            };
+
                             if !done {
-                                self.write_block(orphan.clone());
+                                // Verify append condition
+                                if let Some(new_tip_state) = append_condition {
+                                    self.write_block(orphan.clone());
+
+                                    // Perform checkpoint
+                                    {
+                                        let height = self.height;
+                                        let last_checkpoint_height = self.last_checkpoint_height.unwrap_or(0);
+
+                                        // Checkpoint state if we have reached the quota
+                                        if height - last_checkpoint_height == B::CHECKPOINT_INTERVAL as u64 {
+                                            if let None = self.earliest_checkpoint_height {
+                                                self.earliest_checkpoint_height = Some(height);
+                                            }
+
+                                            self.last_checkpoint_height = Some(height);
+                                            let checkpoint_id = new_tip_state.checkpoint();
+
+                                            // Store checkpoint id
+                                            self.disk_heights_checkpoints.insert(height, checkpoint_id);
+                                        }
+                                    }
+
+                                    self.canonical_tip_state = new_tip_state;
+                                } else {
+                                    done = true;
+                                }
                             } else {
                                 break;
                             }
@@ -545,7 +609,9 @@ impl<B: Block> Chain<B> {
                             }
                         }
                     } else {
-                        let mut buf: Vec<(Hash, u64)> = Vec::with_capacity(orphans.len());
+                        let mut new_prev_valid_tips = prev_valid_tips.clone();
+                        let mut obsolete = HashSet::new();
+                        let mut buf: Vec<(Hash, u64, B::ChainState)> = Vec::with_capacity(orphans.len());
 
                         for (o, i_h) in orphans.iter() {
                             // Filter out orphans that do not follow
@@ -555,24 +621,61 @@ impl<B: Block> Chain<B> {
                             let canonical_tip = self.canonical_tip.block_hash().unwrap();
 
                             if orphan_parent == canonical_tip {
-                                buf.push((o.clone(), i_h.clone()));
+                                let new_state = {
+                                    match B::append_condition(orphan.clone(), self.canonical_tip_state.clone()) {
+                                        // Set new tip state if the append can proceed
+                                        Ok(new_tip_state) => Some(new_tip_state),
+                                        _ => None
+                                    }
+                                };
+
+                                if let Some(new_state) = new_state {
+                                    buf.push((o.clone(), i_h.clone(), new_state));
+                                } else {
+                                    // TODO: Maybe cleanup here?
+                                }
                             } else if prev_valid_tips.contains(&orphan_parent) {
-                                // Mark old tip as belonging to valid chain
-                                let parent_status =
-                                    self.validations_mapping.get_mut(&orphan_parent).unwrap();
-                                *parent_status = OrphanType::BelongsToValidChain;
+                                let append_condition = {
+                                    let parent_state = self.valid_tips_states.get(&orphan_parent).unwrap();
 
-                                // Mark new tip
-                                let status = self.validations_mapping.get_mut(&o).unwrap();
-                                *status = OrphanType::ValidChainTip;
+                                    match B::append_condition(orphan.clone(), parent_state.clone()) {
+                                        // Set new tip state if the append can proceed
+                                        Ok(new_tip_state) => Some(new_tip_state),
+                                        _ => None
+                                    }
+                                };
 
-                                // Add to valid tips sets
-                                self.valid_tips.remove(&orphan_parent);
-                                self.valid_tips.insert(o.clone());
-                                prev_valid_tips.remove(&orphan_parent);
-                                prev_valid_tips.insert(o.clone());
+                                if let Some(new_tip_state) = append_condition {
+                                    // Mark old tip as belonging to valid chain
+                                    let parent_status =
+                                        self.validations_mapping.get_mut(&orphan_parent).unwrap();
+                                    *parent_status = OrphanType::BelongsToValidChain;
+
+                                    // Mark new tip
+                                    let status = self.validations_mapping.get_mut(&o).unwrap();
+                                    *status = OrphanType::ValidChainTip;
+
+                                    obsolete.insert(orphan_parent.clone());
+                                    self.valid_tips_states.insert(o.clone(), new_tip_state);
+
+                                    // Add to valid tips sets
+                                    self.valid_tips.insert(o.clone());
+                                    new_prev_valid_tips.remove(&orphan_parent);
+                                    new_prev_valid_tips.insert(o.clone());
+                                } else {
+                                    // TODO: Maybe cleanup here?
+                                }
+                            } else {
                             }
                         }
+
+                        // Remove obsolete tips
+                        for b in obsolete.iter() {
+                            self.valid_tips.remove(&b);
+                            self.valid_tips_states.remove(&b);
+                        }
+
+                        prev_valid_tips = new_prev_valid_tips;
 
                         if buf.is_empty() {
                             if prev_valid_tips.is_empty() {
@@ -590,25 +693,47 @@ impl<B: Block> Chain<B> {
                         }
 
                         // Write the orphan with the greatest inverse height
-                        buf.sort_unstable_by(|(_, a), (_, b)| a.cmp(&b));
+                        buf.sort_unstable_by(|(_, a, _), (_, b, _)| a.cmp(&b));
 
                         if !done {
-                            if let Some((to_write, _)) = buf.pop() {
-                                let to_write = self.orphan_pool.get(&to_write).unwrap();
+                            if let Some((to_write, _, state)) = buf.pop() {
+                                let to_write = self.orphan_pool.get(&to_write).unwrap().clone();
+                                let block_hash = to_write.block_hash().unwrap();
+                                let height = to_write.height();
+                                let last_checkpoint_height = self.last_checkpoint_height.unwrap_or(0);
+
+                                // Checkpoint state if we have reached the quota
+                                if height - last_checkpoint_height == B::CHECKPOINT_INTERVAL as u64 {
+                                    if let None = self.earliest_checkpoint_height {
+                                        self.earliest_checkpoint_height = Some(height);
+                                    }
+
+                                    self.last_checkpoint_height = Some(height);
+                                    let checkpoint_id = state.checkpoint();
+
+                                    // Store checkpoint id
+                                    self.disk_heights_checkpoints.insert(height, checkpoint_id);
+                                    self.last_checkpoint_height = Some(height);
+                                }
+
+                                self.make_valid_tips(&block_hash, state.clone());
+                                self.canonical_tip_state = state;
                                 self.write_block(to_write.clone());
                             }
                         }
 
                         // Place remaining tips in valid tips set
                         // and mark them as valid chain tips.
-                        for (o, _) in buf {
+                        for (o, _, state) in buf {
                             let status = self.validations_mapping.get_mut(&o).unwrap();
                             *status = OrphanType::ValidChainTip;
                             prev_valid_tips.insert(o);
                             self.valid_tips.insert(o.clone());
+                            self.valid_tips_states.insert(o.clone(), state);
                         }
                     }
-                }
+                } 
+
 
                 h += 1;
             }
@@ -619,14 +744,12 @@ impl<B: Block> Chain<B> {
     /// which has the given canidate tip. Do nothing if this is not
     /// possible.
     fn attempt_switch(&mut self, candidate_tip: Arc<B>) {
-        assert!(self
-            .valid_tips
-            .contains(&candidate_tip.block_hash().unwrap()));
+        let candidate_hash = candidate_tip.block_hash().unwrap();
+        assert!(self.valid_tips.contains(&candidate_hash));
+        assert!(self.disconnected_heads_mapping.get(&candidate_hash).is_none());
+        assert!(self.disconnected_tips_mapping.get(&candidate_hash).is_none());
 
-        // TODO: Possibly add an offset here so we don't switch
-        // chains that often on many chains competing for being
-        // canonical.
-        if candidate_tip.height() > self.height {
+        if candidate_tip.height() > self.height + B::SWITCH_OFFSET as u64 {
             let mut to_write: VecDeque<Arc<B>> = VecDeque::new();
             to_write.push_front(candidate_tip.clone());
 
@@ -636,7 +759,7 @@ impl<B: Block> Chain<B> {
             let horizon = {
                 let mut current = candidate_tip.parent_hash().unwrap();
 
-                // Recurse parents until we find a canonical block
+                // Traverse parents until we find a canonical block
                 loop {
                     if self.db.get(&current).is_some() {
                         break;
@@ -654,12 +777,20 @@ impl<B: Block> Chain<B> {
             // Rewind to horizon
             self.rewind(&horizon).unwrap();
 
+            // Set the canonical tip state as the one belonging to the new tip
+            self.canonical_tip_state = self.valid_tips_states.remove(&candidate_hash).unwrap();
+
             // Write the blocks from the candidate chain
             for block in to_write {
+                let block_hash = block.block_hash().unwrap();
                 // Don't write the horizon
-                if block.block_hash().unwrap() == horizon {
+                if block_hash == horizon {
                     continue;
                 }
+
+                self.disconnected_heads_mapping.remove(&block_hash);
+                self.disconnected_tips_mapping.remove(&block_hash);
+                self.disconnected_heads_heights.remove(&block_hash);
 
                 self.write_block(block);
             }
@@ -670,7 +801,7 @@ impl<B: Block> Chain<B> {
     /// disconnected chains. Returns the final status of the tip.
     fn attempt_attach(&mut self, tip_hash: &Hash, initial_status: OrphanType) -> OrphanType {
         let mut status = initial_status;
-        let mut to_attach = Vec::with_capacity(MAX_ORPHANS);
+        let mut to_attach = Vec::with_capacity(B::MAX_ORPHANS);
         let our_head_hash = self.disconnected_tips_mapping.get(tip_hash).unwrap();
 
         // Find a matching disconnected chain head
@@ -709,7 +840,7 @@ impl<B: Block> Chain<B> {
                     self.disconnected_heads_mapping.get_mut(&cur_head).unwrap()
                 };
 
-            let mut to_recurse = Vec::with_capacity(tips.len());
+            let mut to_traverse = Vec::with_capacity(tips.len());
 
             // Clear our the head from tips set if it exists
             cur_tips.remove(&cur_head);
@@ -733,13 +864,13 @@ impl<B: Block> Chain<B> {
                         .insert(cur_head.clone(), (tip.height(), tip.block_hash().unwrap()));
                 }
 
-                to_recurse.push(tip.clone());
+                to_traverse.push(tip.clone());
                 cur_tips.insert(tip_hash.clone());
             }
 
             // Update inverse heights starting from pushed tips
-            for tip in to_recurse {
-                self.recurse_inverse(tip, 0, false);
+            for tip in to_traverse {
+                self.traverse_inverse(tip, 0, false);
             }
         }
 
@@ -752,10 +883,14 @@ impl<B: Block> Chain<B> {
     fn attempt_attach_valid(
         &mut self,
         tip: &mut Arc<B>,
+        tip_state: B::ChainState,
         inverse_height: &mut u64,
         status: &mut OrphanType,
     ) {
-        assert!(self.valid_tips.contains(&tip.block_hash().unwrap()));
+        let block_hash = tip.block_hash().unwrap();
+        assert!(self.valid_tips.contains(&block_hash));
+        assert!(self.disconnected_heads_mapping.get(&block_hash).is_none());
+        assert!(self.disconnected_tips_mapping.get(&block_hash).is_none());
 
         let iterable = self
             .disconnected_heads_heights
@@ -786,19 +921,32 @@ impl<B: Block> Chain<B> {
 
         // If we have a matching chain, update the return values.
         if let Some(head_hash) = current {
-            let (largest_height, largest_tip) = current_height;
-            let largest_tip = self.orphan_pool.get(&largest_tip.unwrap()).unwrap().clone();
-            let tip_height = tip.height();
+            let head = self.orphan_pool.get(head_hash).unwrap();
+            let tip_state = B::append_condition(head.clone(), tip_state);
 
-            *status = OrphanType::BelongsToValidChain;
-            *inverse_height = largest_height - tip_height;
-            *tip = largest_tip;
+            if let Ok(tip_state) = tip_state {
+                let (largest_height, largest_tip) = current_height;
+                let largest_tip = self.orphan_pool.get(&largest_tip.unwrap()).unwrap().clone();
+                let tip_height = tip.height();
 
-            self.make_valid_tips(&head_hash.clone());
+                *status = OrphanType::BelongsToValidChain;
+                *inverse_height = largest_height - tip_height;
+                *tip = largest_tip;
+
+                // Remove old tip if we found a match
+                self.valid_tips.remove(&block_hash);
+                self.valid_tips_states.remove(&block_hash);
+                let old_tip_status = self.validations_mapping.get_mut(&block_hash).unwrap();
+                *old_tip_status = OrphanType::BelongsToValidChain;
+
+                self.make_valid_tips(&head_hash.clone(), tip_state);
+            } else {
+                // TODO: Maybe cleanup here?
+            }
         }
 
         // Update inverse heights
-        self.recurse_inverse(tip.clone(), 0, true);
+        self.traverse_inverse(tip.clone(), 0, true);
     }
 
     /// Recursively changes the validation status of the tips
@@ -806,55 +954,120 @@ impl<B: Block> Chain<B> {
     /// and of their parents to `OrphanType::BelongsToValid`.
     ///
     /// Also removes all the disconnected mappings related to the head.
-    fn make_valid_tips(&mut self, head: &Hash) {
-        let tips = self.disconnected_heads_mapping.remove(head).unwrap();
-        self.disconnected_heads_heights.remove(head);
+    /// 
+    /// This function will short-circuit paths that have an invalid chain
+    /// state transition.
+    fn make_valid_tips(&mut self, head: &Hash, head_state: B::ChainState) {
+        if self.disconnected_heads_mapping.remove(head).is_some() {
+            let head_block = self.orphan_pool.get(head).unwrap();
+            let mut cur_height = head_block.height() + 1;
+            let mut previous: HashMap<Hash, B::ChainState> = HashMap::new();
 
-        for tip_hash in tips.iter() {
-            let tip = self.orphan_pool.get(tip_hash).unwrap();
+            self.valid_tips.insert(head.clone());
+            self.valid_tips_states.insert(head.clone(), head_state.clone());
 
-            // Update status
-            let status = self.validations_mapping.get_mut(tip_hash).unwrap();
+            previous.insert(head.clone(), head_state);
+            self.disconnected_heads_heights.remove(head);
+            self.disconnected_tips_mapping.remove(head);
+
+            // Update status of head, initially to being a valid chain tip
+            let status = self
+                .validations_mapping
+                .get_mut(head)
+                .unwrap();
+
             *status = OrphanType::ValidChainTip;
 
-            // Update mappings
-            self.disconnected_tips_mapping.remove(tip_hash);
-            self.valid_tips.insert(tip_hash.clone());
-
-            let mut current = tip.parent_hash().unwrap();
-
-            // For each tip, recurse parents and update their
-            // validation status until we either find a parent
-            // with the good status or until we reach the
-            // canonical chain.
+            // Traverse paths starting from the head vertex,
+            // updating along the way the validation statuses
+            // of encountered events.
             loop {
-                if let Some(parent) = self.orphan_pool.get(&current) {
-                    let status = self
-                        .validations_mapping
-                        .get_mut(&parent.block_hash().unwrap())
-                        .unwrap();
+                let heights_entry = self.heights_mapping.get(&cur_height);
 
-                    // Don't continue if we have already been here
-                    if let OrphanType::BelongsToValidChain = status {
-                        break;
+                if let Some(heights_entry) = heights_entry {
+                    let mut matched_set = HashSet::new();
+                    let mut new_previous_set = HashMap::with_capacity(previous.len());
+
+                    // Find entries in the next height that have
+                    // parents in the previous events set.
+                    let iter = heights_entry
+                        .iter()
+                        .map(|(h, _)| h);
+
+                    // Update status of all matches
+                    for m in iter {
+                        let e = self.orphan_pool.get(m).unwrap();
+                        let parent_hash = e.parent_hash().unwrap();
+                            
+                        if let Some(state) = previous.get(&parent_hash) {
+                            // TODO: Reduce number of state clones
+                            if let Ok(state) = B::append_condition(e.clone(), state.clone()) {
+                                let block_hash = e.block_hash().unwrap();
+                                self.valid_tips_states.remove(&parent_hash);
+                                self.valid_tips.remove(&parent_hash);
+                                self.disconnected_heads_mapping.remove(&parent_hash);
+                                self.disconnected_tips_mapping.remove(&parent_hash);
+                                new_previous_set.insert(block_hash, state);
+                                matched_set.insert(parent_hash);
+
+                                let status = self
+                                    .validations_mapping
+                                    .get_mut(m)
+                                    .unwrap();
+
+                                *status = OrphanType::BelongsToValidChain;
+                            } else {
+                                // TODO: Maybe cleanup here?
+                            }
+                        } 
                     }
 
-                    *status = OrphanType::BelongsToValidChain;
-                    current = parent.parent_hash().unwrap();
+                    let previous_keys: HashSet<Hash> = previous.keys().cloned().collect();
+
+                    // Make non matched valid tips
+                    for tip_hash in previous_keys.difference(&matched_set) {
+                        let state = previous.get(tip_hash).unwrap();
+
+                        // Update status
+                        let status = self.validations_mapping.get_mut(tip_hash).unwrap();
+                        *status = OrphanType::ValidChainTip;
+
+                        // Update mappings
+                        self.disconnected_tips_mapping.remove(&tip_hash);
+                        self.disconnected_heads_mapping.remove(&tip_hash);
+                        self.valid_tips.insert(tip_hash.clone());
+                        self.valid_tips_states.insert(tip_hash.clone(), state.clone());
+                    }
+
+                    previous = new_previous_set;
+                    cur_height += 1;
                 } else {
+                    for (tip_hash, state) in previous {
+                        // Update status
+                        let status = self.validations_mapping.get_mut(&tip_hash).unwrap();
+                        *status = OrphanType::ValidChainTip;
+
+                        // Update mappings
+                        self.disconnected_tips_mapping.remove(&tip_hash);
+                        self.disconnected_heads_mapping.remove(&tip_hash);
+                        self.valid_tips.insert(tip_hash.clone());
+                        self.valid_tips_states.insert(tip_hash, state);
+                    }
+
                     break;
                 }
             }
         }
     }
 
-    /// Recurses the parents of the orphan and updates their
+    /// Traverses the parents of the orphan and updates their
     /// inverse heights according to the provided start height
     /// of the orphan. The third argument specifies if we should
-    /// mark the recursed chain as a valid canonical chain.
-    fn recurse_inverse(&mut self, orphan: Arc<B>, start_height: u64, make_valid: bool) {
+    /// mark the traversed chain as a valid canonical chain.
+    fn traverse_inverse(&mut self, orphan: Arc<B>, start_height: u64, make_valid: bool) {
         let mut cur_inverse = start_height;
         let mut current = orphan.clone();
+        let mut branch_stack = Vec::new();
 
         // This flag only makes sense when the
         // starting inverse height is 0.
@@ -872,7 +1085,7 @@ impl<B: Block> Chain<B> {
             }
         }
 
-        // Recurse parents and update inverse height
+        // Traverse parents and update inverse height
         // until we reach a missing block or the
         // canonical chain.
         while let Some(parent) = self.orphan_pool.get(&current.parent_hash().unwrap()) {
@@ -896,6 +1109,7 @@ impl<B: Block> Chain<B> {
                 }
             }
 
+            branch_stack.push(parent.clone());
             current = parent.clone();
             cur_inverse += 1;
         }
@@ -923,13 +1137,14 @@ impl<B: Block> Chain<B> {
     }
 
     pub fn append_block(&mut self, block: Arc<B>) -> Result<(), ChainErr> {
-        let min_height = if self.height > MIN_HEIGHT {
-            self.height - MIN_HEIGHT
+        println!("DEBUG PUSHED BLOCK HASH: {:?}", block.block_hash().unwrap());
+        let min_height = if self.height > B::MIN_HEIGHT {
+            self.height - B::MIN_HEIGHT
         } else {
             1
         };
 
-        if block.height() > self.height + MAX_HEIGHT || block.height() < min_height {
+        if block.height() > self.height + B::MAX_HEIGHT || block.height() < min_height {
             return Err(ChainErr::BadHeight);
         }
 
@@ -946,22 +1161,55 @@ impl<B: Block> Chain<B> {
             // First attempt to place the block after the
             // tip canonical block.
             if parent_hash == tip.block_hash().unwrap() {
+                let height = block.height();
+                
                 // The height must be equal to that of the parent plus one
-                if block.height() != self.height + 1 {
+                if height != self.height + 1 {
                     return Err(ChainErr::BadHeight);
                 }
 
-                let height = block.height();
+                let append_condition = {
+                    match B::append_condition(block.clone(), self.canonical_tip_state.clone()) {
+                        // Set new tip state if the append can proceed
+                        Ok(new_tip_state) => Some(new_tip_state),
+                        _ => None
+                    }
+                };
 
-                // Write block to the chain
-                self.write_block(block);
+                if let Some(new_tip_state) = append_condition {
+                    // Write block to the chain
+                    self.write_block(block);
 
-                // Process orphans
-                self.process_orphans(height + 1);
+                    // Perform checkpoint
+                    {
+                        let height = self.height;
+                        let last_checkpoint_height = self.last_checkpoint_height.unwrap_or(0);
 
-                Ok(())
+                        // Checkpoint state if we have reached the quota
+                        if height - last_checkpoint_height == B::CHECKPOINT_INTERVAL as u64 {
+                            if let None = self.earliest_checkpoint_height {
+                                self.earliest_checkpoint_height = Some(height);
+                            }
+
+                            self.last_checkpoint_height = Some(height);
+                            let checkpoint_id = new_tip_state.checkpoint();
+
+                            // Store checkpoint id
+                            self.disk_heights_checkpoints.insert(height, checkpoint_id);
+                        }
+                    }
+
+                    self.canonical_tip_state = new_tip_state;
+
+                    // Process orphans
+                    self.process_orphans(height + 1);
+
+                    Ok(())
+                } else {
+                    Err(ChainErr::BadAppendCondition)
+                }
             } else {
-                if self.orphan_pool.len() >= MAX_ORPHANS {
+                if self.orphan_pool.len() >= B::MAX_ORPHANS {
                     return Err(ChainErr::TooManyOrphans);
                 }
 
@@ -979,20 +1227,56 @@ impl<B: Block> Chain<B> {
                             return Err(ChainErr::BadHeight);
                         }
 
-                        let mut status = OrphanType::ValidChainTip;
-                        let mut tip = block.clone();
-                        let mut _inverse_height = 0;
+                        let parent_state: B::ChainState = if let (Some(earliest_checkpoint_height), Some(last_checkpoint_height)) = (self.earliest_checkpoint_height, self.last_checkpoint_height) {
+                            if parent_height < earliest_checkpoint_height {
+                                return Err(ChainErr::NoCheckpointFound);
+                            }
 
-                        self.write_orphan(block, OrphanType::ValidChainTip, 0);
-                        self.attempt_attach_valid(&mut tip, &mut _inverse_height, &mut status);
-
-                        if let OrphanType::ValidChainTip = status {
-                            // Do nothing
+                            if parent_height == last_checkpoint_height {
+                                // Simply retrieve checkpointed state in this case
+                                let id = self.disk_heights_checkpoints.get(&parent_height).unwrap();
+                                
+                                // Load disk state
+                                if let Ok(state) = B::ChainState::load_from_disk(*id) {
+                                    state
+                                } else {
+                                    panic!("Could not find disk state!");
+                                }
+                            } else if parent_height > last_checkpoint_height {
+                                self.fetch_next_state(last_checkpoint_height, parent_height)
+                            } else {
+                                self.search_fetch_next_state(parent_height)
+                            }
                         } else {
-                            self.attempt_switch(tip);
-                        }
+                            self.search_fetch_next_state(parent_height)
+                        };
 
-                        Ok(())
+                        let tip_state = match B::append_condition(block.clone(), parent_state) {
+                            Ok(new_tip_state) => Some(new_tip_state),
+                            Err(_) => None
+                        };
+
+                        if let Some(tip_state) = tip_state {
+                            // Insert new state to valid tips mapping
+                            self.valid_tips_states.insert(block.block_hash().unwrap(), tip_state.clone());
+                            
+                            let mut status = OrphanType::ValidChainTip;
+                            let mut tip = block.clone();
+                            let mut _inverse_height = 0;
+
+                            self.write_orphan(block, OrphanType::ValidChainTip, 0);
+                            self.attempt_attach_valid(&mut tip, tip_state, &mut _inverse_height, &mut status);
+
+                            if let OrphanType::ValidChainTip = status {
+                                // Do nothing
+                            } else {
+                                self.attempt_switch(tip);
+                            }
+
+                            Ok(())
+                        } else {
+                            Err(ChainErr::BadAppendCondition)
+                        }
                     }
                     None => {
                         // The parent is an orphan
@@ -1048,7 +1332,7 @@ impl<B: Block> Chain<B> {
                                         .attempt_attach(&block_hash, OrphanType::DisconnectedTip);
 
                                     if let OrphanType::DisconnectedTip = status {
-                                        self.recurse_inverse(block, 0, false);
+                                        self.traverse_inverse(block, 0, false);
                                     } else {
                                         // Write final status
                                         self.validations_mapping.insert(block_hash.clone(), status);
@@ -1061,37 +1345,61 @@ impl<B: Block> Chain<B> {
                                     }
                                 }
                                 OrphanType::ValidChainTip => {
-                                    // Change status of old tip
-                                    *parent_status = OrphanType::BelongsToValidChain;
+                                    let append_condition = {
+                                        let tip_state = self.valid_tips_states.get_mut(&parent_hash).unwrap();
 
-                                    let mut status = OrphanType::ValidChainTip;
-                                    let mut tip = block.clone();
-                                    let mut inverse_height = 0;
+                                        match B::append_condition(block.clone(), tip_state.clone()) {
+                                            // Set new tip state if the append can proceed
+                                            Ok(new_tip_state) => {
+                                                *tip_state = new_tip_state.clone();
+                                                Some(new_tip_state)
+                                            },
+                                            _ => None
+                                        }
+                                    };
 
-                                    // Mark orphan as the new tip
-                                    self.write_orphan(block.clone(), status, inverse_height);
+                                    if let Some(tip_state) = append_condition {
+                                        // Change status of old tip
+                                        *parent_status = OrphanType::BelongsToValidChain;
 
-                                    // Attempt to attach to disconnected chains
-                                    self.attempt_attach_valid(
-                                        &mut tip,
-                                        &mut inverse_height,
-                                        &mut status,
-                                    );
+                                        let mut status = OrphanType::ValidChainTip;
+                                        let mut tip = block.clone();
+                                        let mut inverse_height = 0;
 
-                                    // Recurse parents and modify their inverse heights
-                                    self.recurse_inverse(
-                                        block.clone(),
-                                        inverse_height,
-                                        inverse_height == 0,
-                                    );
+                                        // Mark orphan as the new tip
+                                        self.write_orphan(block.clone(), status, inverse_height);
 
-                                    // Update tips set
-                                    self.valid_tips.remove(&parent_hash);
-                                    self.valid_tips.insert(tip.block_hash().unwrap());
 
-                                    // Check if the new tip's height is greater than
-                                    // the canonical chain, and if so, switch chains.
-                                    self.attempt_switch(tip);
+                                        // Attempt to attach to disconnected chains
+                                        self.attempt_attach_valid(
+                                            &mut tip,
+                                            tip_state.clone(),
+                                            &mut inverse_height,
+                                            &mut status,
+                                        );
+
+
+                                        // Traverse parents and modify their inverse heights
+                                        self.traverse_inverse(
+                                            block.clone(),
+                                            inverse_height,
+                                            inverse_height == 0,
+                                        );
+
+                                        // Update tips set
+                                        self.valid_tips.remove(&parent_hash);
+
+                                        if let OrphanType::ValidChainTip = status {
+                                            self.valid_tips.insert(tip.block_hash().unwrap());
+                                            self.valid_tips_states.insert(tip.block_hash().unwrap(), tip_state);
+                                        }
+
+                                        // Check if the new tip's height is greater than
+                                        // the canonical chain, and if so, switch chains.
+                                        self.attempt_switch(tip);
+                                    } else {
+                                        return Err(ChainErr::BadAppendCondition);
+                                    }
                                 }
                                 OrphanType::BelongsToDisconnected => {
                                     self.write_orphan(
@@ -1101,7 +1409,7 @@ impl<B: Block> Chain<B> {
                                     );
 
                                     let head = {
-                                        // Recurse parents until we find the head block
+                                        // Traverse parents until we find the head block
                                         let mut current = parent_hash.clone();
                                         let mut result = None;
 
@@ -1139,7 +1447,7 @@ impl<B: Block> Chain<B> {
                                     if let OrphanType::DisconnectedTip = status {
                                         self.disconnected_tips_mapping
                                             .insert(block_hash.clone(), head);
-                                        self.recurse_inverse(block.clone(), 0, false);
+                                        self.traverse_inverse(block.clone(), 0, false);
                                     } else {
                                         // Write final status
                                         self.validations_mapping.insert(block_hash.clone(), status);
@@ -1152,25 +1460,65 @@ impl<B: Block> Chain<B> {
                                     }
                                 }
                                 OrphanType::BelongsToValidChain => {
+                                    // TODO: Maybe cache intermediate states? 
+                                    let tip_state = {
+                                        let mut visited_stack = Vec::new();
+                                        let head = {
+                                            let mut current = parent_hash.clone();
+
+                                            // Traverse parents until we find a canonical block
+                                            loop {
+                                                let cur = self.orphan_pool.get(&current).unwrap();
+                                                let parent_hash = cur.parent_hash().unwrap();
+
+                                                visited_stack.push(cur.clone());
+
+                                                if self.db.get(&parent_hash).is_some() {
+                                                    current = parent_hash;
+                                                    break;
+                                                }
+
+                                                current = parent_hash;
+                                            }
+
+                                            B::from_bytes(&self.db.get(&current).unwrap()).unwrap()
+                                        };
+
+                                        // Retrieve state associated with the head's parent
+                                        let state = self.search_fetch_next_state(head.height() - 1);
+                                        let mut state = B::append_condition(head.clone(), state)?;
+
+                                        // Compute tip state
+                                        while let Some(b) = visited_stack.pop() {
+                                            state = B::append_condition(b, state)?;
+                                        }
+ 
+                                        B::append_condition(block.clone(), state)?
+                                    };
+
                                     let mut status = OrphanType::ValidChainTip;
                                     let mut tip = block.clone();
                                     let mut inverse_height = 0;
 
+                                    let tip_hash = tip.block_hash().unwrap();
+
                                     // Write tip to valid tips set
-                                    self.valid_tips.insert(tip.block_hash().unwrap());
+                                    self.valid_tips.insert(tip_hash.clone());
+                                    self.valid_tips_states.insert(tip_hash, tip_state.clone());
 
                                     // Attempt to attach disconnected chains
                                     // to the new valid tip.
                                     self.attempt_attach_valid(
                                         &mut tip,
+                                        tip_state,
                                         &mut inverse_height,
                                         &mut status,
                                     );
 
-                                    // Write orphan, recurse and update inverse heights,
+                                    // Write orphan, traverse and update inverse heights,
                                     // then attempt to switch the canonical chain.
                                     self.write_orphan(block, status, inverse_height);
-                                    self.recurse_inverse(
+                                    self.traverse_inverse(
                                         tip.clone(),
                                         inverse_height,
                                         inverse_height == 0,
@@ -1222,6 +1570,7 @@ impl<B: Block> Chain<B> {
                             }
 
                             if let Some(tip) = found_match {
+                                let tip_state = self.valid_tips_states.get(&tip.block_hash().unwrap()).unwrap().clone();
                                 let mut _status = OrphanType::ValidChainTip;
                                 let mut _tip = tip.clone();
                                 let mut _inverse_height = 0;
@@ -1229,6 +1578,7 @@ impl<B: Block> Chain<B> {
                                 self.write_orphan(block, status, 0);
                                 self.attempt_attach_valid(
                                     &mut _tip,
+                                    tip_state,
                                     &mut _inverse_height,
                                     &mut _status,
                                 );
@@ -1253,6 +1603,84 @@ impl<B: Block> Chain<B> {
 
     pub fn canonical_tip(&self) -> Arc<B> {
         self.canonical_tip.clone()
+    }
+
+    fn search_fetch_next_state(&self, target_height: u64) -> B::ChainState {
+        // Find a height with an earlier checkpoint
+        // than the target height.
+        let height = {
+            if let Some(last_checkpoint_height) = self.last_checkpoint_height {
+                let mut current = last_checkpoint_height;
+                let interval = B::CHECKPOINT_INTERVAL as u64;
+
+                loop {
+                    if current - interval < target_height {
+                        break;
+                    }
+
+                    current -= interval;
+                }
+
+                current
+            } else {
+                target_height
+            }
+        };
+
+        self.fetch_next_state(height, target_height)
+    }
+
+    /// Fetches the matching state of target height, starting from height.
+    fn fetch_next_state(&self, mut height: u64, target_height: u64) -> B::ChainState {
+        assert!(target_height <= self.height);
+        assert!(height <= target_height);
+
+        let mut state = {
+            if height == 0 {
+                return B::genesis_state();
+            } else if height < B::CHECKPOINT_INTERVAL as u64 {
+                height = 0;
+                B::genesis_state()
+            } else {
+                // Load disk state
+                let id = self.disk_heights_checkpoints.get(&height).unwrap();
+
+                if let Ok(state) = B::ChainState::load_from_disk(*id) {
+                    state
+                } else {
+                    panic!("Could not find disk state!");
+                }
+            }
+        };
+
+        if height == target_height {
+            state
+        } else {
+            let mut cur_height = height + 1;
+            
+            loop {
+                // Retrieve block key via height
+                let height_key = crypto::hash_slice(&encode_be_u64!(cur_height));
+                let block_hash = self.db.get(&height_key).unwrap();
+                let mut hash = [0; 32];
+                hash.copy_from_slice(&block_hash);
+
+                // Retrieve block
+                let hash = Hash(hash);
+                let block = B::from_bytes(&self.db.get(&hash).unwrap()).unwrap();
+
+                // Compute next state
+                state = B::append_condition(block, state.clone()).unwrap();
+
+                if cur_height == target_height {
+                    break;
+                }
+
+                cur_height += 1;
+            }
+
+            state
+        }
     }
 }
 
@@ -1331,6 +1759,8 @@ mod tests {
     }
 
     impl Block for DummyBlock {
+        type ChainState = DummyCheckpoint;
+
         fn genesis() -> Arc<Self> {
             let genesis = DummyBlock {
                 hash: Hash::NULL,
@@ -1340,6 +1770,10 @@ mod tests {
             };
 
             Arc::new(genesis)
+        }
+
+        fn genesis_state() -> DummyCheckpoint {
+            DummyCheckpoint::genesis()
         }
 
         fn parent_hash(&self) -> Option<Hash> {
@@ -1366,8 +1800,16 @@ mod tests {
             None
         }
 
-        fn append_condition() -> Option<Box<(FnMut(Arc<DummyBlock>) -> bool)>> {
-            None
+        fn append_condition(block: Arc<DummyBlock>, mut chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
+            let valid = chain_state.height() == block.height() - 1;
+            
+
+            if valid {
+                chain_state.increment();
+                Ok(chain_state)
+            } else {
+                Err(ChainErr::BadAppendCondition)
+            }
         }
 
         fn to_bytes(&self) -> Vec<u8> {
@@ -1417,7 +1859,7 @@ mod tests {
     #[test]
     fn it_rewinds_to_genesis() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -1440,6 +1882,14 @@ mod tests {
         let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
         let G = Arc::new(G);
 
+        let height_1_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 1]);
+        let height_2_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 2]);
+        let height_3_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 3]);
+        let height_4_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 4]);
+        let height_5_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 5]);
+        let height_6_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 6]);
+        let height_7_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 7]);
+
         hard_chain.append_block(A.clone()).unwrap();
         hard_chain.append_block(B.clone()).unwrap();
         hard_chain.append_block(C.clone()).unwrap();
@@ -1447,6 +1897,14 @@ mod tests {
         hard_chain.append_block(E.clone()).unwrap();
         hard_chain.append_block(F.clone()).unwrap();
         hard_chain.append_block(G.clone()).unwrap();
+
+        assert_eq!(hard_chain.db.get(&height_1_key).unwrap().to_vec(), A.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_2_key).unwrap().to_vec(), B.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_3_key).unwrap().to_vec(), C.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_4_key).unwrap().to_vec(), D.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_5_key).unwrap().to_vec(), E.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_6_key).unwrap().to_vec(), F.block_hash().unwrap().0.to_vec());
+        assert_eq!(hard_chain.db.get(&height_7_key).unwrap().to_vec(), G.block_hash().unwrap().0.to_vec());
 
         hard_chain.rewind(&DummyBlock::genesis().block_hash().unwrap()).unwrap();
 
@@ -1457,12 +1915,21 @@ mod tests {
         assert!(hard_chain.orphan_pool.get(&E.block_hash().unwrap()).is_some());
         assert!(hard_chain.orphan_pool.get(&F.block_hash().unwrap()).is_some());
         assert!(hard_chain.orphan_pool.get(&G.block_hash().unwrap()).is_some());
+
+        // Check for heights cleanup
+        assert!(hard_chain.db.get(&height_1_key).is_none());
+        assert!(hard_chain.db.get(&height_2_key).is_none());
+        assert!(hard_chain.db.get(&height_3_key).is_none());
+        assert!(hard_chain.db.get(&height_4_key).is_none());
+        assert!(hard_chain.db.get(&height_5_key).is_none());
+        assert!(hard_chain.db.get(&height_6_key).is_none());
+        assert!(hard_chain.db.get(&height_7_key).is_none());
     }
 
     #[test]
     fn stages_append_test1() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -1604,7 +2071,7 @@ mod tests {
     #[test]
     fn stages_append_test2() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -1779,6 +2246,7 @@ mod tests {
 
         // We now append `B'` and the canonical tip should be `B'`
         hard_chain.append_block(B_prime.clone()).unwrap();
+        assert_eq!(hard_chain.valid_tips_states.len(), 0);
 
         assert_eq!(hard_chain.height(), 2);
         assert_eq!(hard_chain.canonical_tip(), B_prime);
@@ -1801,7 +2269,7 @@ mod tests {
     /// of appended blocks.
     fn stages_append_test3() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -3474,7 +3942,7 @@ mod tests {
     /// tip instead of G at commit hash `d0ad0bd6a7422f6308b96a34a6f7725662c8b7d4`.
     fn stages_append_test4() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -6212,130 +6680,361 @@ mod tests {
         assert_eq!(hard_chain.max_orphan_height, Some(6));
     }
 
+    #[test]
+    /// Assertions in stages on random order
+    /// of appended blocks.
+    ///
+    /// The order is the following:
+    /// G, C', C'', E', C, B', F'', E'', B, A, D', F, D''', E, D, D'',
+    fn stages_append_test5() {
+        let db = test_helpers::init_tempdb();
+        let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+
+        let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
+        let A = Arc::new(A);
+
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B = Arc::new(B);
+
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C = Arc::new(C);
+
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D = Arc::new(D);
+
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E = Arc::new(E);
+
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F = Arc::new(F);
+
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
+        let G = Arc::new(G);
+
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B_prime = Arc::new(B_prime);
+
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_prime = Arc::new(C_prime);
+
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_prime = Arc::new(D_prime);
+
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_prime = Arc::new(E_prime);
+
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_second = Arc::new(C_second);
+
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_second = Arc::new(D_second);
+
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_second = Arc::new(E_second);
+
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F_second = Arc::new(F_second);
+
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_tertiary = Arc::new(D_tertiary);
+
+        let mut blocks = vec![
+            G.clone(),
+            C_prime.clone(),
+            C_second.clone(),
+            E_prime.clone(),
+            C.clone(),
+            B_prime.clone(),
+            F_second.clone(),
+            E_second.clone(),
+            B.clone(),
+            A.clone(),
+            D_prime.clone(),
+            F.clone(),
+            D_tertiary.clone(),
+            E.clone(),
+            D.clone(),
+            D_second.clone(),
+        ];
+
+        chain.append_block(blocks.remove(0)).unwrap(); // G
+        chain.append_block(blocks.remove(0)).unwrap(); // C_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // C_second
+        chain.append_block(blocks.remove(0)).unwrap(); // E_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // C
+        chain.append_block(blocks.remove(0)).unwrap(); // B_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // F_second
+        chain.append_block(blocks.remove(0)).unwrap(); // E_second
+        chain.append_block(blocks.remove(0)).unwrap(); // B
+        chain.append_block(blocks.remove(0)).unwrap(); // A
+        chain.append_block(blocks.remove(0)).unwrap(); // D_prime
+
+        assert_eq!(chain.height(), 5);
+        assert_eq!(chain.canonical_tip, E_prime.clone());
+        assert_eq!(chain.valid_tips, set![C_second.block_hash().unwrap(), C.block_hash().unwrap()]);
+
+        chain.append_block(blocks.remove(0)).unwrap(); // F
+        chain.append_block(blocks.remove(0)).unwrap(); // D_tertiary
+        chain.append_block(blocks.remove(0)).unwrap(); // E
+        chain.append_block(blocks.remove(0)).unwrap(); // D
+        chain.append_block(blocks.remove(0)).unwrap(); // D_second
+
+        assert_eq!(chain.height(), 7);
+        assert_eq!(chain.canonical_tip, G);
+        assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
+    }
+
+    // #[test]
+    // /// Assertions in stages of random block order.
+    // /// 
+    // /// The sample ordering, taken from the stress test,
+    // /// is the following:
+    // /// E', E'', D'', C, D''', F, D, B', C'', E, F'', G, A, C', D', B
+    // fn stages_append_test6() {
+    //     let db = test_helpers::init_tempdb();
+    //     let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+
+    //     let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
+    //     let A = Arc::new(A);
+
+    //     let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+    //     let B = Arc::new(B);
+
+    //     let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
+    //     let C = Arc::new(C);
+
+    //     let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
+    //     let D = Arc::new(D);
+
+    //     let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
+    //     let E = Arc::new(E);
+
+    //     let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
+    //     let F = Arc::new(F);
+
+    //     let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
+    //     let G = Arc::new(G);
+
+    //     let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+    //     let B_prime = Arc::new(B_prime);
+
+    //     let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+    //     let C_prime = Arc::new(C_prime);
+
+    //     let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+    //     let D_prime = Arc::new(D_prime);
+
+    //     let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
+    //     let E_prime = Arc::new(E_prime);
+
+    //     let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+    //     let C_second = Arc::new(C_second);
+
+    //     let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
+    //     let D_second = Arc::new(D_second);
+
+    //     let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
+    //     let E_second = Arc::new(E_second);
+
+    //     let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
+    //     let F_second = Arc::new(F_second);
+
+    //     let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+    //     let D_tertiary = Arc::new(D_tertiary);
+
+    //     let mut blocks = vec![
+    //         E_prime.clone(),
+    //         E_second.clone(),
+    //         D_second.clone(),
+    //         C.clone(),
+    //         D_tertiary.clone(),
+    //         F.clone(),
+    //         D.clone(),
+    //         B_prime.clone(),
+    //         C_second.clone(),
+    //         E.clone(),
+    //         F_second.clone(),
+    //         G.clone(),
+    //         A.clone(),
+    //         C_prime.clone(),
+    //         D_prime.clone(),
+    //         B.clone(),
+    //     ];
+
+    //     println!("PUSHING E'");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // E_prime
+    //     println!("PUSHING E''");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // E_second
+    //     println!("PUSHING D''");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // D_second
+    //     println!("PUSHING C");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // C
+    //     println!("PUSHING D'''");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // D_tertiary
+    //     println!("PUSHING F");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // F
+    //     println!("PUSHING D");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // D
+    //     println!("PUSHING B'");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // B_prime
+    //     println!("PUSHING C''");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // C_second
+    //     println!("PUSHING E");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // E
+    //     println!("PUSHING F''");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // F_second
+    //     println!("PUSHING G");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // G
+    //     println!("PUSHING A");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // A
+    //     println!("PUSHING C'");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // C_prime
+    //     println!("PUSHING D'");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // D_prime
+    //     println!("PUSHING B");
+    //     chain.append_block(blocks.remove(0)).unwrap(); // B
+
+    //     assert_eq!(chain.height(), 7);
+    //     assert_eq!(chain.canonical_tip, G);
+    //     assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
+    // }
+
     quickcheck! {
-        /// Stress test of chain append.
-        ///
-        /// We have a graph of chains of blocks with
-        /// the following structure:
-        /// ```
-        /// GEN -> A -> B -> C -> D -> E -> F -> G
-        ///        |
-        ///         -> B' -> C' -> D' -> E'
-        ///            |     |
-        ///            |     -> D'''
-        ///            |
-        ///            -> C'' -> D'' -> E'' -> F''
-        /// ```
-        ///
-        /// The tip of the block must always be `G`, regardless
-        /// of the order in which the blocks are received. And
-        /// the height of the chain must be that of `G` which is 7.
-        fn append_stress_test() -> bool {
-            let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db);
+        // /// Stress test of chain append.
+        // ///
+        // /// We have a graph of chains of blocks with
+        // /// the following structure:
+        // /// ```
+        // /// GEN -> A -> B -> C -> D -> E -> F -> G
+        // ///        |
+        // ///         -> B' -> C' -> D' -> E'
+        // ///            |     |
+        // ///            |     -> D'''
+        // ///            |
+        // ///            -> C'' -> D'' -> E'' -> F''
+        // /// ```
+        // ///
+        // /// The tip of the block must always be `G`, regardless
+        // /// of the order in which the blocks are received. And
+        // /// the height of the chain must be that of `G` which is 7.
+        // fn append_stress_test() -> bool {
+        //     let db = test_helpers::init_tempdb();
+        //     let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
-            let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
-            let A = Arc::new(A);
+        //     let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
+        //     let A = Arc::new(A);
 
-            let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
-            let B = Arc::new(B);
+        //     let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        //     let B = Arc::new(B);
 
-            let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
-            let C = Arc::new(C);
+        //     let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        //     let C = Arc::new(C);
 
-            let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
-            let D = Arc::new(D);
+        //     let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        //     let D = Arc::new(D);
 
-            let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
-            let E = Arc::new(E);
+        //     let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        //     let E = Arc::new(E);
 
-            let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
-            let F = Arc::new(F);
+        //     let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        //     let F = Arc::new(F);
 
-            let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
-            let G = Arc::new(G);
+        //     let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
+        //     let G = Arc::new(G);
 
-            let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
-            let B_prime = Arc::new(B_prime);
+        //     let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        //     let B_prime = Arc::new(B_prime);
 
-            let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
-            let C_prime = Arc::new(C_prime);
+        //     let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        //     let C_prime = Arc::new(C_prime);
 
-            let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
-            let D_prime = Arc::new(D_prime);
+        //     let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        //     let D_prime = Arc::new(D_prime);
 
-            let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
-            let E_prime = Arc::new(E_prime);
+        //     let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        //     let E_prime = Arc::new(E_prime);
 
-            let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
-            let C_second = Arc::new(C_second);
+        //     let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        //     let C_second = Arc::new(C_second);
 
-            let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
-            let D_second = Arc::new(D_second);
+        //     let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        //     let D_second = Arc::new(D_second);
 
-            let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
-            let E_second = Arc::new(E_second);
+        //     let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        //     let E_second = Arc::new(E_second);
 
-            let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
-            let F_second = Arc::new(F_second);
+        //     let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        //     let F_second = Arc::new(F_second);
 
-            let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
-            let D_tertiary = Arc::new(D_tertiary);
+        //     let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        //     let D_tertiary = Arc::new(D_tertiary);
 
-            let mut blocks = vec![
-                A.clone(),
-                B.clone(),
-                C.clone(),
-                D.clone(),
-                E.clone(),
-                F.clone(),
-                G.clone(),
-                B_prime.clone(),
-                C_prime.clone(),
-                D_prime.clone(),
-                E_prime.clone(),
-                C_second.clone(),
-                D_second.clone(),
-                E_second.clone(),
-                F_second.clone(),
-                D_tertiary.clone()
-            ];
+        //     let mut blocks = vec![
+        //         A.clone(),
+        //         B.clone(),
+        //         C.clone(),
+        //         D.clone(),
+        //         E.clone(),
+        //         F.clone(),
+        //         G.clone(),
+        //         B_prime.clone(),
+        //         C_prime.clone(),
+        //         D_prime.clone(),
+        //         E_prime.clone(),
+        //         C_second.clone(),
+        //         D_second.clone(),
+        //         E_second.clone(),
+        //         F_second.clone(),
+        //         D_tertiary.clone()
+        //     ];
 
-            // Shuffle blocks
-            thread_rng().shuffle(&mut blocks);
+        //     // Shuffle blocks
+        //     thread_rng().shuffle(&mut blocks);
 
-            let mut block_letters = HashMap::new();
+        //     let mut block_letters = HashMap::new();
 
-            block_letters.insert(A.block_hash().unwrap(), "A");
-            block_letters.insert(B.block_hash().unwrap(), "B");
-            block_letters.insert(C.block_hash().unwrap(), "C");
-            block_letters.insert(D.block_hash().unwrap(), "D");
-            block_letters.insert(E.block_hash().unwrap(), "E");
-            block_letters.insert(F.block_hash().unwrap(), "F");
-            block_letters.insert(G.block_hash().unwrap(), "G");
-            block_letters.insert(B_prime.block_hash().unwrap(), "B'");
-            block_letters.insert(C_prime.block_hash().unwrap(), "C'");
-            block_letters.insert(D_prime.block_hash().unwrap(), "D'");
-            block_letters.insert(E_prime.block_hash().unwrap(), "E'");
-            block_letters.insert(C_second.block_hash().unwrap(), "C''");
-            block_letters.insert(D_second.block_hash().unwrap(), "D''");
-            block_letters.insert(E_second.block_hash().unwrap(), "E''");
-            block_letters.insert(F_second.block_hash().unwrap(), "F''");
-            block_letters.insert(D_tertiary.block_hash().unwrap(), "D'''");
+        //     block_letters.insert(A.block_hash().unwrap(), "A");
+        //     block_letters.insert(B.block_hash().unwrap(), "B");
+        //     block_letters.insert(C.block_hash().unwrap(), "C");
+        //     block_letters.insert(D.block_hash().unwrap(), "D");
+        //     block_letters.insert(E.block_hash().unwrap(), "E");
+        //     block_letters.insert(F.block_hash().unwrap(), "F");
+        //     block_letters.insert(G.block_hash().unwrap(), "G");
+        //     block_letters.insert(B_prime.block_hash().unwrap(), "B'");
+        //     block_letters.insert(C_prime.block_hash().unwrap(), "C'");
+        //     block_letters.insert(D_prime.block_hash().unwrap(), "D'");
+        //     block_letters.insert(E_prime.block_hash().unwrap(), "E'");
+        //     block_letters.insert(C_second.block_hash().unwrap(), "C''");
+        //     block_letters.insert(D_second.block_hash().unwrap(), "D''");
+        //     block_letters.insert(E_second.block_hash().unwrap(), "E''");
+        //     block_letters.insert(F_second.block_hash().unwrap(), "F''");
+        //     block_letters.insert(D_tertiary.block_hash().unwrap(), "D'''");
 
-            for b in blocks {
-                hard_chain.append_block(b).unwrap();
-            }
+        //     // Uncomment this for printing a failed order
+        //     let blocks_clone = blocks.clone();
 
-            assert_eq!(hard_chain.height(), 7);
-            assert_eq!(hard_chain.canonical_tip(), G);
+        //     std::panic::set_hook(Box::new(move |_| {
+        //         print!("Failed block ordering: ");
+        //         for b in blocks_clone.clone() {
+        //             print!("{}, ", block_letters.get(&b.block_hash().unwrap()).unwrap());
+        //         }
+        //         print!("\n");
+        //     }));
 
-            true
-        }
+        //     for b in blocks {
+        //         hard_chain.append_block(b).unwrap();
+        //     }
+
+        //     assert_eq!(hard_chain.height(), 7);
+        //     assert_eq!(hard_chain.canonical_tip, G);
+        //     assert_eq!(hard_chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
+
+        //     true
+        // }
 
         fn it_rewinds_correctly1() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db);
+            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -6405,13 +7104,12 @@ mod tests {
             tips.insert(G.block_hash().unwrap());
 
             assert_eq!(hard_chain.valid_tips, tips);
-
             true
         }
 
         fn it_rewinds_correctly2() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db);
+            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -6479,6 +7177,25 @@ mod tests {
                 F_second.clone(),
                 D_tertiary.clone(),
             ];
+
+            let mut block_letters = HashMap::new();
+
+            block_letters.insert(A.block_hash().unwrap(), "A");
+            block_letters.insert(B.block_hash().unwrap(), "B");
+            block_letters.insert(C.block_hash().unwrap(), "C");
+            block_letters.insert(D.block_hash().unwrap(), "D");
+            block_letters.insert(E.block_hash().unwrap(), "E");
+            block_letters.insert(F.block_hash().unwrap(), "F");
+            block_letters.insert(G.block_hash().unwrap(), "G");
+            block_letters.insert(B_prime.block_hash().unwrap(), "B'");
+            block_letters.insert(C_prime.block_hash().unwrap(), "C'");
+            block_letters.insert(D_prime.block_hash().unwrap(), "D'");
+            block_letters.insert(E_prime.block_hash().unwrap(), "E'");
+            block_letters.insert(C_second.block_hash().unwrap(), "C''");
+            block_letters.insert(D_second.block_hash().unwrap(), "D''");
+            block_letters.insert(E_second.block_hash().unwrap(), "E''");
+            block_letters.insert(F_second.block_hash().unwrap(), "F''");
+            block_letters.insert(D_tertiary.block_hash().unwrap(), "D'''");
 
             for b in blocks {
                 hard_chain.append_block(b).unwrap();

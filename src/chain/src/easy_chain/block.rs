@@ -17,6 +17,8 @@
 */
 
 use crate::block::Block;
+use crate::chain::ChainErr;
+use common::checkpointable::*;
 use bin_tools::*;
 use account::NormalAddress;
 use crypto::PublicKey;
@@ -93,8 +95,14 @@ impl HashTrait for EasyBlock {
 }
 
 impl Block for EasyBlock {
+    type ChainState = DummyCheckpoint;
+
     fn genesis() -> Arc<EasyBlock> {
         GENESIS_RC.clone()
+    }
+
+    fn genesis_state() -> DummyCheckpoint {
+        DummyCheckpoint::genesis()
     }
 
     fn height(&self) -> u64 {
@@ -125,8 +133,8 @@ impl Block for EasyBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(FnMut(Arc<EasyBlock>) -> bool)>> {
-        None
+    fn append_condition(_block: Arc<EasyBlock>, chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
+        Ok(chain_state)
     }
 
     fn to_bytes(&self) -> Vec<u8> {

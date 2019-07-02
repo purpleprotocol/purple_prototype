@@ -1,0 +1,10 @@
+[package]
+name = "common"
+version = "0.1.0"
+authors = ["Octavian Oncescu <octavonce@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+parking_lot = "0.7.1"
+lazy_static = "1.2.0"
+hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }

@@ -62,11 +62,11 @@ impl Heartbeat {
     /// tree formed by the transactions stored
     /// in the heartbeat event.
     pub fn calculate_root_hash(&mut self) {
-        let mut hasher = BlakeHasher::new();
         let txs_hashes = self
             .transactions
             .iter()
             .map(|tx| {
+                let mut hasher = BlakeHasher::new();
                 let message: Vec<u8> = tx.compute_hash_message();
 
                 hasher.write(&message);

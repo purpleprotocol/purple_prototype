@@ -17,6 +17,7 @@
 */
 
 use crypto::Hash;
+use common::{Checkpointable, StorageLocation};
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
 use hashdb::{AsHashDB, HashDB};
@@ -24,6 +25,12 @@ use rocksdb::{DBCompactionStyle, Options, WriteBatch, ColumnFamily, DB};
 use rlp::NULL_RLP;
 use std::sync::Arc;
 use BlakeDbHasher;
+
+pub fn cf_options() -> Options {
+    let mut opts = Options::default();
+    opts.set_max_write_buffer_number(16);
+    opts
+}
 
 pub fn db_options() -> Options {
     let mut opts = Options::default();
@@ -205,6 +212,24 @@ impl PersistentDb {
                 Err(err) => panic!(err),
             }
         }
+    }
+}
+
+impl Checkpointable for PersistentDb {
+    fn checkpoint(&self) -> u64 {
+        unimplemented!();
+    }
+
+    fn delete_checkpoint(id: u64) -> Result<(), ()> {
+        unimplemented!();
+    }
+
+    fn load_from_disk(id: u64) -> Result<PersistentDb, ()> {
+        unimplemented!();
+    }
+
+    fn storage_location(&self) -> StorageLocation {
+        unimplemented!();
     }
 }
 

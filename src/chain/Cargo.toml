@@ -16,6 +16,7 @@ hex = "0.3.2"
 account = { path = "../account" }
 crypto = { path = "../crypto" }
 events = { path = "../events" }
+common = { path = "../common" }
 persistence = { path = "../persistence" }
 bin-tools = { path = "../util/bin-tools/" }
 hashdb = "0.3.0"

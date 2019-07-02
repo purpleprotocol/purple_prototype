@@ -23,6 +23,7 @@ rand = "^0.6.0"
 quickcheck = "0.7.2"
 
 [dev-dependencies]
+mimalloc = "0.1.3"
 criterion = "0.2.1"
 test-helpers = { path = "../util/test-helpers" }
 

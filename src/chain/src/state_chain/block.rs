@@ -17,6 +17,7 @@
 */
 
 use crate::block::Block;
+use crate::chain::ChainErr;
 use crate::hard_chain::block::HardBlock;
 use events::Event;
 use account::NormalAddress;
@@ -25,6 +26,7 @@ use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
 use crypto::Hash;
+use persistence::PersistentDb;
 use lazy_static::*;
 use std::boxed::Box;
 use std::hash::Hash as HashTrait;
@@ -106,8 +108,14 @@ impl HashTrait for StateBlock {
 }
 
 impl Block for StateBlock {
+    type ChainState = PersistentDb;
+
     fn genesis() -> Arc<StateBlock> {
         GENESIS_RC.clone()
+    }
+
+    fn genesis_state() -> PersistentDb {
+        unimplemented!();
     }
 
     fn height(&self) -> u64 {
@@ -138,8 +146,8 @@ impl Block for StateBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition() -> Option<Box<(FnMut(Arc<StateBlock>) -> bool)>> {
-        None
+    fn append_condition(_block: Arc<StateBlock>, chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
+        Ok(chain_state)
     }
 
     fn to_bytes(&self) -> Vec<u8> {
