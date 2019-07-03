@@ -396,7 +396,7 @@ impl<B: Block> Chain<B> {
 
     fn write_block(&mut self, block: Arc<B>) {
         let block_hash = block.block_hash().unwrap();
-        println!("DEBUG WRITING BLOCK: {:?}", block_hash);
+        //println!("DEBUG WRITING BLOCK: {:?}", block_hash);
         assert!(self.disconnected_heads_mapping.get(&block_hash).is_none());
         assert!(self.disconnected_tips_mapping.get(&block_hash).is_none());
 
@@ -900,6 +900,7 @@ impl<B: Block> Chain<B> {
             self.validations_mapping.insert(block_hash.clone(), status.clone());
         }
 
+        let tip_clone = tip.clone();
         let iterable = self
             .disconnected_heads_heights
             .iter()
@@ -910,47 +911,42 @@ impl<B: Block> Chain<B> {
                 let head = self.orphan_pool.get(h).unwrap();
                 let parent_hash = head.parent_hash().unwrap();
 
-                parent_hash == tip.block_hash().unwrap()
+                parent_hash == tip_clone.block_hash().unwrap()
             });
 
-        let mut current = None;
-        let mut current_height = (0, None);
+        let mut to_write: Vec<(Hash, Arc<B>, u64, B::ChainState)> = Vec::new();
 
-        // Find the head that follows our tip that
-        // has the largest potential height.
+        // For each matching head, make the descending
+        // branches, valid chains.
         for (head_hash, (largest_height, largest_tip)) in iterable {
-            let (cur_height, _) = current_height;
-
-            if current.is_none() || *largest_height > cur_height {
-                current = Some(head_hash);
-                current_height = (*largest_height, Some(largest_tip));
-            }
-        }
-
-        // If we have a matching chain, update the return values.
-        if let Some(head_hash) = current {
             let head = self.orphan_pool.get(head_hash).unwrap();
-            let tip_state = B::append_condition(head.clone(), tip_state);
+            let tip_state = B::append_condition(head.clone(), tip_state.clone());
 
             if let Ok(tip_state) = tip_state {
-                let (largest_height, largest_tip) = current_height;
-                let largest_tip = self.orphan_pool.get(&largest_tip.unwrap()).unwrap().clone();
+                let largest_tip = self.orphan_pool.get(&largest_tip).unwrap().clone();
                 let tip_height = tip.height();
-
-                *status = OrphanType::BelongsToValidChain;
-                *inverse_height = largest_height - tip_height;
-                *tip = largest_tip;
-
-                // Remove old tip if we found a match
-                self.valid_tips.remove(&block_hash);
-                self.valid_tips_states.remove(&block_hash);
-                let old_tip_status = self.validations_mapping.get_mut(&block_hash).unwrap();
-                *old_tip_status = OrphanType::BelongsToValidChain;
-
-                self.make_valid_tips(&head_hash.clone(), tip_state);
+                let inverse_h = largest_height - tip_height;
+                to_write.push((head_hash.clone(), largest_tip, inverse_h, tip_state));
             } else {
                 // TODO: Maybe cleanup here?
             }
+        }
+
+        for (head_hash, new_tip, inverse_h, tip_state) in to_write {
+            *status = OrphanType::BelongsToValidChain;
+            
+            if inverse_h > *inverse_height {
+                *inverse_height = inverse_h;
+                *tip = new_tip;
+            }
+
+            // Remove old tip if we found a match
+            self.valid_tips.remove(&block_hash);
+            self.valid_tips_states.remove(&block_hash);
+            let old_tip_status = self.validations_mapping.get_mut(&block_hash).unwrap();
+            *old_tip_status = OrphanType::BelongsToValidChain;
+
+            self.make_valid_tips(&head_hash.clone(), tip_state);
         }
 
         // Update inverse heights
@@ -6890,6 +6886,137 @@ mod tests {
         assert_eq!(chain.canonical_tip, G);
         assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
     }
+
+    #[test]
+    /// Assertions in stages of random block order.
+    /// 
+    /// The sample ordering, taken from the stress test,
+    /// is the following:
+    /// E, D''', D', A, B, F'', E'', C, F, C'', D'', G, C', E', D, B'
+    fn stages_append_test7() {
+        let db = test_helpers::init_tempdb();
+        let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+
+        let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
+        let A = Arc::new(A);
+
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B = Arc::new(B);
+
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C = Arc::new(C);
+
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D = Arc::new(D);
+
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E = Arc::new(E);
+
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F = Arc::new(F);
+
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
+        let G = Arc::new(G);
+
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B_prime = Arc::new(B_prime);
+
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_prime = Arc::new(C_prime);
+
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_prime = Arc::new(D_prime);
+
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_prime = Arc::new(E_prime);
+
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_second = Arc::new(C_second);
+
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_second = Arc::new(D_second);
+
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_second = Arc::new(E_second);
+
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F_second = Arc::new(F_second);
+
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_tertiary = Arc::new(D_tertiary);
+
+        let mut blocks = vec![
+            E.clone(),
+            D_tertiary.clone(),
+            D_prime.clone(),
+            A.clone(),
+            B.clone(),
+            F_second.clone(),
+            E_second.clone(),
+            C.clone(),
+            F.clone(),
+            C_second.clone(),
+            D_second.clone(),
+            G.clone(),
+            C_prime.clone(),
+            E_prime.clone(),
+            D.clone(),
+            B_prime.clone(),
+        ];
+
+        println!("DEBUG PUSHING E");
+        chain.append_block(blocks.remove(0)).unwrap(); // E
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING D'''");
+        chain.append_block(blocks.remove(0)).unwrap(); // D_tertiary
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING D'");
+        chain.append_block(blocks.remove(0)).unwrap(); // D_prime
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING A");
+        chain.append_block(blocks.remove(0)).unwrap(); // A
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING B");
+        chain.append_block(blocks.remove(0)).unwrap(); // B
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING F''");
+        chain.append_block(blocks.remove(0)).unwrap(); // F_second
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING E''");
+        chain.append_block(blocks.remove(0)).unwrap(); // E_second
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING C");
+        chain.append_block(blocks.remove(0)).unwrap(); // C
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING F");
+        chain.append_block(blocks.remove(0)).unwrap(); // F
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING C''");
+        chain.append_block(blocks.remove(0)).unwrap(); // C_second
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING D''");
+        chain.append_block(blocks.remove(0)).unwrap(); // D_second
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING G");
+        chain.append_block(blocks.remove(0)).unwrap(); // G
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING C'");
+        chain.append_block(blocks.remove(0)).unwrap(); // C_prime
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING E'");
+        chain.append_block(blocks.remove(0)).unwrap(); // E_prime
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING D");
+        chain.append_block(blocks.remove(0)).unwrap(); // D
+        println!("DEBUG VALID TIPS: {:?}", chain.valid_tips);
+        println!("DEBUG PUSHING B'"); 
+        chain.append_block(blocks.remove(0)).unwrap(); // B_prime
+
+        assert_eq!(chain.height(), 7);
+        assert_eq!(chain.canonical_tip, G);
+        assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
+    }
+
 
     quickcheck! {
         /// Stress test of chain append.
