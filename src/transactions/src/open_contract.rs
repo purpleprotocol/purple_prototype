@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{Address, NormalAddress, Balance, ContractAddress};
+use account::{Address, Balance, ContractAddress, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Signature, Hash, PublicKey as Pk, SecretKey as Sk};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;

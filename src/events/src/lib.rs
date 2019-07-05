@@ -31,11 +31,11 @@ extern crate merkle_light;
 extern crate parking_lot;
 extern crate patricia_trie;
 extern crate persistence;
+extern crate rand;
 extern crate rayon;
 extern crate rlp;
 extern crate serde;
 extern crate transactions;
-extern crate rand;
 
 #[macro_use]
 mod macros;
@@ -133,21 +133,21 @@ impl Event {
         match bytes[0] {
             Heartbeat::EVENT_TYPE => match Heartbeat::from_bytes(bytes) {
                 Ok(result) => Ok(Event::Heartbeat(result)),
-                Err(err) => Err(err)
-            }
+                Err(err) => Err(err),
+            },
 
             Leave::EVENT_TYPE => match Leave::from_bytes(bytes) {
                 Ok(result) => Ok(Event::Leave(result)),
-                Err(err) => Err(err)
-            }
+                Err(err) => Err(err),
+            },
 
-            _ => Err("Invalid event type")
+            _ => Err("Invalid event type"),
         }
-    } 
+    }
 }
 
-use rand::prelude::*;
 use quickcheck::Arbitrary;
+use rand::prelude::*;
 
 impl Arbitrary for Event {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Event {

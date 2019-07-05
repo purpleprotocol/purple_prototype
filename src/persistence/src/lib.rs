@@ -22,15 +22,15 @@ extern crate tempdir;
 extern crate log;
 
 extern crate common;
-extern crate num_cpus;
 extern crate crypto;
 extern crate elastic_array;
 extern crate hashbrown;
 extern crate hashdb;
-extern crate rocksdb;
+extern crate num_cpus;
 extern crate parking_lot;
 extern crate patricia_trie;
 extern crate rlp;
+extern crate rocksdb;
 
 pub use hasher::*;
 pub use node_codec::*;

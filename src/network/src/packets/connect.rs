@@ -16,18 +16,18 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::peer::ConnectionType;
-use crate::interface::NetworkInterface;
-use crypto::NodeId;
 use crate::error::NetworkErr;
+use crate::interface::NetworkInterface;
 use crate::packet::Packet;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::str;
-use chrono::prelude::*;
+use crate::peer::ConnectionType;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use crypto::{PublicKey as Pk, SecretKey as Sk, Signature, KxPublicKey as KxPk};
+use chrono::prelude::*;
+use crypto::NodeId;
+use crypto::{KxPublicKey as KxPk, PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
+use std::net::SocketAddr;
+use std::str;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Connect {
@@ -162,14 +162,14 @@ impl Packet for Connect {
 
         let timestamp = if buf.len() == timestamp_len as usize {
             let result: Vec<u8> = buf.drain(..timestamp_len as usize).collect();
-            
+
             match str::from_utf8(&result) {
                 Ok(result) => match DateTime::parse_from_rfc3339(result) {
                     Ok(result) => Utc.from_utc_datetime(&result.naive_utc()),
-                    _ => return Err(NetworkErr::BadFormat)
+                    _ => return Err(NetworkErr::BadFormat),
                 },
-                Err(_) => return Err(NetworkErr::BadFormat)
-            } 
+                Err(_) => return Err(NetworkErr::BadFormat),
+            }
         } else {
             return Err(NetworkErr::BadFormat);
         };
@@ -188,15 +188,20 @@ impl Packet for Connect {
         self.timestamp.clone()
     }
 
-    fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &Connect, conn_type: ConnectionType) -> Result<(), NetworkErr> {
+    fn handle<N: NetworkInterface>(
+        network: &mut N,
+        addr: &SocketAddr,
+        packet: &Connect,
+        conn_type: ConnectionType,
+    ) -> Result<(), NetworkErr> {
         if !packet.verify_sig() {
             return Err(NetworkErr::BadSignature);
         }
-        
+
         let our_node_id = network.our_node_id().clone();
         let node_id = packet.node_id.clone();
         let mut our_pk = None;
-        
+
         {
             let node_id = node_id.clone();
             let peer = network.fetch_peer_mut(addr)?;
@@ -204,12 +209,8 @@ impl Packet for Connect {
 
             // Compute session keys
             let result = match conn_type {
-                ConnectionType::Client => {
-                    crypto::client_sk(&peer.pk, &peer.sk, &kx_key)
-                }
-                ConnectionType::Server => {
-                    crypto::server_sk(&peer.pk, &peer.sk, &kx_key)
-                }
+                ConnectionType::Client => crypto::client_sk(&peer.pk, &peer.sk, &kx_key),
+                ConnectionType::Server => crypto::server_sk(&peer.pk, &peer.sk, &kx_key),
             };
 
             let (rx, tx) = if let Ok(result) = result {
@@ -233,7 +234,7 @@ impl Packet for Connect {
 
         // If we are the server, also send a connect packet back
         if let ConnectionType::Server = conn_type {
-            let mut packet = Connect::new(our_node_id,  our_pk.unwrap());
+            let mut packet = Connect::new(our_node_id, our_pk.unwrap());
             network.send_raw_unsigned::<Connect>(addr, &mut packet)?;
         }
 
@@ -281,15 +282,15 @@ impl Arbitrary for Connect {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
-    use std::thread;
-    use std::time::Duration;
-    use std::sync::mpsc::channel;
-    use parking_lot::Mutex;
-    use hashbrown::HashMap;
     use crate::interface::NetworkInterface;
     use crate::mock::MockNetwork;
     use crypto::NodeId;
+    use hashbrown::HashMap;
+    use parking_lot::Mutex;
+    use std::sync::mpsc::channel;
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
 
     #[test]
     fn it_successfuly_performs_connect_handshake() {
@@ -312,13 +313,27 @@ mod tests {
         // Peer 1 listener thread
         thread::Builder::new()
             .name("peer1".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network1, network1_easy_rec, network1_hard_rec, network1_state_rec))
+            .spawn(move || {
+                MockNetwork::start_receive_loop(
+                    network1,
+                    network1_easy_rec,
+                    network1_hard_rec,
+                    network1_state_rec,
+                )
+            })
             .unwrap();
 
         // Peer 2 listener thread
         thread::Builder::new()
             .name("peer2".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network2, network2_easy_rec, network2_hard_rec, network2_state_rec))
+            .spawn(move || {
+                MockNetwork::start_receive_loop(
+                    network2,
+                    network2_easy_rec,
+                    network2_hard_rec,
+                    network2_state_rec,
+                )
+            })
             .unwrap();
 
         {
@@ -339,7 +354,7 @@ mod tests {
             let network1 = network1_c.lock();
             network1.peers.get(&addr2).unwrap().clone()
         };
-        
+
         // Check if the peers have the same session keys
         assert_eq!(peer1.rx.as_ref().unwrap(), peer2.tx.as_ref().unwrap());
         assert_eq!(peer2.rx.as_ref().unwrap(), peer1.tx.as_ref().unwrap());

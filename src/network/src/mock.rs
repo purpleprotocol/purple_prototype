@@ -18,17 +18,17 @@
 
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
-use crate::packets::*;
-use crate::peer::{Peer, ConnectionType};
 use crate::packet::Packet;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::sync::mpsc::{Sender, Receiver};
+use crate::packets::*;
+use crate::peer::{ConnectionType, Peer};
 use chain::*;
+use crypto::NodeId;
 use crypto::SecretKey as Sk;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
-use crypto::NodeId;
+use std::net::SocketAddr;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Arc;
 
 /// Mock network layer used for testing.
 pub struct MockNetwork {
@@ -59,7 +59,7 @@ pub struct MockNetwork {
     state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
 
     /// Mapping between ips and node ids.
-    pub(crate) address_mappings: HashMap<SocketAddr, NodeId>, 
+    pub(crate) address_mappings: HashMap<SocketAddr, NodeId>,
 
     /// Mapping between connected peers and their information
     pub(crate) peers: HashMap<SocketAddr, Peer>,
@@ -83,9 +83,9 @@ impl NetworkInterface for MockNetwork {
 
         let mut peer = Peer::new(None, address.clone(), ConnectionType::Client);
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
-        connect_packet.sign(&self.secret_key); 
+        connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
-        
+
         peer.sent_connect = true;
         self.peers.insert(address.clone(), peer);
         self.send_raw(address, &connect).unwrap();
@@ -135,7 +135,7 @@ impl NetworkInterface for MockNetwork {
         } else {
             return Err(NetworkErr::PeerNotFound);
         };
-        
+
         if let Some(mailbox) = self.mailboxes.get(&id) {
             mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
             Ok(())
@@ -161,7 +161,8 @@ impl NetworkInterface for MockNetwork {
             return Err(NetworkErr::NoPeers);
         }
 
-        let ids_to_send_to = self.address_mappings
+        let ids_to_send_to = self
+            .address_mappings
             .iter()
             .filter(|(addr, _)| *addr != exception)
             .map(|(_, id)| id);
@@ -174,7 +175,11 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
-    fn send_to_all_unsigned_except<P: Packet>(&self, exception: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
+    fn send_to_all_unsigned_except<P: Packet>(
+        &self,
+        exception: &SocketAddr,
+        packet: &mut P,
+    ) -> Result<(), NetworkErr> {
         if packet.signature().is_none() {
             packet.sign(&self.secret_key);
         }
@@ -182,7 +187,6 @@ impl NetworkInterface for MockNetwork {
         let packet = packet.to_bytes();
         self.send_to_all_except(exception, &packet)
     }
-
 
     fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr> {
         if packet.signature().is_none() {
@@ -193,7 +197,11 @@ impl NetworkInterface for MockNetwork {
         self.send_to_all(&packet)
     }
 
-    fn send_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
+    fn send_unsigned<P: Packet>(
+        &self,
+        peer: &SocketAddr,
+        packet: &mut P,
+    ) -> Result<(), NetworkErr> {
         if packet.signature().is_none() {
             packet.sign(&self.secret_key);
         }
@@ -204,7 +212,11 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
-    fn send_raw_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
+    fn send_raw_unsigned<P: Packet>(
+        &self,
+        peer: &SocketAddr,
+        packet: &mut P,
+    ) -> Result<(), NetworkErr> {
         if packet.signature().is_none() {
             packet.sign(&self.secret_key);
         }
@@ -246,7 +258,10 @@ impl NetworkInterface for MockNetwork {
 
         // Insert to peer table if this is the first received packet.
         if self.peers.get(addr).is_none() {
-            self.peers.insert(addr.clone(), Peer::new(None, addr.clone(), ConnectionType::Server));
+            self.peers.insert(
+                addr.clone(),
+                Peer::new(None, addr.clone(), ConnectionType::Server),
+            );
         }
 
         let (tx, is_none_id, conn_type) = {
@@ -280,17 +295,17 @@ impl NetworkInterface for MockNetwork {
 
             let packet = crate::common::unwrap_packet(packet, tx.as_ref().unwrap())?;
             let packet_type = packet[0];
-            
+
             match packet_type {
                 RequestPeers::PACKET_TYPE => match RequestPeers::from_bytes(&packet) {
                     Ok(packet) => RequestPeers::handle(self, addr, &packet, conn_type)?,
-                    _ => return Err(NetworkErr::PacketParseErr)
-                }
-                    
+                    _ => return Err(NetworkErr::PacketParseErr),
+                },
+
                 SendPeers::PACKET_TYPE => match SendPeers::from_bytes(&packet) {
                     Ok(packet) => SendPeers::handle(self, addr, &packet, conn_type)?,
-                    _ => return Err(NetworkErr::PacketParseErr)
-                }
+                    _ => return Err(NetworkErr::PacketParseErr),
+                },
 
                 _ => {
                     debug!("Could not parse packet from {}", addr);
@@ -314,7 +329,7 @@ impl NetworkInterface for MockNetwork {
         if let Some(peer) = self.peers.get(peer) {
             Ok(peer)
         } else {
-            Err(NetworkErr::PeerNotFound)        
+            Err(NetworkErr::PeerNotFound)
         }
     }
 
@@ -322,7 +337,7 @@ impl NetworkInterface for MockNetwork {
         if let Some(peer) = self.peers.get_mut(peer) {
             Ok(peer)
         } else {
-            Err(NetworkErr::PeerNotFound)        
+            Err(NetworkErr::PeerNotFound)
         }
     }
 
@@ -337,12 +352,12 @@ impl NetworkInterface for MockNetwork {
 
 impl MockNetwork {
     pub fn new(
-        node_id: NodeId, 
-        ip: SocketAddr, 
-        network_name: String, 
-        secret_key: Sk, 
-        rx: Receiver<(SocketAddr, Vec<u8>)>, 
-        mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>, 
+        node_id: NodeId,
+        ip: SocketAddr,
+        network_name: String,
+        secret_key: Sk,
+        rx: Receiver<(SocketAddr, Vec<u8>)>,
+        mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>,
         address_mappings: HashMap<SocketAddr, NodeId>,
         easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
         hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
@@ -365,12 +380,12 @@ impl MockNetwork {
             node_id,
             secret_key,
             ip,
-            network_name
+            network_name,
         }
     }
 
     pub fn start_receive_loop(
-        network: Arc<Mutex<Self>>, 
+        network: Arc<Mutex<Self>>,
         easy_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<EasyBlock>)>>>,
         hard_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>,
         state_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<StateBlock>)>>>,
@@ -381,11 +396,11 @@ impl MockNetwork {
             if let Ok((addr, packet)) = network.rx.try_recv() {
                 if let Err(err) = network.process_packet(&addr, &packet) {
                     match err {
-                        NetworkErr::InvalidConnectPacket =>  {
+                        NetworkErr::InvalidConnectPacket => {
                             network.disconnect_from_ip(&addr).unwrap();
                             network.ban_ip(&addr).unwrap();
-                        },
-                        err => { 
+                        }
+                        err => {
                             debug!("Packet error: {:?}", err);
                             network.disconnect_from_ip(&addr).unwrap();
                             network.ban_ip(&addr).unwrap();
@@ -409,51 +424,76 @@ impl MockNetwork {
                 .try_iter()
                 .map(|(a, b)| (a, BlockWrapper::StateBlock(b)));
 
-            let mut iter = easy_iter
-                .chain(hard_iter)
-                .chain(state_iter);
+            let mut iter = easy_iter.chain(hard_iter).chain(state_iter);
 
             while let Some((addr, block)) = iter.next() {
                 match block {
                     BlockWrapper::EasyBlock(block) => {
                         let easy_chain = network.easy_chain_ref().chain;
                         let mut chain = easy_chain.write();
-                        
+
                         match chain.append_block(block.clone()) {
                             Ok(()) => {
                                 // Forward block
-                                let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::EasyBlock(block)));
-                                network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
+                                let mut packet = ForwardBlock::new(
+                                    network.our_node_id().clone(),
+                                    Arc::new(BlockWrapper::EasyBlock(block)),
+                                );
+                                network
+                                    .send_to_all_unsigned_except(&addr, &mut packet)
+                                    .unwrap();
                             }
-                            Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)
+                            Err(err) => info!(
+                                "Chain Error for block {:?}: {:?}",
+                                block.block_hash().unwrap(),
+                                err
+                            ),
                         }
                     }
 
                     BlockWrapper::HardBlock(block) => {
                         let hard_chain = network.hard_chain_ref().chain;
                         let mut chain = hard_chain.write();
-                        
+
                         match chain.append_block(block.clone()) {
                             Ok(()) => {
                                 // Forward block
-                                let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::HardBlock(block)));
-                                network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
+                                let mut packet = ForwardBlock::new(
+                                    network.our_node_id().clone(),
+                                    Arc::new(BlockWrapper::HardBlock(block)),
+                                );
+                                network
+                                    .send_to_all_unsigned_except(&addr, &mut packet)
+                                    .unwrap();
                             }
-                            Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)
+                            Err(err) => info!(
+                                "Chain Error for block {:?}: {:?}",
+                                block.block_hash().unwrap(),
+                                err
+                            ),
                         }
                     }
 
                     BlockWrapper::StateBlock(block) => {
                         let state_chain = network.state_chain_ref().chain;
                         let mut chain = state_chain.write();
-                        
+
                         match chain.append_block(block.clone()) {
                             Ok(()) => {
                                 // Forward block
-                                let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::StateBlock(block)));
-                                network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
+                                let mut packet = ForwardBlock::new(
+                                    network.our_node_id().clone(),
+                                    Arc::new(BlockWrapper::StateBlock(block)),
+                                );
+                                network
+                                    .send_to_all_unsigned_except(&addr, &mut packet)
+                                    .unwrap();
                             }
-                            Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)
+                            Err(err) => info!(
+                                "Chain Error for block {:?}: {:?}",
+                                block.block_hash().unwrap(),
+                                err
+                            ),
                         }
                     }
                 }

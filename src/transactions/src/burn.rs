@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, Balance};
+use account::{Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Signature, Hash};
+use crypto::{Hash, Signature};
 use crypto::{PublicKey as Pk, SecretKey as Sk};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
@@ -265,9 +265,7 @@ impl Burn {
         let message = assemble_message(&self);
 
         match self.signature {
-            Some(ref sig) => {
-                crypto::verify(&message, sig, &self.burner.pkey())
-            }
+            Some(ref sig) => crypto::verify(&message, sig, &self.burner.pkey()),
             None => false,
         }
     }
@@ -523,7 +521,12 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(burner_addr.clone()),
+            asset_hash,
+            b"10000.0",
+        );
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -556,7 +559,12 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10.0");
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(burner_addr.clone()),
+            asset_hash,
+            b"10.0",
+        );
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -590,8 +598,18 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
-        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), fee_hash, b"10.0");
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(burner_addr.clone()),
+            asset_hash,
+            b"10000.0",
+        );
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(burner_addr.clone()),
+            fee_hash,
+            b"10.0",
+        );
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -625,8 +643,18 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10.0");
-        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), fee_hash, b"10.0");
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(burner_addr.clone()),
+            asset_hash,
+            b"10.0",
+        );
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(burner_addr.clone()),
+            fee_hash,
+            b"10.0",
+        );
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -660,8 +688,18 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10.0");
-        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), fee_hash, b"10.0");
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(burner_addr.clone()),
+            asset_hash,
+            b"10.0",
+        );
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(burner_addr.clone()),
+            fee_hash,
+            b"10.0",
+        );
 
         let amount = Balance::from_bytes(b"5.0").unwrap();
         let fee = Balance::from_bytes(b"20.0").unwrap();
@@ -694,7 +732,12 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(burner_addr.clone()),
+            asset_hash,
+            b"10000.0",
+        );
 
         let amount = Balance::from_bytes(b"0.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -727,7 +770,12 @@ mod tests {
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize burner balance
-        test_helpers::init_balance(&mut trie, Address::Normal(burner_addr.clone()), asset_hash, b"10000.0");
+        test_helpers::init_balance(
+            &mut trie,
+            Address::Normal(burner_addr.clone()),
+            asset_hash,
+            b"10000.0",
+        );
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();

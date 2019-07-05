@@ -16,9 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use account::{NormalAddress, Address, Balance, ContractAddress};
+use account::{Address, Balance, ContractAddress, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, Signature, PublicKey as Pk, SecretKey as Sk};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use purple_vm::Gas;
 use std::io::Cursor;
 use std::str;
@@ -65,9 +65,7 @@ impl Call {
         let message = assemble_message(&self);
 
         match self.signature {
-            Some(ref sig) => {
-                crypto::verify(&message, sig, &self.from.pkey())
-            }
+            Some(ref sig) => crypto::verify(&message, sig, &self.from.pkey()),
             None => false,
         }
     }

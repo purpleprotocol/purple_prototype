@@ -17,11 +17,11 @@
 */
 
 use crate::error::NetworkErr;
-use crate::network::Network;
 use crate::interface::NetworkInterface;
-use crate::peer::{Peer, ConnectionType};
-use crate::packets::connect::Connect;
+use crate::network::Network;
 use crate::packet::Packet;
+use crate::packets::connect::Connect;
+use crate::peer::{ConnectionType, Peer};
 use parking_lot::Mutex;
 use std::io::BufReader;
 use std::iter;
@@ -131,38 +131,37 @@ fn process_connection(
     let refuse_connection_clone = refuse_connection.clone();
 
     let writer_iter = stream::iter_ok::<_, ()>(iter::repeat(()));
-    let socket_writer = writer_iter
-        .fold(writer, move |mut writer, _| {
-            let mut network = network_clone.lock();
-            let peer = network.peers.get_mut(&addr).unwrap();
+    let socket_writer = writer_iter.fold(writer, move |mut writer, _| {
+        let mut network = network_clone.lock();
+        let peer = network.peers.get_mut(&addr).unwrap();
 
-            // Write a connect packet if we are the client
-            // and we have not yet sent a connect packet.
-            if let ConnectionType::Client = client_or_server {
-                if !peer.sent_connect {
-                    // Send `Connect` packet.
-                    let mut connect = Connect::new(node_id.clone(), peer.pk);
-                    connect.sign(&skey);
+        // Write a connect packet if we are the client
+        // and we have not yet sent a connect packet.
+        if let ConnectionType::Client = client_or_server {
+            if !peer.sent_connect {
+                // Send `Connect` packet.
+                let mut connect = Connect::new(node_id.clone(), peer.pk);
+                connect.sign(&skey);
 
-                    let packet = connect.to_bytes();
+                let packet = connect.to_bytes();
 
-                    writer
-                        .poll_write(&packet)
-                        .map_err(|err| warn!("write failed = {:?}", err));
-
-                    peer.sent_connect = true;
-                }
-            }
-
-            // Pop packet from outbound buffer and write it to the socket.
-            if let Some(packet) = peer.outbound_buffer.pop_back() {
                 writer
                     .poll_write(&packet)
                     .map_err(|err| warn!("write failed = {:?}", err));
-            }
 
-            ok(writer)
-        });
+                peer.sent_connect = true;
+            }
+        }
+
+        // Pop packet from outbound buffer and write it to the socket.
+        if let Some(packet) = peer.outbound_buffer.pop_back() {
+            writer
+                .poll_write(&packet)
+                .map_err(|err| warn!("write failed = {:?}", err));
+        }
+
+        ok(writer)
+    });
 
     let socket_reader = iter
         .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
@@ -182,26 +181,25 @@ fn process_connection(
             let network_clone = network.clone();
             let refuse_connection = refuse_connection.clone();
 
-            line
-                .map(move |(reader, message)| {
-                    let result = network.lock().process_packet(&addr, &message);
-                    (reader, result)
-                })
-                .map(move |(reader, result)| {
-                    // TODO: Handle other errors as well
-                    if let Err(NetworkErr::InvalidConnectPacket) = result {
-                        let network = network_clone.clone();
+            line.map(move |(reader, message)| {
+                let result = network.lock().process_packet(&addr, &message);
+                (reader, result)
+            })
+            .map(move |(reader, result)| {
+                // TODO: Handle other errors as well
+                if let Err(NetworkErr::InvalidConnectPacket) = result {
+                    let network = network_clone.clone();
 
-                        // Flag socket for connection refusal if we 
-                        // have received an invalid connect packet.
-                        refuse_connection.store(true, Ordering::Relaxed);
+                    // Flag socket for connection refusal if we
+                    // have received an invalid connect packet.
+                    refuse_connection.store(true, Ordering::Relaxed);
 
-                        // Also, ban the peer
-                        network.lock().ban_ip(&addr).unwrap();
-                    }
+                    // Also, ban the peer
+                    network.lock().ban_ip(&addr).unwrap();
+                }
 
-                    reader
-                })
+                reader
+            })
         });
 
     // Now that we've got futures representing each half of the socket, we

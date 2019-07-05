@@ -16,19 +16,19 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::peer::ConnectionType;
-use crate::interface::NetworkInterface;
-use crypto::NodeId;
 use crate::error::NetworkErr;
+use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::SendPeers;
+use crate::peer::ConnectionType;
+use byteorder::{ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
-use std::sync::Arc;
+use crypto::NodeId;
+use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
+use std::io::Cursor;
 use std::net::SocketAddr;
 use std::str;
-use std::io::Cursor;
-use byteorder::{ReadBytesExt, WriteBytesExt};
-use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestPeers {
@@ -42,7 +42,7 @@ pub struct RequestPeers {
     requested_peers: u8,
 
     /// Packet signature
-    signature: Option<Signature>
+    signature: Option<Signature>,
 }
 
 impl RequestPeers {
@@ -170,14 +170,14 @@ impl Packet for RequestPeers {
 
         let timestamp = if buf.len() == timestamp_len as usize {
             let result: Vec<u8> = buf.drain(..timestamp_len as usize).collect();
-            
+
             match str::from_utf8(&result) {
                 Ok(result) => match DateTime::parse_from_rfc3339(result) {
                     Ok(result) => Utc.from_utc_datetime(&result.naive_utc()),
-                    _ => return Err(NetworkErr::BadFormat)
+                    _ => return Err(NetworkErr::BadFormat),
                 },
-                Err(_) => return Err(NetworkErr::BadFormat)
-            } 
+                Err(_) => return Err(NetworkErr::BadFormat),
+            }
         } else {
             return Err(NetworkErr::BadFormat);
         };
@@ -192,11 +192,16 @@ impl Packet for RequestPeers {
         Ok(Arc::new(packet))
     }
 
-    fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &RequestPeers, _conn_type: ConnectionType) -> Result<(), NetworkErr> {
+    fn handle<N: NetworkInterface>(
+        network: &mut N,
+        addr: &SocketAddr,
+        packet: &RequestPeers,
+        _conn_type: ConnectionType,
+    ) -> Result<(), NetworkErr> {
         if !packet.verify_sig() {
             return Err(NetworkErr::BadSignature);
         }
-        
+
         debug!("Received RequestPeers packet from: {:?}", addr);
 
         let num_of_peers = packet.requested_peers as usize;
@@ -204,7 +209,9 @@ impl Packet for RequestPeers {
         let addresses: Vec<SocketAddr> = network
             .peers()
             // Don't send the address of the requester
-            .filter(|(peer_addr, peer)| peer.id.is_some() && peer.id != Some(packet.node_id.clone()) && *peer_addr != addr)
+            .filter(|(peer_addr, peer)| {
+                peer.id.is_some() && peer.id != Some(packet.node_id.clone()) && *peer_addr != addr
+            })
             .take(num_of_peers)
             .map(|(addr, _)| addr)
             .cloned()

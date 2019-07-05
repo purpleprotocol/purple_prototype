@@ -16,22 +16,22 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use std::sync::Arc;
-use std::sync::mpsc::Receiver;
-use tokio::executor::Spawn;
-use futures::prelude::*;
-use std::net::SocketAddr;
-use crate::{NetworkInterface, Network};
 use crate::packets::ForwardBlock;
-use parking_lot::Mutex;
-use futures::future::{self, ok, loop_fn, Loop, FutureResult};
+use crate::{Network, NetworkInterface};
 use chain::*;
+use futures::future::{self, loop_fn, ok, FutureResult, Loop};
+use futures::prelude::*;
+use parking_lot::Mutex;
+use std::net::SocketAddr;
+use std::sync::mpsc::Receiver;
+use std::sync::Arc;
+use tokio::executor::Spawn;
 
-/// Listens for blocks on chain receivers and 
+/// Listens for blocks on chain receivers and
 /// forwards them to their respective chains.
 pub fn start_block_listeners(
     network: Arc<Mutex<Network>>,
-    easy_chain: EasyChainRef, 
+    easy_chain: EasyChainRef,
     hard_chain: HardChainRef,
     state_chain: StateChainRef,
     easy_receiver: Receiver<(SocketAddr, Arc<EasyBlock>)>,
@@ -55,10 +55,19 @@ pub fn start_block_listeners(
                         let network = network.lock();
 
                         // Forward block
-                        let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::EasyBlock(block)));
-                        network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
+                        let mut packet = ForwardBlock::new(
+                            network.our_node_id().clone(),
+                            Arc::new(BlockWrapper::EasyBlock(block)),
+                        );
+                        network
+                            .send_to_all_unsigned_except(&addr, &mut packet)
+                            .unwrap();
                     }
-                    Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)
+                    Err(err) => info!(
+                        "Chain Error for block {:?}: {:?}",
+                        block.block_hash().unwrap(),
+                        err
+                    ),
                 }
             }
         }
@@ -77,16 +86,25 @@ pub fn start_block_listeners(
                     let mut chain = hard_chain.write();
                     chain.append_block(block.clone())
                 };
-                
+
                 match chain_result {
                     Ok(()) => {
                         let network = network.lock();
 
                         // Forward block
-                        let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::HardBlock(block)));
-                        network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
+                        let mut packet = ForwardBlock::new(
+                            network.our_node_id().clone(),
+                            Arc::new(BlockWrapper::HardBlock(block)),
+                        );
+                        network
+                            .send_to_all_unsigned_except(&addr, &mut packet)
+                            .unwrap();
                     }
-                    Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)
+                    Err(err) => info!(
+                        "Chain Error for block {:?}: {:?}",
+                        block.block_hash().unwrap(),
+                        err
+                    ),
                 }
             }
         }
@@ -105,16 +123,25 @@ pub fn start_block_listeners(
                     let mut chain = state_chain.write();
                     chain.append_block(block.clone())
                 };
-                
+
                 match chain_result {
                     Ok(()) => {
                         let network = network.lock();
 
                         // Forward block
-                        let mut packet = ForwardBlock::new(network.our_node_id().clone(), Arc::new(BlockWrapper::StateBlock(block)));
-                        network.send_to_all_unsigned_except(&addr, &mut packet).unwrap();
+                        let mut packet = ForwardBlock::new(
+                            network.our_node_id().clone(),
+                            Arc::new(BlockWrapper::StateBlock(block)),
+                        );
+                        network
+                            .send_to_all_unsigned_except(&addr, &mut packet)
+                            .unwrap();
                     }
-                    Err(err) => info!("Chain Error for block {:?}: {:?}", block.block_hash().unwrap(), err)
+                    Err(err) => info!(
+                        "Chain Error for block {:?}: {:?}",
+                        block.block_hash().unwrap(),
+                        err
+                    ),
                 }
             }
         }

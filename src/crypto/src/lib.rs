@@ -19,39 +19,36 @@
 #[macro_use]
 extern crate serde_derive;
 
-pub extern crate crc32fast;
 extern crate blake2_rfc;
+extern crate byteorder;
+pub extern crate crc32fast;
 extern crate hashdb;
 extern crate hex;
 extern crate merkle_light;
 extern crate quickcheck;
 extern crate rand;
 extern crate rlp;
-extern crate byteorder;
 extern crate rust_base58;
 extern crate rust_sodium;
 
 pub use blake_hasher::*;
 pub use hash::*;
+pub use node_id::*;
 pub use rust_base58::base58::*;
-pub use rust_sodium::crypto::kx::{
-    gen_keypair as gen_kx_keypair, 
-    PublicKey as KxPublicKey, 
-    SecretKey as KxSecretKey, 
-    SessionKey,
-    client_session_keys as client_sk,
-    server_session_keys as server_sk,
-};
-pub use rust_sodium::crypto::sign::{gen_keypair, PublicKey, SecretKey};
 pub use rust_sodium::crypto::aead;
 pub use rust_sodium::crypto::aead::Nonce;
+pub use rust_sodium::crypto::kx::{
+    client_session_keys as client_sk, gen_keypair as gen_kx_keypair,
+    server_session_keys as server_sk, PublicKey as KxPublicKey, SecretKey as KxSecretKey,
+    SessionKey,
+};
+pub use rust_sodium::crypto::sign::{gen_keypair, PublicKey, SecretKey};
 pub use signature::*;
-pub use node_id::*;
 
 mod blake_hasher;
 mod hash;
-mod signature;
 mod node_id;
+mod signature;
 
 use rust_sodium::crypto::sign::{sign_detached, verify_detached};
 
@@ -68,16 +65,16 @@ pub fn seal(message: &[u8], key: &SessionKey) -> (Vec<u8>, Nonce) {
     let n = aead::gen_nonce();
     let key = aead::Key::from_slice(&key.0).unwrap();
     let ciphertext = aead::seal(message, None, &n, &key);
-    
+
     (ciphertext, n)
 }
 
 pub fn open(ciphertext: &[u8], key: &SessionKey, nonce: &Nonce) -> Result<Vec<u8>, ()> {
     let key = aead::Key::from_slice(&key.0).unwrap();
-    
+
     match aead::open(ciphertext, None, nonce, &key) {
         Ok(result) => Ok(result),
-        _ => Err(())
+        _ => Err(()),
     }
 }
 

@@ -18,17 +18,17 @@
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use causality::Stamp;
+use crypto::NodeId;
 use crypto::{BlakeHasher, Hash, PublicKey, SecretKey as Sk, Signature};
 use merkle_light::hash::Algorithm;
 use merkle_light::merkle::MerkleTree;
-use crypto::NodeId;
 use rayon::prelude::*;
-use std::sync::Arc;
+use rlp::Rlp;
 use std::hash::Hasher;
 use std::io::Cursor;
 use std::iter::FromIterator;
+use std::sync::Arc;
 use transactions::*;
-use rlp::Rlp;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Heartbeat {
@@ -62,16 +62,13 @@ impl Heartbeat {
     /// tree formed by the transactions stored
     /// in the heartbeat event.
     pub fn calculate_root_hash(&mut self) {
-        let txs_hashes = self
-            .transactions
-            .iter()
-            .map(|tx| {
-                let mut hasher = BlakeHasher::new();
-                let message: Vec<u8> = tx.compute_hash_message();
+        let txs_hashes = self.transactions.iter().map(|tx| {
+            let mut hasher = BlakeHasher::new();
+            let message: Vec<u8> = tx.compute_hash_message();
 
-                hasher.write(&message);
-                hasher.hash()
-            });
+            hasher.write(&message);
+            hasher.hash()
+        });
 
         let mt: MerkleTree<Hash, BlakeHasher> = MerkleTree::from_iter(txs_hashes);
 
@@ -268,97 +265,118 @@ impl Heartbeat {
             let rlp = Rlp::new(&buf);
 
             if rlp.is_list() {
-                let txs: Result<Vec<Arc<Tx>>, _> = rlp
-                    .iter()
-                    .map(|data| {
-                        if data.is_data() {
-                            match data.data() {
-                                Ok(tx) => {
-                                    let tx_type = &tx[0];
+                let txs: Result<Vec<Arc<Tx>>, _> =
+                    rlp.iter()
+                        .map(|data| {
+                            if data.is_data() {
+                                match data.data() {
+                                    Ok(tx) => {
+                                        let tx_type = &tx[0];
 
-                                    match *tx_type {
-                                        1 => {
-                                            let deserialized = match Call::from_bytes(&tx) {
-                                                Ok(result) => result,
-                                                Err(_) => return Err("Invalid call transaction"),
-                                            };
+                                        match *tx_type {
+                                            1 => {
+                                                let deserialized = match Call::from_bytes(&tx) {
+                                                    Ok(result) => result,
+                                                    Err(_) => {
+                                                        return Err("Invalid call transaction");
+                                                    }
+                                                };
 
-                                            Ok(Arc::new(Tx::Call(deserialized)))
+                                                Ok(Arc::new(Tx::Call(deserialized)))
+                                            }
+                                            2 => {
+                                                let deserialized =
+                                                    match OpenContract::from_bytes(&tx) {
+                                                        Ok(result) => result,
+                                                        Err(e) => return Err(e),
+                                                    };
+
+                                                Ok(Arc::new(Tx::OpenContract(deserialized)))
+                                            }
+                                            3 => {
+                                                let deserialized = match Send::from_bytes(&tx) {
+                                                    Ok(result) => result,
+                                                    Err(_) => {
+                                                        return Err("Invalid send transaction");
+                                                    }
+                                                };
+
+                                                Ok(Arc::new(Tx::Send(deserialized)))
+                                            }
+                                            4 => {
+                                                let deserialized =
+                                                    match CreateCurrency::from_bytes(&tx) {
+                                                        Ok(result) => result,
+                                                        Err(_) => return Err(
+                                                            "Invalid create currency transaction",
+                                                        ),
+                                                    };
+
+                                                Ok(Arc::new(Tx::CreateCurrency(deserialized)))
+                                            }
+                                            5 => {
+                                                let deserialized =
+                                                    match CreateMintable::from_bytes(&tx) {
+                                                        Ok(result) => result,
+                                                        Err(_) => return Err(
+                                                            "Invalid create mintable transaction",
+                                                        ),
+                                                    };
+
+                                                Ok(Arc::new(Tx::CreateMintable(deserialized)))
+                                            }
+                                            6 => {
+                                                let deserialized = match Mint::from_bytes(&tx) {
+                                                    Ok(result) => result,
+                                                    Err(_) => {
+                                                        return Err("Invalid mint transaction");
+                                                    }
+                                                };
+
+                                                Ok(Arc::new(Tx::Mint(deserialized)))
+                                            }
+                                            7 => {
+                                                let deserialized = match Burn::from_bytes(&tx) {
+                                                    Ok(result) => result,
+                                                    Err(_) => {
+                                                        return Err("Invalid burn transaction");
+                                                    }
+                                                };
+
+                                                Ok(Arc::new(Tx::Burn(deserialized)))
+                                            }
+                                            8 => {
+                                                let deserialized =
+                                                    match ChangeMinter::from_bytes(&tx) {
+                                                        Ok(result) => result,
+                                                        Err(_) => return Err(
+                                                            "Invalid `ChangeMinter` transaction",
+                                                        ),
+                                                    };
+
+                                                Ok(Arc::new(Tx::ChangeMinter(deserialized)))
+                                            }
+                                            9 => {
+                                                let deserialized =
+                                                    match CreateUnique::from_bytes(&tx) {
+                                                        Ok(result) => result,
+                                                        Err(_) => return Err(
+                                                            "Invalid `CreateUnique` transaction",
+                                                        ),
+                                                    };
+
+                                                Ok(Arc::new(Tx::CreateUnique(deserialized)))
+                                            }
+                                            _ => return Err("Bad transaction type"),
                                         }
-                                        2 => {
-                                            let deserialized = match OpenContract::from_bytes(&tx) {
-                                                Ok(result) => result,
-                                                Err(e) => return Err(e),
-                                            };
-
-                                            Ok(Arc::new(Tx::OpenContract(deserialized)))
-                                        }
-                                        3 => {
-                                            let deserialized = match Send::from_bytes(&tx) {
-                                                Ok(result) => result,
-                                                Err(_) => return Err("Invalid send transaction"),
-                                            };
-
-                                            Ok(Arc::new(Tx::Send(deserialized)))
-                                        }
-                                        4 => {
-                                            let deserialized = match CreateCurrency::from_bytes(&tx) {
-                                                Ok(result) => result,
-                                                Err(_) => return Err("Invalid create currency transaction"),
-                                            };
-
-                                            Ok(Arc::new(Tx::CreateCurrency(deserialized)))
-                                        }
-                                        5 => {
-                                            let deserialized = match CreateMintable::from_bytes(&tx) {
-                                                Ok(result) => result,
-                                                Err(_) => return Err("Invalid create mintable transaction"),
-                                            };
-
-                                            Ok(Arc::new(Tx::CreateMintable(deserialized)))
-                                        }
-                                        6 => {
-                                            let deserialized = match Mint::from_bytes(&tx) {
-                                                Ok(result) => result,
-                                                Err(_) => return Err("Invalid mint transaction"),
-                                            };
-
-                                            Ok(Arc::new(Tx::Mint(deserialized)))
-                                        }
-                                        7 => {
-                                            let deserialized = match Burn::from_bytes(&tx) {
-                                                Ok(result) => result,
-                                                Err(_) => return Err("Invalid burn transaction"),
-                                            };
-
-                                            Ok(Arc::new(Tx::Burn(deserialized)))
-                                        },
-                                        8 => {
-                                            let deserialized = match ChangeMinter::from_bytes(&tx) {
-                                                Ok(result) => result,
-                                                Err(_) => return Err("Invalid `ChangeMinter` transaction"),
-                                            };
-
-                                            Ok(Arc::new(Tx::ChangeMinter(deserialized)))
-                                        },
-                                        9 => {
-                                            let deserialized = match CreateUnique::from_bytes(&tx) {
-                                                Ok(result) => result,
-                                                Err(_) => return Err("Invalid `CreateUnique` transaction"),
-                                            };
-
-                                            Ok(Arc::new(Tx::CreateUnique(deserialized)))
-                                        },
-                                        _ => return Err("Bad transaction type"),
                                     }
+                                    Err(_) => return Err("Invalid transaction"),
                                 }
-                                Err(_) => return Err("Invalid transaction")
+                            } else {
+                                return Err("Invalid transaction");
                             }
-                        } else {
-                            return Err("Invalid transaction")
-                        }
-                    })
-                    .collect();
+                        })
+                        .collect();
 
                 match txs {
                     Ok(result) => result,
@@ -389,10 +407,7 @@ impl Heartbeat {
 
 fn assemble_message(obj: &Heartbeat) -> Vec<u8> {
     let mut buffer = Vec::new();
-    let transaction_hashes = obj
-        .transactions
-        .iter()
-        .map(|tx| tx.transaction_hash());
+    let transaction_hashes = obj.transactions.iter().map(|tx| tx.transaction_hash());
 
     let node_id = &(&&obj.node_id.0).0;
     let parent_hash = &obj.parent_hash.0;
