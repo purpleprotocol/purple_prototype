@@ -57,7 +57,7 @@ use persistence::PersistentDb;
 use rocksdb::{ColumnFamilyDescriptor, DB};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::channel;
+use futures::sync::mpsc::channel;
 use std::sync::Arc;
 
 // Use mimalloc allocator
@@ -100,9 +100,9 @@ fn main() {
     let easy_chain = EasyChainRef::new(easy_chain);
     let hard_chain = HardChainRef::new(hard_chain);
     let state_chain = StateChainRef::new(state_chain);
-    let (easy_tx, easy_rx) = channel();
-    let (hard_tx, hard_rx) = channel();
-    let (state_tx, state_rx) = channel();
+    let (easy_tx, easy_rx) = channel(10000);
+    let (hard_tx, hard_rx) = channel(10000);
+    let (state_tx, state_rx) = channel(10000);
 
     info!("Setting up the network...");
 
