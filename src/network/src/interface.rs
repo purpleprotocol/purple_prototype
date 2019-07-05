@@ -22,8 +22,13 @@ use crate::packet::Packet;
 use crate::peer::Peer;
 use crypto::NodeId;
 use std::net::SocketAddr;
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
+
+#[cfg(not(test))]
+use futures::sync::mpsc::Sender;
+
+#[cfg(test)]
+use std::sync::mpsc::Sender;
 
 /// Generic network layer interface.
 pub trait NetworkInterface {

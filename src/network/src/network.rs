@@ -26,9 +26,14 @@ use crypto::SecretKey as Sk;
 use hashbrown::{HashMap, HashSet};
 use parking_lot::Mutex;
 use std::net::SocketAddr;
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use Peer;
+
+#[cfg(test)]
+use std::sync::mpsc::Sender;
+
+#[cfg(not(test))]
+use futures::sync::mpsc::Sender;
 
 pub struct Network {
     /// Mapping between connected ips and peer information

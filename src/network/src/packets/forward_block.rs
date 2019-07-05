@@ -212,7 +212,12 @@ impl Packet for ForwardBlock {
                 if easy_chain.query(&block.block_hash().unwrap()).is_some() {
                     Ok(())
                 } else {
-                    let sender = network.easy_chain_sender();
+                    let mut sender = network.easy_chain_sender().clone();
+                    
+                    #[cfg(not(test))]
+                    sender.try_send((addr.clone(), block.clone())).unwrap();
+
+                    #[cfg(test)]
                     sender.send((addr.clone(), block.clone())).unwrap();
 
                     Ok(())
@@ -227,7 +232,12 @@ impl Packet for ForwardBlock {
                 if hard_chain.query(&block.block_hash().unwrap()).is_some() {
                     Ok(())
                 } else {
-                    let sender = network.hard_chain_sender();
+                    let mut sender = network.hard_chain_sender().clone();
+                    
+                    #[cfg(not(test))]
+                    sender.try_send((addr.clone(), block.clone())).unwrap();
+
+                    #[cfg(test)]
                     sender.send((addr.clone(), block.clone())).unwrap();
 
                     Ok(())
@@ -242,7 +252,12 @@ impl Packet for ForwardBlock {
                 if state_chain.query(&block.block_hash().unwrap()).is_some() {
                     Ok(())
                 } else {
-                    let sender = network.state_chain_sender();
+                    let mut sender = network.state_chain_sender().clone();
+
+                    #[cfg(not(test))]
+                    sender.try_send((addr.clone(), block.clone())).unwrap();
+
+                    #[cfg(test)]
                     sender.send((addr.clone(), block.clone())).unwrap();
 
                     Ok(())
