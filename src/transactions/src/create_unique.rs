@@ -20,9 +20,9 @@ use account::{Address, Balance, NormalAddress};
 use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
-use std::io::Cursor;
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
+use std::io::Cursor;
 
 pub const ASSET_NAME_SIZE: usize = 32;
 pub const META_FIELD_SIZE: usize = 32;
@@ -56,7 +56,7 @@ pub struct CreateUnique {
 
     // Nonce
     pub nonce: u64,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -3,29 +3,29 @@
 #[macro_use]
 extern crate criterion;
 
-extern crate mimalloc;
 extern crate causality;
 extern crate crypto;
 extern crate events;
+extern crate mimalloc;
 extern crate patricia_trie;
 extern crate persistence;
+extern crate quickcheck;
+extern crate rand;
 extern crate test;
 extern crate test_helpers;
 extern crate transactions;
-extern crate quickcheck;
-extern crate rand;
 
-use mimalloc::MiMalloc;
 use causality::Stamp;
 use criterion::Criterion;
+use crypto::NodeId;
 use crypto::{Hash, Identity};
 use events::Heartbeat;
-use crypto::NodeId;
+use mimalloc::MiMalloc;
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
+use std::sync::Arc;
 use test::Bencher;
 use transactions::Tx;
-use std::sync::Arc;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

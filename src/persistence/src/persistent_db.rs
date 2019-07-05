@@ -16,13 +16,13 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::Hash;
 use common::{Checkpointable, StorageLocation};
+use crypto::Hash;
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
 use hashdb::{AsHashDB, HashDB};
-use rocksdb::{DBCompactionStyle, Options, WriteBatch, ColumnFamily, DB};
 use rlp::NULL_RLP;
+use rocksdb::{ColumnFamily, DBCompactionStyle, Options, WriteBatch, DB};
 use std::sync::Arc;
 use BlakeDbHasher;
 
@@ -123,10 +123,9 @@ impl PersistentDb {
                 }
             }
 
-            
             // Commit the transactions
             db_ref.write(batch).unwrap();
-        } 
+        }
 
         if wipe {
             // Wipe pending state
@@ -167,7 +166,7 @@ impl PersistentDb {
             }
         } else {
             let result = self.memory_db.get(key);
-            
+
             if let Some(Operation::Put(ref val)) = result {
                 Some(val.clone())
             } else {
@@ -180,7 +179,8 @@ impl PersistentDb {
     /// # Remarks
     /// Transactions will be commited when flush is called
     pub fn put(&mut self, key: &[u8], val: &[u8]) {
-        self.memory_db.insert(key.to_vec(), Operation::Put(val.to_vec()));
+        self.memory_db
+            .insert(key.to_vec(), Operation::Put(val.to_vec()));
     }
 
     /// Removes a value from the specified key

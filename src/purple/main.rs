@@ -23,9 +23,9 @@ extern crate unwrap;
 #[macro_use]
 extern crate jsonrpc_macros;
 
-extern crate mimalloc;
 extern crate chain;
 extern crate clap;
+extern crate common;
 extern crate crypto;
 extern crate dirs;
 extern crate elastic_array;
@@ -35,30 +35,30 @@ extern crate hashdb;
 extern crate itc;
 extern crate jsonrpc_core;
 extern crate jump;
+extern crate mimalloc;
 extern crate network;
 extern crate parking_lot;
 extern crate persistence;
-extern crate tokio;
 extern crate rocksdb;
-extern crate common;
+extern crate tokio;
 
-use mimalloc::MiMalloc;
-use common::checkpointable::DummyCheckpoint;
-use rocksdb::{ColumnFamilyDescriptor, DB};
+use chain::*;
 use clap::{App, Arg};
-use crypto::{NodeId, Identity, SecretKey as Sk};
+use common::checkpointable::DummyCheckpoint;
+use crypto::{Identity, NodeId, SecretKey as Sk};
 use elastic_array::ElasticArray128;
 use futures::future::ok;
 use futures::Future;
 use hashdb::HashDB;
+use mimalloc::MiMalloc;
 use network::*;
-use parking_lot::{RwLock, Mutex};
-use chain::*;
+use parking_lot::{Mutex, RwLock};
 use persistence::PersistentDb;
+use rocksdb::{ColumnFamilyDescriptor, DB};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 use std::sync::mpsc::channel;
+use std::sync::Arc;
 
 // Use mimalloc allocator
 #[global_allocator]
@@ -66,16 +66,12 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
-const COLUMN_FAMILIES: &'static [&'static str] = &[
-    "state_chain",
-    "easy_chain",
-    "hard_chain",
-    "node_storage",
-];
+const COLUMN_FAMILIES: &'static [&'static str] =
+    &["state_chain", "easy_chain", "hard_chain", "node_storage"];
 
 fn main() {
     env_logger::init();
-    
+
     info!("Opening databases...");
 
     let argv = parse_cli_args();
@@ -86,9 +82,21 @@ fn main() {
     let state_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[0]));
     let easy_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[1]));
     let hard_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[2]));
-    let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_chain_db, DummyCheckpoint::genesis(), argv.archival_mode)));
-    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_chain_db, DummyCheckpoint::genesis(), argv.archival_mode)));
-    let state_chain = Arc::new(RwLock::new(StateChain::new(state_chain_db, state_db, argv.archival_mode)));
+    let easy_chain = Arc::new(RwLock::new(EasyChain::new(
+        easy_chain_db,
+        DummyCheckpoint::genesis(),
+        argv.archival_mode,
+    )));
+    let hard_chain = Arc::new(RwLock::new(HardChain::new(
+        hard_chain_db,
+        DummyCheckpoint::genesis(),
+        argv.archival_mode,
+    )));
+    let state_chain = Arc::new(RwLock::new(StateChain::new(
+        state_chain_db,
+        state_db,
+        argv.archival_mode,
+    )));
     let easy_chain = EasyChainRef::new(easy_chain);
     let hard_chain = HardChainRef::new(hard_chain);
     let state_chain = StateChainRef::new(state_chain);
@@ -109,14 +117,22 @@ fn main() {
         state_tx,
         easy_chain.clone(),
         hard_chain.clone(),
-        state_chain.clone()
+        state_chain.clone(),
     )));
     let accept_connections = Arc::new(AtomicBool::new(true));
 
     // Start the tokio runtime
     tokio::run(ok(()).and_then(move |_| {
         // Start listening for blocks
-        start_block_listeners(network.clone(), easy_chain, hard_chain, state_chain, easy_rx, hard_rx, state_rx);
+        start_block_listeners(
+            network.clone(),
+            easy_chain,
+            hard_chain,
+            state_chain,
+            easy_rx,
+            hard_rx,
+            state_rx,
+        );
 
         // Start listening to connections
         start_listener(network.clone(), accept_connections.clone());
@@ -158,7 +174,7 @@ fn fetch_credentials(db: &mut PersistentDb) -> (NodeId, Sk) {
             db.emplace(node_id_key, ElasticArray128::<u8>::from_slice(&bin_pkey));
             db.emplace(node_skey_key, ElasticArray128::<u8>::from_slice(&bin_skey));
 
-           (NodeId::new(bin_pkey), identity.skey().clone())
+            (NodeId::new(bin_pkey), identity.skey().clone())
         }
     }
 }
@@ -172,7 +188,10 @@ fn open_database(network_name: &str) -> DB {
     let mut cfs: Vec<ColumnFamilyDescriptor> = Vec::with_capacity(COLUMN_FAMILIES.len());
 
     for cf in COLUMN_FAMILIES {
-        cfs.push(ColumnFamilyDescriptor::new(cf.to_owned(), persistence::cf_options()));
+        cfs.push(ColumnFamilyDescriptor::new(
+            cf.to_owned(),
+            persistence::cf_options(),
+        ));
     }
 
     DB::open_cf_descriptors(&persistence::db_options(), path.to_str().unwrap(), cfs).unwrap()
@@ -186,7 +205,7 @@ struct Argv {
     interactive: bool,
     archival_mode: bool,
     mine_easy: bool,
-    mine_hard: bool
+    mine_hard: bool,
 }
 
 fn parse_cli_args() -> Argv {

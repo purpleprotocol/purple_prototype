@@ -16,21 +16,21 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::error::NetworkErr;
-use crate::peer::Peer;
-use crate::packet::Packet;
-use crypto::NodeId;
 use crate::chain::*;
+use crate::error::NetworkErr;
+use crate::packet::Packet;
+use crate::peer::Peer;
+use crypto::NodeId;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
 
 /// Generic network layer interface.
 pub trait NetworkInterface {
     /// Attempts to connect to the peer with the given ip.
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr>;
 
-    /// Attempts to connect to a previously encountered peer 
+    /// Attempts to connect to a previously encountered peer
     fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr>;
 
     /// Returns true if the network has the given address in its peer list.
@@ -54,21 +54,30 @@ pub trait NetworkInterface {
     /// Signs a packet and sends it to all peers.
     fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr>;
 
-    /// Signs a packet and sends it to all peers 
+    /// Signs a packet and sends it to all peers
     /// except the peer with the given address.
-    fn send_to_all_unsigned_except<P: Packet>(&self, exception: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr>;
+    fn send_to_all_unsigned_except<P: Packet>(
+        &self,
+        exception: &SocketAddr,
+        packet: &mut P,
+    ) -> Result<(), NetworkErr>;
 
     /// Attempts to send a packet to the specific peer. This
     /// function will also sign the packet if it does not yet
     /// have a signature and it will also serialize it to binary.
-    fn send_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr>;
+    fn send_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P)
+        -> Result<(), NetworkErr>;
 
-    /// Sends a raw packet to a specific peer. This 
+    /// Sends a raw packet to a specific peer. This
     /// means that the packet will be un-encrypted.
     fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
 
     /// This behaves similarly to `send_unsigned()` but it sends a raw packet.
-    fn send_raw_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr>;
+    fn send_raw_unsigned<P: Packet>(
+        &self,
+        peer: &SocketAddr,
+        packet: &mut P,
+    ) -> Result<(), NetworkErr>;
 
     /// Callback that processes each packet that is received from any peer.
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
@@ -76,14 +85,14 @@ pub trait NetworkInterface {
     /// Bans the peer with the node id
     fn ban_peer(&self, peer: &NodeId) -> Result<(), NetworkErr>;
 
-    /// Bans any further connections from the given ip. 
+    /// Bans any further connections from the given ip.
     fn ban_ip(&self, peer: &SocketAddr) -> Result<(), NetworkErr>;
 
-    /// Attempts to retrieve a reference to 
+    /// Attempts to retrieve a reference to
     /// the peer entry of the given `NodeId`.
     fn fetch_peer(&self, peer: &SocketAddr) -> Result<&Peer, NetworkErr>;
 
-    /// Attempts to retrieve a mutable reference to 
+    /// Attempts to retrieve a mutable reference to
     /// the peer entry of the given ip.
     fn fetch_peer_mut(&mut self, peer: &SocketAddr) -> Result<&mut Peer, NetworkErr>;
 

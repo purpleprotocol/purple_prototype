@@ -16,11 +16,11 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
-use std::net::SocketAddr;
-use std::hash::{Hash, Hasher};
-use std::collections::VecDeque;
 use crypto::NodeId;
+use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
+use std::collections::VecDeque;
+use std::hash::{Hash, Hasher};
+use std::net::SocketAddr;
 
 #[derive(Clone, Debug, Copy)]
 pub enum ConnectionType {
@@ -40,12 +40,12 @@ pub struct Peer {
     /// node's id has been received.
     pub id: Option<NodeId>,
 
-    /// The type of the connection. Can be 
+    /// The type of the connection. Can be
     /// either `Client` or `Server`.
-    /// 
+    ///
     /// A connection type is `Client` when
     /// we are the one connecting.
-    /// 
+    ///
     /// A connection type is `Server` when
     /// a peer connects to us.
     pub connection_type: ConnectionType,
@@ -56,11 +56,11 @@ pub struct Peer {
     /// Wether the peer has send a `Connect` packet or not.
     pub sent_connect: bool,
 
-    /// Wether we have asked the peer to send us a peer list 
+    /// Wether we have asked the peer to send us a peer list
     /// and the number of peers that we have requested.
     pub requested_peers: Option<u8>,
 
-    /// Buffer storing packets that are to be 
+    /// Buffer storing packets that are to be
     /// sent to the peer.
     pub outbound_buffer: VecDeque<Vec<u8>>,
 
@@ -74,7 +74,7 @@ pub struct Peer {
     pub(crate) rx: Option<SessionKey>,
 
     /// The peer's encryption key
-    pub (crate) tx: Option<SessionKey>,
+    pub(crate) tx: Option<SessionKey>,
 }
 
 impl Peer {
@@ -109,7 +109,7 @@ impl Peer {
 }
 
 impl PartialEq for Peer {
-    fn eq(&self, other: &Peer) ->  bool {
+    fn eq(&self, other: &Peer) -> bool {
         match (&self.id, &other.id) {
             // Check both ids and ips
             (Some(id1), Some(id2)) => id1 == id2 && self.ip == other.ip,

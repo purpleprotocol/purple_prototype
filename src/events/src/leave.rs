@@ -18,8 +18,8 @@
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use causality::Stamp;
-use crypto::{Hash, PublicKey, Signature};
 use crypto::NodeId;
+use crypto::{Hash, PublicKey, Signature};
 use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

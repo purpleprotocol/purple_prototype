@@ -18,16 +18,16 @@
 
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
-use crate::packets::connect::Connect;
 use crate::packet::Packet;
-use std::net::SocketAddr;
-use crypto::SecretKey as Sk;
+use crate::packets::connect::Connect;
 use chain::*;
-use std::sync::mpsc::Sender;
-use hashbrown::{HashSet, HashMap};
-use std::sync::Arc;
-use parking_lot::Mutex;
 use crypto::NodeId;
+use crypto::SecretKey as Sk;
+use hashbrown::{HashMap, HashSet};
+use parking_lot::Mutex;
+use std::net::SocketAddr;
+use std::sync::mpsc::Sender;
+use std::sync::Arc;
 use Peer;
 
 pub struct Network {
@@ -67,9 +67,9 @@ pub struct Network {
 
 impl Network {
     pub fn new(
-        node_id: NodeId, 
-        network_name: String, 
-        secret_key: Sk, 
+        node_id: NodeId,
+        network_name: String,
+        secret_key: Sk,
         max_peers: usize,
         easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
         hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
@@ -171,10 +171,13 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
-    fn send_to_all_unsigned_except<P: Packet>(&self, exception: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
+    fn send_to_all_unsigned_except<P: Packet>(
+        &self,
+        exception: &SocketAddr,
+        packet: &mut P,
+    ) -> Result<(), NetworkErr> {
         unimplemented!();
     }
-
 
     fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr> {
         unimplemented!();
@@ -184,7 +187,11 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
-    fn send_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
+    fn send_unsigned<P: Packet>(
+        &self,
+        peer: &SocketAddr,
+        packet: &mut P,
+    ) -> Result<(), NetworkErr> {
         if packet.signature().is_none() {
             packet.sign(&self.secret_key);
         }
@@ -195,7 +202,11 @@ impl NetworkInterface for Network {
         Ok(())
     }
 
-    fn send_raw_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P) -> Result<(), NetworkErr> {
+    fn send_raw_unsigned<P: Packet>(
+        &self,
+        peer: &SocketAddr,
+        packet: &mut P,
+    ) -> Result<(), NetworkErr> {
         if packet.signature().is_none() {
             packet.sign(&self.secret_key);
         }
@@ -235,7 +246,7 @@ impl NetworkInterface for Network {
             let peer = self.peers.get(peer).unwrap();
             (peer.id.is_none(), peer.connection_type)
         };
-        
+
         // We should receive a connect packet
         // if the peer's id is non-existent.
         if is_none_id {
@@ -275,7 +286,7 @@ impl NetworkInterface for Network {
         if let Some(peer) = self.peers.get(peer) {
             Ok(peer)
         } else {
-            Err(NetworkErr::PeerNotFound)        
+            Err(NetworkErr::PeerNotFound)
         }
     }
 
@@ -283,7 +294,7 @@ impl NetworkInterface for Network {
         if let Some(peer) = self.peers.get_mut(peer) {
             Ok(peer)
         } else {
-            Err(NetworkErr::PeerNotFound)        
+            Err(NetworkErr::PeerNotFound)
         }
     }
 

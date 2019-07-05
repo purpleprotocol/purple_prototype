@@ -274,9 +274,6 @@ impl<B: Block> Chain<B> {
         let mut current = self.canonical_tip.clone();
         let mut inverse_height = 1;
 
-        // Retrieve target height
-        let target_height = new_tip.height();
-
         // Remove canonical tip from the chain
         // and mark it as a valid chain tip.
         self.db.remove(&current.block_hash().unwrap());
@@ -396,6 +393,7 @@ impl<B: Block> Chain<B> {
 
     fn write_block(&mut self, block: Arc<B>) {
         let block_hash = block.block_hash().unwrap();
+        //println!("DEBUG WRITING BLOCK: {:?}", block_hash);
         assert!(self.disconnected_heads_mapping.get(&block_hash).is_none());
         assert!(self.disconnected_tips_mapping.get(&block_hash).is_none());
 
@@ -443,6 +441,7 @@ impl<B: Block> Chain<B> {
         );
 
         self.orphan_pool.remove(&block_hash);
+        self.validations_mapping.remove(&block_hash);
 
         // Remove from height mappings
         if let Some(orphans) = self.heights_mapping.get_mut(&block.height()) {
@@ -549,7 +548,8 @@ impl<B: Block> Chain<B> {
                     if orphans.len() == 1 {
                         // HACK: Maybe we can find a better/faster way to get the only item of a set?
                         let (orphan_hash, _) = orphans.iter().find(|_| true).unwrap();
-                        let orphan = self.orphan_pool.get(orphan_hash).unwrap();
+                        let orphan = self.orphan_pool.get(orphan_hash).unwrap().clone();
+                        let block_hash = orphan.block_hash().unwrap();
 
                         // If the orphan directly follows the canonical
                         // tip, write it to the chain.
@@ -565,6 +565,7 @@ impl<B: Block> Chain<B> {
                             if !done {
                                 // Verify append condition
                                 if let Some(new_tip_state) = append_condition {
+                                    self.make_valid_tips(&block_hash, new_tip_state.clone());
                                     self.write_block(orphan.clone());
 
                                     // Perform checkpoint
@@ -632,7 +633,7 @@ impl<B: Block> Chain<B> {
                                 if let Some(new_state) = new_state {
                                     buf.push((o.clone(), i_h.clone(), new_state));
                                 } else {
-                                    // TODO: Maybe cleanup here?
+                                    // TODO: Maybe cleanup here? Issue #109
                                 }
                             } else if prev_valid_tips.contains(&orphan_parent) {
                                 let append_condition = {
@@ -663,7 +664,7 @@ impl<B: Block> Chain<B> {
                                     new_prev_valid_tips.remove(&orphan_parent);
                                     new_prev_valid_tips.insert(o.clone());
                                 } else {
-                                    // TODO: Maybe cleanup here?
+                                    // TODO: Maybe cleanup here? Issue #109
                                 }
                             } else {
                             }
@@ -892,6 +893,12 @@ impl<B: Block> Chain<B> {
         assert!(self.disconnected_heads_mapping.get(&block_hash).is_none());
         assert!(self.disconnected_tips_mapping.get(&block_hash).is_none());
 
+        // Init validations mappings for tip
+        if self.validations_mapping.get(&block_hash).is_none() {
+            self.validations_mapping.insert(block_hash.clone(), status.clone());
+        }
+
+        let tip_clone = tip.clone();
         let iterable = self
             .disconnected_heads_heights
             .iter()
@@ -902,47 +909,42 @@ impl<B: Block> Chain<B> {
                 let head = self.orphan_pool.get(h).unwrap();
                 let parent_hash = head.parent_hash().unwrap();
 
-                parent_hash == tip.block_hash().unwrap()
+                parent_hash == tip_clone.block_hash().unwrap()
             });
 
-        let mut current = None;
-        let mut current_height = (0, None);
+        let mut to_write: Vec<(Hash, Arc<B>, u64, B::ChainState)> = Vec::new();
 
-        // Find the head that follows our tip that
-        // has the largest potential height.
+        // For each matching head, make the descending
+        // branches, valid chains.
         for (head_hash, (largest_height, largest_tip)) in iterable {
-            let (cur_height, _) = current_height;
+            let head = self.orphan_pool.get(head_hash).unwrap();
+            let tip_state = B::append_condition(head.clone(), tip_state.clone());
 
-            if current.is_none() || *largest_height > cur_height {
-                current = Some(head_hash);
-                current_height = (*largest_height, Some(largest_tip));
+            if let Ok(tip_state) = tip_state {
+                let largest_tip = self.orphan_pool.get(&largest_tip).unwrap().clone();
+                let tip_height = tip.height();
+                let inverse_h = largest_height - tip_height;
+                to_write.push((head_hash.clone(), largest_tip, inverse_h, tip_state));
+            } else {
+                // TODO: Maybe cleanup here? Issue #109
             }
         }
 
-        // If we have a matching chain, update the return values.
-        if let Some(head_hash) = current {
-            let head = self.orphan_pool.get(head_hash).unwrap();
-            let tip_state = B::append_condition(head.clone(), tip_state);
-
-            if let Ok(tip_state) = tip_state {
-                let (largest_height, largest_tip) = current_height;
-                let largest_tip = self.orphan_pool.get(&largest_tip.unwrap()).unwrap().clone();
-                let tip_height = tip.height();
-
-                *status = OrphanType::BelongsToValidChain;
-                *inverse_height = largest_height - tip_height;
-                *tip = largest_tip;
-
-                // Remove old tip if we found a match
-                self.valid_tips.remove(&block_hash);
-                self.valid_tips_states.remove(&block_hash);
-                let old_tip_status = self.validations_mapping.get_mut(&block_hash).unwrap();
-                *old_tip_status = OrphanType::BelongsToValidChain;
-
-                self.make_valid_tips(&head_hash.clone(), tip_state);
-            } else {
-                // TODO: Maybe cleanup here?
+        for (head_hash, new_tip, inverse_h, tip_state) in to_write {
+            *status = OrphanType::BelongsToValidChain;
+            
+            if inverse_h > *inverse_height {
+                *inverse_height = inverse_h;
+                *tip = new_tip;
             }
+
+            // Remove old tip if we found a match
+            self.valid_tips.remove(&block_hash);
+            self.valid_tips_states.remove(&block_hash);
+            let old_tip_status = self.validations_mapping.get_mut(&block_hash).unwrap();
+            *old_tip_status = OrphanType::BelongsToValidChain;
+
+            self.make_valid_tips(&head_hash.clone(), tip_state);
         }
 
         // Update inverse heights
@@ -1002,6 +1004,14 @@ impl<B: Block> Chain<B> {
                         if let Some(state) = previous.get(&parent_hash) {
                             // TODO: Reduce number of state clones
                             if let Ok(state) = B::append_condition(e.clone(), state.clone()) {
+                                // Change head status if we have a match
+                                let status = self
+                                    .validations_mapping
+                                    .get_mut(head)
+                                    .unwrap();
+
+                                *status = OrphanType::BelongsToValidChain;
+
                                 let block_hash = e.block_hash().unwrap();
                                 self.valid_tips_states.remove(&parent_hash);
                                 self.valid_tips.remove(&parent_hash);
@@ -1017,7 +1027,7 @@ impl<B: Block> Chain<B> {
 
                                 *status = OrphanType::BelongsToValidChain;
                             } else {
-                                // TODO: Maybe cleanup here?
+                                // TODO: Maybe cleanup here? Issue #109
                             }
                         } 
                     }
@@ -1073,10 +1083,9 @@ impl<B: Block> Chain<B> {
         // starting inverse height is 0.
         if make_valid {
             assert_eq!(start_height, 0);
-
-            // Mark orphan as being tip of a valid chain
             let key = orphan.block_hash().unwrap();
 
+            // Mark orphan as being tip of a valid chain
             if let Some(validation) = self.validations_mapping.get_mut(&key) {
                 *validation = OrphanType::ValidChainTip;
             } else {
@@ -1137,7 +1146,7 @@ impl<B: Block> Chain<B> {
     }
 
     pub fn append_block(&mut self, block: Arc<B>) -> Result<(), ChainErr> {
-        println!("DEBUG PUSHED BLOCK HASH: {:?}", block.block_hash().unwrap());
+        //println!("DEBUG PUSHED BLOCK HASH: {:?}", block.block_hash().unwrap());
         let min_height = if self.height > B::MIN_HEIGHT {
             self.height - B::MIN_HEIGHT
         } else {
@@ -6784,253 +6793,586 @@ mod tests {
         assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
     }
 
-    // #[test]
-    // /// Assertions in stages of random block order.
-    // /// 
-    // /// The sample ordering, taken from the stress test,
-    // /// is the following:
-    // /// E', E'', D'', C, D''', F, D, B', C'', E, F'', G, A, C', D', B
-    // fn stages_append_test6() {
-    //     let db = test_helpers::init_tempdb();
-    //     let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+    #[test]
+    /// Assertions in stages of random block order.
+    /// 
+    /// The sample ordering, taken from the stress test,
+    /// is the following:
+    /// E', E'', D'', C, D''', F, D, B', C'', E, F'', G, A, C', D', B
+    fn stages_append_test6() {
+        let db = test_helpers::init_tempdb();
+        let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
-    //     let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
-    //     let A = Arc::new(A);
+        let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
+        let A = Arc::new(A);
 
-    //     let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
-    //     let B = Arc::new(B);
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B = Arc::new(B);
 
-    //     let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
-    //     let C = Arc::new(C);
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C = Arc::new(C);
 
-    //     let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
-    //     let D = Arc::new(D);
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D = Arc::new(D);
 
-    //     let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
-    //     let E = Arc::new(E);
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E = Arc::new(E);
 
-    //     let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
-    //     let F = Arc::new(F);
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F = Arc::new(F);
 
-    //     let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
-    //     let G = Arc::new(G);
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
+        let G = Arc::new(G);
 
-    //     let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
-    //     let B_prime = Arc::new(B_prime);
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B_prime = Arc::new(B_prime);
 
-    //     let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
-    //     let C_prime = Arc::new(C_prime);
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_prime = Arc::new(C_prime);
 
-    //     let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
-    //     let D_prime = Arc::new(D_prime);
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_prime = Arc::new(D_prime);
 
-    //     let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
-    //     let E_prime = Arc::new(E_prime);
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_prime = Arc::new(E_prime);
 
-    //     let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
-    //     let C_second = Arc::new(C_second);
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_second = Arc::new(C_second);
 
-    //     let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
-    //     let D_second = Arc::new(D_second);
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_second = Arc::new(D_second);
 
-    //     let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
-    //     let E_second = Arc::new(E_second);
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_second = Arc::new(E_second);
 
-    //     let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
-    //     let F_second = Arc::new(F_second);
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F_second = Arc::new(F_second);
 
-    //     let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
-    //     let D_tertiary = Arc::new(D_tertiary);
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_tertiary = Arc::new(D_tertiary);
 
-    //     let mut blocks = vec![
-    //         E_prime.clone(),
-    //         E_second.clone(),
-    //         D_second.clone(),
-    //         C.clone(),
-    //         D_tertiary.clone(),
-    //         F.clone(),
-    //         D.clone(),
-    //         B_prime.clone(),
-    //         C_second.clone(),
-    //         E.clone(),
-    //         F_second.clone(),
-    //         G.clone(),
-    //         A.clone(),
-    //         C_prime.clone(),
-    //         D_prime.clone(),
-    //         B.clone(),
-    //     ];
+        let mut blocks = vec![
+            E_prime.clone(),
+            E_second.clone(),
+            D_second.clone(),
+            C.clone(),
+            D_tertiary.clone(),
+            F.clone(),
+            D.clone(),
+            B_prime.clone(),
+            C_second.clone(),
+            E.clone(),
+            F_second.clone(),
+            G.clone(),
+            A.clone(),
+            C_prime.clone(),
+            D_prime.clone(),
+            B.clone(),
+        ];
 
-    //     println!("PUSHING E'");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // E_prime
-    //     println!("PUSHING E''");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // E_second
-    //     println!("PUSHING D''");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // D_second
-    //     println!("PUSHING C");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // C
-    //     println!("PUSHING D'''");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // D_tertiary
-    //     println!("PUSHING F");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // F
-    //     println!("PUSHING D");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // D
-    //     println!("PUSHING B'");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // B_prime
-    //     println!("PUSHING C''");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // C_second
-    //     println!("PUSHING E");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // E
-    //     println!("PUSHING F''");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // F_second
-    //     println!("PUSHING G");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // G
-    //     println!("PUSHING A");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // A
-    //     println!("PUSHING C'");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // C_prime
-    //     println!("PUSHING D'");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // D_prime
-    //     println!("PUSHING B");
-    //     chain.append_block(blocks.remove(0)).unwrap(); // B
+        chain.append_block(blocks.remove(0)).unwrap(); // E_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // E_second
+        chain.append_block(blocks.remove(0)).unwrap(); // D_second
+        chain.append_block(blocks.remove(0)).unwrap(); // C
+        chain.append_block(blocks.remove(0)).unwrap(); // D_tertiary
+        chain.append_block(blocks.remove(0)).unwrap(); // F
+        chain.append_block(blocks.remove(0)).unwrap(); // D
+        chain.append_block(blocks.remove(0)).unwrap(); // B_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // C_second
+        chain.append_block(blocks.remove(0)).unwrap(); // E
+        chain.append_block(blocks.remove(0)).unwrap(); // F_second
+        chain.append_block(blocks.remove(0)).unwrap(); // G
+        chain.append_block(blocks.remove(0)).unwrap(); // A
+        chain.append_block(blocks.remove(0)).unwrap(); // C_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // D_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // B
 
-    //     assert_eq!(chain.height(), 7);
-    //     assert_eq!(chain.canonical_tip, G);
-    //     assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
-    // }
+        assert_eq!(chain.height(), 7);
+        assert_eq!(chain.canonical_tip, G);
+        assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
+    }
+
+    #[test]
+    /// Assertions in stages of random block order.
+    /// 
+    /// The sample ordering, taken from the stress test,
+    /// is the following:
+    /// E, D''', D', A, B, F'', E'', C, F, C'', D'', G, C', E', D, B'
+    fn stages_append_test7() {
+        let db = test_helpers::init_tempdb();
+        let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+
+        let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
+        let A = Arc::new(A);
+
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B = Arc::new(B);
+
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C = Arc::new(C);
+
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D = Arc::new(D);
+
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E = Arc::new(E);
+
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F = Arc::new(F);
+
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
+        let G = Arc::new(G);
+
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B_prime = Arc::new(B_prime);
+
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_prime = Arc::new(C_prime);
+
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_prime = Arc::new(D_prime);
+
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_prime = Arc::new(E_prime);
+
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_second = Arc::new(C_second);
+
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_second = Arc::new(D_second);
+
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_second = Arc::new(E_second);
+
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F_second = Arc::new(F_second);
+
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_tertiary = Arc::new(D_tertiary);
+
+        let mut blocks = vec![
+            E.clone(),
+            D_tertiary.clone(),
+            D_prime.clone(),
+            A.clone(),
+            B.clone(),
+            F_second.clone(),
+            E_second.clone(),
+            C.clone(),
+            F.clone(),
+            C_second.clone(),
+            D_second.clone(),
+            G.clone(),
+            C_prime.clone(),
+            E_prime.clone(),
+            D.clone(),
+            B_prime.clone(),
+        ];
+
+        chain.append_block(blocks.remove(0)).unwrap(); // E
+        chain.append_block(blocks.remove(0)).unwrap(); // D_tertiary
+        chain.append_block(blocks.remove(0)).unwrap(); // D_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // A
+        chain.append_block(blocks.remove(0)).unwrap(); // B
+        chain.append_block(blocks.remove(0)).unwrap(); // F_second
+        chain.append_block(blocks.remove(0)).unwrap(); // E_second
+        chain.append_block(blocks.remove(0)).unwrap(); // C
+        chain.append_block(blocks.remove(0)).unwrap(); // F
+        chain.append_block(blocks.remove(0)).unwrap(); // C_second
+        chain.append_block(blocks.remove(0)).unwrap(); // D_second
+        chain.append_block(blocks.remove(0)).unwrap(); // G
+        chain.append_block(blocks.remove(0)).unwrap(); // C_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // E_prime
+        chain.append_block(blocks.remove(0)).unwrap(); // D
+        chain.append_block(blocks.remove(0)).unwrap(); // B_prime
+
+        assert_eq!(chain.height(), 7);
+        assert_eq!(chain.canonical_tip, G);
+        assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
+    }
+
+    #[test]
+    /// Assertions in stages of random block order.
+    /// 
+    /// The sample ordering, taken from the stress test,
+    /// is the following:
+    /// E, D'', D, A, C'', F'', G, E'', C, B, C', D''', E', F, B', D',
+    fn stages_append_test8() {
+        let db = test_helpers::init_tempdb();
+        let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+
+        let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
+        let A = Arc::new(A);
+
+        let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B = Arc::new(B);
+
+        let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C = Arc::new(C);
+
+        let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D = Arc::new(D);
+
+        let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E = Arc::new(E);
+
+        let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F = Arc::new(F);
+
+        let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
+        let G = Arc::new(G);
+
+        let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+        let B_prime = Arc::new(B_prime);
+
+        let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_prime = Arc::new(C_prime);
+
+        let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_prime = Arc::new(D_prime);
+
+        let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_prime = Arc::new(E_prime);
+
+        let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+        let C_second = Arc::new(C_second);
+
+        let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_second = Arc::new(D_second);
+
+        let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
+        let E_second = Arc::new(E_second);
+
+        let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
+        let F_second = Arc::new(F_second);
+
+        let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+        let D_tertiary = Arc::new(D_tertiary);
+
+        let mut blocks = vec![
+            E.clone(),
+            D_second.clone(),
+            D.clone(),
+            A.clone(),
+            C_second.clone(),
+            F_second.clone(),
+            G.clone(),
+            E_second.clone(),
+            C.clone(),
+            B.clone(),
+            C_prime.clone(),
+            D_tertiary.clone(),
+            E_prime.clone(),
+            F.clone(),
+            B_prime.clone(),
+            D_prime.clone(),
+            
+        ];
+
+        chain.append_block(blocks.remove(0)).unwrap(); // E
+        assert_eq!(chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        chain.append_block(blocks.remove(0)).unwrap(); // D_second
+        assert_eq!(chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        chain.append_block(blocks.remove(0)).unwrap(); // D
+        assert_eq!(chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        chain.append_block(blocks.remove(0)).unwrap(); // A
+        assert_eq!(chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.height(), 1);
+        assert_eq!(chain.canonical_tip, A);
+        chain.append_block(blocks.remove(0)).unwrap(); // C_second
+        assert_eq!(chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.height(), 1);
+        assert_eq!(chain.canonical_tip, A);
+        chain.append_block(blocks.remove(0)).unwrap(); // F_second
+        assert_eq!(chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.height(), 1);
+        assert_eq!(chain.canonical_tip, A);
+        chain.append_block(blocks.remove(0)).unwrap(); // G
+        assert_eq!(chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.height(), 1);
+        assert_eq!(chain.canonical_tip, A);
+        chain.append_block(blocks.remove(0)).unwrap(); // E_second
+        assert_eq!(chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.height(), 1);
+        assert_eq!(chain.canonical_tip, A);
+        chain.append_block(blocks.remove(0)).unwrap(); // C
+        assert_eq!(chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.height(), 1);
+        assert_eq!(chain.canonical_tip, A);
+        chain.append_block(blocks.remove(0)).unwrap(); // B
+        assert_eq!(chain.height(), 5);
+        assert_eq!(chain.canonical_tip, E);
+        assert!(chain.validations_mapping.get(&C.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&D.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&E.block_hash().unwrap()).is_none());
+        assert_eq!(chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        chain.append_block(blocks.remove(0)).unwrap(); // C_prime
+        assert_eq!(chain.height(), 5);
+        assert_eq!(chain.canonical_tip, E);
+        assert!(chain.validations_mapping.get(&C.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&D.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&E.block_hash().unwrap()).is_none());
+        assert_eq!(chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        chain.append_block(blocks.remove(0)).unwrap(); // D_tertiary
+        assert_eq!(chain.height(), 5);
+        assert_eq!(chain.canonical_tip, E);
+        assert!(chain.validations_mapping.get(&C.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&D.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&E.block_hash().unwrap()).is_none());
+        assert_eq!(chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        chain.append_block(blocks.remove(0)).unwrap(); // E_prime
+        assert_eq!(chain.height(), 5);
+        assert_eq!(chain.canonical_tip, E);
+        assert!(chain.validations_mapping.get(&C.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&D.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&E.block_hash().unwrap()).is_none());
+        assert_eq!(chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        chain.append_block(blocks.remove(0)).unwrap(); // F
+        assert_eq!(chain.height(), 7);
+        assert_eq!(chain.canonical_tip, G);
+        assert!(chain.validations_mapping.get(&C.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&D.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&E.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&F.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&G.block_hash().unwrap()).is_none());
+        assert_eq!(chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToDisconnected);
+        assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        chain.append_block(blocks.remove(0)).unwrap(); // B_prime
+        assert_eq!(chain.height(), 7);
+        assert_eq!(chain.canonical_tip, G);
+        assert!(chain.validations_mapping.get(&C.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&D.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&E.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&F.block_hash().unwrap()).is_none());
+        assert!(chain.validations_mapping.get(&G.block_hash().unwrap()).is_none());
+        assert_eq!(chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+        assert_eq!(chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
+        assert_eq!(chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), &OrphanType::DisconnectedTip);
+        assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+        assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+        assert_eq!(chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+        assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
+        assert!(chain.valid_tips.contains(&F_second.block_hash().unwrap()));
+        assert!(chain.valid_tips_states.get(&F_second.block_hash().unwrap()).is_some());
+        assert!(chain.valid_tips.contains(&D_tertiary.block_hash().unwrap()));
+        assert!(chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).is_some());
+        chain.append_block(blocks.remove(0)).unwrap(); // D_prime
+
+        assert_eq!(chain.height(), 7);
+        assert_eq!(chain.canonical_tip, G);
+        assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
+        assert!(chain.valid_tips_states.get(&E_prime.block_hash().unwrap()).is_some());
+        assert!(chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).is_some());
+        assert!(chain.valid_tips_states.get(&F_second.block_hash().unwrap()).is_some());
+    }
 
     quickcheck! {
-        // /// Stress test of chain append.
-        // ///
-        // /// We have a graph of chains of blocks with
-        // /// the following structure:
-        // /// ```
-        // /// GEN -> A -> B -> C -> D -> E -> F -> G
-        // ///        |
-        // ///         -> B' -> C' -> D' -> E'
-        // ///            |     |
-        // ///            |     -> D'''
-        // ///            |
-        // ///            -> C'' -> D'' -> E'' -> F''
-        // /// ```
-        // ///
-        // /// The tip of the block must always be `G`, regardless
-        // /// of the order in which the blocks are received. And
-        // /// the height of the chain must be that of `G` which is 7.
-        // fn append_stress_test() -> bool {
-        //     let db = test_helpers::init_tempdb();
-        //     let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+        /// Stress test of chain append.
+        ///
+        /// We have a graph of chains of blocks with
+        /// the following structure:
+        /// ```
+        /// GEN -> A -> B -> C -> D -> E -> F -> G
+        ///        |
+        ///         -> B' -> C' -> D' -> E'
+        ///            |     |
+        ///            |     -> D'''
+        ///            |
+        ///            -> C'' -> D'' -> E'' -> F''
+        /// ```
+        ///
+        /// The tip of the block must always be `G`, regardless
+        /// of the order in which the blocks are received. And
+        /// the height of the chain must be that of `G` which is 7.
+        fn append_stress_test() -> bool {
+            let db = test_helpers::init_tempdb();
+            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
 
-        //     let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
-        //     let A = Arc::new(A);
+            let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
+            let A = Arc::new(A);
 
-        //     let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
-        //     let B = Arc::new(B);
+            let mut B = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+            let B = Arc::new(B);
 
-        //     let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
-        //     let C = Arc::new(C);
+            let mut C = DummyBlock::new(Some(B.block_hash().unwrap()), crate::random_socket_addr(), 3);
+            let C = Arc::new(C);
 
-        //     let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
-        //     let D = Arc::new(D);
+            let mut D = DummyBlock::new(Some(C.block_hash().unwrap()), crate::random_socket_addr(), 4);
+            let D = Arc::new(D);
 
-        //     let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
-        //     let E = Arc::new(E);
+            let mut E = DummyBlock::new(Some(D.block_hash().unwrap()), crate::random_socket_addr(), 5);
+            let E = Arc::new(E);
 
-        //     let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
-        //     let F = Arc::new(F);
+            let mut F = DummyBlock::new(Some(E.block_hash().unwrap()), crate::random_socket_addr(), 6);
+            let F = Arc::new(F);
 
-        //     let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
-        //     let G = Arc::new(G);
+            let mut G = DummyBlock::new(Some(F.block_hash().unwrap()), crate::random_socket_addr(), 7);
+            let G = Arc::new(G);
 
-        //     let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
-        //     let B_prime = Arc::new(B_prime);
+            let mut B_prime = DummyBlock::new(Some(A.block_hash().unwrap()), crate::random_socket_addr(), 2);
+            let B_prime = Arc::new(B_prime);
 
-        //     let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
-        //     let C_prime = Arc::new(C_prime);
+            let mut C_prime = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+            let C_prime = Arc::new(C_prime);
 
-        //     let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
-        //     let D_prime = Arc::new(D_prime);
+            let mut D_prime = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+            let D_prime = Arc::new(D_prime);
 
-        //     let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
-        //     let E_prime = Arc::new(E_prime);
+            let mut E_prime = DummyBlock::new(Some(D_prime.block_hash().unwrap()), crate::random_socket_addr(), 5);
+            let E_prime = Arc::new(E_prime);
 
-        //     let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
-        //     let C_second = Arc::new(C_second);
+            let mut C_second = DummyBlock::new(Some(B_prime.block_hash().unwrap()), crate::random_socket_addr(), 3);
+            let C_second = Arc::new(C_second);
 
-        //     let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
-        //     let D_second = Arc::new(D_second);
+            let mut D_second = DummyBlock::new(Some(C_second.block_hash().unwrap()), crate::random_socket_addr(), 4);
+            let D_second = Arc::new(D_second);
 
-        //     let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
-        //     let E_second = Arc::new(E_second);
+            let mut E_second = DummyBlock::new(Some(D_second.block_hash().unwrap()), crate::random_socket_addr(), 5);
+            let E_second = Arc::new(E_second);
 
-        //     let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
-        //     let F_second = Arc::new(F_second);
+            let mut F_second = DummyBlock::new(Some(E_second.block_hash().unwrap()), crate::random_socket_addr(), 6);
+            let F_second = Arc::new(F_second);
 
-        //     let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
-        //     let D_tertiary = Arc::new(D_tertiary);
+            let mut D_tertiary = DummyBlock::new(Some(C_prime.block_hash().unwrap()), crate::random_socket_addr(), 4);
+            let D_tertiary = Arc::new(D_tertiary);
 
-        //     let mut blocks = vec![
-        //         A.clone(),
-        //         B.clone(),
-        //         C.clone(),
-        //         D.clone(),
-        //         E.clone(),
-        //         F.clone(),
-        //         G.clone(),
-        //         B_prime.clone(),
-        //         C_prime.clone(),
-        //         D_prime.clone(),
-        //         E_prime.clone(),
-        //         C_second.clone(),
-        //         D_second.clone(),
-        //         E_second.clone(),
-        //         F_second.clone(),
-        //         D_tertiary.clone()
-        //     ];
+            let mut blocks = vec![
+                A.clone(),
+                B.clone(),
+                C.clone(),
+                D.clone(),
+                E.clone(),
+                F.clone(),
+                G.clone(),
+                B_prime.clone(),
+                C_prime.clone(),
+                D_prime.clone(),
+                E_prime.clone(),
+                C_second.clone(),
+                D_second.clone(),
+                E_second.clone(),
+                F_second.clone(),
+                D_tertiary.clone()
+            ];
 
-        //     // Shuffle blocks
-        //     thread_rng().shuffle(&mut blocks);
+            // Shuffle blocks
+            thread_rng().shuffle(&mut blocks);
 
-        //     let mut block_letters = HashMap::new();
+            let mut block_letters = HashMap::new();
 
-        //     block_letters.insert(A.block_hash().unwrap(), "A");
-        //     block_letters.insert(B.block_hash().unwrap(), "B");
-        //     block_letters.insert(C.block_hash().unwrap(), "C");
-        //     block_letters.insert(D.block_hash().unwrap(), "D");
-        //     block_letters.insert(E.block_hash().unwrap(), "E");
-        //     block_letters.insert(F.block_hash().unwrap(), "F");
-        //     block_letters.insert(G.block_hash().unwrap(), "G");
-        //     block_letters.insert(B_prime.block_hash().unwrap(), "B'");
-        //     block_letters.insert(C_prime.block_hash().unwrap(), "C'");
-        //     block_letters.insert(D_prime.block_hash().unwrap(), "D'");
-        //     block_letters.insert(E_prime.block_hash().unwrap(), "E'");
-        //     block_letters.insert(C_second.block_hash().unwrap(), "C''");
-        //     block_letters.insert(D_second.block_hash().unwrap(), "D''");
-        //     block_letters.insert(E_second.block_hash().unwrap(), "E''");
-        //     block_letters.insert(F_second.block_hash().unwrap(), "F''");
-        //     block_letters.insert(D_tertiary.block_hash().unwrap(), "D'''");
+            block_letters.insert(A.block_hash().unwrap(), "A");
+            block_letters.insert(B.block_hash().unwrap(), "B");
+            block_letters.insert(C.block_hash().unwrap(), "C");
+            block_letters.insert(D.block_hash().unwrap(), "D");
+            block_letters.insert(E.block_hash().unwrap(), "E");
+            block_letters.insert(F.block_hash().unwrap(), "F");
+            block_letters.insert(G.block_hash().unwrap(), "G");
+            block_letters.insert(B_prime.block_hash().unwrap(), "B'");
+            block_letters.insert(C_prime.block_hash().unwrap(), "C'");
+            block_letters.insert(D_prime.block_hash().unwrap(), "D'");
+            block_letters.insert(E_prime.block_hash().unwrap(), "E'");
+            block_letters.insert(C_second.block_hash().unwrap(), "C''");
+            block_letters.insert(D_second.block_hash().unwrap(), "D''");
+            block_letters.insert(E_second.block_hash().unwrap(), "E''");
+            block_letters.insert(F_second.block_hash().unwrap(), "F''");
+            block_letters.insert(D_tertiary.block_hash().unwrap(), "D'''");
 
-        //     // Uncomment this for printing a failed order
-        //     let blocks_clone = blocks.clone();
+            // Uncomment this for printing a failed order
+            // let blocks_clone = blocks.clone();
 
-        //     std::panic::set_hook(Box::new(move |_| {
-        //         print!("Failed block ordering: ");
-        //         for b in blocks_clone.clone() {
-        //             print!("{}, ", block_letters.get(&b.block_hash().unwrap()).unwrap());
-        //         }
-        //         print!("\n");
-        //     }));
+            // std::panic::set_hook(Box::new(move |_| {
+            //     print!("Failed block ordering: ");
+            //     for b in blocks_clone.clone() {
+            //         print!("{}, ", block_letters.get(&b.block_hash().unwrap()).unwrap());
+            //     }
+            //     print!("\n");
+            // }));
 
-        //     for b in blocks {
-        //         hard_chain.append_block(b).unwrap();
-        //     }
+            for b in blocks {
+                hard_chain.append_block(b).unwrap();
+            }
 
-        //     assert_eq!(hard_chain.height(), 7);
-        //     assert_eq!(hard_chain.canonical_tip, G);
-        //     assert_eq!(hard_chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
+            assert_eq!(hard_chain.height(), 7);
+            assert_eq!(hard_chain.canonical_tip, G);
+            assert_eq!(hard_chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
+            assert!(hard_chain.valid_tips_states.get(&E_prime.block_hash().unwrap()).is_some());
+            assert!(hard_chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).is_some());
+            assert!(hard_chain.valid_tips_states.get(&F_second.block_hash().unwrap()).is_some());
+            assert!(hard_chain.validations_mapping.get(&A.block_hash().unwrap()).is_none());
+            assert!(hard_chain.validations_mapping.get(&B.block_hash().unwrap()).is_none());
+            assert!(hard_chain.validations_mapping.get(&C.block_hash().unwrap()).is_none());
+            assert!(hard_chain.validations_mapping.get(&D.block_hash().unwrap()).is_none());
+            assert!(hard_chain.validations_mapping.get(&E.block_hash().unwrap()).is_none());
+            assert!(hard_chain.validations_mapping.get(&F.block_hash().unwrap()).is_none());
+            assert!(hard_chain.validations_mapping.get(&G.block_hash().unwrap()).is_none());
+            assert_eq!(hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+            assert_eq!(hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+            assert_eq!(hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
+            assert_eq!(hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
+            assert_eq!(hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+            assert_eq!(hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+            assert_eq!(hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+            assert_eq!(hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
 
-        //     true
-        // }
+            true
+        }
 
         fn it_rewinds_correctly1() -> bool {
             let db = test_helpers::init_tempdb();

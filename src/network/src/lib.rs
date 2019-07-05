@@ -26,8 +26,9 @@ extern crate log;
 #[cfg(test)]
 extern crate common as other_common;
 
-extern crate chain;
 extern crate byteorder;
+extern crate chain;
+extern crate chrono;
 extern crate crypto;
 extern crate env_logger;
 extern crate futures;
@@ -41,30 +42,29 @@ extern crate rlp;
 extern crate tokio;
 extern crate tokio_io_timeout;
 extern crate tokio_timer;
-extern crate chrono;
 
 #[cfg(test)]
 pub mod mock;
 
 mod bootstrap;
+mod common;
 mod connection;
 mod error;
+mod handlers;
 mod interface;
 mod network;
+mod packet;
 pub mod packets;
 mod peer;
-mod packet;
-mod common;
-mod handlers;
 
-pub use packet::*;
 pub use bootstrap::*;
 pub use connection::*;
 pub use error::*;
+pub use handlers::*;
 pub use interface::*;
 pub use network::*;
+pub use packet::*;
 pub use peer::*;
-pub use handlers::*;
 
 #[cfg(test)]
 use other_common::checkpointable::*;
@@ -73,7 +73,7 @@ use other_common::checkpointable::*;
 use crypto::NodeId;
 
 #[cfg(test)]
-use std::net::{SocketAddr, IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 #[cfg(test)]
 use rand::prelude::*;
@@ -97,7 +97,7 @@ use std::sync::Arc;
 use std::sync::mpsc::*;
 
 #[cfg(test)]
-use parking_lot::{RwLock, Mutex};
+use parking_lot::{Mutex, RwLock};
 
 #[cfg(test)]
 use hashbrown::HashMap;
@@ -116,13 +116,49 @@ use crypto::SecretKey;
 
 #[cfg(test)]
 /// Test helper for initializing mock networks
-pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketAddr, NodeId, Arc<Mutex<Receiver<(SocketAddr, Arc<EasyBlock>)>>>, Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>, Arc<Mutex<Receiver<(SocketAddr, Arc<StateBlock>)>>>)> {
+pub fn init_test_networks(
+    peers: usize,
+) -> Vec<(
+    Arc<Mutex<MockNetwork>>,
+    SocketAddr,
+    NodeId,
+    Arc<Mutex<Receiver<(SocketAddr, Arc<EasyBlock>)>>>,
+    Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>,
+    Arc<Mutex<Receiver<(SocketAddr, Arc<StateBlock>)>>>,
+)> {
     let mut mailboxes = HashMap::new();
     let chains: Vec<(EasyChainRef, HardChainRef, StateChainRef)> = (0..peers)
         .into_iter()
-        .map(|_| (test_helpers::init_tempdb(), test_helpers::init_tempdb(), test_helpers::init_tempdb(), test_helpers::init_tempdb()))
-        .map(|(db1, db2, db3, db4)| (Arc::new(RwLock::new(EasyChain::new(db1, DummyCheckpoint::genesis(), true))), Arc::new(RwLock::new(HardChain::new(db2, DummyCheckpoint::genesis(), true))), Arc::new(RwLock::new(StateChain::new(db3, db4, true)))))
-        .map(|(easy, hard, state)| (EasyChainRef::new(easy), HardChainRef::new(hard), StateChainRef::new(state)))
+        .map(|_| {
+            (
+                test_helpers::init_tempdb(),
+                test_helpers::init_tempdb(),
+                test_helpers::init_tempdb(),
+                test_helpers::init_tempdb(),
+            )
+        })
+        .map(|(db1, db2, db3, db4)| {
+            (
+                Arc::new(RwLock::new(EasyChain::new(
+                    db1,
+                    DummyCheckpoint::genesis(),
+                    true,
+                ))),
+                Arc::new(RwLock::new(HardChain::new(
+                    db2,
+                    DummyCheckpoint::genesis(),
+                    true,
+                ))),
+                Arc::new(RwLock::new(StateChain::new(db3, db4, true))),
+            )
+        })
+        .map(|(easy, hard, state)| {
+            (
+                EasyChainRef::new(easy),
+                HardChainRef::new(hard),
+                StateChainRef::new(state),
+            )
+        })
         .collect();
 
     let addresses: Vec<SocketAddr> = (0..peers)
@@ -137,7 +173,14 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
         .collect();
 
     let mut address_mappings = HashMap::new();
-    let mut networks: Vec<(Arc<Mutex<MockNetwork>>, SocketAddr, NodeId, Arc<Mutex<Receiver<(SocketAddr, Arc<EasyBlock>)>>>, Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>, Arc<Mutex<Receiver<(SocketAddr, Arc<StateBlock>)>>>)> = Vec::with_capacity(peers);
+    let mut networks: Vec<(
+        Arc<Mutex<MockNetwork>>,
+        SocketAddr,
+        NodeId,
+        Arc<Mutex<Receiver<(SocketAddr, Arc<EasyBlock>)>>>,
+        Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>,
+        Arc<Mutex<Receiver<(SocketAddr, Arc<StateBlock>)>>>,
+    )> = Vec::with_capacity(peers);
 
     for i in 0..peers {
         let (rx, tx) = channel();
@@ -147,12 +190,12 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
         address_mappings.insert(addresses[i].clone(), identities[i].0.clone());
         mailboxes.insert(identities[i].0.clone(), rx);
         let network = MockNetwork::new(
-            identities[i].0.clone(), 
-            addresses[i].clone(), 
-            "test_network".to_owned(), 
-            identities[i].1.clone(), 
-            tx, 
-            mailboxes.clone(), 
+            identities[i].0.clone(),
+            addresses[i].clone(),
+            "test_network".to_owned(),
+            identities[i].1.clone(),
+            tx,
+            mailboxes.clone(),
             address_mappings.clone(),
             rx1,
             rx2,
@@ -163,7 +206,14 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
         );
 
         let network = Arc::new(Mutex::new(network));
-        networks.push((network, addresses[i].clone(), identities[i].0.clone(), Arc::new(Mutex::new(tx1)), Arc::new(Mutex::new(tx2)), Arc::new(Mutex::new(tx3))));
+        networks.push((
+            network,
+            addresses[i].clone(),
+            identities[i].0.clone(),
+            Arc::new(Mutex::new(tx1)),
+            Arc::new(Mutex::new(tx2)),
+            Arc::new(Mutex::new(tx3)),
+        ));
     }
 
     for i in 0..peers {

@@ -16,19 +16,19 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::peer::ConnectionType;
-use crate::interface::NetworkInterface;
-use crypto::NodeId;
 use crate::error::NetworkErr;
+use crate::interface::NetworkInterface;
 use crate::packet::Packet;
-use chain::{Block, BlockWrapper};
+use crate::peer::ConnectionType;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
+use chain::{Block, BlockWrapper};
 use chrono::prelude::*;
-use std::sync::Arc;
-use std::net::SocketAddr;
+use crypto::NodeId;
+use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
+use std::net::SocketAddr;
 use std::str;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ForwardBlock {
@@ -46,7 +46,7 @@ impl ForwardBlock {
             node_id,
             block,
             timestamp: Utc::now(),
-            signature: None
+            signature: None,
         }
     }
 }
@@ -125,7 +125,7 @@ impl Packet for ForwardBlock {
         } else {
             return Err(NetworkErr::BadFormat);
         };
-        
+
         rdr.set_position(2);
 
         let block_len = if let Ok(result) = rdr.read_u32::<BigEndian>() {
@@ -158,14 +158,14 @@ impl Packet for ForwardBlock {
 
         let timestamp = if buf.len() > timestamp_len as usize {
             let result: Vec<u8> = buf.drain(..timestamp_len as usize).collect();
-            
+
             match str::from_utf8(&result) {
                 Ok(result) => match DateTime::parse_from_rfc3339(result) {
                     Ok(result) => Utc.from_utc_datetime(&result.naive_utc()),
-                    _ => return Err(NetworkErr::BadFormat)
+                    _ => return Err(NetworkErr::BadFormat),
                 },
-                Err(_) => return Err(NetworkErr::BadFormat)
-            } 
+                Err(_) => return Err(NetworkErr::BadFormat),
+            }
         } else {
             return Err(NetworkErr::BadFormat);
         };
@@ -173,7 +173,7 @@ impl Packet for ForwardBlock {
         let block = if buf.len() == block_len as usize {
             match BlockWrapper::from_bytes(&buf) {
                 Ok(result) => result,
-                _ => return Err(NetworkErr::BadFormat)
+                _ => return Err(NetworkErr::BadFormat),
             }
         } else {
             return Err(NetworkErr::BadFormat);
@@ -197,12 +197,17 @@ impl Packet for ForwardBlock {
         self.timestamp.clone()
     }
 
-    fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &ForwardBlock, _conn_type: ConnectionType) -> Result<(), NetworkErr> {
+    fn handle<N: NetworkInterface>(
+        network: &mut N,
+        addr: &SocketAddr,
+        packet: &ForwardBlock,
+        _conn_type: ConnectionType,
+    ) -> Result<(), NetworkErr> {
         match *packet.block {
             BlockWrapper::EasyBlock(ref block) => {
                 let easy_chain = network.easy_chain_ref();
 
-                // Do not push block to queue if we already  
+                // Do not push block to queue if we already
                 // have it stored in the chain.
                 if easy_chain.query(&block.block_hash().unwrap()).is_some() {
                     Ok(())
@@ -217,7 +222,7 @@ impl Packet for ForwardBlock {
             BlockWrapper::HardBlock(ref block) => {
                 let hard_chain = network.hard_chain_ref();
 
-                // Do not push block to queue if we already  
+                // Do not push block to queue if we already
                 // have it stored in the chain.
                 if hard_chain.query(&block.block_hash().unwrap()).is_some() {
                     Ok(())
@@ -232,7 +237,7 @@ impl Packet for ForwardBlock {
             BlockWrapper::StateBlock(ref block) => {
                 let state_chain = network.state_chain_ref();
 
-                // Do not push block to queue if we already  
+                // Do not push block to queue if we already
                 // have it stored in the chain.
                 if state_chain.query(&block.block_hash().unwrap()).is_some() {
                     Ok(())

@@ -70,7 +70,7 @@ impl Genesis {
                     if *balance > coinbase_supply {
                         panic!("We are assigning more coins than there are in the coinbase! This shouldn't ever happen...");
                     }
-                    
+
                     coinbase_supply -= balance;
 
                     let bin_addr = addr.to_bytes();
@@ -88,7 +88,7 @@ impl Genesis {
 
                 // Insert coinbase supply
                 let coinbase_cur_key = format!("coinbase.{}", asset_hash);
-                let coinbase_cur_key = coinbase_cur_key.as_bytes(); 
+                let coinbase_cur_key = coinbase_cur_key.as_bytes();
                 let balance = format!("{}.0", coinbase_supply);
                 let balance = balance.as_bytes();
 

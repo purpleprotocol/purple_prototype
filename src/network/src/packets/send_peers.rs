@@ -16,20 +16,20 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::peer::ConnectionType;
-use crate::interface::NetworkInterface;
-use crypto::NodeId;
 use crate::error::NetworkErr;
+use crate::interface::NetworkInterface;
 use crate::packet::Packet;
-use rlp::{Rlp, RlpStream};
+use crate::peer::ConnectionType;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
-use std::sync::Arc;
+use crypto::NodeId;
+use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
+use rlp::{Rlp, RlpStream};
+use std::io::Cursor;
 use std::net::SocketAddr;
 use std::str;
-use std::io::Cursor;
 use std::str::FromStr;
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
-use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendPeers {
@@ -43,7 +43,7 @@ pub struct SendPeers {
     peers: Vec<SocketAddr>,
 
     /// Packet signature
-    signature: Option<Signature>
+    signature: Option<Signature>,
 }
 
 impl SendPeers {
@@ -187,14 +187,14 @@ impl Packet for SendPeers {
 
         let timestamp = if buf.len() > timestamp_len as usize {
             let result: Vec<u8> = buf.drain(..timestamp_len as usize).collect();
-            
+
             match str::from_utf8(&result) {
                 Ok(result) => match DateTime::parse_from_rfc3339(result) {
                     Ok(result) => Utc.from_utc_datetime(&result.naive_utc()),
-                    _ => return Err(NetworkErr::BadFormat)
+                    _ => return Err(NetworkErr::BadFormat),
                 },
-                Err(_) => return Err(NetworkErr::BadFormat)
-            } 
+                Err(_) => return Err(NetworkErr::BadFormat),
+            }
         } else {
             return Err(NetworkErr::BadFormat);
         };
@@ -210,11 +210,11 @@ impl Packet for SendPeers {
                             Ok(bytes) => match str::from_utf8(bytes) {
                                 Ok(result) => match SocketAddr::from_str(result) {
                                     Ok(addr) => peers.push(addr),
-                                    Err(_) => return Err(NetworkErr::BadFormat)
+                                    Err(_) => return Err(NetworkErr::BadFormat),
                                 },
-                                _ => return Err(NetworkErr::BadFormat)
+                                _ => return Err(NetworkErr::BadFormat),
                             },
-                            _ => return Err(NetworkErr::BadFormat)
+                            _ => return Err(NetworkErr::BadFormat),
                         }
                     } else {
                         return Err(NetworkErr::BadFormat);
@@ -239,11 +239,16 @@ impl Packet for SendPeers {
         Ok(Arc::new(packet))
     }
 
-    fn handle<N: NetworkInterface>(network: &mut N, addr: &SocketAddr, packet: &SendPeers, conn_type: ConnectionType) -> Result<(), NetworkErr> {
+    fn handle<N: NetworkInterface>(
+        network: &mut N,
+        addr: &SocketAddr,
+        packet: &SendPeers,
+        conn_type: ConnectionType,
+    ) -> Result<(), NetworkErr> {
         if !packet.verify_sig() {
             return Err(NetworkErr::BadSignature);
         }
-        
+
         debug!("Received SendPeers packet from: {:?}", addr);
 
         {
@@ -262,7 +267,8 @@ impl Packet for SendPeers {
         }
 
         let peers: Vec<SocketAddr> = {
-            packet.peers
+            packet
+                .peers
                 .iter()
                 // Don't connect to peers that we are already connected to
                 .filter(|addr| !network.is_connected_to(addr))
@@ -317,17 +323,17 @@ impl Arbitrary for SendPeers {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::interface::NetworkInterface;
+    use crate::mock::MockNetwork;
+    use crate::packets::RequestPeers;
+    use chain::*;
+    use crypto::NodeId;
+    use hashbrown::HashMap;
+    use parking_lot::{Mutex, RwLock};
+    use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
-    use std::sync::mpsc::channel;
-    use parking_lot::{RwLock, Mutex};
-    use hashbrown::HashMap;
-    use chain::*;
-    use crate::packets::RequestPeers;
-    use crate::interface::NetworkInterface;
-    use crate::mock::MockNetwork;
-    use crypto::NodeId;
 
     #[test]
     fn it_sends_and_requests_peers() {
@@ -370,38 +376,73 @@ mod tests {
         // Peer 1 listener thread
         thread::Builder::new()
             .name("peer1".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network1, network1_easy_rec, network1_hard_rec, network1_state_rec))
+            .spawn(move || {
+                MockNetwork::start_receive_loop(
+                    network1,
+                    network1_easy_rec,
+                    network1_hard_rec,
+                    network1_state_rec,
+                )
+            })
             .unwrap();
 
         // Peer 2 listener thread
         thread::Builder::new()
             .name("peer2".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network2, network2_easy_rec, network2_hard_rec, network2_state_rec))
+            .spawn(move || {
+                MockNetwork::start_receive_loop(
+                    network2,
+                    network2_easy_rec,
+                    network2_hard_rec,
+                    network2_state_rec,
+                )
+            })
             .unwrap();
 
         // Peer 3 listener thread
         thread::Builder::new()
             .name("peer3".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network3, network3_easy_rec, network3_hard_rec, network3_state_rec))
+            .spawn(move || {
+                MockNetwork::start_receive_loop(
+                    network3,
+                    network3_easy_rec,
+                    network3_hard_rec,
+                    network3_state_rec,
+                )
+            })
             .unwrap();
 
         // Peer 4 listener thread
         thread::Builder::new()
             .name("peer4".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network4, network4_easy_rec, network4_hard_rec, network4_state_rec))
+            .spawn(move || {
+                MockNetwork::start_receive_loop(
+                    network4,
+                    network4_easy_rec,
+                    network4_hard_rec,
+                    network4_state_rec,
+                )
+            })
             .unwrap();
 
         // Peer 5 listener thread
         thread::Builder::new()
             .name("peer5".to_string())
-            .spawn(move || MockNetwork::start_receive_loop(network5, network5_easy_rec, network5_hard_rec, network5_state_rec))
+            .spawn(move || {
+                MockNetwork::start_receive_loop(
+                    network5,
+                    network5_easy_rec,
+                    network5_hard_rec,
+                    network5_state_rec,
+                )
+            })
             .unwrap();
 
         // Establish initial connections.
         //
         // Peers 3, 4 and 5 will establish a connection
         // to Peer1.
-        // 
+        //
         // After this, Peer 2 will connect to Peer 1 and ask
         // it for its peer list.
         {
@@ -426,7 +467,7 @@ mod tests {
         {
             let mut network = network2_c.lock();
             let node_id = network.our_node_id().clone();
-            
+
             let peer_id = {
                 let peer = network.fetch_peer_mut(&addr1).unwrap();
                 peer.requested_peers = Some(3);
@@ -434,7 +475,9 @@ mod tests {
             };
 
             let mut packet = RequestPeers::new(node_id, 3);
-            network.send_unsigned::<RequestPeers>(&addr1, &mut packet).unwrap();
+            network
+                .send_unsigned::<RequestPeers>(&addr1, &mut packet)
+                .unwrap();
         }
 
         // Pause main thread for a bit before

@@ -17,15 +17,15 @@
 */
 
 use crate::error::NetworkErr;
-use crypto::{Nonce, SessionKey};
-use crypto::crc32fast::Hasher;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use crypto::crc32fast::Hasher;
+use crypto::{Nonce, SessionKey};
 use std::io::Cursor;
 
 pub const NETWORK_VERSION: u8 = 0;
 
 /// Encrypts and wraps a packet with the default network header
-/// 
+///
 /// ### Header fields
 /// 1) Network layer version   - 8bits
 /// 2) Packet length           - 32bits
@@ -50,7 +50,6 @@ pub fn wrap_packet(packet: &[u8], key: &SessionKey) -> Vec<u8> {
     buf.extend_from_slice(&encrypted);
     buf
 }
-
 
 /// Attempts to decrypt a packet
 pub fn unwrap_packet(packet: &[u8], key: &SessionKey) -> Result<Vec<u8>, NetworkErr> {
@@ -115,7 +114,7 @@ pub fn unwrap_packet(packet: &[u8], key: &SessionKey) -> Result<Vec<u8>, Network
 
     match crypto::open(&packet, key, &nonce) {
         Ok(result) => Ok(result),
-        Err(_) => Err(NetworkErr::EncryptionErr)
+        Err(_) => Err(NetworkErr::EncryptionErr),
     }
 }
 
