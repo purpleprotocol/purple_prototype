@@ -18,7 +18,10 @@
 
 use std::cmp::{Ordering, PartialOrd};
 use std::fmt;
+// use std::ops::Try;
 use std::ops::{Add, Div, Mul, Sub, SubAssign};
+use std::{f32, f64};
+use VmError;
 
 #[derive(Clone, Copy)]
 pub enum VmValue {
@@ -83,7 +86,41 @@ impl VmValue {
             _ => panic!(),
         }
     }
+
+    pub fn sum_f32(val1: &f32, val2: &f32) -> Option<f32> {
+        match val1 + val2 {
+            // TODO: consider warning and change it
+            f32::INFINITY | f32::NEG_INFINITY => None,
+            val => Some(val),
+        }
+    }
+
+    pub fn sum_f64(val1: &f64, val2: &f64) -> Option<f64> {
+        match val1 + val2 {
+            // TODO: consider warning and change it
+            f64::INFINITY | f64::NEG_INFINITY => None,
+            val => Some(val),
+        }
+    }
 }
+
+// #[unstable(feature = "try_trait", issue = "42327")]
+// impl Try for Option<VmValue> {
+//     type Ok = VmValue;
+//     type Error = VmError;
+
+//     fn into_result(self) -> Result<VmValue, VmError> {
+//         self.ok_or(None { _priv: () })
+//     }
+
+//     fn from_ok(v: VmValue) -> Self {
+//         Some(v)
+//     }
+
+//     fn from_error(e: VmError) -> Self {
+//         e
+//     }
+// }
 
 impl PartialEq for VmValue {
     fn eq(&self, other: &VmValue) -> bool {
@@ -322,134 +359,183 @@ impl PartialOrd for VmValue {
 // }
 
 impl Add for VmValue {
-    type Output = VmValue;
+    type Output = Result<VmValue, VmError>;
 
     // TODO: Possibly use native SIMD for arrays, but benchmark first
-    fn add(self, other: VmValue) -> VmValue {
+    fn add(self, other: VmValue) -> Result<VmValue, VmError> {
         match (self, other) {
-            (VmValue::I32(val1), VmValue::I32(val2)) => VmValue::I32(val1 + val2),
-            (VmValue::I64(val1), VmValue::I64(val2)) => VmValue::I64(val1 + val2),
-            (VmValue::F32(val1), VmValue::F32(val2)) => VmValue::F32(val1 + val2),
-            (VmValue::F64(val1), VmValue::F64(val2)) => VmValue::F64(val1 + val2),
+            (VmValue::I32(val1), VmValue::I32(val2)) => match val1.checked_add(val2) {
+                Some(result) => Ok(VmValue::I32(result)),
+                None => Err(VmError::Overflow),
+            },
+            (VmValue::I64(val1), VmValue::I64(val2)) => match val1.checked_add(val2) {
+                Some(result) => Ok(VmValue::I64(result)),
+                None => Err(VmError::Overflow),
+            },
+            (VmValue::F32(val1), VmValue::F32(val2)) => match VmValue::sum_f32(&val1, &val2) {
+                Some(result) => Ok(VmValue::F32(result)),
+                None => Err(VmError::Infinity),
+            },
+            (VmValue::F64(val1), VmValue::F64(val2)) => match VmValue::sum_f64(&val1, &val2) {
+                Some(result) => Ok(VmValue::F64(result)),
+                None => Err(VmError::Infinity),
+            },
             (VmValue::i32Array2(val1), VmValue::i32Array2(val2)) => {
                 let mut result: [i32; 2] = [0; 2];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::i32Array2(result)
+                Ok(VmValue::i32Array2(result))
             }
             (VmValue::i32Array4(val1), VmValue::i32Array4(val2)) => {
                 let mut result: [i32; 4] = [0; 4];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::i32Array4(result)
+                Ok(VmValue::i32Array4(result))
             }
             (VmValue::i32Array8(val1), VmValue::i32Array8(val2)) => {
                 let mut result: [i32; 8] = [0; 8];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::i32Array8(result)
+                Ok(VmValue::i32Array8(result))
             }
             (VmValue::i64Array2(val1), VmValue::i64Array2(val2)) => {
                 let mut result: [i64; 2] = [0; 2];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::i64Array2(result)
+                Ok(VmValue::i64Array2(result))
             }
             (VmValue::i64Array4(val1), VmValue::i64Array4(val2)) => {
                 let mut result: [i64; 4] = [0; 4];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::i64Array4(result)
+                Ok(VmValue::i64Array4(result))
             }
             (VmValue::i64Array8(val1), VmValue::i64Array8(val2)) => {
                 let mut result: [i64; 8] = [0; 8];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::i64Array8(result)
+                Ok(VmValue::i64Array8(result))
             }
             (VmValue::f32Array2(val1), VmValue::f32Array2(val2)) => {
                 let mut result: [f32; 2] = [0.0; 2];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| VmValue::sum_f32(a, b).ok_or(VmError::Infinity));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::f32Array2(result)
+                Ok(VmValue::f32Array2(result))
             }
             (VmValue::f32Array4(val1), VmValue::f32Array4(val2)) => {
                 let mut result: [f32; 4] = [0.0; 4];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| VmValue::sum_f32(a, b).ok_or(VmError::Infinity));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::f32Array4(result)
+                Ok(VmValue::f32Array4(result))
             }
             (VmValue::f32Array8(val1), VmValue::f32Array8(val2)) => {
                 let mut result: [f32; 8] = [0.0; 8];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| VmValue::sum_f32(a, b).ok_or(VmError::Infinity));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::f32Array8(result)
+                Ok(VmValue::f32Array8(result))
             }
             (VmValue::f64Array2(val1), VmValue::f64Array2(val2)) => {
                 let mut result: [f64; 2] = [0.0; 2];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| VmValue::sum_f64(a, b).ok_or(VmError::Infinity));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::f64Array2(result)
+                Ok(VmValue::f64Array2(result))
             }
             (VmValue::f64Array4(val1), VmValue::f64Array4(val2)) => {
                 let mut result: [f64; 4] = [0.0; 4];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| VmValue::sum_f64(a, b).ok_or(VmError::Infinity));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::f64Array4(result)
+                Ok(VmValue::f64Array4(result))
             }
             (VmValue::f64Array8(val1), VmValue::f64Array8(val2)) => {
                 let mut result: [f64; 8] = [0.0; 8];
-                let src = val1.iter().zip(&val2).map(|(a, b)| a + b);
+                let src = val1
+                    .iter()
+                    .zip(&val2)
+                    .map(|(a, b)| VmValue::sum_f64(a, b).ok_or(VmError::Infinity));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v;
+                    *r = v.unwrap();
                 }
 
-                VmValue::f64Array8(result)
+                Ok(VmValue::f64Array8(result))
             }
             (_, _) => panic!("Cannot perform addition between different variants!"),
         }

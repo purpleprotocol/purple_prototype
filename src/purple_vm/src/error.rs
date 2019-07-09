@@ -39,4 +39,10 @@ pub enum VmError {
 
     /// Integer overflow
     Overflow,
+
+    /// Float overflow
+    Infinity,
+
+    /// Divide by zero
+    DivideByZero
 }

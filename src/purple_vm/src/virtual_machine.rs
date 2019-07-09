@@ -496,7 +496,7 @@ impl Vm {
                         }
                     }
                     Some(Instruction::Add) => {
-                        perform_addition(Instruction::Add, &mut self.operand_stack);
+                        perform_addition(Instruction::Add, &mut self.operand_stack)?;
                         ip.increment();
                     }
                     Some(Instruction::Sub) => {
@@ -3003,8 +3003,7 @@ fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> bool {
     }
 }
 
-// TODO: Handle overflow
-fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) {
+fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
     let len = operand_stack.len();
 
     if len < 2 {
@@ -3024,26 +3023,24 @@ fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) {
             }
 
             // Perform addition
-            let result = buf.iter().fold(None, |acc: Option<VmValue>, x| {
-                if let Some(acc) = acc {
-                    Some(acc + *x)
-                } else {
-                    Some(*x)
+            let mut acc: VmValue = buf[0];
+            for i in 1..buf.len(){
+                acc = match acc + buf[i] {
+                    Ok(res) => res,
+                    Err(err) => return Err(err)
                 }
-            });
+            }
 
             // Push result back to operand stack
-            if let Some(result) = result {
-                operand_stack.push(result);
-            } else {
-                unreachable!();
-            }
+            operand_stack.push(acc);
         }
         _ => panic!(format!(
             "Must receive an addition instruction! Got: {:?}",
             op
         )),
     };
+
+    Ok(())
 }
 
 fn perform_substraction(op: Instruction, operand_stack: &mut Stack<VmValue>) {
