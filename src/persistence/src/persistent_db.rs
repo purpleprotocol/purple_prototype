@@ -229,7 +229,11 @@ impl Checkpointable for PersistentDb {
     }
 
     fn storage_location(&self) -> StorageLocation {
-        unimplemented!();
+        if self.memory_db.is_empty() {
+            StorageLocation::Disk
+        } else {
+            StorageLocation::Memory
+        }
     }
 }
 

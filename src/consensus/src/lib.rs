@@ -24,6 +24,7 @@ mod consensus_machine;
 pub mod parameters;
 mod validation;
 mod validator_state;
+mod pool_state;
 
 pub use candidate::*;
 pub use consensus_machine::*;

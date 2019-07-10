@@ -32,14 +32,18 @@ pub struct ValidatorState {
     /// The stamp of the latest event that
     /// has been sent by the validator.
     pub(crate) latest_stamp: Stamp,
+
+    /// The index of the validator
+    pub(crate) validator_idx: usize,
 }
 
 impl ValidatorState {
-    pub fn new(allowed_to_send: bool, remaining_blocks: u64, init_stamp: Stamp) -> ValidatorState {
+    pub fn new(allowed_to_send: bool, remaining_blocks: u64, idx: usize, init_stamp: Stamp) -> ValidatorState {
         ValidatorState {
             allowed_to_send,
             remaining_blocks,
             latest_stamp: init_stamp,
+            validator_idx: idx,
         }
     }
 }
