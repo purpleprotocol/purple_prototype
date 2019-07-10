@@ -94,7 +94,7 @@ impl HashTrait for EasyBlock {
     }
 }
 
-impl Block for EasyBlock {
+impl<'a> Block<'a> for EasyBlock {
     type ChainState = DummyCheckpoint;
 
     fn genesis() -> Arc<EasyBlock> {

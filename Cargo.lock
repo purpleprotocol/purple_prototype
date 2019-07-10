@@ -799,6 +799,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashcow"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "hashbrown 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "hashdb"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1410,6 +1418,7 @@ dependencies = [
  "crypto 0.1.0",
  "elastic-array 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)",
+ "hashcow 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "mimalloc 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2532,6 +2541,7 @@ dependencies = [
 "checksum graphlib 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "83f53d0fa782253a8308ee6fe0edd8154a17d70e8479f089073f2665ca1f050e"
 "checksum hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)" = "<none>"
 "checksum hashbrown 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)" = "3bae29b6653b3412c2e71e9d486db9f9df5d701941d86683005efb9f2d28e3da"
+"checksum hashcow 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a0fe95bb034c65293e49de49ab6429795e7cf509d2427395b4fde93b162b0c46"
 "checksum hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d91261ee336dd046ac7df28306cb297b7a7228bd1ae25e9a57f4ed5e0ab628c7"
 "checksum heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "1679e6ea370dee694f91f1dc469bf94cf8f52051d147aec3e1f9497c6fc22461"
 "checksum hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"

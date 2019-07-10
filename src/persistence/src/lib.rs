@@ -21,6 +21,7 @@ extern crate tempdir;
 #[macro_use]
 extern crate log;
 
+extern crate hashcow;
 extern crate common;
 extern crate crypto;
 extern crate elastic_array;

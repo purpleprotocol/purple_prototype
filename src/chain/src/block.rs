@@ -27,9 +27,9 @@ use std::fmt::Debug;
 use std::hash::Hash as HashTrait;
 
 /// Generic block interface
-pub trait Block: Debug + PartialEq + Eq + HashTrait {
+pub trait Block<'a>: Debug + PartialEq + Eq + HashTrait {
     /// Per tip validation state
-    type ChainState: Clone + Checkpointable + Debug;
+    type ChainState: Checkpointable<'a> + Debug;
 
     /// Size of the block cache.
     const BLOCK_CACHE_SIZE: usize = 20;

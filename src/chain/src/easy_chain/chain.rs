@@ -19,7 +19,7 @@
 use crate::chain::{Chain, ChainRef};
 use crate::easy_chain::block::EasyBlock;
 
-pub type EasyChainRef = ChainRef<EasyBlock>;
+pub type EasyChainRef<'a> = ChainRef<'a, EasyBlock>;
 
 /// The easy chain stores blocks that represent buffered
 /// validator pool join requests. If a miner wishes to become
@@ -41,4 +41,4 @@ pub type EasyChainRef = ChainRef<EasyBlock>;
 /// ones on the hard chain, however, miners from the easy chain receive
 /// transaction fees as additional reward because they participate in the
 /// validator pool.
-pub type EasyChain = Chain<EasyBlock>;
+pub type EasyChain<'a> = Chain<'a, EasyBlock>;

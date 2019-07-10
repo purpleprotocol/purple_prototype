@@ -16,10 +16,10 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use common::{Checkpointable, StorageLocation};
+use common::{Duplicable, Checkpointable, StorageLocation};
 use crypto::Hash;
 use elastic_array::ElasticArray128;
-use hashbrown::HashMap;
+use hashcow::CowHashMap as HashMap;
 use hashdb::{AsHashDB, HashDB};
 use rlp::NULL_RLP;
 use rocksdb::{ColumnFamily, DBCompactionStyle, Options, WriteBatch, DB};
@@ -61,15 +61,14 @@ enum Operation {
     Put(Vec<u8>),
 }
 
-#[derive(Clone)]
-pub struct PersistentDb {
+pub struct PersistentDb<'a> {
     db_ref: Option<Arc<DB>>,
     cf_name: Option<&'static str>,
-    memory_db: HashMap<Vec<u8>, Operation>,
+    memory_db: HashMap<'a, [u8], Operation>,
 }
 
-impl PersistentDb {
-    pub fn new(db_ref: Arc<DB>, cf_name: Option<&'static str>) -> PersistentDb {
+impl<'a> PersistentDb<'a> {
+    pub fn new(db_ref: Arc<DB>, cf_name: Option<&'static str>) -> PersistentDb<'a> {
         PersistentDb {
             db_ref: Some(db_ref),
             cf_name,
@@ -78,7 +77,7 @@ impl PersistentDb {
     }
 
     /// Creates a new in-memory `PersistentDb`.
-    pub fn new_in_memory() -> PersistentDb {
+    pub fn new_in_memory() -> PersistentDb<'a> {
         PersistentDb {
             db_ref: None,
             cf_name: None,
@@ -180,14 +179,14 @@ impl PersistentDb {
     /// Transactions will be commited when flush is called
     pub fn put(&mut self, key: &[u8], val: &[u8]) {
         self.memory_db
-            .insert(key.to_vec(), Operation::Put(val.to_vec()));
+            .insert_owned(key.to_vec(), Operation::Put(val.to_vec()));
     }
 
     /// Removes a value from the specified key
     /// # Remarks
     /// Transactions will be commited when flush is called
     pub fn delete(&mut self, key: &[u8]) {
-        self.memory_db.insert(key.to_vec(), Operation::Remove);
+        self.memory_db.insert_owned(key.to_vec(), Operation::Remove);
     }
 
     fn get_db(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -215,7 +214,17 @@ impl PersistentDb {
     }
 }
 
-impl Checkpointable for PersistentDb {
+impl<'a> Duplicable<'a> for PersistentDb<'a> {
+    fn duplicate(&'a self) -> PersistentDb<'a> {
+        PersistentDb {
+            db_ref: self.db_ref.clone(),
+            cf_name: self.cf_name.clone(),
+            memory_db: self.memory_db.borrow_fields(),
+        }
+    }
+}
+
+impl<'a> Checkpointable<'a> for PersistentDb<'a> {
     fn checkpoint(&self) -> u64 {
         unimplemented!();
     }
@@ -224,7 +233,7 @@ impl Checkpointable for PersistentDb {
         unimplemented!();
     }
 
-    fn load_from_disk(id: u64) -> Result<PersistentDb, ()> {
+    fn load_from_disk(id: u64) -> Result<PersistentDb<'a>, ()> {
         unimplemented!();
     }
 
@@ -233,13 +242,13 @@ impl Checkpointable for PersistentDb {
     }
 }
 
-impl std::fmt::Debug for PersistentDb {
+impl<'a> std::fmt::Debug for PersistentDb<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "PersistentDb {{ cf: {:?} }}", self.cf_name)
     }
 }
 
-impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
+impl<'a> HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb<'a> {
     fn keys(&self) -> std::collections::HashMap<Hash, i32> {
         unimplemented!();
     }
@@ -293,7 +302,7 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     }
 }
 
-impl AsHashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
+impl<'a> AsHashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb<'a> {
     fn as_hashdb(&self) -> &HashDB<BlakeDbHasher, ElasticArray128<u8>> {
         self
     }

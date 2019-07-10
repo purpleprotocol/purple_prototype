@@ -107,14 +107,14 @@ impl HashTrait for StateBlock {
     }
 }
 
-impl Block for StateBlock {
-    type ChainState = PersistentDb;
+impl<'a> Block<'a> for StateBlock {
+    type ChainState = PersistentDb<'a>;
 
     fn genesis() -> Arc<StateBlock> {
         GENESIS_RC.clone()
     }
 
-    fn genesis_state() -> PersistentDb {
+    fn genesis_state() -> PersistentDb<'a> {
         unimplemented!();
     }
 

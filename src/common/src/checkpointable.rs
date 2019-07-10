@@ -29,9 +29,16 @@ pub enum StorageLocation {
     Memory
 }
 
+/// Specialized trait similar to clone but which creates
+/// a copy with the same lifetime as the cloned data.
+pub trait Duplicable<'a> {
+    /// Creates a duplicate with potentially borrowed fields
+    fn duplicate(&'a self) -> Self;
+}
+
 /// Trait for any state that can be checkpointed
 /// and that can be reloaded from checkpoints.
-pub trait Checkpointable: Sized + Debug + Clone {
+pub trait Checkpointable<'a>: Sized + Debug + Duplicable<'a> {
     /// Creates a checkpoint of the current state and 
     /// returns the checkpoint id associated with it.
     fn checkpoint(&self) -> u64;
@@ -110,7 +117,13 @@ impl DummyCheckpoint {
     }
 }
 
-impl Checkpointable for DummyCheckpoint {
+impl<'a> Duplicable<'a> for DummyCheckpoint {
+    fn duplicate(&'a self) -> Self {
+        self.clone()
+    }
+}
+
+impl<'a> Checkpointable<'a> for DummyCheckpoint {
     fn checkpoint(&self) -> u64 {
         let mut id = self.id.lock();
         let mut location = self.location.lock();

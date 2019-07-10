@@ -19,7 +19,7 @@
 use crate::chain::{Chain, ChainRef};
 use crate::hard_chain::block::HardBlock;
 
-pub type HardChainRef = ChainRef<HardBlock>;
+pub type HardChainRef<'a> = ChainRef<'a, HardBlock>;
 
 /// The hard chain stores blocks that represent state
 /// changes in the validator pool. A block from the hard chain
@@ -44,4 +44,4 @@ pub type HardChainRef = ChainRef<HardBlock>;
 /// to the pool until the pool has either consumed all of
 /// their allocated events or until the pool is deemed to be
 /// corrupt.
-pub type HardChain = Chain<HardBlock>;
+pub type HardChain<'a> = Chain<'a, HardBlock>;

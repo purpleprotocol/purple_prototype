@@ -104,7 +104,7 @@ impl HashTrait for HardBlock {
     }
 }
 
-impl Block for HardBlock {
+impl<'a> Block<'a> for HardBlock {
     type ChainState = DummyCheckpoint;
 
     fn genesis() -> Arc<HardBlock> {

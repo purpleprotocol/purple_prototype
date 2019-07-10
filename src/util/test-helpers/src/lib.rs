@@ -35,7 +35,7 @@ use tempdir::TempDir;
 
 pub use quicksort::*;
 
-pub fn init_tempdb() -> PersistentDb {
+pub fn init_tempdb<'a>() -> PersistentDb<'a> {
     PersistentDb::new_in_memory()
 }
 

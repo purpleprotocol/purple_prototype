@@ -19,7 +19,7 @@
 use crate::chain::{Chain, ChainRef};
 use crate::state_chain::block::StateBlock;
 
-pub type StateChainRef = ChainRef<StateBlock>;
+pub type StateChainRef<'a> = ChainRef<'a, StateBlock>;
 
 /// The state chain is responsible for storing blocks
 /// that are produced by the validator pool and which
@@ -27,4 +27,4 @@ pub type StateChainRef = ChainRef<StateBlock>;
 /// 
 /// A `StateBlock` contains multiple `Events`, which
 /// in turn, contain transactions.
-pub type StateChain = Chain<StateBlock>;
+pub type StateChain<'a> = Chain<'a, StateBlock>;
