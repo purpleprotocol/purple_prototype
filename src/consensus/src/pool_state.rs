@@ -47,8 +47,7 @@ impl PoolState {
     }
 
     /// Performs an injection of new validators and allocated
-    /// blocks that the whole pool can produce. Note that this
-    /// function does not check for duplicate node ids.
+    /// blocks that the whole pool can produce. 
     pub fn inject(&mut self, validator_set: &HashMap<NodeId, u64>, allocated: u64) {
         let mut fork_stack: Vec<(Stamp, Option<NodeId>)> = vec![(Stamp::seed(), None)];
         let mut forked = vec![];
@@ -64,7 +63,11 @@ impl PoolState {
         // Sort ids lexicographically so that injections are deterministic.
         all_node_ids.sort_unstable();
 
-        let mut idx: usize = 0;
+        let mut idx: usize = if all_node_ids.len() > 0 {
+            all_node_ids.len() - 1
+        } else {
+            0
+        };
 
         // For each node id, fork a stamp and insert it to
         // the validator pool.
@@ -108,7 +111,10 @@ impl PoolState {
                     // Update the stamp of the validator state
                     validator_state.allowed_to_send = true;
                     validator_state.latest_stamp = stamp;
-                    idx += 1;
+
+                    if idx > 0 {
+                        idx -= 1;
+                    }
 
                     break;
                 } else {
@@ -124,5 +130,43 @@ impl PoolState {
 
         // Inject allocated events
         self.remaining_blocks = allocated;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_assigns_correct_indexes() {
+        let mut node_ids: Vec<NodeId> = (0..10)
+            .into_iter()
+            .map(|_| {
+                let (pk, _) = crypto::gen_keypair();
+                NodeId::from_pkey(pk)
+            })
+            .collect();
+
+        node_ids.sort_unstable();
+        
+        let ids_hm = node_ids
+            .iter()
+            .cloned()
+            .map(|id| (id, 500))
+            .collect();
+
+        let mut pool_state = PoolState::new(0, 1000);
+        pool_state.inject(&ids_hm, 500);
+
+        assert_eq!(pool_state.validators.get(&node_ids[0]).unwrap().validator_idx, 0);
+        assert_eq!(pool_state.validators.get(&node_ids[1]).unwrap().validator_idx, 1);
+        assert_eq!(pool_state.validators.get(&node_ids[2]).unwrap().validator_idx, 2);
+        assert_eq!(pool_state.validators.get(&node_ids[3]).unwrap().validator_idx, 3);
+        assert_eq!(pool_state.validators.get(&node_ids[4]).unwrap().validator_idx, 4);
+        assert_eq!(pool_state.validators.get(&node_ids[5]).unwrap().validator_idx, 5);
+        assert_eq!(pool_state.validators.get(&node_ids[6]).unwrap().validator_idx, 6);
+        assert_eq!(pool_state.validators.get(&node_ids[7]).unwrap().validator_idx, 7);
+        assert_eq!(pool_state.validators.get(&node_ids[8]).unwrap().validator_idx, 8);
+        assert_eq!(pool_state.validators.get(&node_ids[9]).unwrap().validator_idx, 9);
     }
 }

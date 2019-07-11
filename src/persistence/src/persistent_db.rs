@@ -16,6 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::init::*;
 use common::{Checkpointable, StorageLocation};
 use crypto::Hash;
 use elastic_array::ElasticArray128;
@@ -33,6 +34,10 @@ pub fn cf_options() -> Options {
 }
 
 pub fn db_options() -> Options {
+    if !is_initialized() {
+        panic!("Persistence module not initialized! Call `persistence::init()` before using anything");
+    }
+
     let mut opts = Options::default();
     opts.increase_parallelism(num_cpus::get() as i32);
     opts.create_if_missing(true);
@@ -56,20 +61,24 @@ pub fn db_options() -> Options {
 }
 
 #[derive(PartialEq, Clone)]
-enum Operation {
+pub enum Operation {
     Remove,
     Put(Vec<u8>),
 }
 
 #[derive(Clone)]
 pub struct PersistentDb {
-    db_ref: Option<Arc<DB>>,
-    cf_name: Option<&'static str>,
-    memory_db: HashMap<Vec<u8>, Operation>,
+    pub db_ref: Option<Arc<DB>>,
+    pub cf_name: Option<&'static str>,
+    pub memory_db: HashMap<Vec<u8>, Operation>,
 }
 
 impl PersistentDb {
     pub fn new(db_ref: Arc<DB>, cf_name: Option<&'static str>) -> PersistentDb {
+        if !is_initialized() {
+            panic!("Persistence module not initialized! Call `persistence::init()` before using anything");
+        }
+
         PersistentDb {
             db_ref: Some(db_ref),
             cf_name,

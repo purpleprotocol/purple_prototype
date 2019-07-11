@@ -19,6 +19,7 @@
 use crate::block::Block;
 use crate::chain::ChainErr;
 use crate::hard_chain::block::HardBlock;
+use crate::state_chain::state::ChainState;
 use events::Event;
 use account::NormalAddress;
 use crypto::PublicKey;
@@ -108,13 +109,13 @@ impl HashTrait for StateBlock {
 }
 
 impl Block for StateBlock {
-    type ChainState = PersistentDb;
+    type ChainState = ChainState;
 
     fn genesis() -> Arc<StateBlock> {
         GENESIS_RC.clone()
     }
 
-    fn genesis_state() -> PersistentDb {
+    fn genesis_state() -> ChainState {
         unimplemented!();
     }
 

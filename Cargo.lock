@@ -247,6 +247,7 @@ dependencies = [
  "byteorder 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "common 0.1.0",
+ "consensus 0.1.0",
  "crypto 0.1.0",
  "elastic-array 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "events 0.1.0",
@@ -327,12 +328,10 @@ name = "consensus"
 version = "0.1.0"
 dependencies = [
  "causality 0.1.0",
- "chain 0.1.0",
  "crypto 0.1.0",
  "events 0.1.0",
  "graphlib 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)",
- "network 0.1.0",
  "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "recursive 0.1.0",
@@ -1411,6 +1410,7 @@ dependencies = [
  "elastic-array 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)",
  "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "mimalloc 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.10.1 (registry+https://github.com/rust-lang/crates.io-index)",

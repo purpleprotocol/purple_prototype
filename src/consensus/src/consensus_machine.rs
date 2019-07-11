@@ -69,8 +69,7 @@ impl ConsensusMachine {
     }
 
     /// Performs an injection of new validators and allocated
-    /// blocks that the whole pool can produce. Note that this
-    /// function does not check for duplicate node ids.
+    /// blocks that the whole pool can produce. 
     pub fn inject(&mut self, validator_set: &HashMap<NodeId, u64>, allocated: u64) {
         self.causal_graph.pool_state.inject(validator_set, allocated);
     }

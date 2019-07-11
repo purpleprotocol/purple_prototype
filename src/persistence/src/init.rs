@@ -16,6 +16,27 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod block;
-pub mod chain;
-pub mod state;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static INITIALIZED: AtomicBool = AtomicBool::new(false);
+pub(crate) static mut WORKING_DIR: Option<PathBuf> = None;
+
+/// This function must be called in `fn main()` at the beginning
+/// in order to initialize database paths.
+pub fn init(working_dir: PathBuf) {
+    unsafe {
+        // Set working dir
+        WORKING_DIR = Some(working_dir);
+    }
+
+    // Flag as initialized
+    INITIALIZED.store(true, Ordering::Relaxed);
+}
+
+/// Returns `true` if the persistence module is initialized
+pub fn is_initialized() -> bool {
+    unsafe {
+        INITIALIZED.load(Ordering::Relaxed) && WORKING_DIR.is_some()
+    }
+}

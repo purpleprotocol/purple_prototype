@@ -30,3 +30,4 @@ pub use candidate::*;
 pub use consensus_machine::*;
 pub use validation::*;
 pub use validator_state::*;
+pub use pool_state::*;

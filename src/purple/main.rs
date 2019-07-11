@@ -59,6 +59,7 @@ use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use futures::sync::mpsc::channel;
 use std::sync::Arc;
+use std::path::PathBuf;
 
 // Use mimalloc allocator
 #[global_allocator]
@@ -75,7 +76,12 @@ fn main() {
     info!("Opening databases...");
 
     let argv = parse_cli_args();
-    let db = Arc::new(open_database(&argv.network_name));
+    let db_path = get_db_path(&argv.network_name);
+
+    // Initialize persistence
+    persistence::init(db_path.clone());
+
+    let db = Arc::new(open_database(&db_path));
 
     let mut node_storage = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[3]));
     let state_db = PersistentDb::new(db.clone(), None);
@@ -94,7 +100,7 @@ fn main() {
     )));
     let state_chain = Arc::new(RwLock::new(StateChain::new(
         state_chain_db,
-        state_db,
+        ChainState::new(state_db),
         argv.archival_mode,
     )));
     let easy_chain = EasyChainRef::new(easy_chain);
@@ -179,12 +185,14 @@ fn fetch_credentials(db: &mut PersistentDb) -> (NodeId, Sk) {
     }
 }
 
-fn open_database(network_name: &str) -> DB {
-    let path = Path::new(&dirs::home_dir().unwrap())
+fn get_db_path(network_name: &str) -> PathBuf {
+    Path::new(&dirs::home_dir().unwrap())
         .join("purple")
         .join(network_name)
-        .join("db");
+        .join("db")
+}
 
+fn open_database(path: &PathBuf) -> DB {
     let mut cfs: Vec<ColumnFamilyDescriptor> = Vec::with_capacity(COLUMN_FAMILIES.len());
 
     for cf in COLUMN_FAMILIES {
