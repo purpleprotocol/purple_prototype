@@ -44,5 +44,8 @@ pub enum VmError {
     Infinity,
 
     /// Divide by zero
-    DivideByZero
+    DivideByZero,
+
+    /// Used signed (negative) operands on an Unsigned operation
+    UnsignedOperationSignedOperand,
 }

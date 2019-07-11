@@ -500,27 +500,27 @@ impl Vm {
                         ip.increment();
                     }
                     Some(Instruction::Sub) => {
-                        perform_substraction(Instruction::Sub, &mut self.operand_stack);
+                        perform_substraction(Instruction::Sub, &mut self.operand_stack)?;
                         ip.increment();
                     }
                     Some(Instruction::Mul) => {
-                        perform_multiplication(Instruction::Mul, &mut self.operand_stack);
+                        perform_multiplication(Instruction::Mul, &mut self.operand_stack)?;
                         ip.increment();
                     }
                     Some(Instruction::DivSigned) => {
-                        perform_div_signed(Instruction::DivSigned, &mut self.operand_stack);
+                        perform_div_signed(Instruction::DivSigned, &mut self.operand_stack)?;
                         ip.increment();
                     }
                     Some(Instruction::DivUnsigned) => {
-                        perform_div_unsigned(Instruction::DivUnsigned, &mut self.operand_stack);
+                        perform_div_unsigned(Instruction::DivUnsigned, &mut self.operand_stack)?;
                         ip.increment();
                     }
                     Some(Instruction::RemSigned) => {
-                        perform_rem_signed(Instruction::RemSigned, &mut self.operand_stack);
+                        perform_rem_signed(Instruction::RemSigned, &mut self.operand_stack)?;
                         ip.increment();
                     }
                     Some(Instruction::RemUnsigned) => {
-                        perform_rem_unsigned(Instruction::RemUnsigned, &mut self.operand_stack);
+                        perform_rem_unsigned(Instruction::RemUnsigned, &mut self.operand_stack)?;
                         ip.increment();
                     }
                     Some(Instruction::Min) => {
@@ -3043,7 +3043,7 @@ fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Resu
     Ok(())
 }
 
-fn perform_substraction(op: Instruction, operand_stack: &mut Stack<VmValue>) {
+fn perform_substraction(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError>  {
     let len = operand_stack.len();
 
     if len != 2 {
@@ -3062,35 +3062,27 @@ fn perform_substraction(op: Instruction, operand_stack: &mut Stack<VmValue>) {
                 buf.push(operand_stack.pop());
             }
 
-            // let mut a = operand_stack.pop();
-            // let b = operand_stack.pop();
-            // a -= b;
-
-            // NOT RIGHT THE ELSE CASE
             // Perform substraction
-            let result = buf.iter().fold(None, |acc: Option<VmValue>, x| {
-                if let Some(acc) = acc {
-                    Some(acc - *x)
-                } else {
-                    Some(*x)
-                }
-            });
+            let mut result = operand_stack.pop();
+            let to_substract = operand_stack.pop();
+            result = match result - to_substract{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
 
             // Push result back to operand stack
-            if let Some(result) = result {
                 operand_stack.push(result);
-            } else {
-                unreachable!();
-            }
         }
         _ => panic!(format!(
             "Must receive a substraction instruction! Got: {:?}",
             op
         )),
     };
+
+    Ok(())
 }
 
-fn perform_multiplication(op: Instruction, operand_stack: &mut Stack<VmValue>) {
+fn perform_multiplication(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError>  {
     let len = operand_stack.len();
 
     if len < 2 {
@@ -3110,26 +3102,188 @@ fn perform_multiplication(op: Instruction, operand_stack: &mut Stack<VmValue>) {
             }
 
             // Perform multiplication
-            let result = buf.iter().fold(None, |acc: Option<VmValue>, x| {
-                if let Some(acc) = acc {
-                    Some(acc * *x)
-                } else {
-                    Some(*x)
+            let mut result: VmValue = buf[0];
+            for i in 1..buf.len(){
+                result = match result * buf[i] {
+                    Ok(res) => res,
+                    Err(err) => return Err(err)
                 }
-            });
+            }
 
             // Push result back to operand stack
-            if let Some(result) = result {
-                operand_stack.push(result);
-            } else {
-                unreachable!();
-            }
+            operand_stack.push(result);
         }
         _ => panic!(format!(
             "Must receive an multiplication instruction! Got: {:?}",
             op
         )),
     };
+
+    Ok(())
+}
+
+fn perform_div_signed(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+    let len = operand_stack.len();
+
+    if len != 2 {
+        panic!(format!(
+            "Cannot perform signed division on {} operands! Must be 2!",
+            len
+        ));
+    }
+
+    match op {
+        Instruction::DivSigned => {
+            let mut buf: Vec<VmValue> = Vec::with_capacity(len);
+
+            // Move items from operand stack to buffer
+            for _ in 0..len {
+                buf.push(operand_stack.pop());
+            }
+
+            // Perform signed division
+            let mut result = operand_stack.pop();
+            let to_divide = operand_stack.pop();
+            result = match result / to_divide{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+
+            // Push result back to operand stack
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive an signed division instruction! Got: {:?}",
+            op
+        )),
+    };
+
+    Ok(())
+}
+
+fn perform_div_unsigned(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+    let len = operand_stack.len();
+
+    if len != 2 {
+        panic!(format!(
+            "Cannot perform unsigned division on {} operands! Must be 2!",
+            len
+        ));
+    }
+
+    match op {
+        Instruction::DivUnsigned => {
+            let mut buf: Vec<VmValue> = Vec::with_capacity(len);
+
+            // Move items from operand stack to buffer
+            for _ in 0..len {
+                let operand: VmValue = operand_stack.pop();
+                if !operand.is_positive(){
+                    return Err(VmError::UnsignedOperationSignedOperand)
+                }else{
+                    buf.push(operand);
+                }
+            }
+
+            // Perform unsigned division
+            let mut result = operand_stack.pop();
+            let to_divide = operand_stack.pop();
+            result = match result / to_divide{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+
+            // Push result back to operand stack
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive an unsigned division instruction! Got: {:?}",
+            op
+        )),
+    };
+
+    Ok(())
+}
+fn perform_rem_signed(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+    let len = operand_stack.len();
+
+    if len != 2 {
+        panic!(format!(
+            "Cannot perform signed remainder instruction on {} operands! Must be 2!",
+            len
+        ));
+    }
+
+    match op {
+        Instruction::RemSigned => {
+            let mut buf: Vec<VmValue> = Vec::with_capacity(len);
+
+            // Move items from operand stack to buffer
+            for _ in 0..len {
+                buf.push(operand_stack.pop());
+            }
+
+            // Perform signed remainder
+            let mut result = operand_stack.pop();
+            let to_divide = operand_stack.pop();
+            result = match result % to_divide{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+
+            // Push result back to operand stack
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive signed remainder instruction! Got: {:?}",
+            op
+        )),
+    };
+
+    Ok(())
+}
+fn perform_rem_unsigned(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+    let len = operand_stack.len();
+
+    if len != 2 {
+        panic!(format!(
+            "Cannot perform unsigned remainder instruction on {} operands! Must be 2!",
+            len
+        ));
+    }
+
+    match op {
+        Instruction::RemUnsigned => {
+            let mut buf: Vec<VmValue> = Vec::with_capacity(len);
+
+            // Move items from operand stack to buffer
+            for _ in 0..len {
+                let operand: VmValue = operand_stack.pop();
+                if !operand.is_positive(){
+                    return Err(VmError::UnsignedOperationSignedOperand)
+                }else{
+                    buf.push(operand);
+                }
+            }
+
+            // Perform unsigned remainder
+            let mut result = operand_stack.pop();
+            let to_divide = operand_stack.pop();
+            result = match result % to_divide{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+
+            // Push result back to operand stack
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive unsigned remainder instruction! Got: {:?}",
+            op
+        )),
+    };
+
+    Ok(())
 }
 
 fn perform_min(op: Instruction, operand_stack: &mut Stack<VmValue>) {
@@ -3196,19 +3350,6 @@ fn perform_max(op: Instruction, operand_stack: &mut Stack<VmValue>) {
             op
         )),
     };
-}
-
-fn perform_div_signed(op: Instruction, operand_stack: &mut Stack<VmValue>){
-    unimplemented!();
-}
-fn perform_div_unsigned(op: Instruction, operand_stack: &mut Stack<VmValue>){
-    unimplemented!();
-}
-fn perform_rem_signed(op: Instruction, operand_stack: &mut Stack<VmValue>){
-    unimplemented!();
-}
-fn perform_rem_unsigned(op: Instruction, operand_stack: &mut Stack<VmValue>){
-    unimplemented!();
 }
 
 #[cfg(test)]
