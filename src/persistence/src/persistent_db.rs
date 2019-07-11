@@ -323,7 +323,9 @@ mod tests {
     #[test]
     fn it_inserts_data() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().to_str().unwrap();
+        init(dir.path().to_path_buf());
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -336,7 +338,9 @@ mod tests {
     #[test]
     fn it_emplaces_data() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().to_str().unwrap();
+        init(dir.path().to_path_buf());
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let key = crypto::hash_slice(b"the_key");
@@ -350,7 +354,9 @@ mod tests {
     #[test]
     fn contains() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().to_str().unwrap();
+        init(dir.path().to_path_buf());
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -363,7 +369,9 @@ mod tests {
     #[test]
     fn remove() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().to_str().unwrap();
+        init(dir.path().to_path_buf());
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -381,7 +389,9 @@ mod tests {
     #[test]
     fn it_keeps_last_operation_per_key() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().to_str().unwrap();
+        init(dir.path().to_path_buf());
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -399,7 +409,9 @@ mod tests {
     #[test]
     fn it_looks_into_pending_transactions() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().to_str().unwrap();
+        init(dir.path().to_path_buf());
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -420,7 +432,9 @@ mod tests {
     #[test]
     fn it_doesnt_write_until_flush() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().to_str().unwrap();
+        init(dir.path().to_path_buf());
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -435,7 +449,9 @@ mod tests {
     #[test]
     fn wipe_works() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().to_str().unwrap();
+        init(dir.path().to_path_buf());
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";

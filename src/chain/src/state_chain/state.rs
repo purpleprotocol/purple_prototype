@@ -16,7 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use persistence::PersistentDb;
+use persistence::{PersistentDb, STATE_REGISTRY};
 use common::{StorageLocation, Checkpointable};
 use consensus::PoolState;
 

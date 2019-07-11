@@ -106,6 +106,9 @@ use hashbrown::HashMap;
 use persistence::PersistentDb;
 
 #[cfg(test)]
+use chain::ChainState;
+
+#[cfg(test)]
 use chain::*;
 
 #[cfg(test)]
@@ -149,7 +152,7 @@ pub fn init_test_networks(
                     DummyCheckpoint::genesis(),
                     true,
                 ))),
-                Arc::new(RwLock::new(StateChain::new(db3, db4, true))),
+                Arc::new(RwLock::new(StateChain::new(db3, ChainState::new(db4), true))),
             )
         })
         .map(|(easy, hard, state)| {

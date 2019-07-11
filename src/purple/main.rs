@@ -76,13 +76,13 @@ fn main() {
     info!("Opening databases...");
 
     let argv = parse_cli_args();
-    let db_path = get_db_path(&argv.network_name);
+    let storage_path = get_storage_path(&argv.network_name);
+    let db_path = storage_path.join("current_db");
 
     // Initialize persistence
-    persistence::init(db_path.clone());
+    persistence::init(storage_path);
 
     let db = Arc::new(open_database(&db_path));
-
     let mut node_storage = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[3]));
     let state_db = PersistentDb::new(db.clone(), None);
     let state_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[0]));
@@ -185,11 +185,10 @@ fn fetch_credentials(db: &mut PersistentDb) -> (NodeId, Sk) {
     }
 }
 
-fn get_db_path(network_name: &str) -> PathBuf {
+fn get_storage_path(network_name: &str) -> PathBuf {
     Path::new(&dirs::home_dir().unwrap())
         .join("purple")
         .join(network_name)
-        .join("db")
 }
 
 fn open_database(path: &PathBuf) -> DB {

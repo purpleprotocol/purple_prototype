@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use parking_lot::Mutex;
 
 lazy_static! {
-    static ref STATE_REGISTRY: Mutex<StateRegistry> = {
+    pub static ref STATE_REGISTRY: Mutex<StateRegistry> = {
         if !is_initialized() {
             panic!("Persistence module not initialized! Call `persistence::init()` before using anything");
         }

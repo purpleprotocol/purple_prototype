@@ -23,7 +23,8 @@ static INITIALIZED: AtomicBool = AtomicBool::new(false);
 pub(crate) static mut WORKING_DIR: Option<PathBuf> = None;
 
 /// This function must be called in `fn main()` at the beginning
-/// in order to initialize database paths.
+/// in order to initialize database paths. Note that this function
+/// **IS NOT** thread-safe.
 pub fn init(working_dir: PathBuf) {
     unsafe {
         // Set working dir
