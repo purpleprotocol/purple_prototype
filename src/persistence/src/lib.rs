@@ -23,6 +23,8 @@ extern crate test;
 extern crate ansi_term;
 use test::{TestName, TestFn, TestDescAndFn};
 use ansi_term::Colour::Green;
+use std::path::PathBuf;
+use rocksdb::DB;
 
 fn test_runner(tests: &[&TestDescAndFn]) {
     for t in tests {
@@ -39,6 +41,14 @@ fn test_runner(tests: &[&TestDescAndFn]) {
             panic!("");
         }
     }
+}
+
+pub fn open_database(path: &PathBuf) -> DB {
+    DB::open(&crate::db_options(), path.to_str().unwrap()).unwrap()
+}
+
+pub(crate) fn open_database_no_checks(path: &PathBuf) -> DB {
+    DB::open(&crate::db_options_no_checks(), path.to_str().unwrap()).unwrap()
 }
 
 #[cfg(test)]

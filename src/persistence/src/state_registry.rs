@@ -18,7 +18,10 @@
 
 use crate::persistent_db::PersistentDb;
 use crate::init::*;
+use std::sync::Arc;
 use std::path::PathBuf;
+use rocksdb::DB;
+use rocksdb::checkpoint::Checkpoint;
 use parking_lot::Mutex;
 
 lazy_static! {
@@ -51,5 +54,20 @@ impl StateRegistry {
             latest_id: 0, // TODO: Load this from a database
             working_dir,
         }
+    }
+
+    // TODO: Maybe return a `Result`.
+    pub fn checkpoint(&mut self, db_ref: Arc<DB>) -> u64 {
+        let working_dir = unsafe {
+            WORKING_DIR.clone().unwrap()
+        };
+
+        let next_id = self.latest_id + 1;
+        let checkpoint = Checkpoint::new(db_ref.as_ref()).unwrap();
+        let checkpoint_path = working_dir.join(&format!("{}", next_id));
+        checkpoint.create_checkpoint(checkpoint_path).unwrap();
+
+        self.latest_id = next_id;
+        next_id
     }
 }

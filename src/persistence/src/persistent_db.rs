@@ -60,6 +60,29 @@ pub fn db_options() -> Options {
     opts
 }
 
+pub(crate) fn db_options_no_checks() -> Options {
+    let mut opts = Options::default();
+    opts.increase_parallelism(num_cpus::get() as i32);
+    opts.create_if_missing(true);
+    opts.create_missing_column_families(true);
+    opts.set_max_open_files(10000);
+    opts.set_use_fsync(false);
+    opts.set_bytes_per_sync(8388608);
+    opts.optimize_for_point_lookup(1024);
+    opts.set_table_cache_num_shard_bits(6);
+    opts.set_max_write_buffer_number(32);
+    opts.set_write_buffer_size(536870912);
+    opts.set_target_file_size_base(1073741824);
+    opts.set_min_write_buffer_number_to_merge(4);
+    opts.set_level_zero_stop_writes_trigger(2000);
+    opts.set_level_zero_slowdown_writes_trigger(0);
+    opts.set_compaction_style(DBCompactionStyle::Universal);
+    opts.set_max_background_compactions(4);
+    opts.set_max_background_flushes(4);
+    opts.set_disable_auto_compactions(true);
+    opts
+}
+
 #[derive(PartialEq, Clone)]
 pub enum Operation {
     Remove,
@@ -79,6 +102,14 @@ impl PersistentDb {
             panic!("Persistence module not initialized! Call `persistence::init()` before using anything");
         }
 
+        PersistentDb {
+            db_ref: Some(db_ref),
+            cf_name,
+            memory_db: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn new_without_checks(db_ref: Arc<DB>, cf_name: Option<&'static str>) -> PersistentDb {
         PersistentDb {
             db_ref: Some(db_ref),
             cf_name,
@@ -323,7 +354,8 @@ mod tests {
     #[test]
     fn it_inserts_data() {
         let dir = TempDir::new("purple_test").unwrap();
-        let path = dir.path().to_str().unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
         init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
@@ -338,7 +370,8 @@ mod tests {
     #[test]
     fn it_emplaces_data() {
         let dir = TempDir::new("purple_test").unwrap();
-        let path = dir.path().to_str().unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
         init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
@@ -354,7 +387,8 @@ mod tests {
     #[test]
     fn contains() {
         let dir = TempDir::new("purple_test").unwrap();
-        let path = dir.path().to_str().unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
         init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
@@ -369,7 +403,8 @@ mod tests {
     #[test]
     fn remove() {
         let dir = TempDir::new("purple_test").unwrap();
-        let path = dir.path().to_str().unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
         init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
@@ -389,7 +424,8 @@ mod tests {
     #[test]
     fn it_keeps_last_operation_per_key() {
         let dir = TempDir::new("purple_test").unwrap();
-        let path = dir.path().to_str().unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
         init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
@@ -409,7 +445,8 @@ mod tests {
     #[test]
     fn it_looks_into_pending_transactions() {
         let dir = TempDir::new("purple_test").unwrap();
-        let path = dir.path().to_str().unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
         init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
@@ -432,7 +469,8 @@ mod tests {
     #[test]
     fn it_doesnt_write_until_flush() {
         let dir = TempDir::new("purple_test").unwrap();
-        let path = dir.path().to_str().unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
         init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
@@ -449,7 +487,8 @@ mod tests {
     #[test]
     fn wipe_works() {
         let dir = TempDir::new("purple_test").unwrap();
-        let path = dir.path().to_str().unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
         init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);

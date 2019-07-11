@@ -65,29 +65,34 @@ use std::path::PathBuf;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
-const COLUMN_FAMILIES: &'static [&'static str] =
-    &["state_chain", "easy_chain", "hard_chain", "node_storage"];
 
 fn main() {
     env_logger::init();
 
-    info!("Opening databases...");
+    info!("Initializing database...");
 
     let argv = parse_cli_args();
     let storage_path = get_storage_path(&argv.network_name);
-    let db_path = storage_path.join("current_db");
+    let storage_db_path = storage_path.join("node_storage");
+    let state_db_path = storage_path.join("state_db");
+    let state_chain_db_path = storage_path.join("state_chain_db");
+    let hard_chain_db_path = storage_path.join("hard_chain_db");
+    let easy_chain_db_path = storage_path.join("easy_chain_db");
 
     // Initialize persistence
     persistence::init(storage_path);
 
-    let db = Arc::new(open_database(&db_path));
-    let mut node_storage = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[3]));
-    let state_db = PersistentDb::new(db.clone(), None);
-    let state_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[0]));
-    let easy_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[1]));
-    let hard_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[2]));
+    let storage_db = Arc::new(persistence::open_database(&storage_db_path));
+    let state_db = Arc::new(persistence::open_database(&state_db_path));
+    let state_chain_db = Arc::new(persistence::open_database(&state_chain_db_path));
+    let hard_chain_db = Arc::new(persistence::open_database(&hard_chain_db_path));
+    let easy_chain_db = Arc::new(persistence::open_database(&easy_chain_db_path));
+    let mut node_storage = PersistentDb::new(storage_db.clone(), None);
+    let state_db = PersistentDb::new(state_db.clone(), None);
+    let state_chain_db = PersistentDb::new(state_chain_db.clone(), None);
+    let easy_chain_db = PersistentDb::new(easy_chain_db.clone(), None);
+    let hard_chain_db = PersistentDb::new(hard_chain_db.clone(), None);
     let easy_chain = Arc::new(RwLock::new(EasyChain::new(
         easy_chain_db,
         DummyCheckpoint::genesis(),
@@ -103,6 +108,9 @@ fn main() {
         ChainState::new(state_db),
         argv.archival_mode,
     )));
+
+    info!("Database initialization was successful!");
+
     let easy_chain = EasyChainRef::new(easy_chain);
     let hard_chain = HardChainRef::new(hard_chain);
     let state_chain = StateChainRef::new(state_chain);
@@ -189,19 +197,6 @@ fn get_storage_path(network_name: &str) -> PathBuf {
     Path::new(&dirs::home_dir().unwrap())
         .join("purple")
         .join(network_name)
-}
-
-fn open_database(path: &PathBuf) -> DB {
-    let mut cfs: Vec<ColumnFamilyDescriptor> = Vec::with_capacity(COLUMN_FAMILIES.len());
-
-    for cf in COLUMN_FAMILIES {
-        cfs.push(ColumnFamilyDescriptor::new(
-            cf.to_owned(),
-            persistence::cf_options(),
-        ));
-    }
-
-    DB::open_cf_descriptors(&persistence::db_options(), path.to_str().unwrap(), cfs).unwrap()
 }
 
 struct Argv {
