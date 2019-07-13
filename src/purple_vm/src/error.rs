@@ -48,4 +48,7 @@ pub enum VmError {
 
     /// Used signed (negative) operands on an Unsigned operation
     UnsignedOperationSignedOperand,
+
+    /// An assertion has failed
+    AssertionFailed,
 }

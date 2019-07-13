@@ -495,6 +495,16 @@ impl Vm {
                             panic!("Invalid instruction after `BreakIf`. Expected a comparison operator!");
                         }
                     }
+                    Some(Instruction::Eq) => {
+                        let os = self.operand_stack.to_vec();
+                        
+                        // Perform assertion
+                        if perform_comparison(Instruction::Eq, os) { 
+                            ip.increment();
+                        } else {
+                            return Err(VmError::AssertionFailed);
+                        }
+                    }
                     Some(Instruction::Add) => {
                         perform_addition(Instruction::Add, &mut self.operand_stack)?;
                         ip.increment();
@@ -4657,6 +4667,112 @@ mod tests {
         vm.load(module).unwrap();
         let result = vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap());
 
+        assert_eq!(result, Err(VmError::Overflow));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_addition() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x0a,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x0b,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: None,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap();
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_overflows_addition() {
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x7f,
+            0xff,
+            0xff,
+            0xff,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: None,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        let result = vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap());
         assert_eq!(result, Err(VmError::Overflow));
     }
 }

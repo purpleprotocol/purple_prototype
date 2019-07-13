@@ -76,6 +76,10 @@ impl<T: fmt::Debug + Clone> Stack<T> {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    pub fn to_vec(&self) -> Vec<T> {
+        self.0.clone()
+    }
 }
 
 #[cfg(test)]
