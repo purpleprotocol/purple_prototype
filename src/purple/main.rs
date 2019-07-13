@@ -60,6 +60,7 @@ use std::sync::atomic::AtomicBool;
 use futures::sync::mpsc::channel;
 use std::sync::Arc;
 use std::path::PathBuf;
+use std::fs;
 
 // Use mimalloc allocator
 #[global_allocator]
@@ -70,10 +71,18 @@ const DEFAULT_NETWORK_NAME: &'static str = "purple";
 fn main() {
     env_logger::init();
 
-    info!("Initializing database...");
-
     let argv = parse_cli_args();
     let storage_path = get_storage_path(&argv.network_name);
+
+    // Wipe database
+    if argv.wipe {
+        info!("Deleting database...");
+        fs::remove_dir_all(&storage_path).unwrap();
+        info!("Database deleted!");
+    }
+
+    info!("Initializing database...");
+
     let storage_db_path = storage_path.join("node_storage");
     let state_db_path = storage_path.join("state_db");
     let state_chain_db_path = storage_path.join("state_chain_db");
@@ -208,6 +217,8 @@ struct Argv {
     archival_mode: bool,
     mine_easy: bool,
     mine_hard: bool,
+    wipe: bool,
+    keep_blocks: usize,
 }
 
 fn parse_cli_args() -> Argv {
@@ -262,9 +273,21 @@ fn parse_cli_args() -> Argv {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("wipe")
+                .long("wipe")
+                .help("Wipe the database before starting the node, forcing it to re-sync."),
+        )
+        .arg(
             Arg::with_name("prune")
                 .long("prune")
                 .help("Whether to prune the ledger or to keep the entire transaction history. False by default."),
+        )
+        .arg(
+            Arg::with_name("keep_blocks")
+                .long("keep-blocks")
+                .value_name("BLOCKS")
+                .requires("prune")
+                .help("How many blocks to keep when in prune mode")
         )
         .get_matches();
 
@@ -286,11 +309,24 @@ fn parse_cli_args() -> Argv {
         8
     };
 
+    let keep_blocks: usize = if let Some(arg) = matches.value_of("keep_blocks") {
+        let result = unwrap!(arg.parse(), "Bad value for <BLOCKS>");
+
+        if result < 10 {
+            panic!("Invalid value for <BLOCKS>! Minimum blocks required to keep is 10 when in prune mode!");
+        } else {
+            result
+        }
+    } else {
+        100
+    };
+
     let archival_mode: bool = !matches.is_present("prune");
     let mine_easy: bool = matches.is_present("mine_easy");
     let mine_hard: bool = matches.is_present("mine_hard");
     let no_mempool: bool = matches.is_present("no_mempool");
     let interactive: bool = matches.is_present("interactive");
+    let wipe: bool = matches.is_present("wipe");
 
     Argv {
         network_name,
@@ -301,5 +337,7 @@ fn parse_cli_args() -> Argv {
         interactive,
         mempool_size,
         archival_mode,
+        keep_blocks,
+        wipe,
     }
 }

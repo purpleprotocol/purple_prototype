@@ -17,6 +17,7 @@
 */
 
 use crate::init::*;
+use crate::state_registry::STATE_REGISTRY;
 use common::{Checkpointable, StorageLocation};
 use crypto::Hash;
 use elastic_array::ElasticArray128;

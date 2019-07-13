@@ -20,6 +20,9 @@ serde = "1.0.91"
 num = "0.2"
 crypto = { path = "../crypto" }
 
+[dev-dependencies]
+quickcheck = "0.7.2"
+
 [build-dependencies]
 cmake = "0.1.24"
 fs_extra = "1.1.0"

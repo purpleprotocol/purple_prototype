@@ -19,8 +19,12 @@
 #![feature(custom_test_frameworks, test)]
 #![test_runner(test_runner)]
 
+#[macro_use] extern crate bin_tools;
+
+extern crate byteorder;
 extern crate test;
 extern crate ansi_term;
+
 use test::{TestName, TestFn, TestDescAndFn};
 use ansi_term::Colour::Green;
 use std::path::PathBuf;

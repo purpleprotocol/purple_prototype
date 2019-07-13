@@ -18,6 +18,8 @@ hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde
 crypto = { path = "../crypto" }
 log = "0.4.0"
 ansi_term = "0.9"
+byteorder = "1.2.7"
+bin-tools = { path = "../util/bin-tools" }
 
 [dev-dependencies]
 mimalloc = "0.1.3"

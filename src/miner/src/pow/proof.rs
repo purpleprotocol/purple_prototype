@@ -96,7 +96,7 @@ impl Proof {
                 let mut stop = false;
 
                 // Traverse bits
-                for i in 0..9 {
+                for i in 0..8 {
                     if byte.get(i) {
                         stop = true;
                         break;
@@ -120,10 +120,13 @@ impl Proof {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck::*;
 
-    #[test]
-    fn it_maps_proof_to_difficulty() {
-        let proof = Proof::random(PROOF_SIZE);
-        let difficulty = proof.to_difficulty();
+    quickcheck! {
+        fn it_maps_proof_to_difficulty() -> bool {
+            let proof = Proof::random(PROOF_SIZE);
+            let difficulty = proof.to_difficulty();
+            true
+        }
     }
 }
