@@ -22,13 +22,20 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
+
+/// Directory containing checkpoints
 pub(crate) static mut WORKING_DIR: Option<PathBuf> = None;
+
+/// How many checkpoints to keep
+pub(crate) static mut KEEP_CHECKPOINTS: Option<usize> = None;
+
+/// Internal database
 pub(crate) static mut REGISTRY_DB: Option<PersistentDb> = None;
 
 /// This function must be called in `fn main()` at the beginning
 /// in order to initialize database paths. Note that this function
 /// **IS NOT** thread-safe.
-pub fn init(working_dir: PathBuf) {
+pub fn init(working_dir: PathBuf, keep_checkpoints: usize) {
     unsafe {
         let registry_db_path = working_dir.join("registry_db");
         let registry_db = crate::open_database_no_checks(&registry_db_path);
@@ -39,6 +46,9 @@ pub fn init(working_dir: PathBuf) {
 
         // Set working dir
         WORKING_DIR = Some(working_dir);
+
+        // Set checkpoints to keep
+        KEEP_CHECKPOINTS = Some(keep_checkpoints);
     }
 
     // Flag as initialized

@@ -90,7 +90,7 @@ fn main() {
     let easy_chain_db_path = storage_path.join("easy_chain_db");
 
     // Initialize persistence
-    persistence::init(storage_path);
+    persistence::init(storage_path, 10); // TODO: Calculate this
 
     let storage_db = Arc::new(persistence::open_database(&storage_db_path));
     let state_db = Arc::new(persistence::open_database(&state_db_path));
