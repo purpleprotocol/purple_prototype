@@ -347,10 +347,33 @@ impl AsHashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, nightly))]
 mod tests {
+    #![feature(custom_test_frameworks, test)]
+    #![test_runner(test_runner)]
+
+    extern crate test;
+
     use super::*;
     use tempdir::TempDir;
+    use test::{TestName, TestFn, TestDescAndFn};
+
+    fn test_runner(tests: &[&TestDescAndFn]) {
+        for t in tests {
+            if let TestFn::StaticTestFn(fun) = t.testfn {
+                fun();
+                let test_name = if let TestName::StaticTestName(name) = t.desc.name {
+                    name
+                } else {
+                    panic!("No static test name");
+                };
+
+                println!("test {} ... {}", test_name, Green.paint("ok"));
+            } else {
+                panic!("");
+            }
+        }
+    }
 
     #[test]
     fn it_inserts_data() {
