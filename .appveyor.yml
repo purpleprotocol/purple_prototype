@@ -1,13 +1,14 @@
 os: Visual Studio 2015
 
 environment:
+  RUST_BACKTRACE: 1
   matrix:
 
 ### MSVC Toolchains ###
 
   # Stable 64-bit MSVC
-    # - channel: stable
-    #   target: x86_64-pc-windows-msvc
+    - channel: stable
+      target: x86_64-pc-windows-msvc
   # # Stable 32-bit MSVC
   #   - channel: stable
   #     target: i686-pc-windows-msvc
@@ -60,9 +61,10 @@ install:
   - rustc -vV
   - cargo -vV
 
-build: false
-
 test_script:
   - git submodule update --init --recursive
   - cargo test --verbose --all %cargoflags%
+
+build_script:
+  - git submodule update --init --recursive
   - cargo build --verbose %cargoflags%
