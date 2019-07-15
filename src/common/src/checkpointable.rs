@@ -34,7 +34,11 @@ pub enum StorageLocation {
 pub trait Checkpointable: Sized + Debug + Clone {
     /// Creates a checkpoint of the current state and 
     /// returns the checkpoint id associated with it.
-    fn checkpoint(&self) -> u64;
+    fn checkpoint(&self, height: u64) -> u64;
+
+    /// Returns a vector containing existing checkpoint ids and
+    /// their corresponding height if there are any listed.
+    fn fetch_existing_checkpoints() -> Option<Vec<(u64, u64)>>;
 
     /// Deletes the checkpoint with the given id
     fn delete_checkpoint(id: u64) -> Result<(), ()>;
@@ -111,7 +115,7 @@ impl DummyCheckpoint {
 }
 
 impl Checkpointable for DummyCheckpoint {
-    fn checkpoint(&self) -> u64 {
+    fn checkpoint(&self, _height: u64) -> u64 {
         let mut id = self.id.lock();
         let mut location = self.location.lock();
         *id = CHECKPOINT_ID.fetch_add(1, Ordering::Relaxed) as u64;
@@ -122,6 +126,10 @@ impl Checkpointable for DummyCheckpoint {
         db.insert(id.clone(), self.clone());
 
         id.clone()
+    }
+
+    fn fetch_existing_checkpoints() -> Option<Vec<(u64, u64)>> {
+        None
     }
 
     fn delete_checkpoint(id: u64) -> Result<(), ()> {

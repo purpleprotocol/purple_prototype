@@ -65,3 +65,4 @@ build: false
 test_script:
   - git submodule update --init --recursive
   - cargo test --verbose --all %cargoflags%
+  - cargo build --verbose %cargoflags%

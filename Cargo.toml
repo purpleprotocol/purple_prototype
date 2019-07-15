@@ -5,6 +5,21 @@ license = "GPL-3.0"
 publish = false
 
 [workspace]
+members = [
+    "src/account",
+    "src/causality",
+    "src/chain",
+    "src/common",
+    "src/consensus",
+    "src/crypto",
+    "src/events",
+    "src/jump",
+    "src/miner",
+    "src/network",
+    "src/persistence",
+    "src/purple_vm",
+    "src/transactions",
+]
 
 [dependencies]
 clap = "2.32.0"
@@ -36,6 +51,14 @@ chain = { path = "src/chain" }
 miner = { path = "src/miner" }
 mimalloc = "0.1.5"
 
+[dev-dependencies.chain]
+path = "src/chain"
+features = ["test"]
+
+[dev-dependencies.persistence]
+path = "src/persistence"
+features = ["test"]
+
 [[bin]]
 path = "src/purple/main.rs"
 name = "purple"
@@ -48,3 +71,4 @@ default = []
 miner-cpu-avx = ["miner/cpu", "miner/avx"]
 miner-cpu = ["miner/cpu"]
 miner-gpu = ["miner/gpu"]
+

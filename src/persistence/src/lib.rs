@@ -17,6 +17,7 @@
 */
 
 #[macro_use] extern crate bin_tools;
+#[macro_use] extern crate cfg_if;
 
 extern crate byteorder;
 extern crate ansi_term;

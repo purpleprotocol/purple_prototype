@@ -232,6 +232,19 @@ impl<B: Block> Chain<B> {
             None => None
         };
 
+        // Load heights and checkpoint ids
+        let disk_heights_checkpoints = if let Some(ids_and_heights) = B::ChainState::fetch_existing_checkpoints() {
+            let mut hm = HashMap::with_capacity(B::MAX_CHECKPOINTS);
+
+            for (id, height) in ids_and_heights {
+                hm.insert(height, id);
+            }
+
+            hm
+        } else {
+            HashMap::with_capacity(B::MAX_CHECKPOINTS)
+        };
+
         let height = height;
 
         Chain {
@@ -245,7 +258,7 @@ impl<B: Block> Chain<B> {
             disconnected_tips_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
             valid_tips: HashSet::with_capacity(B::MAX_ORPHANS),
             valid_tips_states: HashMap::with_capacity(B::MAX_ORPHANS),
-            disk_heights_checkpoints: HashMap::with_capacity(B::MAX_CHECKPOINTS),
+            disk_heights_checkpoints,
             last_checkpoint_height,
             earliest_checkpoint_height,
             max_orphan_height: None,
@@ -580,7 +593,7 @@ impl<B: Block> Chain<B> {
                                             }
 
                                             self.last_checkpoint_height = Some(height);
-                                            let checkpoint_id = new_tip_state.checkpoint();
+                                            let checkpoint_id = new_tip_state.checkpoint(height);
 
                                             // Store checkpoint id
                                             self.disk_heights_checkpoints.insert(height, checkpoint_id);
@@ -710,7 +723,7 @@ impl<B: Block> Chain<B> {
                                     }
 
                                     self.last_checkpoint_height = Some(height);
-                                    let checkpoint_id = state.checkpoint();
+                                    let checkpoint_id = state.checkpoint(height);
 
                                     // Store checkpoint id
                                     self.disk_heights_checkpoints.insert(height, checkpoint_id);
@@ -1201,7 +1214,7 @@ impl<B: Block> Chain<B> {
                             }
 
                             self.last_checkpoint_height = Some(height);
-                            let checkpoint_id = new_tip_state.checkpoint();
+                            let checkpoint_id = new_tip_state.checkpoint(height);
 
                             // Store checkpoint id
                             self.disk_heights_checkpoints.insert(height, checkpoint_id);

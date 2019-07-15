@@ -256,28 +256,6 @@ impl PersistentDb {
     }
 }
 
-impl Checkpointable for PersistentDb {
-    fn checkpoint(&self) -> u64 {
-        unimplemented!();
-    }
-
-    fn delete_checkpoint(id: u64) -> Result<(), ()> {
-        unimplemented!();
-    }
-
-    fn load_from_disk(id: u64) -> Result<PersistentDb, ()> {
-        unimplemented!();
-    }
-
-    fn storage_location(&self) -> StorageLocation {
-        if self.memory_db.is_empty() {
-            StorageLocation::Disk
-        } else {
-            StorageLocation::Memory
-        }
-    }
-}
-
 impl std::fmt::Debug for PersistentDb {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "PersistentDb {{ cf: {:?} }}", self.cf_name)
@@ -347,33 +325,10 @@ impl AsHashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     }
 }
 
-#[cfg(all(test, nightly))]
+#[cfg(all(test, unix))]
 mod tests {
-    #![feature(custom_test_frameworks, test)]
-    #![test_runner(test_runner)]
-
-    extern crate test;
-
     use super::*;
     use tempdir::TempDir;
-    use test::{TestName, TestFn, TestDescAndFn};
-
-    fn test_runner(tests: &[&TestDescAndFn]) {
-        for t in tests {
-            if let TestFn::StaticTestFn(fun) = t.testfn {
-                fun();
-                let test_name = if let TestName::StaticTestName(name) = t.desc.name {
-                    name
-                } else {
-                    panic!("No static test name");
-                };
-
-                println!("test {} ... {}", test_name, Green.paint("ok"));
-            } else {
-                panic!("");
-            }
-        }
-    }
 
     #[test]
     fn it_inserts_data() {

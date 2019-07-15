@@ -31,6 +31,8 @@ pub struct ChainState {
 }
 
 impl ChainState {
+    const POOL_STATE_KEY: &'static [u8] = b"pool_state";
+    
     pub fn new(db: PersistentDb) -> ChainState {
         ChainState {
             db,
@@ -40,12 +42,52 @@ impl ChainState {
 }
 
 impl Checkpointable for ChainState {
-    fn checkpoint(&self) -> u64 {
-        unimplemented!();
+    fn checkpoint(&self, height: u64) -> u64 {
+        #[cfg(not(feature = "test"))]
+        {
+            let mut registry = STATE_REGISTRY.lock();
+            registry.checkpoint(self.db.db_ref.clone().unwrap(), height)
+        }
+
+        #[cfg(feature = "test")]
+        {
+            STATE_REGISTRY.with(|registry| {
+                let mut registry = registry.lock();
+                registry.checkpoint(self.db.db_ref.clone().unwrap(), height)
+            })
+        }
+    }
+
+    fn fetch_existing_checkpoints() -> Option<Vec<(u64, u64)>> {
+        #[cfg(not(feature = "test"))]
+        {
+            let registry = STATE_REGISTRY.lock();
+            registry.retrieve_ids_and_heights()
+        }
+
+        #[cfg(feature = "test")]
+        {
+            STATE_REGISTRY.with(|registry| {
+                let mut registry = registry.lock();
+                registry.retrieve_ids_and_heights()
+            })
+        }
     }
 
     fn delete_checkpoint(id: u64) -> Result<(), ()> {
-        unimplemented!();
+        #[cfg(not(feature = "test"))]
+        {
+            let mut registry = STATE_REGISTRY.lock();
+            registry.delete_checkpoint(id)
+        }
+
+        #[cfg(feature = "test")]
+        {
+            STATE_REGISTRY.with(|registry| {
+                let mut registry = registry.lock();
+                registry.delete_checkpoint(id)
+            })
+        }
     }
 
     fn load_from_disk(id: u64) -> Result<ChainState, ()> {

@@ -90,7 +90,7 @@ fn main() {
     let easy_chain_db_path = storage_path.join("easy_chain_db");
 
     // Initialize persistence
-    persistence::init(storage_path, 10); // TODO: Calculate this
+    persistence::init(storage_path);
 
     let storage_db = Arc::new(persistence::open_database(&storage_db_path));
     let state_db = Arc::new(persistence::open_database(&state_db_path));
@@ -218,7 +218,6 @@ struct Argv {
     mine_easy: bool,
     mine_hard: bool,
     wipe: bool,
-    keep_blocks: usize,
 }
 
 fn parse_cli_args() -> Argv {
@@ -282,13 +281,6 @@ fn parse_cli_args() -> Argv {
                 .long("prune")
                 .help("Whether to prune the ledger or to keep the entire transaction history. False by default."),
         )
-        .arg(
-            Arg::with_name("keep_blocks")
-                .long("keep-blocks")
-                .value_name("BLOCKS")
-                .requires("prune")
-                .help("How many blocks to keep when in prune mode")
-        )
         .get_matches();
 
     let network_name: String = if let Some(arg) = matches.value_of("network_name") {
@@ -309,18 +301,6 @@ fn parse_cli_args() -> Argv {
         8
     };
 
-    let keep_blocks: usize = if let Some(arg) = matches.value_of("keep_blocks") {
-        let result = unwrap!(arg.parse(), "Bad value for <BLOCKS>");
-
-        if result < 10 {
-            panic!("Invalid value for <BLOCKS>! Minimum blocks required to keep is 10 when in prune mode!");
-        } else {
-            result
-        }
-    } else {
-        100
-    };
-
     let archival_mode: bool = !matches.is_present("prune");
     let mine_easy: bool = matches.is_present("mine_easy");
     let mine_hard: bool = matches.is_present("mine_hard");
@@ -337,7 +317,6 @@ fn parse_cli_args() -> Argv {
         interactive,
         mempool_size,
         archival_mode,
-        keep_blocks,
         wipe,
     }
 }

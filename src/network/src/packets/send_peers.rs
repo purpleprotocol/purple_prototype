@@ -343,100 +343,20 @@ mod tests {
         let addr3 = networks[2].1;
         let addr4 = networks[3].1;
         let addr5 = networks[4].1;
-        let network1_easy_rec = networks[0].3.clone();
-        let network1_hard_rec = networks[0].4.clone();
-        let network1_state_rec = networks[0].5.clone();
         let network1 = networks[0].0.clone();
         let network1_cc = network1.clone();
-        let network2_easy_rec = networks[1].3.clone();
-        let network2_hard_rec = networks[1].4.clone();
-        let network2_state_rec = networks[1].5.clone();
         let network2 = networks[1].0.clone();
         let network2_c = network2.clone();
         let network2_cc = network2.clone();
-        let network3_easy_rec = networks[2].3.clone();
-        let network3_hard_rec = networks[2].4.clone();
-        let network3_state_rec = networks[2].5.clone();
         let network3 = networks[2].0.clone();
         let network3_c = network3.clone();
         let network3_cc = network3.clone();
-        let network4_easy_rec = networks[3].3.clone();
-        let network4_hard_rec = networks[3].4.clone();
-        let network4_state_rec = networks[3].5.clone();
         let network4 = networks[3].0.clone();
         let network4_c = network4.clone();
         let network4_cc = network4.clone();
-        let network5_easy_rec = networks[4].3.clone();
-        let network5_hard_rec = networks[4].4.clone();
-        let network5_state_rec = networks[4].5.clone();
         let network5 = networks[4].0.clone();
         let network5_c = network5.clone();
         let network5_cc = network5.clone();
-
-        // Peer 1 listener thread
-        thread::Builder::new()
-            .name("peer1".to_string())
-            .spawn(move || {
-                MockNetwork::start_receive_loop(
-                    network1,
-                    network1_easy_rec,
-                    network1_hard_rec,
-                    network1_state_rec,
-                )
-            })
-            .unwrap();
-
-        // Peer 2 listener thread
-        thread::Builder::new()
-            .name("peer2".to_string())
-            .spawn(move || {
-                MockNetwork::start_receive_loop(
-                    network2,
-                    network2_easy_rec,
-                    network2_hard_rec,
-                    network2_state_rec,
-                )
-            })
-            .unwrap();
-
-        // Peer 3 listener thread
-        thread::Builder::new()
-            .name("peer3".to_string())
-            .spawn(move || {
-                MockNetwork::start_receive_loop(
-                    network3,
-                    network3_easy_rec,
-                    network3_hard_rec,
-                    network3_state_rec,
-                )
-            })
-            .unwrap();
-
-        // Peer 4 listener thread
-        thread::Builder::new()
-            .name("peer4".to_string())
-            .spawn(move || {
-                MockNetwork::start_receive_loop(
-                    network4,
-                    network4_easy_rec,
-                    network4_hard_rec,
-                    network4_state_rec,
-                )
-            })
-            .unwrap();
-
-        // Peer 5 listener thread
-        thread::Builder::new()
-            .name("peer5".to_string())
-            .spawn(move || {
-                MockNetwork::start_receive_loop(
-                    network5,
-                    network5_easy_rec,
-                    network5_hard_rec,
-                    network5_state_rec,
-                )
-            })
-            .unwrap();
 
         // Establish initial connections.
         //
