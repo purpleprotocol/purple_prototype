@@ -16,20 +16,17 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(non_snake_case)]
+#[derive(Clone, Debug, PartialEq, Copy)]
+pub enum ConsensusErr {
+    /// Could not find a validator with the given id.
+    NoValidatorWithId,
 
-mod candidate;
-mod causal_graph;
-mod consensus_machine;
-pub mod parameters;
-mod validation;
-mod validator_state;
-mod pool_state;
-mod error;
+    /// The validator is not allowed to send an event.
+    NotAllowedToSend,
 
-pub use error::*;
-pub use candidate::*;
-pub use consensus_machine::*;
-pub use validation::*;
-pub use validator_state::*;
-pub use pool_state::*;
+    /// The validator doesn't have any more events that it can send.
+    NoMoreEvents,
+
+    /// The pool does not have remaining events that it can produce.
+    NoMoreEventsPool,
+}

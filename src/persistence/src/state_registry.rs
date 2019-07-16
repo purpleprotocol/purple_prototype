@@ -123,15 +123,14 @@ impl StateRegistry {
     // TODO: Make this async
     pub fn delete_checkpoint(&mut self, id: u64) -> Result<(), ()> {
         let path = self.working_dir.join(&format!("{}", id));
-        let exists = fs::metadata(path).is_ok();
+        let exists = fs::metadata(&path).is_ok();
 
         if exists {
-            let removed_path = self.working_dir.join(&format!("{}", id));
             let ids_and_heights = self
                 .retrieve_ids_and_heights()
                 .unwrap()
                 .iter()
-                // Filter removed id
+                // Remove entry with given id
                 .filter(|(i, _)| *i != id)
                 .cloned()
                 .collect();
@@ -142,7 +141,7 @@ impl StateRegistry {
             self.inner_db.put(Self::IDS_AND_HEIGHTS_KEY, &entries);
 
             // Delete checkpoint dir
-            fs::remove_dir_all(&removed_path).unwrap();
+            fs::remove_dir_all(&path).unwrap();
             Ok(())
         } else {
             Err(())

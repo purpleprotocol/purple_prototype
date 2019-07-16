@@ -48,6 +48,13 @@ pub trait Checkpointable: Sized + Debug + Clone {
 
     /// Returns the storage location of the checkpoint.
     fn storage_location(&self) -> StorageLocation;
+
+    /// Receives the old canonical state and a checkpoint state. This
+    /// function is responsible for doing any additional modifications
+    /// in order for the new state to become canonical.
+    /// 
+    /// Returns the final canonical state.
+    fn make_canonical(old_state: &Self, new_state: Self) -> Self;
 }
 
 lazy_static! {
@@ -158,4 +165,6 @@ impl Checkpointable for DummyCheckpoint {
         let location = self.location.lock();
         location.clone()
     }
+
+    fn make_canonical(_old_state: &Self, new_state: Self) -> Self { new_state }
 }

@@ -583,9 +583,10 @@ impl CausalGraph {
         stamp: Stamp,
         idx: usize,
         allocated: u64,
+        followers: Option<HashSet<NodeId>>,
     ) {
         self.pool_state.validators
-            .insert(id, ValidatorState::new(can_send, allocated, idx, stamp));
+            .insert(id, ValidatorState::new(can_send, allocated, idx, stamp, None));
     }
 
     pub fn empty(&self) -> bool {

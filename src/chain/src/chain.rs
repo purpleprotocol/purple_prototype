@@ -383,7 +383,8 @@ impl<B: Block> Chain<B> {
 
         self.height = new_tip.height();
         self.write_canonical_height(new_tip.height());
-        self.canonical_tip_state = self.search_fetch_next_state(new_tip.height());
+        let state = self.search_fetch_next_state(new_tip.height());
+        self.canonical_tip_state = B::ChainState::make_canonical(&self.canonical_tip_state, state);
         self.canonical_tip = new_tip;
         
         // Flush changes
@@ -600,7 +601,7 @@ impl<B: Block> Chain<B> {
                                         }
                                     }
 
-                                    self.canonical_tip_state = new_tip_state;
+                                    self.canonical_tip_state = B::ChainState::make_canonical(&self.canonical_tip_state, new_tip_state);
                                 } else {
                                     done = true;
                                 }
@@ -731,7 +732,8 @@ impl<B: Block> Chain<B> {
                                 }
 
                                 self.make_valid_tips(&block_hash, state.clone());
-                                self.canonical_tip_state = state;
+                                // TODO: Write canonical state transition function
+                                self.canonical_tip_state = B::ChainState::make_canonical(&self.canonical_tip_state, state);
                                 self.write_block(to_write.clone());
                             }
                         }
@@ -792,7 +794,8 @@ impl<B: Block> Chain<B> {
             self.rewind(&horizon).unwrap();
 
             // Set the canonical tip state as the one belonging to the new tip
-            self.canonical_tip_state = self.valid_tips_states.remove(&candidate_hash).unwrap();
+            let state = self.valid_tips_states.remove(&candidate_hash).unwrap();
+            self.canonical_tip_state = B::ChainState::make_canonical(&self.canonical_tip_state, state);
 
             // Write the blocks from the candidate chain
             for block in to_write {
@@ -1221,7 +1224,7 @@ impl<B: Block> Chain<B> {
                         }
                     }
 
-                    self.canonical_tip_state = new_tip_state;
+                    self.canonical_tip_state = B::ChainState::make_canonical(&self.canonical_tip_state, new_tip_state);
 
                     // Process orphans
                     self.process_orphans(height + 1);

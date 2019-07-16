@@ -101,4 +101,9 @@ impl Checkpointable for ChainState {
             StorageLocation::Memory
         }
     }
+
+    fn make_canonical(_old_state: &Self, new_state: Self) -> Self { 
+        // TODO: Implement this
+        new_state 
+    }
 }

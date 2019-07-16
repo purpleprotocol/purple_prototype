@@ -381,7 +381,7 @@ mod tests {
             network2_c.lock().connect(&addr1).unwrap();
         }
 
-        thread::sleep(Duration::from_millis(600));
+        thread::sleep(Duration::from_millis(1600));
 
         // Send request peers packet from Peer2 to Peer1
         {
