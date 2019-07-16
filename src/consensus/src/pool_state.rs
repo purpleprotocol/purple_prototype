@@ -60,6 +60,7 @@ impl PoolState {
                         self.remaining_events -= 1;
                         state.remaining_events -= 1;
                         state.allowed_to_send = false;
+                        state.followers = Some(HashSet::new());
                     } else {
                         return Err(ConsensusErr::NoMoreEvents);
                     }
@@ -196,6 +197,170 @@ impl PoolState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn it_accounts_sent_by_validator() {
+        let mut node_ids: Vec<NodeId> = (0..10)
+            .into_iter()
+            .map(|_| {
+                let (pk, _) = crypto::gen_keypair();
+                NodeId::from_pkey(pk)
+            })
+            .collect();
+
+        node_ids.sort_unstable();
+        
+        let ids_hm = node_ids
+            .iter()
+            .cloned()
+            .map(|id| (id, 500))
+            .collect();
+
+        let mut pool_state = PoolState::new(0, 1000);
+        pool_state.inject(&ids_hm, 500);
+
+        // Account for first four nodes
+        for i in 0..4 {
+            pool_state.account_sent_by_validator(&node_ids[i]).unwrap();
+        }
+
+        assert!(pool_state.validators.get(&node_ids[0]).unwrap().allowed_to_send);
+        assert!(!pool_state.validators.get(&node_ids[1]).unwrap().allowed_to_send);
+        assert!(!pool_state.validators.get(&node_ids[2]).unwrap().allowed_to_send);
+        assert!(!pool_state.validators.get(&node_ids[3]).unwrap().allowed_to_send);
+
+        assert_eq!(pool_state.validators.get(&node_ids[0]).unwrap().followers.as_ref().unwrap(), &set![node_ids[1].clone(), node_ids[2].clone(), node_ids[3].clone()]);
+        assert_eq!(pool_state.validators.get(&node_ids[1]).unwrap().followers.as_ref().unwrap(), &set![node_ids[2].clone(), node_ids[3].clone()]);
+        assert_eq!(pool_state.validators.get(&node_ids[2]).unwrap().followers.as_ref().unwrap(), &set![node_ids[3].clone()]);
+        assert_eq!(pool_state.validators.get(&node_ids[3]).unwrap().followers.as_ref().unwrap(), &HashSet::new());
+
+        pool_state.account_sent_by_validator(&node_ids[0]).unwrap();
+        assert_eq!(pool_state.validators.get(&node_ids[0]).unwrap().followers.as_ref().unwrap(), &HashSet::new());
+        assert_eq!(pool_state.validators.get(&node_ids[1]).unwrap().followers.as_ref().unwrap(), &set![node_ids[0].clone(), node_ids[2].clone(), node_ids[3].clone()]);
+        assert_eq!(pool_state.validators.get(&node_ids[2]).unwrap().followers.as_ref().unwrap(), &set![node_ids[0].clone(), node_ids[3].clone()]);
+        assert_eq!(pool_state.validators.get(&node_ids[3]).unwrap().followers.as_ref().unwrap(), &set![node_ids[0].clone()]);
+
+        pool_state.account_sent_by_validator(&node_ids[1]).unwrap();
+        pool_state.account_sent_by_validator(&node_ids[4]).unwrap();
+        pool_state.account_sent_by_validator(&node_ids[5]).unwrap();
+        pool_state.account_sent_by_validator(&node_ids[3]).unwrap();
+        pool_state.account_sent_by_validator(&node_ids[0]).unwrap();
+        pool_state.account_sent_by_validator(&node_ids[4]).unwrap();
+    }
+
+    #[test]
+    fn it_fails_when_accounting_for_non_existing_id() {
+        let non_belonging_id = {
+            let (pk, _) = crypto::gen_keypair();
+            NodeId::from_pkey(pk)
+        }; 
+
+        let mut node_ids: Vec<NodeId> = (0..10)
+            .into_iter()
+            .map(|_| {
+                let (pk, _) = crypto::gen_keypair();
+                NodeId::from_pkey(pk)
+            })
+            .collect();
+
+        node_ids.sort_unstable();
+        
+        let ids_hm = node_ids
+            .iter()
+            .cloned()
+            .map(|id| (id, 500))
+            .collect();
+
+        let mut pool_state = PoolState::new(0, 1000);
+        pool_state.inject(&ids_hm, 500);
+
+        assert_eq!(pool_state.account_sent_by_validator(&non_belonging_id), Err(ConsensusErr::NoValidatorWithId));
+    }
+
+    #[test]
+    fn it_fails_when_accounting_for_node_that_already_sent() {
+        let mut node_ids: Vec<NodeId> = (0..10)
+            .into_iter()
+            .map(|_| {
+                let (pk, _) = crypto::gen_keypair();
+                NodeId::from_pkey(pk)
+            })
+            .collect();
+
+        node_ids.sort_unstable();
+        
+        let ids_hm = node_ids
+            .iter()
+            .cloned()
+            .map(|id| (id, 500))
+            .collect();
+
+        let mut pool_state = PoolState::new(0, 1000);
+        pool_state.inject(&ids_hm, 500);
+
+        // Account for first four nodes
+        for i in 0..3 {
+            pool_state.account_sent_by_validator(&node_ids[i]).unwrap();
+        }
+
+        assert_eq!(pool_state.account_sent_by_validator(&node_ids[2]), Err(ConsensusErr::NotAllowedToSend));
+    }
+
+    #[test]
+    fn it_fails_when_there_are_no_more_allocated_events() {
+        let mut node_ids: Vec<NodeId> = (0..10)
+            .into_iter()
+            .map(|_| {
+                let (pk, _) = crypto::gen_keypair();
+                NodeId::from_pkey(pk)
+            })
+            .collect();
+
+        node_ids.sort_unstable();
+        
+        let ids_hm = node_ids
+            .iter()
+            .cloned()
+            .map(|id| (id, 1))
+            .collect();
+
+        let mut pool_state = PoolState::new(0, 500);
+        pool_state.inject(&ids_hm, 500);
+
+        // Account for first four nodes
+        for i in 0..4 {
+            pool_state.account_sent_by_validator(&node_ids[i]).unwrap();
+        }
+
+        assert_eq!(pool_state.account_sent_by_validator(&node_ids[0]), Err(ConsensusErr::NoMoreEvents));
+    }
+
+    #[test]
+    fn it_fails_when_there_are_no_more_allocated_events_pool() {
+        let mut node_ids: Vec<NodeId> = (0..10)
+            .into_iter()
+            .map(|_| {
+                let (pk, _) = crypto::gen_keypair();
+                NodeId::from_pkey(pk)
+            })
+            .collect();
+
+        node_ids.sort_unstable();
+        
+        let ids_hm = node_ids
+            .iter()
+            .cloned()
+            .map(|id| (id, 500))
+            .collect();
+
+        let mut pool_state = PoolState::new(0, 0);
+        pool_state.inject(&ids_hm, 2);
+
+        pool_state.account_sent_by_validator(&node_ids[0]).unwrap();
+        pool_state.account_sent_by_validator(&node_ids[1]).unwrap();
+
+        assert_eq!(pool_state.account_sent_by_validator(&node_ids[2]), Err(ConsensusErr::NoMoreEventsPool));
+    }
 
     #[test]
     fn it_assigns_correct_indexes() {

@@ -18,6 +18,8 @@
 
 #![allow(non_snake_case)]
 
+#[macro_use] mod macros;
+
 mod candidate;
 mod causal_graph;
 mod consensus_machine;
