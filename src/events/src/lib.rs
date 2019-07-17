@@ -50,6 +50,9 @@ use crypto::Hash;
 use crypto::NodeId;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
+use persistence::Codec;
+use patricia_trie::TrieDBMut;
+use persistence::BlakeDbHasher;
 
 #[derive(Clone, Debug)]
 pub enum Event {
@@ -84,6 +87,10 @@ impl HashTrait for Event {
 }
 
 impl Event {
+    pub fn validate_apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) -> Result<(), ()> {
+        unimplemented!();
+    }
+
     pub fn stamp(&self) -> Stamp {
         match *self {
             Event::Heartbeat(ref event) => event.stamp.clone(),

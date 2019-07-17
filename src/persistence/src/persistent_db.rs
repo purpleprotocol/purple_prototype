@@ -98,6 +98,8 @@ pub struct PersistentDb {
 }
 
 impl PersistentDb {
+    pub const ROOT_HASH_KEY: &'static [u8] = b"root_hash";
+
     pub fn new(db_ref: Arc<DB>, cf_name: Option<&'static str>) -> PersistentDb {
         if !is_initialized() {
             panic!("Persistence module not initialized! Call `persistence::init()` before using anything");
@@ -203,7 +205,13 @@ impl PersistentDb {
                     Operation::Put(ref val) => Some(val.clone()),
                     Operation::Remove => None,
                 },
-                None => self.get_db(key),
+                None => match self.get_db(key) {
+                    Some(res) => Some(res),
+                    None => match key {
+                        Self::ROOT_HASH_KEY => Some(Hash::NULL_RLP.0.to_vec()),
+                        _ => None
+                    }
+                },
             }
         } else {
             let result = self.memory_db.get(key);
