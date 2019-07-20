@@ -182,6 +182,10 @@ impl StateRegistry {
         next_id
     }
 
+    pub fn load_from_disk(&self, id: u64) -> Result<PersistentDb, ()> {
+        unimplemented!();
+    }
+
     fn encode_ids_and_heights(ids_and_heights: Vec<(u64, u64)>) -> Vec<u8> {
         let mut rlp = RlpStream::new_list(ids_and_heights.len());
 

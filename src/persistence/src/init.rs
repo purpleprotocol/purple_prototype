@@ -84,7 +84,8 @@ pub fn init(working_dir: PathBuf) {
     }
 
     let registry_db_path = working_dir.join("registry_db");
-    let registry_db = crate::open_database_no_checks(&registry_db_path);
+    let registry_wal_path = working_dir.join("registry_db_wal");
+    let registry_db = crate::open_database_no_checks(&registry_db_path, &registry_wal_path);
     let registry_db = PersistentDb::new_without_checks(Arc::new(registry_db), None);
 
     // Set registry db

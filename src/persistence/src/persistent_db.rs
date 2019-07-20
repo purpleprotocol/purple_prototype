@@ -26,6 +26,7 @@ use hashdb::{AsHashDB, HashDB};
 use rlp::NULL_RLP;
 use rocksdb::{ColumnFamily, DBCompactionStyle, Options, WriteBatch, DB};
 use std::sync::Arc;
+use std::path::Path;
 use BlakeDbHasher;
 
 pub fn cf_options() -> Options {
@@ -34,12 +35,13 @@ pub fn cf_options() -> Options {
     opts
 }
 
-pub fn db_options() -> Options {
+pub fn db_options(wal_dir: &Path) -> Options {
     if !is_initialized() {
         panic!("Persistence module not initialized! Call `persistence::init()` before using anything");
     }
 
     let mut opts = Options::default();
+    opts.set_wal_dir(wal_dir);
     opts.increase_parallelism(num_cpus::get() as i32);
     opts.create_if_missing(true);
     opts.create_missing_column_families(true);
@@ -61,8 +63,9 @@ pub fn db_options() -> Options {
     opts
 }
 
-pub(crate) fn db_options_no_checks() -> Options {
+pub(crate) fn db_options_no_checks(wal_dir: &Path) -> Options {
     let mut opts = Options::default();
+    opts.set_wal_dir(wal_dir);
     opts.increase_parallelism(num_cpus::get() as i32);
     opts.create_if_missing(true);
     opts.create_missing_column_families(true);
@@ -90,10 +93,20 @@ pub enum Operation {
     Put(Vec<u8>),
 }
 
+#[derive(PartialEq, Clone)]
+pub enum DbType {
+    /// The database is a checkpoint.
+    Checkpoint,
+
+    /// The database is the canonical state.
+    Canonical,
+}
+
 #[derive(Clone)]
 pub struct PersistentDb {
     pub db_ref: Option<Arc<DB>>,
     pub cf_name: Option<&'static str>,
+    pub db_type: Option<DbType>,
     pub memory_db: HashMap<Vec<u8>, Operation>,
 }
 
@@ -108,6 +121,7 @@ impl PersistentDb {
         PersistentDb {
             db_ref: Some(db_ref),
             cf_name,
+            db_type: None,
             memory_db: HashMap::new(),
         }
     }
@@ -116,6 +130,7 @@ impl PersistentDb {
         PersistentDb {
             db_ref: Some(db_ref),
             cf_name,
+            db_type: None,
             memory_db: HashMap::new(),
         }
     }
@@ -124,6 +139,7 @@ impl PersistentDb {
     pub fn new_in_memory() -> PersistentDb {
         PersistentDb {
             db_ref: None,
+            db_type: None,
             cf_name: None,
             memory_db: HashMap::new(),
         }
@@ -158,9 +174,9 @@ impl PersistentDb {
 
                     Operation::Remove => {
                         if self.cf_name.is_some() {
-                            batch.delete_cf(cf_handle.unwrap(), key);
+                            batch.delete_cf(cf_handle.unwrap(), key).unwrap();
                         } else {
-                            batch.delete(key);
+                            batch.delete(key).unwrap();
                         }
                     }
                 }
@@ -199,7 +215,7 @@ impl PersistentDb {
 
     /// Gets the value based on the provided key
     pub fn retrieve(&self, key: &[u8]) -> Option<Vec<u8>> {
-        if let Some(db_ref) = &self.db_ref {
+        if self.db_ref.is_some() {
             match self.memory_db.get(key) {
                 Some(res) => match res {
                     Operation::Put(ref val) => Some(val.clone()),
@@ -262,6 +278,28 @@ impl PersistentDb {
             }
         }
     }
+
+    /// Returns true if the `PersistentDb` 
+    /// is canonical i.e. not a checkpoint.
+    pub fn is_canonical(&self) -> bool {
+        if let Some(ref db_type) = self.db_type {
+            db_type == &DbType::Canonical
+        } else {
+            panic!("This function can only be called on a state database!");
+        }
+    }
+
+    pub fn make_canonical(&mut self) -> Result<(), ()> {
+        if let Some(ref db_type) = self.db_type {
+            if db_type == &DbType::Canonical {
+                return Err(())
+            }
+        } else {
+            panic!("This function can only be called on a state database!");
+        }
+
+        unimplemented!();
+    }
 }
 
 impl std::fmt::Debug for PersistentDb {
@@ -280,9 +318,8 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return Some(ElasticArray128::from_slice(&NULL_RLP));
         }
 
-        let result = self.retrieve(&key.0.to_vec());
-        if result.is_some() {
-            Some(ElasticArray128::<u8>::from_slice(&result.unwrap()))
+        if let Some(ref result) =  self.retrieve(&key.0) {
+            Some(ElasticArray128::<u8>::from_slice(result))
         } else {
             None
         }
@@ -294,7 +331,7 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
         }
 
         let val_hash = crypto::hash_slice(val);
-        self.put(&val_hash.0.to_vec(), val);
+        self.put(&val_hash.0, val);
 
         val_hash
     }
@@ -304,15 +341,15 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return true;
         }
 
-        self.retrieve(&key.0.to_vec()).is_some()
+        self.retrieve(&key.0).is_some()
     }
 
     fn emplace(&mut self, key: Hash, val: ElasticArray128<u8>) {
-        if &val == &Hash::NULL_RLP.to_vec() {
+        if key == Hash::NULL_RLP {
             return;
         }
 
-        self.put(&key.0.to_vec(), &val);
+        self.put(&key.0, &val);
     }
 
     fn remove(&mut self, key: &Hash) {
@@ -320,7 +357,7 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return;
         }
 
-        self.delete(&key.0.to_vec());
+        self.delete(&key.0);
     }
 }
 

@@ -39,6 +39,16 @@ impl ChainState {
             pool_state: PoolState::new(0, 1000) // TODO: Retrieve/calculate pool state from database
         }
     }
+
+    /// Returns true if the underlying `PersistentDb` 
+    /// is canonical i.e. not a checkpoint.
+    pub fn is_canonical(&self) -> bool {
+        self.db.is_canonical()
+    }
+
+    pub fn make_canonical(&mut self) -> Result<(), ()> {
+        self.db.make_canonical()
+    }
 }
 
 impl Checkpointable for ChainState {
@@ -91,7 +101,23 @@ impl Checkpointable for ChainState {
     }
 
     fn load_from_disk(id: u64) -> Result<ChainState, ()> {
-        unimplemented!();
+        let database = {
+            #[cfg(not(feature = "test"))]
+            {
+                let registry = STATE_REGISTRY.lock();
+                registry.load_from_disk(id)?
+            }
+
+            #[cfg(feature = "test")]
+            {
+                STATE_REGISTRY.with(|registry| {
+                    let registry = registry.lock();
+                    registry.load_from_disk(id)
+                })?
+            }
+        };
+
+        Ok(ChainState::new(database))
     }
 
     fn storage_location(&self) -> StorageLocation {
@@ -102,8 +128,17 @@ impl Checkpointable for ChainState {
         }
     }
 
-    fn make_canonical(_old_state: &Self, new_state: Self) -> Self { 
-        // TODO: Implement this
-        new_state 
+    fn make_canonical(old_state: &Self, mut new_state: Self) -> Self { 
+        assert!(old_state.is_canonical());
+        
+        if new_state.is_canonical() {
+            // Just flush changes if both states are canonical
+            new_state.db.flush();
+            new_state
+        } else {
+            new_state.make_canonical().unwrap();
+            new_state.db.flush();
+            new_state
+        }
     }
 }

@@ -82,7 +82,7 @@ impl Call {
     /// 7) Nonce                - 64bits
     /// 8) From                 - 33byte binary
     /// 9) To                   - 33byte binary
-    /// 10) Currency hash        - 32byte binary
+    /// 10) Currency hash       - 32byte binary
     /// 11) Fee hash            - 32byte binary
     /// 12) Hash                - 32byte binary
     /// 13) Signature           - 64byte binary

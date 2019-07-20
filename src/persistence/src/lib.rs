@@ -23,15 +23,15 @@ extern crate byteorder;
 extern crate ansi_term;
 
 use ansi_term::Colour::Green;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use rocksdb::DB;
 
-pub fn open_database(path: &PathBuf) -> DB {
-    DB::open(&crate::db_options(), path.to_str().unwrap()).unwrap()
+pub fn open_database(path: &PathBuf, wal_path: &Path) -> DB {
+  DB::open(&crate::db_options(wal_path), path.to_str().unwrap()).unwrap()
 }
 
-pub(crate) fn open_database_no_checks(path: &PathBuf) -> DB {
-    DB::open(&crate::db_options_no_checks(), path.to_str().unwrap()).unwrap()
+pub(crate) fn open_database_no_checks(path: &PathBuf, wal_path: &Path) -> DB {
+    DB::open(&crate::db_options_no_checks(wal_path), path.to_str().unwrap()).unwrap()
 }
 
 #[cfg(test)]

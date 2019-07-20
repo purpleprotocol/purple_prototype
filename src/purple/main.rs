@@ -89,14 +89,20 @@ fn main() {
     let hard_chain_db_path = storage_path.join("hard_chain_db");
     let easy_chain_db_path = storage_path.join("easy_chain_db");
 
+    let storage_wal_path = storage_path.join("node_storage_wal");
+    let state_wal_path = storage_path.join("state_db_wal");
+    let state_chain_wal_path = storage_path.join("state_chain_db_wal");
+    let hard_chain_wal_path = storage_path.join("hard_chain_db_wal");
+    let easy_chain_wal_path = storage_path.join("easy_chain_db_wal");
+
     // Initialize persistence
     persistence::init(storage_path);
 
-    let storage_db = Arc::new(persistence::open_database(&storage_db_path));
-    let state_db = Arc::new(persistence::open_database(&state_db_path));
-    let state_chain_db = Arc::new(persistence::open_database(&state_chain_db_path));
-    let hard_chain_db = Arc::new(persistence::open_database(&hard_chain_db_path));
-    let easy_chain_db = Arc::new(persistence::open_database(&easy_chain_db_path));
+    let storage_db = Arc::new(persistence::open_database(&storage_db_path, &storage_wal_path));
+    let state_db = Arc::new(persistence::open_database(&state_db_path, &state_wal_path));
+    let state_chain_db = Arc::new(persistence::open_database(&state_chain_db_path, &state_chain_wal_path));
+    let hard_chain_db = Arc::new(persistence::open_database(&hard_chain_db_path, &hard_chain_wal_path));
+    let easy_chain_db = Arc::new(persistence::open_database(&easy_chain_db_path, &easy_chain_wal_path));
     let mut node_storage = PersistentDb::new(storage_db.clone(), None);
     let state_db = PersistentDb::new(state_db.clone(), None);
     let state_chain_db = PersistentDb::new(state_chain_db.clone(), None);
