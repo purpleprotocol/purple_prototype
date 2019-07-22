@@ -16,8 +16,7 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use persistence::{PersistentDb, STATE_REGISTRY};
-use common::{StorageLocation, Checkpointable};
+use persistence::PersistentDb;
 use consensus::PoolState;
 
 /// Wrapper over the `StateChain` associated chain state.
@@ -48,97 +47,5 @@ impl ChainState {
 
     pub fn make_canonical(&mut self) -> Result<(), ()> {
         self.db.make_canonical()
-    }
-}
-
-impl Checkpointable for ChainState {
-    fn checkpoint(&self, height: u64) -> u64 {
-        #[cfg(not(feature = "test"))]
-        {
-            let mut registry = STATE_REGISTRY.lock();
-            registry.checkpoint(self.db.db_ref.clone().unwrap(), height)
-        }
-
-        #[cfg(feature = "test")]
-        {
-            STATE_REGISTRY.with(|registry| {
-                let mut registry = registry.lock();
-                registry.checkpoint(self.db.db_ref.clone().unwrap(), height)
-            })
-        }
-    }
-
-    fn fetch_existing_checkpoints() -> Option<Vec<(u64, u64)>> {
-        #[cfg(not(feature = "test"))]
-        {
-            let registry = STATE_REGISTRY.lock();
-            registry.retrieve_ids_and_heights()
-        }
-
-        #[cfg(feature = "test")]
-        {
-            STATE_REGISTRY.with(|registry| {
-                let mut registry = registry.lock();
-                registry.retrieve_ids_and_heights()
-            })
-        }
-    }
-
-    fn delete_checkpoint(id: u64) -> Result<(), ()> {
-        #[cfg(not(feature = "test"))]
-        {
-            let mut registry = STATE_REGISTRY.lock();
-            registry.delete_checkpoint(id)
-        }
-
-        #[cfg(feature = "test")]
-        {
-            STATE_REGISTRY.with(|registry| {
-                let mut registry = registry.lock();
-                registry.delete_checkpoint(id)
-            })
-        }
-    }
-
-    fn load_from_disk(id: u64) -> Result<ChainState, ()> {
-        let database = {
-            #[cfg(not(feature = "test"))]
-            {
-                let registry = STATE_REGISTRY.lock();
-                registry.load_from_disk(id)?
-            }
-
-            #[cfg(feature = "test")]
-            {
-                STATE_REGISTRY.with(|registry| {
-                    let registry = registry.lock();
-                    registry.load_from_disk(id)
-                })?
-            }
-        };
-
-        Ok(ChainState::new(database))
-    }
-
-    fn storage_location(&self) -> StorageLocation {
-        if self.db.memory_db.is_empty() {
-            StorageLocation::Disk
-        } else {
-            StorageLocation::Memory
-        }
-    }
-
-    fn make_canonical(old_state: &Self, mut new_state: Self) -> Self { 
-        assert!(old_state.is_canonical());
-        
-        if new_state.is_canonical() {
-            // Just flush changes if both states are canonical
-            new_state.db.flush();
-            new_state
-        } else {
-            new_state.make_canonical().unwrap();
-            new_state.db.flush();
-            new_state
-        }
     }
 }

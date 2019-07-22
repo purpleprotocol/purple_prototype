@@ -18,7 +18,6 @@
 
 use crate::block::Block;
 use crate::orphan_type::OrphanType;
-use common::checkpointable::*;
 use bin_tools::*;
 use crypto::Hash;
 use elastic_array::ElasticArray128;
@@ -1784,7 +1783,7 @@ mod tests {
     }
 
     impl Block for DummyBlock {
-        type ChainState = DummyCheckpoint;
+        type ChainState = ();
 
         fn genesis() -> Arc<Self> {
             let genesis = DummyBlock {
@@ -1797,8 +1796,8 @@ mod tests {
             Arc::new(genesis)
         }
 
-        fn genesis_state() -> DummyCheckpoint {
-            DummyCheckpoint::genesis()
+        fn genesis_state() -> () {
+            ()
         }
 
         fn parent_hash(&self) -> Option<Hash> {
@@ -1884,7 +1883,7 @@ mod tests {
     #[test]
     fn it_rewinds_to_genesis() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, (), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -1954,7 +1953,7 @@ mod tests {
     #[test]
     fn stages_append_test1() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, (), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -2096,7 +2095,7 @@ mod tests {
     #[test]
     fn stages_append_test2() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, (), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -2294,7 +2293,7 @@ mod tests {
     /// of appended blocks.
     fn stages_append_test3() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, (), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -3967,7 +3966,7 @@ mod tests {
     /// tip instead of G at commit hash `d0ad0bd6a7422f6308b96a34a6f7725662c8b7d4`.
     fn stages_append_test4() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+        let mut hard_chain = Chain::<DummyBlock>::new(db, (), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -6713,7 +6712,7 @@ mod tests {
     /// G, C', C'', E', C, B', F'', E'', B, A, D', F, D''', E, D, D'',
     fn stages_append_test5() {
         let db = test_helpers::init_tempdb();
-        let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+        let mut chain = Chain::<DummyBlock>::new(db, (), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -6817,7 +6816,7 @@ mod tests {
     /// E', E'', D'', C, D''', F, D, B', C'', E, F'', G, A, C', D', B
     fn stages_append_test6() {
         let db = test_helpers::init_tempdb();
-        let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+        let mut chain = Chain::<DummyBlock>::new(db, (), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -6916,7 +6915,7 @@ mod tests {
     /// E, D''', D', A, B, F'', E'', C, F, C'', D'', G, C', E', D, B'
     fn stages_append_test7() {
         let db = test_helpers::init_tempdb();
-        let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+        let mut chain = Chain::<DummyBlock>::new(db, (), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -7015,7 +7014,7 @@ mod tests {
     /// E, D'', D, A, C'', F'', G, E'', C, B, C', D''', E', F, B', D',
     fn stages_append_test8() {
         let db = test_helpers::init_tempdb();
-        let mut chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+        let mut chain = Chain::<DummyBlock>::new(db, (), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -7259,7 +7258,7 @@ mod tests {
         /// the height of the chain must be that of `G` which is 7.
         fn append_stress_test() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+            let mut hard_chain = Chain::<DummyBlock>::new(db, (), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -7392,7 +7391,7 @@ mod tests {
 
         fn it_rewinds_correctly1() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+            let mut hard_chain = Chain::<DummyBlock>::new(db, (), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -7467,7 +7466,7 @@ mod tests {
 
         fn it_rewinds_correctly2() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyCheckpoint::genesis(), true);
+            let mut hard_chain = Chain::<DummyBlock>::new(db, (), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);

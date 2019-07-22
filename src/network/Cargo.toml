@@ -28,5 +28,4 @@ hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["rayon
 
 [dev-dependencies]
 tempdir = "0.3.7"
-common = { path = "../common" }
 test-helpers = { path = "../util/test-helpers" }

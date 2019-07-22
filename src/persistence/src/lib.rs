@@ -27,11 +27,7 @@ use std::path::{Path, PathBuf};
 use rocksdb::DB;
 
 pub fn open_database(path: &PathBuf, wal_path: &Path) -> DB {
-  DB::open(&crate::db_options(wal_path), path.to_str().unwrap()).unwrap()
-}
-
-pub(crate) fn open_database_no_checks(path: &PathBuf, wal_path: &Path) -> DB {
-    DB::open(&crate::db_options_no_checks(wal_path), path.to_str().unwrap()).unwrap()
+    DB::open(&crate::db_options(wal_path), path.to_str().unwrap()).unwrap()
 }
 
 #[cfg(test)]
@@ -42,7 +38,6 @@ extern crate log;
 #[macro_use]
 extern crate lazy_static;
 
-extern crate common;
 extern crate crypto;
 extern crate elastic_array;
 extern crate hashbrown;
@@ -56,11 +51,7 @@ extern crate rocksdb;
 pub use hasher::*;
 pub use node_codec::*;
 pub use persistent_db::*;
-pub use state_registry::*;
-pub use init::*;
 
 mod hasher;
 mod node_codec;
 mod persistent_db;
-mod state_registry;
-mod init;

@@ -15,10 +15,6 @@
   You should have received a copy of the GNU General Public License
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
-
-use crate::init::*;
-use crate::state_registry::STATE_REGISTRY;
-use common::{Checkpointable, StorageLocation};
 use crypto::Hash;
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
@@ -36,34 +32,6 @@ pub fn cf_options() -> Options {
 }
 
 pub fn db_options(wal_dir: &Path) -> Options {
-    if !is_initialized() {
-        panic!("Persistence module not initialized! Call `persistence::init()` before using anything");
-    }
-
-    let mut opts = Options::default();
-    opts.set_wal_dir(wal_dir);
-    opts.increase_parallelism(num_cpus::get() as i32);
-    opts.create_if_missing(true);
-    opts.create_missing_column_families(true);
-    opts.set_max_open_files(10000);
-    opts.set_use_fsync(false);
-    opts.set_bytes_per_sync(8388608);
-    opts.optimize_for_point_lookup(1024);
-    opts.set_table_cache_num_shard_bits(6);
-    opts.set_max_write_buffer_number(32);
-    opts.set_write_buffer_size(536870912);
-    opts.set_target_file_size_base(1073741824);
-    opts.set_min_write_buffer_number_to_merge(4);
-    opts.set_level_zero_stop_writes_trigger(2000);
-    opts.set_level_zero_slowdown_writes_trigger(0);
-    opts.set_compaction_style(DBCompactionStyle::Universal);
-    opts.set_max_background_compactions(4);
-    opts.set_max_background_flushes(4);
-    opts.set_disable_auto_compactions(true);
-    opts
-}
-
-pub(crate) fn db_options_no_checks(wal_dir: &Path) -> Options {
     let mut opts = Options::default();
     opts.set_wal_dir(wal_dir);
     opts.increase_parallelism(num_cpus::get() as i32);
@@ -114,19 +82,6 @@ impl PersistentDb {
     pub const ROOT_HASH_KEY: &'static [u8] = b"root_hash";
 
     pub fn new(db_ref: Arc<DB>, cf_name: Option<&'static str>) -> PersistentDb {
-        if !is_initialized() {
-            panic!("Persistence module not initialized! Call `persistence::init()` before using anything");
-        }
-
-        PersistentDb {
-            db_ref: Some(db_ref),
-            cf_name,
-            db_type: None,
-            memory_db: HashMap::new(),
-        }
-    }
-
-    pub(crate) fn new_without_checks(db_ref: Arc<DB>, cf_name: Option<&'static str>) -> PersistentDb {
         PersistentDb {
             db_ref: Some(db_ref),
             cf_name,
@@ -380,7 +335,6 @@ mod tests {
         let dir = TempDir::new("purple_test").unwrap();
         let path = dir.path().join("database");
         let path = path.to_str().unwrap();
-        init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
@@ -396,7 +350,6 @@ mod tests {
         let dir = TempDir::new("purple_test").unwrap();
         let path = dir.path().join("database");
         let path = path.to_str().unwrap();
-        init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
@@ -413,7 +366,6 @@ mod tests {
         let dir = TempDir::new("purple_test").unwrap();
         let path = dir.path().join("database");
         let path = path.to_str().unwrap();
-        init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
@@ -429,7 +381,6 @@ mod tests {
         let dir = TempDir::new("purple_test").unwrap();
         let path = dir.path().join("database");
         let path = path.to_str().unwrap();
-        init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
@@ -450,7 +401,6 @@ mod tests {
         let dir = TempDir::new("purple_test").unwrap();
         let path = dir.path().join("database");
         let path = path.to_str().unwrap();
-        init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
@@ -471,7 +421,6 @@ mod tests {
         let dir = TempDir::new("purple_test").unwrap();
         let path = dir.path().join("database");
         let path = path.to_str().unwrap();
-        init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
@@ -495,7 +444,6 @@ mod tests {
         let dir = TempDir::new("purple_test").unwrap();
         let path = dir.path().join("database");
         let path = path.to_str().unwrap();
-        init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
@@ -513,7 +461,6 @@ mod tests {
         let dir = TempDir::new("purple_test").unwrap();
         let path = dir.path().join("database");
         let path = path.to_str().unwrap();
-        init(dir.path().to_path_buf());
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);

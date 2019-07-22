@@ -24,9 +24,6 @@ extern crate quickcheck;
 extern crate log;
 
 #[cfg(test)]
-extern crate common as other_common;
-
-#[cfg(test)]
 extern crate tempdir;
 
 extern crate byteorder;
@@ -74,9 +71,6 @@ use tempdir::TempDir;
 
 #[cfg(test)]
 use std::thread;
-
-#[cfg(test)]
-use other_common::checkpointable::*;
 
 #[cfg(test)]
 use crypto::NodeId;

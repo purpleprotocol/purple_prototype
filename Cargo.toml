@@ -9,7 +9,6 @@ members = [
     "src/account",
     "src/causality",
     "src/chain",
-    "src/common",
     "src/consensus",
     "src/crypto",
     "src/events",
@@ -46,7 +45,6 @@ consensus = { path = "src/consensus" }
 persistence = { path = "src/persistence" }
 network = { path = "src/network" }
 transactions = { path = "src/transactions" }
-common = { path = "src/common" }
 chain = { path = "src/chain" }
 miner = { path = "src/miner" }
 mimalloc = "0.1.5"

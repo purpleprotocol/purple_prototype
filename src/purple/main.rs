@@ -25,7 +25,6 @@ extern crate jsonrpc_macros;
 
 extern crate chain;
 extern crate clap;
-extern crate common;
 extern crate crypto;
 extern crate dirs;
 extern crate elastic_array;
@@ -44,7 +43,6 @@ extern crate tokio;
 
 use chain::*;
 use clap::{App, Arg};
-use common::checkpointable::DummyCheckpoint;
 use crypto::{Identity, NodeId, SecretKey as Sk};
 use elastic_array::ElasticArray128;
 use futures::future::ok;

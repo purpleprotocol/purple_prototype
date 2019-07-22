@@ -17,7 +17,6 @@ patricia-trie = "0.3.0"
 account = { path = "../account" }
 crypto = { path = "../crypto" }
 events = { path = "../events" }
-common = { path = "../common" }
 consensus = { path = "../consensus" }
 persistence = { path = "../persistence" }
 bin-tools = { path = "../util/bin-tools/" }
