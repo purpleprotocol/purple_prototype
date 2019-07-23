@@ -16,33 +16,29 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::chain::ChainErr;
 use crate::types::*;
-use persistence::PersistentDb;
-use consensus::PoolState;
 
-/// Wrapper over the `StateChain` associated chain state.
 #[derive(Clone, Debug)]
-pub struct ChainState {
-    /// Database storing the ledger ephemeral state.
-    pub(crate) db: PersistentDb,
+/// Chain state associated with proof-of-work chains.
+/// This is used to calculate the difficulty on the 
+/// `EasyChain` and on the `HardChain`.
+pub struct PowChainState {
+    /// The current chain height
+    height: u64,
 
-    /// The un-flushed validator pool state
-    pub(crate) pool_state: PoolState,
+    /// Current difficulty
+    difficulty: u64,
 }
 
-impl ChainState {
-    const POOL_STATE_KEY: &'static [u8] = b"pool_state";
-    
-    pub fn new(db: PersistentDb) -> ChainState {
-        ChainState {
-            db,
-            pool_state: PoolState::new(0, 1000) // TODO: Retrieve/calculate pool state from database
-        }
+impl PowChainState {
+    pub fn genesis() -> Self {
+        PowChainState { height: 0, difficulty: 0 }
     }
 }
 
-impl Flushable for ChainState {
+impl Flushable for PowChainState {
     fn flush(&mut self) -> Result<(), ChainErr> {
-        unimplemented!();
+        Ok(())
     }
 }

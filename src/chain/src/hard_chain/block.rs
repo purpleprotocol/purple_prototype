@@ -19,6 +19,7 @@
 use crate::block::Block;
 use crate::chain::ChainErr;
 use crate::easy_chain::block::EasyBlock;
+use crate::pow_chain_state::PowChainState;
 use account::NormalAddress;
 use crypto::PublicKey;
 use bin_tools::*;
@@ -104,14 +105,14 @@ impl HashTrait for HardBlock {
 }
 
 impl Block for HardBlock {
-    type ChainState = ();
+    type ChainState = PowChainState;
 
     fn genesis() -> Arc<HardBlock> {
         GENESIS_RC.clone()
     }
 
-    fn genesis_state() -> () {
-        ()
+    fn genesis_state() -> PowChainState {
+        PowChainState::genesis()
     }
 
     fn height(&self) -> u64 {

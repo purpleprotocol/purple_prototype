@@ -18,6 +18,7 @@
 
 use crate::block::Block;
 use crate::chain::ChainErr;
+use crate::pow_chain_state::PowChainState;
 use bin_tools::*;
 use account::NormalAddress;
 use crypto::PublicKey;
@@ -94,14 +95,14 @@ impl HashTrait for EasyBlock {
 }
 
 impl Block for EasyBlock {
-    type ChainState = ();
+    type ChainState = PowChainState;
 
     fn genesis() -> Arc<EasyBlock> {
         GENESIS_RC.clone()
     }
 
-    fn genesis_state() -> () {
-        ()
+    fn genesis_state() -> PowChainState {
+        PowChainState::genesis()
     }
 
     fn height(&self) -> u64 {
