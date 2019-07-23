@@ -23,7 +23,7 @@ mod chain;
 mod easy_chain;
 mod hard_chain;
 mod state_chain;
-mod orphan_type;
+mod types;
 
 pub use crate::chain::*;
 pub use block::*;

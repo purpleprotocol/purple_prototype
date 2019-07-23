@@ -16,6 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::chain::ChainErr;
+use std::fmt::Debug;
+
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub enum OrphanType {
     /// The orphan has both a valid parent and/or children
@@ -32,4 +35,45 @@ pub enum OrphanType {
 
     /// The orphan is the tip of a disconnected chain
     DisconnectedTip,
+}
+
+/// Generic trait for state that can be flushed to disk.
+pub trait Flushable {
+    fn flush(&mut self) -> Result<(), ChainErr>;
+}
+
+/// Chain state wrapper representing an in-memory state
+/// that is not yet flushed to disk.
+#[derive(Clone, Debug)]
+pub struct UnflushedChainState<S> 
+    where S: Debug + Sized + Flushable
+{
+    state: S
+}
+
+impl<S> UnflushedChainState<S> 
+    where S: Debug + Sized + Flushable
+{
+    pub fn flush(self) -> Result<FlushedChainState<S>, ChainErr> {
+        self.state.flush()?;
+        Ok(FlushedChainState { state: self.state })
+    }
+}
+
+/// Chain state wrapper representing state that is flushed
+/// to disk. This is not modifiable and read-only. To request
+/// a modifiable state which is un-flushed, call `Self::modify()`.
+#[derive(Clone, Debug)]
+pub struct FlushedChainState<S>
+    where S: Debug + Sized + Flushable
+{
+    state: S
+}
+
+impl<S> FlushedChainState<S>
+    where S: Debug + Sized + Flushable
+{
+    pub fn modify(self) -> UnflushedChainState<S> {
+        UnflushedChainState { state: self.state }
+    }
 }

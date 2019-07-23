@@ -25,7 +25,7 @@ pub struct ChainState {
     /// Database storing the ledger ephemeral state.
     pub(crate) db: PersistentDb,
 
-    /// The current validator pool state
+    /// The un-flushed validator pool state
     pub(crate) pool_state: PoolState,
 }
 
@@ -37,15 +37,5 @@ impl ChainState {
             db,
             pool_state: PoolState::new(0, 1000) // TODO: Retrieve/calculate pool state from database
         }
-    }
-
-    /// Returns true if the underlying `PersistentDb` 
-    /// is canonical i.e. not a checkpoint.
-    pub fn is_canonical(&self) -> bool {
-        self.db.is_canonical()
-    }
-
-    pub fn make_canonical(&mut self) -> Result<(), ()> {
-        self.db.make_canonical()
     }
 }

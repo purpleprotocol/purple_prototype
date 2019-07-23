@@ -22,6 +22,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("default options flush no cf - 10 items", |b| {
         let tmp_dir = tempdir::TempDir::new("db_dir").unwrap();
         let path = tmp_dir.path();
+        let wal_path = path.join("wal");
         let db = Arc::new(DB::open_default(path.to_str().unwrap()).unwrap());
         let mut per_db = PersistentDb::new(db, None);
         let mut rng = rand::thread_rng();
@@ -162,7 +163,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("custom options flush with cf - 100 items", |b| {
         let tmp_dir = tempdir::TempDir::new("db_dir").unwrap();
         let path = tmp_dir.path();
-        let opts = persistence::db_options();
+        let wal_path = path.join("wal");
+        let opts = persistence::db_options(&wal_path);
         let db = Arc::new(DB::open_cf(&opts, path.to_str().unwrap(), &["test_cf"]).unwrap());
         let mut per_db = PersistentDb::new(db, Some("test_cf"));
         let mut rng = rand::thread_rng();
@@ -179,7 +181,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("custom options flush with cf - 1000 items", |b| {
         let tmp_dir = tempdir::TempDir::new("db_dir").unwrap();
         let path = tmp_dir.path();
-        let opts = persistence::db_options();
+        let wal_path = path.join("wal");
+        let opts = persistence::db_options(&wal_path);
         let db = Arc::new(DB::open_cf(&opts, path.to_str().unwrap(), &["test_cf"]).unwrap());
         let mut per_db = PersistentDb::new(db, Some("test_cf"));
         let mut rng = rand::thread_rng();
@@ -196,7 +199,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("custom options flush with cf - 10000 items", |b| {
         let tmp_dir = tempdir::TempDir::new("db_dir").unwrap();
         let path = tmp_dir.path();
-        let opts = persistence::db_options();
+        let wal_path = path.join("wal");
+        let opts = persistence::db_options(&wal_path);
         let db = Arc::new(DB::open_cf(&opts, path.to_str().unwrap(), &["test_cf"]).unwrap());
         let mut per_db = PersistentDb::new(db, Some("test_cf"));
         let mut rng = rand::thread_rng();
@@ -213,7 +217,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("clone 100 unflushed items", |b| {
         let tmp_dir = tempdir::TempDir::new("db_dir").unwrap();
         let path = tmp_dir.path();
-        let opts = persistence::db_options();
+        let wal_path = path.join("wal");
+        let opts = persistence::db_options(&wal_path);
         let db = Arc::new(DB::open_cf(&opts, path.to_str().unwrap(), &["test_cf"]).unwrap());
         let mut per_db = PersistentDb::new(db, Some("test_cf"));
         let mut rng = rand::thread_rng();
@@ -230,7 +235,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("clone 500 unflushed items", |b| {
         let tmp_dir = tempdir::TempDir::new("db_dir").unwrap();
         let path = tmp_dir.path();
-        let opts = persistence::db_options();
+        let wal_path = path.join("wal");
+        let opts = persistence::db_options(&wal_path);
         let db = Arc::new(DB::open_cf(&opts, path.to_str().unwrap(), &["test_cf"]).unwrap());
         let mut per_db = PersistentDb::new(db, Some("test_cf"));
         let mut rng = rand::thread_rng();
@@ -247,7 +253,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("clone 1000 unflushed items", |b| {
         let tmp_dir = tempdir::TempDir::new("db_dir").unwrap();
         let path = tmp_dir.path();
-        let opts = persistence::db_options();
+        let wal_path = path.join("wal");
+        let opts = persistence::db_options(&wal_path);
         let db = Arc::new(DB::open_cf(&opts, path.to_str().unwrap(), &["test_cf"]).unwrap());
         let mut per_db = PersistentDb::new(db, Some("test_cf"));
         let mut rng = rand::thread_rng();
@@ -264,7 +271,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("clone 10000 unflushed items", |b| {
         let tmp_dir = tempdir::TempDir::new("db_dir").unwrap();
         let path = tmp_dir.path();
-        let opts = persistence::db_options();
+        let wal_path = path.join("wal");
+        let opts = persistence::db_options(&wal_path);
         let db = Arc::new(DB::open_cf(&opts, path.to_str().unwrap(), &["test_cf"]).unwrap());
         let mut per_db = PersistentDb::new(db, Some("test_cf"));
         let mut rng = rand::thread_rng();

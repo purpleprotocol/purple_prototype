@@ -61,20 +61,10 @@ pub enum Operation {
     Put(Vec<u8>),
 }
 
-#[derive(PartialEq, Clone)]
-pub enum DbType {
-    /// The database is a checkpoint.
-    Checkpoint,
-
-    /// The database is the canonical state.
-    Canonical,
-}
-
 #[derive(Clone)]
 pub struct PersistentDb {
     pub db_ref: Option<Arc<DB>>,
     pub cf_name: Option<&'static str>,
-    pub db_type: Option<DbType>,
     pub memory_db: HashMap<Vec<u8>, Operation>,
 }
 
@@ -85,7 +75,6 @@ impl PersistentDb {
         PersistentDb {
             db_ref: Some(db_ref),
             cf_name,
-            db_type: None,
             memory_db: HashMap::new(),
         }
     }
@@ -94,7 +83,6 @@ impl PersistentDb {
     pub fn new_in_memory() -> PersistentDb {
         PersistentDb {
             db_ref: None,
-            db_type: None,
             cf_name: None,
             memory_db: HashMap::new(),
         }
@@ -232,28 +220,6 @@ impl PersistentDb {
                 Err(err) => panic!(err),
             }
         }
-    }
-
-    /// Returns true if the `PersistentDb` 
-    /// is canonical i.e. not a checkpoint.
-    pub fn is_canonical(&self) -> bool {
-        if let Some(ref db_type) = self.db_type {
-            db_type == &DbType::Canonical
-        } else {
-            panic!("This function can only be called on a state database!");
-        }
-    }
-
-    pub fn make_canonical(&mut self) -> Result<(), ()> {
-        if let Some(ref db_type) = self.db_type {
-            if db_type == &DbType::Canonical {
-                return Err(())
-            }
-        } else {
-            panic!("This function can only be called on a state database!");
-        }
-
-        unimplemented!();
     }
 }
 

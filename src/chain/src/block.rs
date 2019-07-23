@@ -17,6 +17,7 @@
 */
 
 use crate::{ChainErr, EasyBlock, HardBlock, StateBlock};
+use crate::types::Flushable;
 use chrono::prelude::*;
 use crypto::Hash;
 use std::boxed::Box;
@@ -28,7 +29,7 @@ use std::hash::Hash as HashTrait;
 /// Generic block interface
 pub trait Block: Debug + PartialEq + Eq + HashTrait {
     /// Per tip validation state
-    type ChainState: Clone + Debug;
+    type ChainState: Clone + Debug + Flushable;
 
     /// Size of the block cache.
     const BLOCK_CACHE_SIZE: usize = 20;
