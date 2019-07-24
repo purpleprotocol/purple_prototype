@@ -61,10 +61,11 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
     /// The number of blocks after which a state checkpoint will be made.
     /// 
     /// This number **MUST** be less or equal than the minimum accepted height.
-    const CHECKPOINT_INTERVAL: usize = 10;
+    const CHECKPOINT_INTERVAL: usize = 5;
 
-    /// Max checkpoints to keep.
-    const MAX_CHECKPOINTS: usize = 10;
+    /// Max checkpoints to keep. This number must be less or equal
+    /// than `(MAX_HEIGHT + MIN_HEIGHT) / CHECKPOINT_INTERVAL`.
+    const MAX_CHECKPOINTS: usize = 4;
 
     /// How many blocks to keep behind the canonical 
     /// chain when pruning is enabled. This number should
@@ -73,6 +74,9 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
 
     /// Returns the genesis block.
     fn genesis() -> Arc<Self>;
+
+    /// Returns true if the block is the genesis block.
+    fn is_genesis(&self) -> bool;
 
     /// Returns the genesis state of the chain
     fn genesis_state() -> Self::ChainState;

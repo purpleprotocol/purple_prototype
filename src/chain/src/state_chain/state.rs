@@ -17,6 +17,7 @@
 */
 
 use crate::types::*;
+use crate::chain::ChainErr;
 use persistence::PersistentDb;
 use consensus::PoolState;
 

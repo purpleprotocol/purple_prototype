@@ -54,7 +54,15 @@ pub struct UnflushedChainState<S>
 impl<S> UnflushedChainState<S> 
     where S: Debug + Sized + Flushable
 {
-    pub fn flush(self) -> Result<FlushedChainState<S>, ChainErr> {
+    pub fn new(state: S) -> UnflushedChainState<S> {
+        UnflushedChainState { state }
+    }
+
+    pub fn inner(self) -> S {
+        self.state
+    }
+
+    pub fn flush(mut self) -> Result<FlushedChainState<S>, ChainErr> {
         self.state.flush()?;
         Ok(FlushedChainState { state: self.state })
     }
@@ -73,6 +81,14 @@ pub struct FlushedChainState<S>
 impl<S> FlushedChainState<S>
     where S: Debug + Sized + Flushable
 {
+    pub fn new(state: S) -> FlushedChainState<S> {
+        FlushedChainState { state }
+    }
+
+    pub fn inner(self) -> S {
+        self.state
+    }
+
     pub fn modify(self) -> UnflushedChainState<S> {
         UnflushedChainState { state: self.state }
     }

@@ -171,7 +171,6 @@ pub fn init_test_networks(
                 let address_mappings = am_clone;
                 let addresses = a_clone;
                 let temp_dir = TempDir::new("storage").unwrap();
-                persistence::init(temp_dir.path().to_path_buf());
 
                 let (db1, db2, db3, db4) = (
                     test_helpers::init_tempdb(),
@@ -182,12 +181,12 @@ pub fn init_test_networks(
 
                 let easy_chain = Arc::new(RwLock::new(EasyChain::new(
                     db1,
-                    DummyCheckpoint::genesis(),
+                    PowChainState::genesis(),
                     true,
                 )));
                 let hard_chain = Arc::new(RwLock::new(HardChain::new(
                     db2,
-                    DummyCheckpoint::genesis(),
+                    PowChainState::genesis(),
                     true,
                 )));
                 let state_chain = Arc::new(RwLock::new(StateChain::new(db3, ChainState::new(db4), true)));

@@ -62,6 +62,9 @@ lazy_static! {
     /// Canonical tip block key
     static ref TIP_KEY: Hash = { crypto::hash_slice(b"canonical_tip") };
 
+    /// The key of the root block
+    static ref ROOT_KEY: Hash = { crypto::hash_slice(b"root_block") };
+
     /// The key to the canonical height of the chain
     static ref CANONICAL_HEIGHT_KEY: Hash = { crypto::hash_slice(b"canonical_height") };
 
@@ -148,6 +151,10 @@ pub struct Chain<B: Block> {
     /// The state associated with the canonical tip
     canonical_tip_state: UnflushedChainState<B::ChainState>,
 
+    /// The block from which the canonical chain and 
+    /// all current forks descend.
+    root_block: Arc<B>,
+
     /// The root state from which all other states descend.
     root_state: FlushedChainState<B::ChainState>,
 
@@ -157,13 +164,26 @@ pub struct Chain<B: Block> {
     /// The biggest height of all orphans
     max_orphan_height: Option<u64>,
 
+    /// Height of the last state that has a checkpoint
+    last_checkpoint_height: Option<u64>,
+
+    /// Earliest height to have a checkpoint
+    earliest_checkpoint_height: Option<u64>,
+
     /// Mapping between heights and their sets of
     /// orphans mapped to their inverse height.
     heights_mapping: HashMap<u64, HashMap<Hash, u64>>,
 
-    /// Mapping between heights and sets of
-    /// orphans mapped to their chain state.
-    heights_state_mapping: HashMap<u64, HashMap<Hash, UnflushedChainState<B::ChainState>>>,
+    /// Mapping between heights and associated
+    /// checkpointed state. Note that this only
+    /// stores the states of the canonical chain.
+    /// 
+    /// TODO: Checkpoint states on non-canonical chains as well
+    /// 
+    /// TODO: Flush chain states when we are certain that their
+    /// blocks are mostly certain to stay in the canonical chain (
+    /// and otherwise any change would trigger a re-sync).
+    heights_state_mapping: HashMap<u64, UnflushedChainState<B::ChainState>>,
 
     /// Mapping between orphans and their orphan types/validation statuses.
     validations_mapping: HashMap<Hash, OrphanType>,
@@ -183,14 +203,14 @@ pub struct Chain<B: Block> {
     valid_tips: HashSet<Hash>,
 
     /// Validation states associated with the valid tips
-    valid_tips_states: HashMap<Hash, B::ChainState>,
+    valid_tips_states: HashMap<Hash, UnflushedChainState<B::ChainState>>,
 
     /// Whether the chain is in archival mode or not
     archival_mode: bool,
 }
 
 impl<B: Block> Chain<B> {
-    pub fn new(mut db_ref: PersistentDb, canonical_tip_state: B::ChainState, archival_mode: bool) -> Chain<B> {
+    pub fn new(mut db_ref: PersistentDb, root_state: B::ChainState, archival_mode: bool) -> Chain<B> {
         let tip_db_res = db_ref.get(&TIP_KEY);
         let canonical_tip = match tip_db_res.clone() {
             Some(tip) => {
@@ -201,6 +221,27 @@ impl<B: Block> Chain<B> {
                 B::from_bytes(&block_bytes).unwrap()
             }
             None => B::genesis(),
+        };
+
+        let mut heights_state_mapping = HashMap::with_capacity(B::MAX_CHECKPOINTS);
+
+        let root_state = FlushedChainState::new(root_state);
+        let root_db_res = db_ref.get(&ROOT_KEY);
+        let root_block = match tip_db_res.clone() {
+            Some(tip) => {
+                let mut buf = [0; 32];
+                buf.copy_from_slice(&tip);
+
+                let block_bytes = db_ref.get(&Hash(buf)).unwrap();
+                B::from_bytes(&block_bytes).unwrap()
+            }
+            None => B::genesis(),
+        };
+
+        let canonical_tip_state = if canonical_tip.is_genesis() {
+            UnflushedChainState::new(B::genesis_state())
+        } else {
+            unimplemented!();
         };
 
         let height = match db_ref.get(&CANONICAL_HEIGHT_KEY) {
@@ -228,24 +269,16 @@ impl<B: Block> Chain<B> {
             None => None
         };
 
-        // Load heights and checkpoint ids
-        let disk_heights_checkpoints = if let Some(ids_and_heights) = B::ChainState::fetch_existing_checkpoints() {
-            let mut hm = HashMap::with_capacity(B::MAX_CHECKPOINTS);
-
-            for (id, height) in ids_and_heights {
-                hm.insert(height, id);
-            }
-
-            hm
-        } else {
-            HashMap::with_capacity(B::MAX_CHECKPOINTS)
-        };
-
         let height = height;
 
         Chain {
             canonical_tip,
             canonical_tip_state,
+            root_block,
+            root_state,
+            heights_state_mapping,
+            earliest_checkpoint_height,
+            last_checkpoint_height,
             orphan_pool: HashMap::with_capacity(B::MAX_ORPHANS),
             heights_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
             validations_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
@@ -254,9 +287,6 @@ impl<B: Block> Chain<B> {
             disconnected_tips_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
             valid_tips: HashSet::with_capacity(B::MAX_ORPHANS),
             valid_tips_states: HashMap::with_capacity(B::MAX_ORPHANS),
-            disk_heights_checkpoints,
-            last_checkpoint_height,
-            earliest_checkpoint_height,
             max_orphan_height: None,
             archival_mode,
             height,
@@ -323,23 +353,6 @@ impl<B: Block> Chain<B> {
             if parent_hash == *block_hash {
                 break;
             } else {
-                // Remove past checkpoints when we reach their height.
-                //
-                // TODO: Maybe we should soft-delete checkpoints
-                // instead on each rewind in case we switch often.
-                if let (Some(last_checkpoint_height), Some(earliest_checkpoint_height)) = (self.last_checkpoint_height, self.earliest_checkpoint_height) {
-                    if current.height() - 1 == last_checkpoint_height {
-                        let checkpoint_id = self.disk_heights_checkpoints.remove(&last_checkpoint_height).unwrap();
-                        B::ChainState::delete_checkpoint(checkpoint_id).unwrap();
-                    }
-
-                    // Remove checkpoint entries if we only have one checkpoint
-                    if last_checkpoint_height == earliest_checkpoint_height {
-                        self.earliest_checkpoint_height = None;
-                        self.last_checkpoint_height = None;
-                    }
-                }
-
                 let parent = B::from_bytes(&self.db.get(&parent_hash).unwrap()).unwrap();
                 let cur_height = parent.height();
 
@@ -377,10 +390,11 @@ impl<B: Block> Chain<B> {
             }
         }
 
+        let state = self.search_fetch_next_state(new_tip.height());
+
         self.height = new_tip.height();
         self.write_canonical_height(new_tip.height());
-        let state = self.search_fetch_next_state(new_tip.height());
-        self.canonical_tip_state = B::ChainState::make_canonical(&self.canonical_tip_state, state);
+        self.canonical_tip_state = state;
         self.canonical_tip = new_tip;
         
         // Flush changes
@@ -505,13 +519,8 @@ impl<B: Block> Chain<B> {
         let orphan_hash = orphan.block_hash().unwrap();
         let height = orphan.height();
 
-        match orphan_type {
-            OrphanType::ValidChainTip => {
-                self.valid_tips.insert(orphan.block_hash().unwrap());
-            }
-            _ => {
-                // Do nothing
-            }
+        if let OrphanType::ValidChainTip = orphan_type {
+            self.valid_tips.insert(orphan.block_hash().unwrap());
         }
 
         // Write height mapping
@@ -566,7 +575,7 @@ impl<B: Block> Chain<B> {
                         if orphan.parent_hash().unwrap() == self.canonical_tip.block_hash().unwrap() 
                         {
                             // Verify append condition
-                            let append_condition = match B::append_condition(orphan.clone(), self.canonical_tip_state.clone()) {
+                            let append_condition = match B::append_condition(orphan.clone(), self.canonical_tip_state.clone().inner()) {
                                 // Set new tip state if the append can proceed
                                 Ok(new_tip_state) => Some(new_tip_state),
                                 _ => None
@@ -575,6 +584,7 @@ impl<B: Block> Chain<B> {
                             if !done {
                                 // Verify append condition
                                 if let Some(new_tip_state) = append_condition {
+                                    let new_tip_state = UnflushedChainState::new(new_tip_state);
                                     self.make_valid_tips(&block_hash, new_tip_state.clone());
                                     self.write_block(orphan.clone());
 
@@ -590,14 +600,11 @@ impl<B: Block> Chain<B> {
                                             }
 
                                             self.last_checkpoint_height = Some(height);
-                                            let checkpoint_id = new_tip_state.checkpoint(height);
-
-                                            // Store checkpoint id
-                                            self.disk_heights_checkpoints.insert(height, checkpoint_id);
+                                            self.heights_state_mapping.insert(height, new_tip_state.clone());
                                         }
                                     }
 
-                                    self.canonical_tip_state = B::ChainState::make_canonical(&self.canonical_tip_state, new_tip_state);
+                                    self.canonical_tip_state = new_tip_state;
                                 } else {
                                     done = true;
                                 }
@@ -633,7 +640,7 @@ impl<B: Block> Chain<B> {
 
                             if orphan_parent == canonical_tip {
                                 let new_state = {
-                                    match B::append_condition(orphan.clone(), self.canonical_tip_state.clone()) {
+                                    match B::append_condition(orphan.clone(), self.canonical_tip_state.clone().inner()) {
                                         // Set new tip state if the append can proceed
                                         Ok(new_tip_state) => Some(new_tip_state),
                                         _ => None
@@ -649,7 +656,7 @@ impl<B: Block> Chain<B> {
                                 let append_condition = {
                                     let parent_state = self.valid_tips_states.get(&orphan_parent).unwrap();
 
-                                    match B::append_condition(orphan.clone(), parent_state.clone()) {
+                                    match B::append_condition(orphan.clone(), parent_state.clone().inner()) {
                                         // Set new tip state if the append can proceed
                                         Ok(new_tip_state) => Some(new_tip_state),
                                         _ => None
@@ -667,7 +674,7 @@ impl<B: Block> Chain<B> {
                                     *status = OrphanType::ValidChainTip;
 
                                     obsolete.insert(orphan_parent.clone());
-                                    self.valid_tips_states.insert(o.clone(), new_tip_state);
+                                    self.valid_tips_states.insert(o.clone(), UnflushedChainState::new(new_tip_state));
 
                                     // Add to valid tips sets
                                     self.valid_tips.insert(o.clone());
@@ -712,6 +719,7 @@ impl<B: Block> Chain<B> {
                                 let block_hash = to_write.block_hash().unwrap();
                                 let height = to_write.height();
                                 let last_checkpoint_height = self.last_checkpoint_height.unwrap_or(0);
+                                let state = UnflushedChainState::new(state);
 
                                 // Checkpoint state if we have reached the quota
                                 if height - last_checkpoint_height == B::CHECKPOINT_INTERVAL as u64 {
@@ -720,16 +728,11 @@ impl<B: Block> Chain<B> {
                                     }
 
                                     self.last_checkpoint_height = Some(height);
-                                    let checkpoint_id = state.checkpoint(height);
-
-                                    // Store checkpoint id
-                                    self.disk_heights_checkpoints.insert(height, checkpoint_id);
-                                    self.last_checkpoint_height = Some(height);
+                                    self.heights_state_mapping.insert(height, state.clone());
                                 }
 
                                 self.make_valid_tips(&block_hash, state.clone());
-                                // TODO: Write canonical state transition function
-                                self.canonical_tip_state = B::ChainState::make_canonical(&self.canonical_tip_state, state);
+                                self.canonical_tip_state = state;
                                 self.write_block(to_write.clone());
                             }
                         }
@@ -741,7 +744,7 @@ impl<B: Block> Chain<B> {
                             *status = OrphanType::ValidChainTip;
                             prev_valid_tips.insert(o);
                             self.valid_tips.insert(o.clone());
-                            self.valid_tips_states.insert(o.clone(), state);
+                            self.valid_tips_states.insert(o.clone(), UnflushedChainState::new(state));
                         }
                     }
                 } 
@@ -791,7 +794,7 @@ impl<B: Block> Chain<B> {
 
             // Set the canonical tip state as the one belonging to the new tip
             let state = self.valid_tips_states.remove(&candidate_hash).unwrap();
-            self.canonical_tip_state = B::ChainState::make_canonical(&self.canonical_tip_state, state);
+            self.canonical_tip_state = state;
 
             // Write the blocks from the candidate chain
             for block in to_write {
@@ -896,7 +899,7 @@ impl<B: Block> Chain<B> {
     fn attempt_attach_valid(
         &mut self,
         tip: &mut Arc<B>,
-        tip_state: B::ChainState,
+        tip_state: UnflushedChainState<B::ChainState>,
         inverse_height: &mut u64,
         status: &mut OrphanType,
     ) {
@@ -930,7 +933,7 @@ impl<B: Block> Chain<B> {
         // branches, valid chains.
         for (head_hash, (largest_height, largest_tip)) in iterable {
             let head = self.orphan_pool.get(head_hash).unwrap();
-            let tip_state = B::append_condition(head.clone(), tip_state.clone());
+            let tip_state = B::append_condition(head.clone(), tip_state.clone().inner());
 
             if let Ok(tip_state) = tip_state {
                 let largest_tip = self.orphan_pool.get(&largest_tip).unwrap().clone();
@@ -956,7 +959,7 @@ impl<B: Block> Chain<B> {
             let old_tip_status = self.validations_mapping.get_mut(&block_hash).unwrap();
             *old_tip_status = OrphanType::BelongsToValidChain;
 
-            self.make_valid_tips(&head_hash.clone(), tip_state);
+            self.make_valid_tips(&head_hash.clone(), UnflushedChainState::new(tip_state));
         }
 
         // Update inverse heights
@@ -971,11 +974,11 @@ impl<B: Block> Chain<B> {
     /// 
     /// This function will short-circuit paths that have an invalid chain
     /// state transition.
-    fn make_valid_tips(&mut self, head: &Hash, head_state: B::ChainState) {
+    fn make_valid_tips(&mut self, head: &Hash, head_state: UnflushedChainState<B::ChainState>) {
         if self.disconnected_heads_mapping.remove(head).is_some() {
             let head_block = self.orphan_pool.get(head).unwrap();
             let mut cur_height = head_block.height() + 1;
-            let mut previous: HashMap<Hash, B::ChainState> = HashMap::new();
+            let mut previous: HashMap<Hash, UnflushedChainState<B::ChainState>> = HashMap::new();
 
             self.valid_tips.insert(head.clone());
             self.valid_tips_states.insert(head.clone(), head_state.clone());
@@ -1015,7 +1018,7 @@ impl<B: Block> Chain<B> {
                             
                         if let Some(state) = previous.get(&parent_hash) {
                             // TODO: Reduce number of state clones
-                            if let Ok(state) = B::append_condition(e.clone(), state.clone()) {
+                            if let Ok(state) = B::append_condition(e.clone(), state.clone().inner()) {
                                 // Change head status if we have a match
                                 let status = self
                                     .validations_mapping
@@ -1029,7 +1032,7 @@ impl<B: Block> Chain<B> {
                                 self.valid_tips.remove(&parent_hash);
                                 self.disconnected_heads_mapping.remove(&parent_hash);
                                 self.disconnected_tips_mapping.remove(&parent_hash);
-                                new_previous_set.insert(block_hash, state);
+                                new_previous_set.insert(block_hash, UnflushedChainState::new(state));
                                 matched_set.insert(parent_hash);
 
                                 let status = self
@@ -1190,7 +1193,7 @@ impl<B: Block> Chain<B> {
                 }
 
                 let append_condition = {
-                    match B::append_condition(block.clone(), self.canonical_tip_state.clone()) {
+                    match B::append_condition(block.clone(), self.canonical_tip_state.clone().inner()) {
                         // Set new tip state if the append can proceed
                         Ok(new_tip_state) => Some(new_tip_state),
                         _ => None
@@ -1213,14 +1216,11 @@ impl<B: Block> Chain<B> {
                             }
 
                             self.last_checkpoint_height = Some(height);
-                            let checkpoint_id = new_tip_state.checkpoint(height);
-
-                            // Store checkpoint id
-                            self.disk_heights_checkpoints.insert(height, checkpoint_id);
+                            self.heights_state_mapping.insert(height, UnflushedChainState::new(new_tip_state.clone()));
                         }
                     }
 
-                    self.canonical_tip_state = B::ChainState::make_canonical(&self.canonical_tip_state, new_tip_state);
+                    self.canonical_tip_state = UnflushedChainState::new(new_tip_state);
 
                     // Process orphans
                     self.process_orphans(height + 1);
@@ -1248,21 +1248,10 @@ impl<B: Block> Chain<B> {
                             return Err(ChainErr::BadHeight);
                         }
 
-                        let parent_state: B::ChainState = if let (Some(earliest_checkpoint_height), Some(last_checkpoint_height)) = (self.earliest_checkpoint_height, self.last_checkpoint_height) {
-                            if parent_height < earliest_checkpoint_height {
-                                return Err(ChainErr::NoCheckpointFound);
-                            }
-
+                        let parent_state: UnflushedChainState<B::ChainState> = if let (Some(earliest_checkpoint_height), Some(last_checkpoint_height)) = (self.earliest_checkpoint_height, self.last_checkpoint_height) {
                             if parent_height == last_checkpoint_height {
                                 // Simply retrieve checkpointed state in this case
-                                let id = self.disk_heights_checkpoints.get(&parent_height).unwrap();
-                                
-                                // Load disk state
-                                if let Ok(state) = B::ChainState::load_from_disk(*id) {
-                                    state
-                                } else {
-                                    panic!("Could not find disk state!");
-                                }
+                                self.heights_state_mapping.get(&parent_height).unwrap().clone()
                             } else if parent_height > last_checkpoint_height {
                                 self.fetch_next_state(last_checkpoint_height, parent_height)
                             } else {
@@ -1272,8 +1261,8 @@ impl<B: Block> Chain<B> {
                             self.search_fetch_next_state(parent_height)
                         };
 
-                        let tip_state = match B::append_condition(block.clone(), parent_state) {
-                            Ok(new_tip_state) => Some(new_tip_state),
+                        let tip_state = match B::append_condition(block.clone(), parent_state.inner()) {
+                            Ok(new_tip_state) => Some(UnflushedChainState::new(new_tip_state)),
                             Err(_) => None
                         };
 
@@ -1369,9 +1358,10 @@ impl<B: Block> Chain<B> {
                                     let append_condition = {
                                         let tip_state = self.valid_tips_states.get_mut(&parent_hash).unwrap();
 
-                                        match B::append_condition(block.clone(), tip_state.clone()) {
+                                        match B::append_condition(block.clone(), tip_state.clone().inner()) {
                                             // Set new tip state if the append can proceed
                                             Ok(new_tip_state) => {
+                                                let new_tip_state = UnflushedChainState::new(new_tip_state);
                                                 *tip_state = new_tip_state.clone();
                                                 Some(new_tip_state)
                                             },
@@ -1507,14 +1497,15 @@ impl<B: Block> Chain<B> {
 
                                         // Retrieve state associated with the head's parent
                                         let state = self.search_fetch_next_state(head.height() - 1);
-                                        let mut state = B::append_condition(head.clone(), state)?;
+                                        let mut state = B::append_condition(head.clone(), state.inner())?;
 
                                         // Compute tip state
                                         while let Some(b) = visited_stack.pop() {
                                             state = B::append_condition(b, state)?;
                                         }
  
-                                        B::append_condition(block.clone(), state)?
+                                        let state = B::append_condition(block.clone(), state)?;
+                                        UnflushedChainState::new(state)
                                     };
 
                                     let mut status = OrphanType::ValidChainTip;
@@ -1626,23 +1617,27 @@ impl<B: Block> Chain<B> {
         self.canonical_tip.clone()
     }
 
-    fn search_fetch_next_state(&self, target_height: u64) -> B::ChainState {
+    fn search_fetch_next_state(&self, target_height: u64) -> UnflushedChainState<B::ChainState> {
         // Find a height with an earlier checkpoint
         // than the target height.
         let height = {
-            if let Some(last_checkpoint_height) = self.last_checkpoint_height {
-                let mut current = last_checkpoint_height;
-                let interval = B::CHECKPOINT_INTERVAL as u64;
+            if let (Some(earliest_checkpoint_height), Some(last_checkpoint_height)) = (self.earliest_checkpoint_height, self.last_checkpoint_height) {
+                if target_height < earliest_checkpoint_height {
+                    target_height 
+                } else {
+                    let mut current = last_checkpoint_height;
+                    let interval = B::CHECKPOINT_INTERVAL as u64;
 
-                loop {
-                    if current - interval < target_height {
-                        break;
+                    loop {
+                        if current - interval < target_height {
+                            break;
+                        }
+
+                        current -= interval;
                     }
 
-                    current -= interval;
+                    current
                 }
-
-                current
             } else {
                 target_height
             }
@@ -1652,30 +1647,24 @@ impl<B: Block> Chain<B> {
     }
 
     /// Fetches the matching state of target height, starting from height.
-    fn fetch_next_state(&self, mut height: u64, target_height: u64) -> B::ChainState {
+    fn fetch_next_state(&self, mut height: u64, target_height: u64) -> UnflushedChainState<B::ChainState> {
         assert!(target_height <= self.height);
         assert!(height <= target_height);
 
         let mut state = {
             if height == 0 {
-                return B::genesis_state();
+                return UnflushedChainState::new(B::genesis_state());
             } else if height < B::CHECKPOINT_INTERVAL as u64 {
                 height = 0;
                 B::genesis_state()
             } else {
-                // Load disk state
-                let id = self.disk_heights_checkpoints.get(&height).unwrap();
-
-                if let Ok(state) = B::ChainState::load_from_disk(*id) {
-                    state
-                } else {
-                    panic!("Could not find disk state!");
-                }
+                // Load checkpoint
+                self.heights_state_mapping.get(&height).unwrap().clone().inner()
             }
         };
 
         if height == target_height {
-            state
+            UnflushedChainState::new(state)
         } else {
             let mut cur_height = height + 1;
             
@@ -1700,7 +1689,7 @@ impl<B: Block> Chain<B> {
                 cur_height += 1;
             }
 
-            state
+            UnflushedChainState::new(state)
         }
     }
 }
@@ -1750,6 +1739,12 @@ mod tests {
 
         pub fn height(&self) -> u64 {
             self.0
+        }
+    }
+
+    impl Flushable for DummyState {
+        fn flush(&mut self) -> Result<(), ChainErr> {
+            Ok(())
         }
     }
 
@@ -1808,6 +1803,10 @@ mod tests {
 
         fn genesis_state() -> DummyState {
             DummyState(0)
+        }
+
+        fn is_genesis(&self) -> bool {
+            self.height == 0
         }
 
         fn parent_hash(&self) -> Option<Hash> {

@@ -35,6 +35,7 @@ pub use hard_chain::chain::*;
 pub use state_chain::block::*;
 pub use state_chain::chain::*;
 pub use state_chain::state::*;
+pub use pow_chain_state::*;
 
 #[cfg(test)]
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};

@@ -118,6 +118,10 @@ impl Block for StateBlock {
         GENESIS_RC.clone()
     }
 
+    fn is_genesis(&self) -> bool {
+        self == GENESIS_RC.as_ref()
+    }
+
     fn genesis_state() -> ChainState {
         unimplemented!();
     }

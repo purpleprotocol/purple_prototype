@@ -93,9 +93,6 @@ fn main() {
     let hard_chain_wal_path = storage_path.join("hard_chain_db_wal");
     let easy_chain_wal_path = storage_path.join("easy_chain_db_wal");
 
-    // Initialize persistence
-    persistence::init(storage_path);
-
     let storage_db = Arc::new(persistence::open_database(&storage_db_path, &storage_wal_path));
     let state_db = Arc::new(persistence::open_database(&state_db_path, &state_wal_path));
     let state_chain_db = Arc::new(persistence::open_database(&state_chain_db_path, &state_chain_wal_path));
@@ -108,12 +105,12 @@ fn main() {
     let hard_chain_db = PersistentDb::new(hard_chain_db.clone(), None);
     let easy_chain = Arc::new(RwLock::new(EasyChain::new(
         easy_chain_db,
-        DummyCheckpoint::genesis(),
+        PowChainState::genesis(),
         argv.archival_mode,
     )));
     let hard_chain = Arc::new(RwLock::new(HardChain::new(
         hard_chain_db,
-        DummyCheckpoint::genesis(),
+        PowChainState::genesis(),
         argv.archival_mode,
     )));
     let state_chain = Arc::new(RwLock::new(StateChain::new(
