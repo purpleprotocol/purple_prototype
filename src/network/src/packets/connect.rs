@@ -299,42 +299,10 @@ mod tests {
         let addr2 = networks[1].1;
         let n1 = networks[0].2.clone();
         let n2 = networks[1].2.clone();
-        let network1_easy_rec = networks[0].3.clone();
-        let network1_hard_rec = networks[0].4.clone();
-        let network1_state_rec = networks[0].5.clone();
         let network1 = networks[0].0.clone();
         let network1_c = network1.clone();
-        let network2_easy_rec = networks[1].3.clone();
-        let network2_hard_rec = networks[1].4.clone();
-        let network2_state_rec = networks[1].5.clone();
         let network2 = networks[1].0.clone();
         let network2_c = network2.clone();
-
-        // Peer 1 listener thread
-        thread::Builder::new()
-            .name("peer1".to_string())
-            .spawn(move || {
-                MockNetwork::start_receive_loop(
-                    network1,
-                    network1_easy_rec,
-                    network1_hard_rec,
-                    network1_state_rec,
-                )
-            })
-            .unwrap();
-
-        // Peer 2 listener thread
-        thread::Builder::new()
-            .name("peer2".to_string())
-            .spawn(move || {
-                MockNetwork::start_receive_loop(
-                    network2,
-                    network2_easy_rec,
-                    network2_hard_rec,
-                    network2_state_rec,
-                )
-            })
-            .unwrap();
 
         {
             // Attempt to connect the first peer to the second
@@ -343,7 +311,7 @@ mod tests {
 
         // Pause main thread for a bit before
         // making assertions.
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(1600));
 
         let peer1 = {
             let network2 = network2_c.lock();

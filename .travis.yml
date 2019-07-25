@@ -13,3 +13,4 @@ matrix:
 
 script:
   - cargo test --verbose --all --features miner-cpu
+  - cargo build --verbose --features miner-cpu

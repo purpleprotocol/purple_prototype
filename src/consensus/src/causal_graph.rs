@@ -20,6 +20,7 @@ use crate::candidate::Candidate;
 use crate::parameters::*;
 use crate::validation::ValidationResp;
 use crate::validator_state::ValidatorState;
+use crate::pool_state::PoolState;
 use causality::Stamp;
 use crypto::Hash;
 use events::Event;
@@ -63,8 +64,8 @@ pub struct CausalGraph {
     /// already been ordered by all participants.
     root: Arc<Event>,
 
-    /// Mapping between validator nodes ids and their state.
-    pub(crate) validators: HashMap<NodeId, ValidatorState>,
+    /// The current pool state
+    pub(crate) pool_state: PoolState,
 
     /// Current candidates
     pub(crate) candidates: HashSet<Candidate>,
@@ -74,7 +75,7 @@ pub struct CausalGraph {
 }
 
 impl CausalGraph {
-    pub fn new(node_id: NodeId, root_event: Arc<Event>) -> CausalGraph {
+    pub fn new(node_id: NodeId, root_event: Arc<Event>, epoch: u64, allocated: u64) -> CausalGraph {
         let mut graph = Graph::new();
         let mut lookup_table = HashMap::new();
         let mut ends = HashMap::new();
@@ -90,7 +91,7 @@ impl CausalGraph {
             lookup_table,
             pending: HashSet::new(),
             candidates: HashSet::new(),
-            validators: HashMap::new(),
+            pool_state: PoolState::new(epoch, allocated),
             root: root_event.clone(),
             highest: (vec![root_event], 0),
             highest_following: (vec![], 0),
@@ -99,7 +100,7 @@ impl CausalGraph {
     }
 
     #[cfg(test)]
-    pub fn new_with_test_mode(node_id: NodeId, root_event: Arc<Event>) -> CausalGraph {
+    pub fn new_with_test_mode(node_id: NodeId, root_event: Arc<Event>, epoch: u64, allocated: u64) -> CausalGraph {
         let mut graph = Graph::new();
         let mut lookup_table = HashMap::new();
         let mut ends = HashMap::new();
@@ -115,7 +116,7 @@ impl CausalGraph {
             lookup_table,
             pending: HashSet::new(),
             candidates: HashSet::new(),
-            validators: HashMap::new(),
+            pool_state: PoolState::new(epoch, allocated),
             root: root_event.clone(),
             highest: (vec![root_event], 0),
             highest_following: (vec![], 0),
@@ -125,7 +126,7 @@ impl CausalGraph {
 
     pub fn is_valid(&self, event: Arc<Event>) -> ValidationResp {
         // Check validator state
-        if let Some(validator_state) = self.validators.get(&event.node_id()) {
+        if let Some(validator_state) = self.pool_state.validators.get(&event.node_id()) {
             // Check stamp validity, if we cannot determine this,
             // this function will be re-applied when this can be
             // determined i.e. once we have received the parent.
@@ -167,7 +168,7 @@ impl CausalGraph {
     }
 
     pub fn validators_count(&self) -> usize {
-        self.validators.len()
+        self.pool_state.validators.len()
     }
 
     pub fn push(&mut self, event: Arc<Event>) -> Vec<Arc<Event>> {
@@ -329,12 +330,12 @@ impl CausalGraph {
                                         candidate.votes += 1;
                                         candidate.voters.insert(
                                             event.clone(),
-                                            (0, HashSet::with_capacity(self.validators.len())),
+                                            (0, HashSet::with_capacity(self.pool_state.validators.len())),
                                         );
                                         candidate.voters_ids.insert(event.node_id());
 
                                         if candidate.votes
-                                            >= proposal_requirement(self.validators.len() as u16)
+                                            >= proposal_requirement(self.pool_state.validators.len() as u16)
                                         {
                                             // Enter proposal stage
                                             candidate.proposal_stage = true;
@@ -366,7 +367,7 @@ impl CausalGraph {
                                                 // and remove it from the voters set.
                                                 if *vote_count
                                                     >= proposal_requirement(
-                                                        self.validators.len() as u16
+                                                        self.pool_state.validators.len() as u16
                                                     )
                                                 {
                                                     candidate.proposals += 1;
@@ -385,7 +386,7 @@ impl CausalGraph {
 
                                         // The candidate can be advanced into the total order
                                         if c.proposals
-                                            >= required_proposals(self.validators.len() as u16)
+                                            >= required_proposals(self.pool_state.validators.len() as u16)
                                         {
                                             to_advance.push(c.clone());
                                         }
@@ -580,10 +581,12 @@ impl CausalGraph {
         id: NodeId,
         can_send: bool,
         stamp: Stamp,
+        idx: usize,
         allocated: u64,
+        followers: Option<HashSet<NodeId>>,
     ) {
-        self.validators
-            .insert(id, ValidatorState::new(can_send, allocated, stamp));
+        self.pool_state.validators
+            .insert(id, ValidatorState::new(can_send, allocated, idx, stamp, None));
     }
 
     pub fn empty(&self) -> bool {
@@ -612,7 +615,7 @@ mod tests {
             None,
             Stamp::seed(),
         ));
-        let cg = CausalGraph::new_with_test_mode(n1.clone(), A.clone());
+        let cg = CausalGraph::new_with_test_mode(n1.clone(), A.clone(), 0, 1000);
 
         assert_eq!(cg.highest_exclusive(&n2), Some(A));
         assert_eq!(cg.highest_exclusive(&n1), None);
@@ -670,7 +673,7 @@ mod tests {
         ));
         assert!(s_b.happened_after(s_a));
 
-        let mut cg = CausalGraph::new_with_test_mode(n1.clone(), A.clone());
+        let mut cg = CausalGraph::new_with_test_mode(n1.clone(), A.clone(), 0, 1000);
         let mut events = vec![B.clone(), C1.clone(), C2.clone(), C3.clone(), D.clone()];
 
         let D = events[4].clone();
@@ -709,7 +712,7 @@ mod tests {
             let s_b = s_b.join(s_a.peek()).event();
             let D = Arc::new(Event::Dummy(n2.clone(), Hash::random(), Some(C_hash), s_b.clone()));
             assert!(s_b.happened_after(s_a));
-            let mut cg = CausalGraph::new_with_test_mode(n1.clone(), A.clone());
+            let mut cg = CausalGraph::new_with_test_mode(n1.clone(), A.clone(), 0, 1000);
             let mut events = vec![B.clone(), C.clone(), D.clone()];
 
             let B = events[0].clone();
@@ -756,7 +759,7 @@ mod tests {
             let E = Arc::new(Event::Dummy(n.clone(), E_hash.clone(), Some(D_hash.clone()), Stamp::seed()));
             let F = Arc::new(Event::Dummy(n.clone(), F_hash.clone(), Some(D_hash.clone()), Stamp::seed()));
             let G = Arc::new(Event::Dummy(n.clone(), Hash::random(), Some(F_hash), Stamp::seed()));
-            let mut cg = CausalGraph::new_with_test_mode(n, A.clone());
+            let mut cg = CausalGraph::new_with_test_mode(n, A.clone(), 0, 1000);
             let mut events = vec![B.clone(), C.clone(), D.clone(), E.clone(), F.clone(), G.clone()];
 
             // The causal graph should be the same regardless

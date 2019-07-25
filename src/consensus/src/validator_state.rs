@@ -16,7 +16,9 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crypto::NodeId;
 use causality::Stamp;
+use hashbrown::HashSet;
 
 #[derive(Clone, Debug)]
 pub struct ValidatorState {
@@ -24,22 +26,40 @@ pub struct ValidatorState {
     /// to send an event.
     pub(crate) allowed_to_send: bool,
 
-    /// The remaining number of allocated blocks
+    /// Number of events sent by different validators
+    /// since the last sent block of the validator.
+    /// 
+    /// This is `None` if the validator has not yet
+    /// sent an initial event.
+    pub(crate) followers: Option<HashSet<NodeId>>,
+
+    /// The remaining number of allocated events
     /// that the validator is allowed to send during
     /// its lifetime in the pool.
-    pub(crate) remaining_blocks: u64,
+    pub(crate) remaining_events: u64,
 
     /// The stamp of the latest event that
     /// has been sent by the validator.
     pub(crate) latest_stamp: Stamp,
+
+    /// The index of the validator
+    pub(crate) validator_idx: usize,
 }
 
 impl ValidatorState {
-    pub fn new(allowed_to_send: bool, remaining_blocks: u64, init_stamp: Stamp) -> ValidatorState {
+    pub fn new(
+        allowed_to_send: bool, 
+        remaining_events: u64, 
+        idx: usize, 
+        init_stamp: Stamp,
+        followers: Option<HashSet<NodeId>>
+    ) -> ValidatorState {
         ValidatorState {
             allowed_to_send,
-            remaining_blocks,
+            followers,
+            remaining_events,
             latest_stamp: init_stamp,
+            validator_idx: idx,
         }
     }
 }

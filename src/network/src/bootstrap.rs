@@ -37,7 +37,7 @@ pub fn bootstrap(
     db: PersistentDb,
     max_peers: usize,
 ) -> Spawn {
-    info!("Starting bootstrap");
+    info!("Bootstrapping...");
 
     let bootstrap_cache_key = crypto::hash_slice(b"bootstrap_cache");
 

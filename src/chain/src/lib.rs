@@ -23,7 +23,8 @@ mod chain;
 mod easy_chain;
 mod hard_chain;
 mod state_chain;
-mod orphan_type;
+mod types;
+mod pow_chain_state;
 
 pub use crate::chain::*;
 pub use block::*;
@@ -33,7 +34,8 @@ pub use hard_chain::block::*;
 pub use hard_chain::chain::*;
 pub use state_chain::block::*;
 pub use state_chain::chain::*;
-pub use common::checkpointable::*;
+pub use state_chain::state::*;
+pub use pow_chain_state::*;
 
 #[cfg(test)]
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};

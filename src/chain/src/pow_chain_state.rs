@@ -16,20 +16,29 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[derive(Clone, Debug, PartialEq, Copy)]
-pub enum OrphanType {
-    /// The orphan has both a valid parent and/or children
-    /// but it belongs to a chain that is disconnected from
-    /// the canonical one.
-    BelongsToDisconnected,
+use crate::chain::ChainErr;
+use crate::types::*;
 
-    /// The orphan belongs to a valid chain that is not canonical
-    BelongsToValidChain,
+#[derive(Clone, Debug)]
+/// Chain state associated with proof-of-work chains.
+/// This is used to calculate the difficulty on the 
+/// `EasyChain` and on the `HardChain`.
+pub struct PowChainState {
+    /// The current chain height
+    height: u64,
 
-    /// The orphan is the tip of a valid chain that is descended
-    /// from the canonical chain.
-    ValidChainTip,
+    /// Current difficulty
+    difficulty: u64,
+}
 
-    /// The orphan is the tip of a disconnected chain
-    DisconnectedTip,
+impl PowChainState {
+    pub fn genesis() -> Self {
+        PowChainState { height: 0, difficulty: 0 }
+    }
+}
+
+impl Flushable for PowChainState {
+    fn flush(&mut self) -> Result<(), ChainErr> {
+        Ok(())
+    }
 }

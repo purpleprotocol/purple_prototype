@@ -24,7 +24,7 @@ extern crate quickcheck;
 extern crate log;
 
 #[cfg(test)]
-extern crate common as other_common;
+extern crate tempdir;
 
 extern crate byteorder;
 extern crate chain;
@@ -67,7 +67,10 @@ pub use packet::*;
 pub use peer::*;
 
 #[cfg(test)]
-use other_common::checkpointable::*;
+use tempdir::TempDir;
+
+#[cfg(test)]
+use std::thread;
 
 #[cfg(test)]
 use crypto::NodeId;
@@ -106,6 +109,9 @@ use hashbrown::HashMap;
 use persistence::PersistentDb;
 
 #[cfg(test)]
+use chain::ChainState;
+
+#[cfg(test)]
 use chain::*;
 
 #[cfg(test)]
@@ -115,52 +121,16 @@ use crate::mock::MockNetwork;
 use crypto::SecretKey;
 
 #[cfg(test)]
-/// Test helper for initializing mock networks
+/// Test helper for initializing mock networks. Also initializes
+/// listener threads.
 pub fn init_test_networks(
     peers: usize,
 ) -> Vec<(
     Arc<Mutex<MockNetwork>>,
     SocketAddr,
     NodeId,
-    Arc<Mutex<Receiver<(SocketAddr, Arc<EasyBlock>)>>>,
-    Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>,
-    Arc<Mutex<Receiver<(SocketAddr, Arc<StateBlock>)>>>,
 )> {
     let mut mailboxes = HashMap::new();
-    let chains: Vec<(EasyChainRef, HardChainRef, StateChainRef)> = (0..peers)
-        .into_iter()
-        .map(|_| {
-            (
-                test_helpers::init_tempdb(),
-                test_helpers::init_tempdb(),
-                test_helpers::init_tempdb(),
-                test_helpers::init_tempdb(),
-            )
-        })
-        .map(|(db1, db2, db3, db4)| {
-            (
-                Arc::new(RwLock::new(EasyChain::new(
-                    db1,
-                    DummyCheckpoint::genesis(),
-                    true,
-                ))),
-                Arc::new(RwLock::new(HardChain::new(
-                    db2,
-                    DummyCheckpoint::genesis(),
-                    true,
-                ))),
-                Arc::new(RwLock::new(StateChain::new(db3, db4, true))),
-            )
-        })
-        .map(|(easy, hard, state)| {
-            (
-                EasyChainRef::new(easy),
-                HardChainRef::new(hard),
-                StateChainRef::new(state),
-            )
-        })
-        .collect();
-
     let addresses: Vec<SocketAddr> = (0..peers)
         .into_iter()
         .map(|_| crate::random_socket_addr())
@@ -177,9 +147,6 @@ pub fn init_test_networks(
         Arc<Mutex<MockNetwork>>,
         SocketAddr,
         NodeId,
-        Arc<Mutex<Receiver<(SocketAddr, Arc<EasyBlock>)>>>,
-        Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>,
-        Arc<Mutex<Receiver<(SocketAddr, Arc<StateBlock>)>>>,
     )> = Vec::with_capacity(peers);
 
     for i in 0..peers {
@@ -189,30 +156,80 @@ pub fn init_test_networks(
         let (rx3, tx3) = channel();
         address_mappings.insert(addresses[i].clone(), identities[i].0.clone());
         mailboxes.insert(identities[i].0.clone(), rx);
-        let network = MockNetwork::new(
-            identities[i].0.clone(),
-            addresses[i].clone(),
-            "test_network".to_owned(),
-            identities[i].1.clone(),
-            tx,
-            mailboxes.clone(),
-            address_mappings.clone(),
-            rx1,
-            rx2,
-            rx3,
-            chains[i].0.clone(),
-            chains[i].1.clone(),
-            chains[i].2.clone(),
-        );
+        let mb_clone = mailboxes.clone();
+        let ids_clone = identities.clone();
+        let am_clone = address_mappings.clone();
+        let a_clone = addresses.clone();
 
-        let network = Arc::new(Mutex::new(network));
+        let (s, r) = channel();
+        
+        thread::Builder::new()
+            .name(format!("Peer {}", i + 1))
+            .spawn(move || {
+                let mailboxes = mb_clone;
+                let identities = ids_clone;
+                let address_mappings = am_clone;
+                let addresses = a_clone;
+                let temp_dir = TempDir::new("storage").unwrap();
+
+                let (db1, db2, db3, db4) = (
+                    test_helpers::init_tempdb(),
+                    test_helpers::init_tempdb(),
+                    test_helpers::init_tempdb(),
+                    test_helpers::init_tempdb(),
+                );
+
+                let easy_chain = Arc::new(RwLock::new(EasyChain::new(
+                    db1,
+                    PowChainState::genesis(),
+                    true,
+                )));
+                let hard_chain = Arc::new(RwLock::new(HardChain::new(
+                    db2,
+                    PowChainState::genesis(),
+                    true,
+                )));
+                let state_chain = Arc::new(RwLock::new(StateChain::new(db3, ChainState::new(db4), true)));
+
+                let easy_chain = EasyChainRef::new(easy_chain);
+                let hard_chain = HardChainRef::new(hard_chain);
+                let state_chain = StateChainRef::new(state_chain);
+
+                let network = MockNetwork::new(
+                    identities[i].0.clone(),
+                    addresses[i].clone(),
+                    "test_network".to_owned(),
+                    identities[i].1.clone(),
+                    tx,
+                    mailboxes.clone(),
+                    address_mappings.clone(),
+                    rx1,
+                    rx2,
+                    rx3,
+                    easy_chain,
+                    hard_chain,
+                    state_chain,
+                );
+
+                let network = Arc::new(Mutex::new(network));
+                s.send(network.clone());
+
+                MockNetwork::start_receive_loop(
+                    network,
+                    Arc::new(Mutex::new(tx1)),
+                    Arc::new(Mutex::new(tx2)),
+                    Arc::new(Mutex::new(tx3)),
+                )
+            })
+            .unwrap();
+
+        // Wait for thread to build and send us the network object
+        let network = r.recv().unwrap();
+
         networks.push((
             network,
             addresses[i].clone(),
             identities[i].0.clone(),
-            Arc::new(Mutex::new(tx1)),
-            Arc::new(Mutex::new(tx2)),
-            Arc::new(Mutex::new(tx3)),
         ));
     }
 

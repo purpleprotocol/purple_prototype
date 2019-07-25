@@ -19,6 +19,7 @@
 use crate::block::Block;
 use crate::chain::ChainErr;
 use crate::hard_chain::block::HardBlock;
+use crate::state_chain::state::ChainState;
 use events::Event;
 use account::NormalAddress;
 use crypto::PublicKey;
@@ -37,6 +38,9 @@ use std::sync::Arc;
 use std::net::SocketAddr;
 use std::str;
 use rlp::{Rlp, RlpStream};
+use persistence::{Codec, BlakeDbHasher};
+use patricia_trie::TrieDBMut;
+use hashdb::HashDB;
 
 lazy_static! {
     /// Atomic reference count to state chain genesis block
@@ -108,13 +112,17 @@ impl HashTrait for StateBlock {
 }
 
 impl Block for StateBlock {
-    type ChainState = PersistentDb;
+    type ChainState = ChainState;
 
     fn genesis() -> Arc<StateBlock> {
         GENESIS_RC.clone()
     }
 
-    fn genesis_state() -> PersistentDb {
+    fn is_genesis(&self) -> bool {
+        self == GENESIS_RC.as_ref()
+    }
+
+    fn genesis_state() -> ChainState {
         unimplemented!();
     }
 
@@ -146,7 +154,43 @@ impl Block for StateBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition(_block: Arc<StateBlock>, chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
+    fn append_condition(block: Arc<StateBlock>, mut chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
+        let pool_state = &mut chain_state.pool_state;
+
+        if block.epoch != pool_state.epoch {
+            return Err(ChainErr::BadAppendCondition);
+        }
+
+        // Validate and apply each event in the block
+        for event in block.events.iter() {
+            let node_id = event.node_id();
+
+            // TODO: Handle different errors
+            if pool_state.account_sent_by_validator(&node_id).is_err() {
+                return Err(ChainErr::BadAppendCondition);
+            }
+
+            let raw_root_hash = chain_state.db.retrieve(PersistentDb::ROOT_HASH_KEY).unwrap();
+            let mut root_hash_slice = [0; 32];
+
+            root_hash_slice.copy_from_slice(&raw_root_hash);
+
+            let mut root = Hash(root_hash_slice);
+            
+            {
+                let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut chain_state.db, &mut root);
+
+                if event.validate_apply(&mut trie).is_err() {
+                    return Err(ChainErr::BadAppendCondition);
+                }
+            }
+
+            let root = root.0.to_vec();
+
+            // Update root hash entry
+            chain_state.db.put(PersistentDb::ROOT_HASH_KEY, &root);
+        }
+        
         Ok(chain_state)
     }
 

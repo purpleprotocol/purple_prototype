@@ -16,6 +16,17 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod checkpointable;
+#[derive(Clone, Debug, PartialEq, Copy)]
+pub enum ConsensusErr {
+    /// Could not find a validator with the given id.
+    NoValidatorWithId,
 
-pub use checkpointable::*;
+    /// The validator is not allowed to send an event.
+    NotAllowedToSend,
+
+    /// The validator doesn't have any more events that it can send.
+    NoMoreEvents,
+
+    /// The pool does not have remaining events that it can produce.
+    NoMoreEventsPool,
+}

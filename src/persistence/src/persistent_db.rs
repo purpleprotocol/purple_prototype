@@ -15,8 +15,6 @@
   You should have received a copy of the GNU General Public License
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
-
-use common::{Checkpointable, StorageLocation};
 use crypto::Hash;
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
@@ -24,6 +22,7 @@ use hashdb::{AsHashDB, HashDB};
 use rlp::NULL_RLP;
 use rocksdb::{ColumnFamily, DBCompactionStyle, Options, WriteBatch, DB};
 use std::sync::Arc;
+use std::path::Path;
 use BlakeDbHasher;
 
 pub fn cf_options() -> Options {
@@ -32,8 +31,9 @@ pub fn cf_options() -> Options {
     opts
 }
 
-pub fn db_options() -> Options {
+pub fn db_options(wal_dir: &Path) -> Options {
     let mut opts = Options::default();
+    opts.set_wal_dir(wal_dir);
     opts.increase_parallelism(num_cpus::get() as i32);
     opts.create_if_missing(true);
     opts.create_missing_column_families(true);
@@ -56,19 +56,21 @@ pub fn db_options() -> Options {
 }
 
 #[derive(PartialEq, Clone)]
-enum Operation {
+pub enum Operation {
     Remove,
     Put(Vec<u8>),
 }
 
 #[derive(Clone)]
 pub struct PersistentDb {
-    db_ref: Option<Arc<DB>>,
-    cf_name: Option<&'static str>,
-    memory_db: HashMap<Vec<u8>, Operation>,
+    pub db_ref: Option<Arc<DB>>,
+    pub cf_name: Option<&'static str>,
+    pub memory_db: HashMap<Vec<u8>, Operation>,
 }
 
 impl PersistentDb {
+    pub const ROOT_HASH_KEY: &'static [u8] = b"root_hash";
+
     pub fn new(db_ref: Arc<DB>, cf_name: Option<&'static str>) -> PersistentDb {
         PersistentDb {
             db_ref: Some(db_ref),
@@ -115,9 +117,9 @@ impl PersistentDb {
 
                     Operation::Remove => {
                         if self.cf_name.is_some() {
-                            batch.delete_cf(cf_handle.unwrap(), key);
+                            batch.delete_cf(cf_handle.unwrap(), key).unwrap();
                         } else {
-                            batch.delete(key);
+                            batch.delete(key).unwrap();
                         }
                     }
                 }
@@ -156,13 +158,19 @@ impl PersistentDb {
 
     /// Gets the value based on the provided key
     pub fn retrieve(&self, key: &[u8]) -> Option<Vec<u8>> {
-        if let Some(db_ref) = &self.db_ref {
+        if self.db_ref.is_some() {
             match self.memory_db.get(key) {
                 Some(res) => match res {
                     Operation::Put(ref val) => Some(val.clone()),
                     Operation::Remove => None,
                 },
-                None => self.get_db(key),
+                None => match self.get_db(key) {
+                    Some(res) => Some(res),
+                    None => match key {
+                        Self::ROOT_HASH_KEY => Some(Hash::NULL_RLP.0.to_vec()),
+                        _ => None
+                    }
+                },
             }
         } else {
             let result = self.memory_db.get(key);
@@ -215,24 +223,6 @@ impl PersistentDb {
     }
 }
 
-impl Checkpointable for PersistentDb {
-    fn checkpoint(&self) -> u64 {
-        unimplemented!();
-    }
-
-    fn delete_checkpoint(id: u64) -> Result<(), ()> {
-        unimplemented!();
-    }
-
-    fn load_from_disk(id: u64) -> Result<PersistentDb, ()> {
-        unimplemented!();
-    }
-
-    fn storage_location(&self) -> StorageLocation {
-        unimplemented!();
-    }
-}
-
 impl std::fmt::Debug for PersistentDb {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "PersistentDb {{ cf: {:?} }}", self.cf_name)
@@ -249,9 +239,8 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return Some(ElasticArray128::from_slice(&NULL_RLP));
         }
 
-        let result = self.retrieve(&key.0.to_vec());
-        if result.is_some() {
-            Some(ElasticArray128::<u8>::from_slice(&result.unwrap()))
+        if let Some(ref result) =  self.retrieve(&key.0) {
+            Some(ElasticArray128::<u8>::from_slice(result))
         } else {
             None
         }
@@ -263,7 +252,7 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
         }
 
         let val_hash = crypto::hash_slice(val);
-        self.put(&val_hash.0.to_vec(), val);
+        self.put(&val_hash.0, val);
 
         val_hash
     }
@@ -273,15 +262,15 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return true;
         }
 
-        self.retrieve(&key.0.to_vec()).is_some()
+        self.retrieve(&key.0).is_some()
     }
 
     fn emplace(&mut self, key: Hash, val: ElasticArray128<u8>) {
-        if &val == &Hash::NULL_RLP.to_vec() {
+        if key == Hash::NULL_RLP {
             return;
         }
 
-        self.put(&key.0.to_vec(), &val);
+        self.put(&key.0, &val);
     }
 
     fn remove(&mut self, key: &Hash) {
@@ -289,7 +278,7 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return;
         }
 
-        self.delete(&key.0.to_vec());
+        self.delete(&key.0);
     }
 }
 
@@ -302,7 +291,7 @@ impl AsHashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use tempdir::TempDir;
@@ -310,7 +299,9 @@ mod tests {
     #[test]
     fn it_inserts_data() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -323,7 +314,9 @@ mod tests {
     #[test]
     fn it_emplaces_data() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let key = crypto::hash_slice(b"the_key");
@@ -337,7 +330,9 @@ mod tests {
     #[test]
     fn contains() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -350,7 +345,9 @@ mod tests {
     #[test]
     fn remove() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -368,7 +365,9 @@ mod tests {
     #[test]
     fn it_keeps_last_operation_per_key() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -386,7 +385,9 @@ mod tests {
     #[test]
     fn it_looks_into_pending_transactions() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -407,7 +408,9 @@ mod tests {
     #[test]
     fn it_doesnt_write_until_flush() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";
@@ -422,7 +425,9 @@ mod tests {
     #[test]
     fn wipe_works() {
         let dir = TempDir::new("purple_test").unwrap();
-        let db = DB::open_default(dir.path().to_str().unwrap()).unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
+        let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let data = b"Hello world";

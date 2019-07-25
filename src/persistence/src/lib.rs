@@ -16,12 +16,28 @@
   along with the Purple Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#[macro_use] extern crate bin_tools;
+#[macro_use] extern crate cfg_if;
+
+extern crate byteorder;
+extern crate ansi_term;
+
+use ansi_term::Colour::Green;
+use std::path::{Path, PathBuf};
+use rocksdb::DB;
+
+pub fn open_database(path: &PathBuf, wal_path: &Path) -> DB {
+    DB::open(&crate::db_options(wal_path), path.to_str().unwrap()).unwrap()
+}
+
 #[cfg(test)]
 extern crate tempdir;
 #[macro_use]
 extern crate log;
 
-extern crate common;
+#[macro_use]
+extern crate lazy_static;
+
 extern crate crypto;
 extern crate elastic_array;
 extern crate hashbrown;

@@ -25,7 +25,6 @@ extern crate jsonrpc_macros;
 
 extern crate chain;
 extern crate clap;
-extern crate common;
 extern crate crypto;
 extern crate dirs;
 extern crate elastic_array;
@@ -44,7 +43,6 @@ extern crate tokio;
 
 use chain::*;
 use clap::{App, Arg};
-use common::checkpointable::DummyCheckpoint;
 use crypto::{Identity, NodeId, SecretKey as Sk};
 use elastic_array::ElasticArray128;
 use futures::future::ok;
@@ -59,44 +57,70 @@ use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use futures::sync::mpsc::channel;
 use std::sync::Arc;
+use std::path::PathBuf;
+use std::fs;
 
 // Use mimalloc allocator
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-const NUM_OF_COLUMNS: u32 = 3;
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
-const COLUMN_FAMILIES: &'static [&'static str] =
-    &["state_chain", "easy_chain", "hard_chain", "node_storage"];
 
 fn main() {
     env_logger::init();
 
-    info!("Opening databases...");
-
     let argv = parse_cli_args();
-    let db = Arc::new(open_database(&argv.network_name));
+    let storage_path = get_storage_path(&argv.network_name);
 
-    let mut node_storage = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[3]));
-    let state_db = PersistentDb::new(db.clone(), None);
-    let state_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[0]));
-    let easy_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[1]));
-    let hard_chain_db = PersistentDb::new(db.clone(), Some(COLUMN_FAMILIES[2]));
+    // Wipe database
+    if argv.wipe {
+        info!("Deleting database...");
+        fs::remove_dir_all(&storage_path).unwrap();
+        info!("Database deleted!");
+    }
+
+    info!("Initializing database...");
+
+    let storage_db_path = storage_path.join("node_storage");
+    let state_db_path = storage_path.join("state_db");
+    let state_chain_db_path = storage_path.join("state_chain_db");
+    let hard_chain_db_path = storage_path.join("hard_chain_db");
+    let easy_chain_db_path = storage_path.join("easy_chain_db");
+
+    let storage_wal_path = storage_path.join("node_storage_wal");
+    let state_wal_path = storage_path.join("state_db_wal");
+    let state_chain_wal_path = storage_path.join("state_chain_db_wal");
+    let hard_chain_wal_path = storage_path.join("hard_chain_db_wal");
+    let easy_chain_wal_path = storage_path.join("easy_chain_db_wal");
+
+    let storage_db = Arc::new(persistence::open_database(&storage_db_path, &storage_wal_path));
+    let state_db = Arc::new(persistence::open_database(&state_db_path, &state_wal_path));
+    let state_chain_db = Arc::new(persistence::open_database(&state_chain_db_path, &state_chain_wal_path));
+    let hard_chain_db = Arc::new(persistence::open_database(&hard_chain_db_path, &hard_chain_wal_path));
+    let easy_chain_db = Arc::new(persistence::open_database(&easy_chain_db_path, &easy_chain_wal_path));
+    let mut node_storage = PersistentDb::new(storage_db.clone(), None);
+    let state_db = PersistentDb::new(state_db.clone(), None);
+    let state_chain_db = PersistentDb::new(state_chain_db.clone(), None);
+    let easy_chain_db = PersistentDb::new(easy_chain_db.clone(), None);
+    let hard_chain_db = PersistentDb::new(hard_chain_db.clone(), None);
     let easy_chain = Arc::new(RwLock::new(EasyChain::new(
         easy_chain_db,
-        DummyCheckpoint::genesis(),
+        PowChainState::genesis(),
         argv.archival_mode,
     )));
     let hard_chain = Arc::new(RwLock::new(HardChain::new(
         hard_chain_db,
-        DummyCheckpoint::genesis(),
+        PowChainState::genesis(),
         argv.archival_mode,
     )));
     let state_chain = Arc::new(RwLock::new(StateChain::new(
         state_chain_db,
-        state_db,
+        ChainState::new(state_db),
         argv.archival_mode,
     )));
+
+    info!("Database initialization was successful!");
+
     let easy_chain = EasyChainRef::new(easy_chain);
     let hard_chain = HardChainRef::new(hard_chain);
     let state_chain = StateChainRef::new(state_chain);
@@ -179,22 +203,10 @@ fn fetch_credentials(db: &mut PersistentDb) -> (NodeId, Sk) {
     }
 }
 
-fn open_database(network_name: &str) -> DB {
-    let path = Path::new(&dirs::home_dir().unwrap())
+fn get_storage_path(network_name: &str) -> PathBuf {
+    Path::new(&dirs::home_dir().unwrap())
         .join("purple")
         .join(network_name)
-        .join("db");
-
-    let mut cfs: Vec<ColumnFamilyDescriptor> = Vec::with_capacity(COLUMN_FAMILIES.len());
-
-    for cf in COLUMN_FAMILIES {
-        cfs.push(ColumnFamilyDescriptor::new(
-            cf.to_owned(),
-            persistence::cf_options(),
-        ));
-    }
-
-    DB::open_cf_descriptors(&persistence::db_options(), path.to_str().unwrap(), cfs).unwrap()
 }
 
 struct Argv {
@@ -206,6 +218,7 @@ struct Argv {
     archival_mode: bool,
     mine_easy: bool,
     mine_hard: bool,
+    wipe: bool,
 }
 
 fn parse_cli_args() -> Argv {
@@ -260,6 +273,11 @@ fn parse_cli_args() -> Argv {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("wipe")
+                .long("wipe")
+                .help("Wipe the database before starting the node, forcing it to re-sync."),
+        )
+        .arg(
             Arg::with_name("prune")
                 .long("prune")
                 .help("Whether to prune the ledger or to keep the entire transaction history. False by default."),
@@ -289,6 +307,7 @@ fn parse_cli_args() -> Argv {
     let mine_hard: bool = matches.is_present("mine_hard");
     let no_mempool: bool = matches.is_present("no_mempool");
     let interactive: bool = matches.is_present("interactive");
+    let wipe: bool = matches.is_present("wipe");
 
     Argv {
         network_name,
@@ -299,5 +318,6 @@ fn parse_cli_args() -> Argv {
         interactive,
         mempool_size,
         archival_mode,
+        wipe,
     }
 }

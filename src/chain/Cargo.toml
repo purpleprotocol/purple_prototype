@@ -13,10 +13,11 @@ lru = "0.1.13"
 rlp = "0.3.0"
 parking_lot = "0.7.1"
 hex = "0.3.2"
+patricia-trie = "0.3.0"
 account = { path = "../account" }
 crypto = { path = "../crypto" }
 events = { path = "../events" }
-common = { path = "../common" }
+consensus = { path = "../consensus" }
 persistence = { path = "../persistence" }
 bin-tools = { path = "../util/bin-tools/" }
 hashdb = "0.3.0"
@@ -26,3 +27,6 @@ hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde
 
 [dev-dependencies]
 test-helpers = { path = "../util/test-helpers" }
+
+[features]
+test = []

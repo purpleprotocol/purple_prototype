@@ -27,5 +27,5 @@ quickcheck = "0.7.2"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["rayon", "serde"] }
 
 [dev-dependencies]
-common = { path = "../common" }
+tempdir = "0.3.7"
 test-helpers = { path = "../util/test-helpers" }

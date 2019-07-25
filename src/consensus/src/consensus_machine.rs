@@ -38,15 +38,6 @@ pub enum CGError {
 pub struct ConsensusMachine {
     pub(crate) causal_graph: CausalGraph,
 
-    /// Number denoting the current consensus epoch.
-    /// This is incremented each time a validator set
-    /// is joined to the pool.
-    epoch: u64,
-
-    /// Remaining number of blocks that the pool is allowed
-    /// to produce during the current epoch.
-    remaining_blocks: u64,
-
     /// Our share of allocated events
     allocated_events: u64,
 }
@@ -60,9 +51,7 @@ impl ConsensusMachine {
         root_event: Arc<Event>,
     ) -> ConsensusMachine {
         ConsensusMachine {
-            causal_graph: CausalGraph::new(node_id, root_event),
-            epoch,
-            remaining_blocks,
+            causal_graph: CausalGraph::new(node_id, root_event, epoch, remaining_blocks),
             allocated_events
         }
     }
@@ -70,10 +59,8 @@ impl ConsensusMachine {
     #[cfg(test)]
     pub fn new_with_test_mode(node_id: NodeId, root_event: Arc<Event>) -> ConsensusMachine {
         ConsensusMachine {
-            causal_graph: CausalGraph::new_with_test_mode(node_id, root_event),
-            epoch: 0,
+            causal_graph: CausalGraph::new_with_test_mode(node_id, root_event, 0, 1000),
             allocated_events: 1000,
-            remaining_blocks: 1000,
         }
     }
 
@@ -82,80 +69,9 @@ impl ConsensusMachine {
     }
 
     /// Performs an injection of new validators and allocated
-    /// blocks that the whole pool can produce. Note that this
-    /// function does not check for duplicate node ids.
+    /// blocks that the whole pool can produce. 
     pub fn inject(&mut self, validator_set: &HashMap<NodeId, u64>, allocated: u64) {
-        let mut fork_stack: Vec<(Stamp, Option<NodeId>)> = vec![(Stamp::seed(), None)];
-        let mut forked = vec![];
-
-        // On each injection/epoch change we re-assign
-        // the nodes internal ids on an injection.
-        let mut all_node_ids: Vec<NodeId> = validator_set
-            .keys()
-            .chain(self.causal_graph.validators.keys())
-            .cloned()
-            .collect();
-
-        // Sort ids lexicographically so that injections are deterministic.
-        all_node_ids.sort_unstable();
-
-        // For each node id, fork a stamp and insert it to
-        // the validator pool.
-        while let Some(node_id) = all_node_ids.pop() {
-            loop {
-                if let Some((next_fork, from)) = fork_stack.pop() {
-                    let allocated = validator_set.get(&node_id).unwrap();
-                    let mut stamp = Stamp::seed();
-
-                    // Update the information of the forked
-                    // node if there is any.
-                    if let Some(from) = from {
-                        let (l, r) = next_fork.fork();
-
-                        // Assign stamps to nodes
-                        forked.push((l.clone(), Some(from.clone())));
-                        forked.push((r.clone(), Some(node_id.clone())));
-
-                        stamp = r;
-
-                        // Replace stamp of forked node
-                        let from_state = self.causal_graph.validators.get_mut(&from).unwrap();
-                        from_state.latest_stamp = l;
-                    } else {
-                        forked.push((next_fork.clone(), Some(node_id.clone())));
-                        stamp = next_fork;
-                    }
-
-                    // Fetch or create the validator state
-                    let validator_state =
-                        if let Some(state) = self.causal_graph.validators.get_mut(&node_id) {
-                            state
-                        } else {
-                            self.causal_graph.validators.insert(
-                                node_id.clone(),
-                                ValidatorState::new(true, allocated.clone(), Stamp::seed()),
-                            );
-                            self.causal_graph.validators.get_mut(&node_id).unwrap()
-                        };
-
-                    // Update the stamp of the validator state
-                    validator_state.allowed_to_send = true;
-                    validator_state.latest_stamp = stamp;
-
-                    break;
-                } else {
-                    // Re-fill the fork stack with the forked stamps
-                    fork_stack = forked;
-                    forked = vec![];
-                }
-            }
-        }
-
-        // Go to next epoch
-        self.epoch += 1;
-
-        // Inject allocated events
-        self.remaining_blocks = allocated;
+        self.causal_graph.pool_state.inject(validator_set, allocated);
     }
 
     /// Attempts to push an atomic reference to an
