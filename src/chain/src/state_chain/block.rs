@@ -162,7 +162,7 @@ impl Block for StateBlock {
         }
 
         // Validate and apply each event in the block
-        for event in block.events.iter().cloned() {
+        for event in block.events.iter() {
             let node_id = event.node_id();
 
             // TODO: Handle different errors

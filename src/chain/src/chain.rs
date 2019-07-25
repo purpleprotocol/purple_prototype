@@ -67,12 +67,6 @@ lazy_static! {
 
     /// The key to the canonical height of the chain
     static ref CANONICAL_HEIGHT_KEY: Hash = { crypto::hash_slice(b"canonical_height") };
-
-    /// The key of the height that has the earliest checkpoint
-    static ref EARLIEST_CHECKPOINT_KEY: Hash = { crypto::hash_slice(b"earliest_checkpoint") };
-
-    /// The key of the height that has the last checkpoint
-    static ref LAST_CHECKPOINT_KEY: Hash = { crypto::hash_slice(b"last_checkpoint") };
 }
 
 #[derive(Clone)]
@@ -212,7 +206,21 @@ pub struct Chain<B: Block> {
 impl<B: Block> Chain<B> {
     pub fn new(mut db_ref: PersistentDb, root_state: B::ChainState, archival_mode: bool) -> Chain<B> {
         let tip_db_res = db_ref.get(&TIP_KEY);
-        let canonical_tip = match tip_db_res.clone() {
+        let found_tip = tip_db_res.is_some();
+        let canonical_tip = match tip_db_res {
+            Some(tip) => {
+                let mut buf = [0; 32];
+                buf.copy_from_slice(&tip);
+
+                let block_bytes = db_ref.get(&Hash(buf)).unwrap();
+                B::from_bytes(&block_bytes).unwrap()
+            }
+            None => B::genesis(),
+        };
+
+        let root_state = FlushedChainState::new(root_state);
+        let root_db_res = db_ref.get(&ROOT_KEY);
+        let root_block = match root_db_res {
             Some(tip) => {
                 let mut buf = [0; 32];
                 buf.copy_from_slice(&tip);
@@ -224,30 +232,65 @@ impl<B: Block> Chain<B> {
         };
 
         let mut heights_state_mapping = HashMap::with_capacity(B::MAX_CHECKPOINTS);
-
-        let root_state = FlushedChainState::new(root_state);
-        let root_db_res = db_ref.get(&ROOT_KEY);
-        let root_block = match tip_db_res.clone() {
-            Some(tip) => {
-                let mut buf = [0; 32];
-                buf.copy_from_slice(&tip);
-
-                let block_bytes = db_ref.get(&Hash(buf)).unwrap();
-                B::from_bytes(&block_bytes).unwrap()
-            }
-            None => B::genesis(),
-        };
+        let mut earliest_checkpoint_height = None;
+        let mut last_checkpoint_height = None;
 
         let canonical_tip_state = if canonical_tip.is_genesis() {
-            UnflushedChainState::new(B::genesis_state())
+            root_state.clone().modify()
         } else {
-            unimplemented!();
+            // Calculate canonical tip state by gathering
+            // all blocks from the tip to the root and
+            // then applying each block to the state.
+            //
+            // We checkpoint states along the way if we can.
+            let mut blocks = vec![canonical_tip.clone()];
+            let mut state = root_state.clone().modify();
+            let mut block_hash = canonical_tip.parent_hash().unwrap();
+
+            // Gather blocks
+            loop {
+                if block_hash == root_block.block_hash().unwrap() {
+                    break;
+                }
+
+                let block_res = db_ref.get(&block_hash).unwrap();
+                let block = B::from_bytes(&block_res).unwrap();
+                
+                block_hash = block.parent_hash().unwrap();
+                blocks.push(block);
+            }
+
+            // Apply each block to the state
+            while let Some(block) = blocks.pop() {
+                let s = B::append_condition(block.clone(), state.inner()).unwrap();
+                let s = UnflushedChainState::new(s);
+
+                // Perform checkpoint
+                {
+                    let height = block.height();
+                    let last_checkpoint = last_checkpoint_height.unwrap_or(0);
+
+                    // Checkpoint state if we have reached the quota
+                    if height - last_checkpoint == B::CHECKPOINT_INTERVAL as u64 {
+                        if let None = earliest_checkpoint_height {
+                            earliest_checkpoint_height = Some(height);
+                        }
+
+                        last_checkpoint_height = Some(height);
+                        heights_state_mapping.insert(height, s.clone());
+                    }
+                }
+                
+                state = s;
+            }
+
+            state
         };
 
         let height = match db_ref.get(&CANONICAL_HEIGHT_KEY) {
             Some(height) => decode_be_u64!(&height).unwrap(),
             None => {
-                if tip_db_res.is_none() {
+                if !found_tip {
                     // Set 0 height
                     db_ref.emplace(
                         CANONICAL_HEIGHT_KEY.clone(),
@@ -259,26 +302,14 @@ impl<B: Block> Chain<B> {
             }
         };
 
-        let earliest_checkpoint_height = match db_ref.get(&EARLIEST_CHECKPOINT_KEY) {
-            Some(height) => Some(decode_be_u64!(&height).unwrap()),
-            None => None
-        };
-
-        let last_checkpoint_height = match db_ref.get(&LAST_CHECKPOINT_KEY) {
-            Some(height) => Some(decode_be_u64!(&height).unwrap()),
-            None => None
-        };
-
-        let height = height;
-
         Chain {
             canonical_tip,
             canonical_tip_state,
             root_block,
             root_state,
-            heights_state_mapping,
             earliest_checkpoint_height,
             last_checkpoint_height,
+            heights_state_mapping,
             orphan_pool: HashMap::with_capacity(B::MAX_ORPHANS),
             heights_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
             validations_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
