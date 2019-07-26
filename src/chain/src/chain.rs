@@ -56,6 +56,10 @@ pub enum ChainErr {
 
     /// Could not find a matching checkpoint
     NoCheckpointFound,
+
+    /// Tried to rewind the chain to a block with a height
+    /// that is lower than the root block in the chain.
+    CannotRewindPastRootBlock,
 }
 
 lazy_static! {
@@ -173,10 +177,6 @@ pub struct Chain<B: Block> {
     /// stores the states of the canonical chain.
     /// 
     /// TODO: Checkpoint states on non-canonical chains as well
-    /// 
-    /// TODO: Flush chain states when we are certain that their
-    /// blocks are mostly certain to stay in the canonical chain (
-    /// and otherwise any change would trigger a re-sync).
     heights_state_mapping: HashMap<u64, UnflushedChainState<B::ChainState>>,
 
     /// Mapping between orphans and their orphan types/validation statuses.
@@ -230,6 +230,8 @@ impl<B: Block> Chain<B> {
             }
             None => B::genesis(),
         };
+
+        assert!(canonical_tip.height() >= root_block.height());
 
         let mut heights_state_mapping = HashMap::with_capacity(B::MAX_CHECKPOINTS);
         let mut earliest_checkpoint_height = None;
@@ -339,7 +341,11 @@ impl<B: Block> Chain<B> {
             return Err(ChainErr::NoSuchBlock);
         };
 
-        // TODO: Rewind states
+        // Do not allow rewinding past the root block
+        if new_tip.height() < self.root_block.height() {
+            return Err(ChainErr::CannotRewindPastRootBlock);
+        }
+
         let canonical_state = self.canonical_tip_state.clone();
         let mut current = self.canonical_tip.clone();
         let mut inverse_height = 1;
@@ -390,6 +396,9 @@ impl<B: Block> Chain<B> {
                 // Remove parent from db
                 self.db.remove(&parent_hash);
 
+                // Remove parent state from state mappings
+                self.heights_state_mapping.remove(&parent.height());
+
                 // Remove current height entry
                 let current_height_key = crypto::hash_slice(&encode_be_u64!(cur_height));
                 self.db.remove(&current_height_key);
@@ -422,11 +431,18 @@ impl<B: Block> Chain<B> {
         }
 
         let state = self.search_fetch_next_state(new_tip.height());
+        let new_tip_hash = new_tip.block_hash().unwrap();
 
         self.height = new_tip.height();
         self.write_canonical_height(new_tip.height());
         self.canonical_tip_state = state;
         self.canonical_tip = new_tip;
+
+        // Write tip key
+        self.db.emplace(
+            TIP_KEY.clone(),
+            ElasticArray128::<u8>::from_slice(&new_tip_hash.0),
+        );
         
         // Flush changes
         self.db.flush();
@@ -469,6 +485,12 @@ impl<B: Block> Chain<B> {
         // Set new tip block
         self.canonical_tip = block.clone();
         let mut height = decode_be_u64!(self.db.get(&CANONICAL_HEIGHT_KEY).unwrap()).unwrap();
+
+        // Write tip key
+        self.db.emplace(
+            TIP_KEY.clone(),
+            ElasticArray128::<u8>::from_slice(&block_hash.0),
+        );
 
         // Increment height
         height += 1;
@@ -528,6 +550,39 @@ impl<B: Block> Chain<B> {
                     current -= 1;
                 }
             }
+        }
+
+        let root_height = self.root_block.height();
+
+        // Flush changes to root state for past blocks
+        //
+        // TODO: Make this async if possible
+        if self.canonical_tip.height() > root_height + B::MIN_HEIGHT {
+            let states_to_flush = self.canonical_tip.height() - (root_height + B::MIN_HEIGHT);
+            let mut cur_block = self.root_block.clone();
+            let mut cur_state = self.root_state.clone().modify();
+
+            for i in 1..=states_to_flush {
+                let cur_height = root_height + i;
+                let block = self.query_by_height(cur_height).unwrap();
+                let new_state = B::append_condition(block.clone(), cur_state.inner()).unwrap();
+                let new_state = UnflushedChainState::new(new_state);
+            
+                // Remove checkpointed state
+                self.heights_state_mapping.remove(&cur_height);
+
+                cur_state = new_state;
+                cur_block = block;
+            }
+
+            // Write new root block
+            self.db.emplace(
+                ROOT_KEY.clone(),
+                ElasticArray128::<u8>::from_slice(&cur_block.block_hash().unwrap().0),
+            );
+
+            self.root_state = cur_state.flush().unwrap();
+            self.root_block = cur_block;
         }
 
         self.db.flush();
@@ -1184,7 +1239,14 @@ impl<B: Block> Chain<B> {
     }
 
     pub fn query_by_height(&self, height: u64) -> Option<Arc<B>> {
-        unimplemented!();
+        let encoded_height = encode_be_u64!(height);
+        let key = crypto::hash_slice(&encoded_height);
+        let result = self.db.get(&key)?;
+        let mut block_hash = [0; 32];
+        block_hash.copy_from_slice(&result);
+        let block_hash = Hash(block_hash);
+
+        self.query(&block_hash)
     }
 
     pub fn block_height(&self, hash: &Hash) -> Option<u64> {
@@ -1760,10 +1822,14 @@ mod tests {
     /// Nonce used for creating unique `DummyBlock` hashes
     static NONCE: AtomicUsize = AtomicUsize::new(0);
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, PartialEq, Debug)]
     struct DummyState(pub u64);
 
     impl DummyState {
+        pub fn new(height: u64) -> DummyState {
+            DummyState(height)
+        }
+
         pub fn increment(&mut self) {
             self.0 += 1;
         }
@@ -1867,7 +1933,6 @@ mod tests {
         fn append_condition(block: Arc<DummyBlock>, mut chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
             let valid = chain_state.height() == block.height() - 1;
             
-
             if valid {
                 chain_state.increment();
                 Ok(chain_state)
@@ -1918,6 +1983,46 @@ mod tests {
                 parent_hash,
             }))
         }
+    }
+
+    #[test]
+    fn it_flushes_pending_state_to_root_state() {
+        let db = test_helpers::init_tempdb();
+        let mut chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
+
+        let mut blocks = vec![];
+        let mut cur_hash = Hash::NULL;
+
+        // Generate 15 blocks
+        for h in 1..16 {
+            let block = DummyBlock::new(Some(cur_hash), crate::random_socket_addr(), h);
+            let block = Arc::new(block);    
+    
+            blocks.push(block.clone());
+            cur_hash = block.block_hash().unwrap();
+        }
+
+        // Append 10 blocks to the chain
+        for _ in 0..10 {
+            chain.append_block(blocks.remove(0)).unwrap();
+        }
+
+        // The root state should still be the genesis state at this point
+        assert_eq!(chain.root_block, DummyBlock::genesis());
+        assert_eq!(chain.root_state, FlushedChainState::new(DummyBlock::genesis_state()));
+
+        
+        // Now the state should flush with each added block
+        chain.append_block(blocks.remove(0)).unwrap();
+        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(1)));
+        chain.append_block(blocks.remove(0)).unwrap();
+        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(2)));
+        chain.append_block(blocks.remove(0)).unwrap();
+        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(3)));
+        chain.append_block(blocks.remove(0)).unwrap();
+        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(4)));
+        chain.append_block(blocks.remove(0)).unwrap();
+        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(5)));
     }
 
     #[test]
@@ -7265,17 +7370,17 @@ mod tests {
         assert_eq!(chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
         assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
         assert!(chain.valid_tips.contains(&F_second.block_hash().unwrap()));
-        assert!(chain.valid_tips_states.get(&F_second.block_hash().unwrap()).is_some());
+        assert_eq!(chain.valid_tips_states.get(&F_second.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(F_second.height())));
         assert!(chain.valid_tips.contains(&D_tertiary.block_hash().unwrap()));
-        assert!(chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).is_some());
+        assert_eq!(chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(D_tertiary.height())));
         chain.append_block(blocks.remove(0)).unwrap(); // D_prime
 
         assert_eq!(chain.height(), 7);
         assert_eq!(chain.canonical_tip, G);
         assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
-        assert!(chain.valid_tips_states.get(&E_prime.block_hash().unwrap()).is_some());
-        assert!(chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).is_some());
-        assert!(chain.valid_tips_states.get(&F_second.block_hash().unwrap()).is_some());
+        assert_eq!(chain.valid_tips_states.get(&E_prime.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(E_prime.height())));
+        assert_eq!(chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(D_tertiary.height())));
+        assert_eq!(chain.valid_tips_states.get(&F_second.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(F_second.height())));
     }
 
     quickcheck! {
@@ -7298,7 +7403,7 @@ mod tests {
         /// the height of the chain must be that of `G` which is 7.
         fn append_stress_test() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
+            let mut chain = Chain::<DummyBlock>::new(db.clone(), DummyBlock::genesis_state(), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -7401,30 +7506,30 @@ mod tests {
             // }));
 
             for b in blocks {
-                hard_chain.append_block(b).unwrap();
+                chain.append_block(b).unwrap();
             }
 
-            assert_eq!(hard_chain.height(), 7);
-            assert_eq!(hard_chain.canonical_tip, G);
-            assert_eq!(hard_chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
-            assert!(hard_chain.valid_tips_states.get(&E_prime.block_hash().unwrap()).is_some());
-            assert!(hard_chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).is_some());
-            assert!(hard_chain.valid_tips_states.get(&F_second.block_hash().unwrap()).is_some());
-            assert!(hard_chain.validations_mapping.get(&A.block_hash().unwrap()).is_none());
-            assert!(hard_chain.validations_mapping.get(&B.block_hash().unwrap()).is_none());
-            assert!(hard_chain.validations_mapping.get(&C.block_hash().unwrap()).is_none());
-            assert!(hard_chain.validations_mapping.get(&D.block_hash().unwrap()).is_none());
-            assert!(hard_chain.validations_mapping.get(&E.block_hash().unwrap()).is_none());
-            assert!(hard_chain.validations_mapping.get(&F.block_hash().unwrap()).is_none());
-            assert!(hard_chain.validations_mapping.get(&G.block_hash().unwrap()).is_none());
-            assert_eq!(hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
-            assert_eq!(hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
-            assert_eq!(hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
-            assert_eq!(hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
-            assert_eq!(hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
-            assert_eq!(hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
-            assert_eq!(hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
-            assert_eq!(hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
+            assert_eq!(chain.height(), 7);
+            assert_eq!(chain.canonical_tip, G);
+            assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
+            assert_eq!(chain.valid_tips_states.get(&E_prime.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(E_prime.height())));
+            assert_eq!(chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(D_tertiary.height())));
+            assert_eq!(chain.valid_tips_states.get(&F_second.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(F_second.height())));
+            assert!(chain.validations_mapping.get(&A.block_hash().unwrap()).is_none());
+            assert!(chain.validations_mapping.get(&B.block_hash().unwrap()).is_none());
+            assert!(chain.validations_mapping.get(&C.block_hash().unwrap()).is_none());
+            assert!(chain.validations_mapping.get(&D.block_hash().unwrap()).is_none());
+            assert!(chain.validations_mapping.get(&E.block_hash().unwrap()).is_none());
+            assert!(chain.validations_mapping.get(&F.block_hash().unwrap()).is_none());
+            assert!(chain.validations_mapping.get(&G.block_hash().unwrap()).is_none());
+            assert_eq!(chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+            assert_eq!(chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+            assert_eq!(chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
+            assert_eq!(chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
+            assert_eq!(chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+            assert_eq!(chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+            assert_eq!(chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), &OrphanType::BelongsToValidChain);
+            assert_eq!(chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), &OrphanType::ValidChainTip);
 
             true
         }

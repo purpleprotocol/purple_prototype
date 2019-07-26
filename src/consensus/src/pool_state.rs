@@ -24,7 +24,7 @@ use causality::Stamp;
 use hashbrown::{HashSet, HashMap};
 
 /// Validator pool state
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct PoolState {
     /// Number denoting the current consensus epoch.
     /// This is incremented each time a validator set

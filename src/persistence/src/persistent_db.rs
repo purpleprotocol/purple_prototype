@@ -319,12 +319,15 @@ mod tests {
         let db = DB::open_default(path).unwrap();
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
+        let db2 = persistent_db.clone();
         let key = crypto::hash_slice(b"the_key");
         let data = b"Hello world";
 
         persistent_db.emplace(key, ElasticArray128::from_slice(data));
+        assert!(db2.get(&key).is_none());
         persistent_db.flush();
-        assert_eq!(persistent_db.get(&key).unwrap().to_vec(), data.to_vec());
+        assert_eq!(persistent_db.retrieve_from_db(&key.0).unwrap(), data.to_vec());
+        assert_eq!(db2.get(&key).unwrap(), data.to_vec());
     }
 
     #[test]

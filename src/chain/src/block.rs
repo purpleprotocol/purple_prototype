@@ -29,7 +29,7 @@ use std::hash::Hash as HashTrait;
 /// Generic block interface
 pub trait Block: Debug + PartialEq + Eq + HashTrait {
     /// Per tip validation state
-    type ChainState: Clone + Debug + Flushable;
+    type ChainState: Clone + Debug + Flushable + PartialEq;
 
     /// Size of the block cache.
     const BLOCK_CACHE_SIZE: usize = 20;
