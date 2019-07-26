@@ -31,6 +31,12 @@ pub struct ChainState {
     pub(crate) pool_state: PoolState,
 }
 
+impl PartialEq for ChainState {
+    fn eq(&self, other: &Self) -> bool {
+        self.pool_state == other.pool_state
+    }
+}
+
 impl ChainState {
     const POOL_STATE_KEY: &'static [u8] = b"pool_state";
     

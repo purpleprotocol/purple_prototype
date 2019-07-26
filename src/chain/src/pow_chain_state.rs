@@ -19,7 +19,7 @@
 use crate::chain::ChainErr;
 use crate::types::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 /// Chain state associated with proof-of-work chains.
 /// This is used to calculate the difficulty on the 
 /// `EasyChain` and on the `HardChain`.

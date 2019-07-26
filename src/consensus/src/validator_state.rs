@@ -20,7 +20,7 @@ use crypto::NodeId;
 use causality::Stamp;
 use hashbrown::HashSet;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct ValidatorState {
     /// Whether or not the validator is allowed
     /// to send an event.
