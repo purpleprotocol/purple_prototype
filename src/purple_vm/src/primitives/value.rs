@@ -240,40 +240,40 @@ impl PartialOrd for VmValue {
                     Some(Ordering::Equal)
                 }
             }
-            (VmValue::i32Array2(val1), VmValue::i32Array2(val2)) => {
+            (VmValue::i32Array2(_), VmValue::i32Array2(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
-            (VmValue::i32Array4(val1), VmValue::i32Array4(val2)) => {
+            (VmValue::i32Array4(_), VmValue::i32Array4(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
-            (VmValue::i32Array8(val1), VmValue::i32Array8(val2)) => {
+            (VmValue::i32Array8(_), VmValue::i32Array8(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
-            (VmValue::i64Array2(val1), VmValue::i64Array2(val2)) => {
+            (VmValue::i64Array2(_), VmValue::i64Array2(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
-            (VmValue::i64Array4(val1), VmValue::i64Array4(val2)) => {
+            (VmValue::i64Array4(_), VmValue::i64Array4(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
-            (VmValue::i64Array8(val1), VmValue::i64Array8(val2)) => {
+            (VmValue::i64Array8(_), VmValue::i64Array8(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
-            (VmValue::f32Array2(val1), VmValue::f32Array2(val2)) => {
+            (VmValue::f32Array2(_), VmValue::f32Array2(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
-            (VmValue::f32Array4(val1), VmValue::f32Array4(val2)) => {
+            (VmValue::f32Array4(_), VmValue::f32Array4(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
-            (VmValue::f32Array8(val1), VmValue::f32Array8(val2)) => {
+            (VmValue::f32Array8(_), VmValue::f32Array8(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
-            (VmValue::f64Array2(val1), VmValue::f64Array2(val2)) => {
+            (VmValue::f64Array2(_), VmValue::f64Array2(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
-            (VmValue::f64Array4(val1), VmValue::f64Array4(val2)) => {
+            (VmValue::f64Array4(_), VmValue::f64Array4(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
-            (VmValue::f64Array8(val1), VmValue::f64Array8(val2)) => {
+            (VmValue::f64Array8(_), VmValue::f64Array8(_)) => {
                 panic!("Cannot perform comparison between arrays!")
             }
             (_, _) => panic!("Cannot perform compare between different variants!"),
