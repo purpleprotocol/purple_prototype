@@ -46,6 +46,7 @@ use clap::{App, Arg};
 use crypto::{Identity, NodeId, SecretKey as Sk};
 use elastic_array::ElasticArray128;
 use futures::future::ok;
+use futures::sync::mpsc::channel;
 use futures::Future;
 use hashdb::HashDB;
 use mimalloc::MiMalloc;
@@ -53,12 +54,11 @@ use network::*;
 use parking_lot::{Mutex, RwLock};
 use persistence::PersistentDb;
 use rocksdb::{ColumnFamilyDescriptor, DB};
-use std::path::Path;
-use std::sync::atomic::AtomicBool;
-use futures::sync::mpsc::channel;
-use std::sync::Arc;
-use std::path::PathBuf;
 use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 // Use mimalloc allocator
 #[global_allocator]
@@ -93,11 +93,23 @@ fn main() {
     let hard_chain_wal_path = storage_path.join("hard_chain_db_wal");
     let easy_chain_wal_path = storage_path.join("easy_chain_db_wal");
 
-    let storage_db = Arc::new(persistence::open_database(&storage_db_path, &storage_wal_path));
+    let storage_db = Arc::new(persistence::open_database(
+        &storage_db_path,
+        &storage_wal_path,
+    ));
     let state_db = Arc::new(persistence::open_database(&state_db_path, &state_wal_path));
-    let state_chain_db = Arc::new(persistence::open_database(&state_chain_db_path, &state_chain_wal_path));
-    let hard_chain_db = Arc::new(persistence::open_database(&hard_chain_db_path, &hard_chain_wal_path));
-    let easy_chain_db = Arc::new(persistence::open_database(&easy_chain_db_path, &easy_chain_wal_path));
+    let state_chain_db = Arc::new(persistence::open_database(
+        &state_chain_db_path,
+        &state_chain_wal_path,
+    ));
+    let hard_chain_db = Arc::new(persistence::open_database(
+        &hard_chain_db_path,
+        &hard_chain_wal_path,
+    ));
+    let easy_chain_db = Arc::new(persistence::open_database(
+        &easy_chain_db_path,
+        &easy_chain_wal_path,
+    ));
     let mut node_storage = PersistentDb::new(storage_db.clone(), None);
     let state_db = PersistentDb::new(state_db.clone(), None);
     let state_chain_db = PersistentDb::new(state_chain_db.clone(), None);

@@ -213,7 +213,7 @@ impl Packet for ForwardBlock {
                     Ok(())
                 } else {
                     let mut sender = network.easy_chain_sender().clone();
-                    
+
                     #[cfg(not(test))]
                     sender.try_send((addr.clone(), block.clone())).unwrap();
 
@@ -233,7 +233,7 @@ impl Packet for ForwardBlock {
                     Ok(())
                 } else {
                     let mut sender = network.hard_chain_sender().clone();
-                    
+
                     #[cfg(not(test))]
                     sender.try_send((addr.clone(), block.clone())).unwrap();
 

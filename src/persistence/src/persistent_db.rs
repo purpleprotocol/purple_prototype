@@ -21,8 +21,8 @@ use hashbrown::HashMap;
 use hashdb::{AsHashDB, HashDB};
 use rlp::NULL_RLP;
 use rocksdb::{ColumnFamily, DBCompactionStyle, Options, WriteBatch, DB};
-use std::sync::Arc;
 use std::path::Path;
+use std::sync::Arc;
 use BlakeDbHasher;
 
 pub fn cf_options() -> Options {
@@ -168,8 +168,8 @@ impl PersistentDb {
                     Some(res) => Some(res),
                     None => match key {
                         Self::ROOT_HASH_KEY => Some(Hash::NULL_RLP.0.to_vec()),
-                        _ => None
-                    }
+                        _ => None,
+                    },
                 },
             }
         } else {
@@ -239,7 +239,7 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
             return Some(ElasticArray128::from_slice(&NULL_RLP));
         }
 
-        if let Some(ref result) =  self.retrieve(&key.0) {
+        if let Some(ref result) = self.retrieve(&key.0) {
             Some(ElasticArray128::<u8>::from_slice(result))
         } else {
             None
@@ -326,7 +326,10 @@ mod tests {
         persistent_db.emplace(key, ElasticArray128::from_slice(data));
         assert!(db2.get(&key).is_none());
         persistent_db.flush();
-        assert_eq!(persistent_db.retrieve_from_db(&key.0).unwrap(), data.to_vec());
+        assert_eq!(
+            persistent_db.retrieve_from_db(&key.0).unwrap(),
+            data.to_vec()
+        );
         assert_eq!(db2.get(&key).unwrap(), data.to_vec());
     }
 

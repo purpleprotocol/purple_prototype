@@ -123,13 +123,7 @@ use crypto::SecretKey;
 #[cfg(test)]
 /// Test helper for initializing mock networks. Also initializes
 /// listener threads.
-pub fn init_test_networks(
-    peers: usize,
-) -> Vec<(
-    Arc<Mutex<MockNetwork>>,
-    SocketAddr,
-    NodeId,
-)> {
+pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketAddr, NodeId)> {
     let mut mailboxes = HashMap::new();
     let addresses: Vec<SocketAddr> = (0..peers)
         .into_iter()
@@ -143,11 +137,8 @@ pub fn init_test_networks(
         .collect();
 
     let mut address_mappings = HashMap::new();
-    let mut networks: Vec<(
-        Arc<Mutex<MockNetwork>>,
-        SocketAddr,
-        NodeId,
-    )> = Vec::with_capacity(peers);
+    let mut networks: Vec<(Arc<Mutex<MockNetwork>>, SocketAddr, NodeId)> =
+        Vec::with_capacity(peers);
 
     for i in 0..peers {
         let (rx, tx) = channel();
@@ -162,7 +153,7 @@ pub fn init_test_networks(
         let a_clone = addresses.clone();
 
         let (s, r) = channel();
-        
+
         thread::Builder::new()
             .name(format!("Peer {}", i + 1))
             .spawn(move || {
@@ -189,7 +180,11 @@ pub fn init_test_networks(
                     PowChainState::genesis(),
                     true,
                 )));
-                let state_chain = Arc::new(RwLock::new(StateChain::new(db3, ChainState::new(db4), true)));
+                let state_chain = Arc::new(RwLock::new(StateChain::new(
+                    db3,
+                    ChainState::new(db4),
+                    true,
+                )));
 
                 let easy_chain = EasyChainRef::new(easy_chain);
                 let hard_chain = HardChainRef::new(hard_chain);
@@ -226,11 +221,7 @@ pub fn init_test_networks(
         // Wait for thread to build and send us the network object
         let network = r.recv().unwrap();
 
-        networks.push((
-            network,
-            addresses[i].clone(),
-            identities[i].0.clone(),
-        ));
+        networks.push((network, addresses[i].clone(), identities[i].0.clone()));
     }
 
     for i in 0..peers {

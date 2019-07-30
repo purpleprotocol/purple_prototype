@@ -21,9 +21,6 @@ use crate::chain::ChainErr;
 use crate::hard_chain::block::HardBlock;
 use crate::state_chain::state::ChainState;
 use events::Event;
-use account::NormalAddress;
-use crypto::PublicKey;
-use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
 use crypto::Hash;
@@ -33,14 +30,11 @@ use std::boxed::Box;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
 use std::io::Cursor;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::net::SocketAddr;
-use std::str;
 use rlp::{Rlp, RlpStream};
 use persistence::{Codec, BlakeDbHasher};
 use patricia_trie::TrieDBMut;
-use hashdb::HashDB;
 
 lazy_static! {
     /// Atomic reference count to state chain genesis block
