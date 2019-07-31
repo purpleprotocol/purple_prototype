@@ -37,9 +37,6 @@ use std::sync::Arc;
 use std::str;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-/// The size of the hard block proof
-pub const HARD_PROOF_SIZE: usize = 42;
-
 lazy_static! {
     /// Atomic reference count to hard chain genesis block
     static ref GENESIS_RC: Arc<HardBlock> = {
@@ -353,6 +350,7 @@ impl HardBlock {
     fn compute_hash_message(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         let encoded_height = encode_be_u64!(self.height);
+        let addr = format!("{}", self.ip);
 
         buf.extend_from_slice(&encoded_height);
 
@@ -360,8 +358,11 @@ impl HardBlock {
             buf.extend_from_slice(&parent_hash.0.to_vec());
         }
 
+        buf.extend_from_slice(&self.easy_block_hash.0);
+        buf.extend_from_slice(&self.collector_address.to_bytes());
+        buf.extend_from_slice(&self.proof.to_bytes());
+        buf.extend_from_slice(addr.as_bytes());
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
-
         buf
     }
 }

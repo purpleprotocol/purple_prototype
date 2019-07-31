@@ -328,6 +328,7 @@ impl EasyBlock {
     fn compute_hash_message(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         let encoded_height = encode_be_u64!(self.height);
+        let addr = format!("{}", self.ip);
 
         buf.extend_from_slice(&encoded_height);
 
@@ -335,6 +336,9 @@ impl EasyBlock {
             buf.extend_from_slice(&parent_hash.0.to_vec());
         }
 
+        buf.extend_from_slice(&self.collector_address.to_bytes());
+        buf.extend_from_slice(&self.proof.to_bytes());
+        buf.extend_from_slice(addr.as_bytes());
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
 
         buf
