@@ -32,6 +32,7 @@ pub use easy_chain::block::*;
 pub use easy_chain::chain::*;
 pub use hard_chain::block::*;
 pub use hard_chain::chain::*;
+pub use hard_chain::state::*;
 pub use state_chain::block::*;
 pub use state_chain::chain::*;
 pub use state_chain::state::*;

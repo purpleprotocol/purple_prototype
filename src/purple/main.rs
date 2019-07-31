@@ -122,7 +122,7 @@ fn main() {
     )));
     let hard_chain = Arc::new(RwLock::new(HardChain::new(
         hard_chain_db,
-        PowChainState::genesis(),
+        HardChainState::genesis(),
         argv.archival_mode,
     )));
     let state_chain = Arc::new(RwLock::new(StateChain::new(

@@ -177,7 +177,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
                 )));
                 let hard_chain = Arc::new(RwLock::new(HardChain::new(
                     db2,
-                    PowChainState::genesis(),
+                    HardChainState::genesis(),
                     true,
                 )));
                 let state_chain = Arc::new(RwLock::new(StateChain::new(
