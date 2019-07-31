@@ -24,6 +24,9 @@ mod macros;
 mod pow;
 mod verify;
 
+pub use pow::*;
+pub use verify::*;
+
 // Only compile miner code if `cpu` or `gpu` features are set
 #[cfg(any(feature = "cpu", feature = "gpu"))]
 mod plugin_type;

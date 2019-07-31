@@ -19,6 +19,7 @@
 use crate::block::Block;
 use crate::chain::ChainErr;
 use crate::pow_chain_state::PowChainState;
+use miner::{PROOF_SIZE, Proof};
 use bin_tools::*;
 use account::NormalAddress;
 use crypto::PublicKey;
@@ -42,6 +43,7 @@ lazy_static! {
         let mut block = EasyBlock {
             parent_hash: None,
             height: 0,
+            proof: Proof::zero(PROOF_SIZE),
             collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
             hash: Some(hash),
             ip: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 44034),
@@ -68,6 +70,9 @@ pub struct EasyBlock {
 
     /// The hash of the block.
     hash: Option<Hash>,
+
+    /// The block's proof of work
+    proof: Proof,
 
     /// The timestamp of the block.
     timestamp: DateTime<Utc>,
@@ -157,6 +162,7 @@ impl Block for EasyBlock {
         buf.extend_from_slice(&self.hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.collector_address.to_bytes());
+        buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(address);
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
         buf
@@ -235,6 +241,17 @@ impl Block for EasyBlock {
             return Err("Incorrect packet structure 5");
         };
 
+        let proof = if buf.len() > 1 + 8 * PROOF_SIZE {
+            let proof: Vec<u8> = buf.drain(..(1 + 8 * PROOF_SIZE)).collect();
+
+            match Proof::from_bytes(&proof) {
+                Ok(proof) => proof,
+                _ => return Err("Incorrect proof field")
+            }
+        } else {
+            return Err("Incorrect packet structure 6");
+        };
+
         let address = if buf.len() > address_len as usize {
             let address_vec: Vec<u8> = buf.drain(..address_len as usize).collect();
 
@@ -264,6 +281,7 @@ impl Block for EasyBlock {
         Ok(Arc::new(EasyBlock {
             collector_address,
             timestamp,
+            proof,
             hash: Some(hash),
             parent_hash: Some(parent_hash),
             ip: address,
@@ -275,13 +293,20 @@ impl Block for EasyBlock {
 impl EasyBlock {
     pub const BLOCK_TYPE: u8 = 2;
 
-    pub fn new(parent_hash: Option<Hash>, collector_address: NormalAddress, ip: SocketAddr, height: u64) -> EasyBlock {
+    pub fn new(
+        parent_hash: Option<Hash>, 
+        collector_address: NormalAddress, 
+        ip: SocketAddr, 
+        height: u64,
+        proof: Proof,
+    ) -> EasyBlock {
         EasyBlock {
             parent_hash,
             collector_address,
             height,
             hash: None,
             ip,
+            proof,
             timestamp: Utc::now(),
         }
     }
@@ -326,6 +351,7 @@ impl quickcheck::Arbitrary for EasyBlock {
             parent_hash: Some(quickcheck::Arbitrary::arbitrary(g)),
             hash: Some(quickcheck::Arbitrary::arbitrary(g)),
             ip: quickcheck::Arbitrary::arbitrary(g),
+            proof: Proof::random(PROOF_SIZE),
             timestamp,
         }
     }

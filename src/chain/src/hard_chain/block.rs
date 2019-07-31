@@ -20,6 +20,7 @@ use crate::block::Block;
 use crate::chain::ChainErr;
 use crate::easy_chain::block::EasyBlock;
 use crate::pow_chain_state::PowChainState;
+use miner::{PROOF_SIZE, Proof};
 use account::NormalAddress;
 use crypto::PublicKey;
 use bin_tools::*;
@@ -47,6 +48,7 @@ lazy_static! {
         let mut block = HardBlock {
             easy_block_hash,
             parent_hash: None,
+            proof: Proof::zero(PROOF_SIZE),
             collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
             height: 0,
             hash: None,
@@ -75,6 +77,9 @@ pub struct HardBlock {
 
     /// The hash of the parent block.
     parent_hash: Option<Hash>,
+
+    /// The block's proof of work
+    proof: Proof,
 
     /// The hash of the block.
     hash: Option<Hash>,
@@ -168,6 +173,7 @@ impl Block for HardBlock {
         buf.extend_from_slice(&self.easy_block_hash.0.to_vec());
         buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.collector_address.to_bytes());
+        buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(address);
         buf.extend_from_slice(&timestamp);
         buf
@@ -257,6 +263,17 @@ impl Block for HardBlock {
             return Err("Incorrect packet structure 5");
         };
 
+        let proof = if buf.len() > 1 + 8 * PROOF_SIZE {
+            let proof: Vec<u8> = buf.drain(..(1 + 8 * PROOF_SIZE)).collect();
+
+            match Proof::from_bytes(&proof) {
+                Ok(proof) => proof,
+                _ => return Err("Incorrect proof field")
+            }
+        } else {
+            return Err("Incorrect packet structure 6");
+        };
+
         let address = if buf.len() > address_len as usize {
             let address_vec: Vec<u8> = buf.drain(..address_len as usize).collect();
 
@@ -268,7 +285,7 @@ impl Block for HardBlock {
                 Err(_) => return Err("Invalid ip address")
             }
         } else {
-            return Err("Incorrect packet structure 5");
+            return Err("Incorrect packet structure 7");
         };
 
         let timestamp = if buf.len() == timestamp_len as usize {
@@ -287,6 +304,7 @@ impl Block for HardBlock {
             timestamp,
             easy_block_hash,
             collector_address,
+            proof,
             hash: Some(hash),
             parent_hash: Some(parent_hash),
             ip: address,
@@ -298,7 +316,14 @@ impl Block for HardBlock {
 impl HardBlock {
     pub const BLOCK_TYPE: u8 = 1;
 
-    pub fn new(parent_hash: Option<Hash>, collector_address: NormalAddress, ip: SocketAddr, height: u64, easy_block_hash: Hash) -> HardBlock {
+    pub fn new(
+        parent_hash: Option<Hash>, 
+        collector_address: NormalAddress, 
+        ip: SocketAddr, 
+        height: u64, 
+        easy_block_hash: Hash,
+        proof: Proof,
+    ) -> HardBlock {
         HardBlock {
             parent_hash,
             easy_block_hash,
@@ -306,6 +331,7 @@ impl HardBlock {
             height,
             hash: None,
             ip,
+            proof,
             timestamp: Utc::now(),
         }
     }
@@ -351,6 +377,7 @@ impl Arbitrary for HardBlock {
             parent_hash: Some(Arbitrary::arbitrary(g)),
             hash: Some(Arbitrary::arbitrary(g)),
             ip: Arbitrary::arbitrary(g),
+            proof: Proof::random(PROOF_SIZE),
             timestamp: Utc::now(),
         }
     }
