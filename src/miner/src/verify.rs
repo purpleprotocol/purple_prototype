@@ -56,10 +56,16 @@ pub enum VerifyError {
 
     /// The difficulty does not match the target
     LowDifficulty,
+
+    /// Proof with lower edge bits than target has been provided
+    LowEdgeBits,
+
+    /// The provided proof has invalid edge bits
+    BadEdgeBits,
 }
 
 /// Verifies the given header and `Proof`.
-pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -> Result<(), VerifyError> {
+pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, target_edge_bits: u8, proof: &Proof) -> Result<(), VerifyError> {
     if proof.proof_size() != PROOF_SIZE {
         return Err(VerifyError::InvalidProofLength);
     }
@@ -84,6 +90,10 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
     match proof.edge_bits {
         #[cfg(test)]
         19 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+            
             let mut ctx = CUCKOO_19.lock();
             ctx.set_header_nonce(
                 header.to_vec(),
@@ -98,6 +108,10 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         24 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+            
             let mut ctx = CUCKOO_24.lock();
             ctx.set_header_nonce(
                 header.to_vec(),
@@ -111,6 +125,10 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         25 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+            
             let mut ctx = CUCKOO_25.lock();
             ctx.set_header_nonce(
                 header.to_vec(),
@@ -124,6 +142,10 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         26 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+            
             let mut ctx = CUCKOO_26.lock();
             ctx.set_header_nonce(
                 header.to_vec(),
@@ -137,6 +159,10 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         27 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+            
             let mut ctx = CUCKOO_27.lock();
             ctx.set_header_nonce(
                 header.to_vec(),
@@ -150,6 +176,10 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         28 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+            
             let mut ctx = CUCKOO_28.lock();
             ctx.set_header_nonce(
                 header.to_vec(),
@@ -163,6 +193,10 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         29 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+            
             let mut ctx = CUCKOO_29.lock();
             ctx.set_header_nonce(
                 header.to_vec(),
@@ -176,6 +210,10 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         30 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+            
             let mut ctx = CUCKOO_30.lock();
             ctx.set_header_nonce(
                 header.to_vec(),
@@ -189,6 +227,10 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         31 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+            
             let mut ctx = CUCKOO_31.lock();
             ctx.set_header_nonce(
                 header.to_vec(),
@@ -202,7 +244,7 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         _ => {
-            unreachable!();
+            return Err(VerifyError::BadEdgeBits);
         }
     }
 

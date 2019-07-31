@@ -43,6 +43,7 @@ lazy_static! {
         let mut block = EasyBlock {
             parent_hash: None,
             height: 0,
+            nonce: 0,
             proof: Proof::zero(PROOF_SIZE),
             collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
             hash: Some(hash),
@@ -73,6 +74,9 @@ pub struct EasyBlock {
 
     /// The block's proof of work
     proof: Proof,
+
+    /// Proof of work nonce
+    nonce: u32,
 
     /// The timestamp of the block.
     timestamp: DateTime<Utc>,
@@ -158,6 +162,7 @@ impl Block for EasyBlock {
         buf.write_u8(Self::BLOCK_TYPE).unwrap();
         buf.write_u8(address_len).unwrap();
         buf.write_u8(timestamp_len).unwrap();
+        buf.write_u32::<BigEndian>(self.nonce).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
         buf.extend_from_slice(&self.hash.unwrap().0.to_vec());
         buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
@@ -198,6 +203,14 @@ impl Block for EasyBlock {
 
         rdr.set_position(3);
 
+        let nonce = if let Ok(result) = rdr.read_u32::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
+        rdr.set_position(7);
+
         let height = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
         } else {
@@ -206,7 +219,7 @@ impl Block for EasyBlock {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        buf.drain(..11);
+        buf.drain(..15);
 
         let hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
@@ -282,6 +295,7 @@ impl Block for EasyBlock {
             collector_address,
             timestamp,
             proof,
+            nonce,
             hash: Some(hash),
             parent_hash: Some(parent_hash),
             ip: address,
@@ -298,6 +312,7 @@ impl EasyBlock {
         collector_address: NormalAddress, 
         ip: SocketAddr, 
         height: u64,
+        nonce: u32,
         proof: Proof,
     ) -> EasyBlock {
         EasyBlock {
@@ -307,6 +322,7 @@ impl EasyBlock {
             hash: None,
             ip,
             proof,
+            nonce,
             timestamp: Utc::now(),
         }
     }
@@ -328,9 +344,11 @@ impl EasyBlock {
     fn compute_hash_message(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         let encoded_height = encode_be_u64!(self.height);
+        let encoded_nonce = encode_be_u32!(self.nonce);
         let addr = format!("{}", self.ip);
 
         buf.extend_from_slice(&encoded_height);
+        buf.extend_from_slice(&encoded_nonce);
 
         if let Some(parent_hash) = self.parent_hash {
             buf.extend_from_slice(&parent_hash.0.to_vec());
@@ -356,6 +374,7 @@ impl quickcheck::Arbitrary for EasyBlock {
             hash: Some(quickcheck::Arbitrary::arbitrary(g)),
             ip: quickcheck::Arbitrary::arbitrary(g),
             proof: Proof::random(PROOF_SIZE),
+            nonce: quickcheck::Arbitrary::arbitrary(g),
             timestamp,
         }
     }
