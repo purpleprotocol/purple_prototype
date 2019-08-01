@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::block::Block;
+use crate::block::*;
 use crate::types::*;
 use bin_tools::*;
 use crypto::Hash;
@@ -835,7 +835,6 @@ impl<B: Block> Chain<B> {
                     }
                 } 
 
-
                 h += 1;
             }
         }
@@ -851,50 +850,65 @@ impl<B: Block> Chain<B> {
         assert!(self.disconnected_tips_mapping.get(&candidate_hash).is_none());
 
         if candidate_tip.height() > self.height + B::SWITCH_OFFSET as u64 {
-            let mut to_write: VecDeque<Arc<B>> = VecDeque::new();
-            to_write.push_front(candidate_tip.clone());
+            let candidate_tip_state = self.valid_tips_states.get(&candidate_hash).unwrap();
+            let condition_result = B::switch_condition(candidate_tip.clone(), candidate_tip_state.clone().inner());
 
-            // Find the horizon block i.e. the common
-            // ancestor of both the candidate tip and
-            // the canonical tip.
-            let horizon = {
-                let mut current = candidate_tip.parent_hash().unwrap();
+            match condition_result {
+                SwitchResult::CannotEverSwitch => {
+                    // TODO: Clean up branch
+                }
 
-                // Traverse parents until we find a canonical block
-                loop {
-                    if self.db.get(&current).is_some() {
-                        break;
+                SwitchResult::MayBeAbleToSwitch => {
+                    // TODO: Buffer switch for later check
+                }
+
+                SwitchResult::Switch => {
+                    let mut to_write: VecDeque<Arc<B>> = VecDeque::new();
+                    to_write.push_front(candidate_tip.clone());
+
+                    // Find the horizon block i.e. the common
+                    // ancestor of both the candidate tip and
+                    // the canonical tip.
+                    let horizon = {
+                        let mut current = candidate_tip.parent_hash().unwrap();
+
+                        // Traverse parents until we find a canonical block
+                        loop {
+                            if self.db.get(&current).is_some() {
+                                break;
+                            }
+
+                            let cur = self.orphan_pool.get(&current).unwrap();
+                            to_write.push_front(cur.clone());
+
+                            current = cur.parent_hash().unwrap();
+                        }
+
+                        current
+                    };
+
+                    // Rewind to horizon
+                    self.rewind(&horizon).unwrap();
+
+                    // Set the canonical tip state as the one belonging to the new tip
+                    let state = self.valid_tips_states.remove(&candidate_hash).unwrap();
+                    self.canonical_tip_state = state;
+
+                    // Write the blocks from the candidate chain
+                    for block in to_write {
+                        let block_hash = block.block_hash().unwrap();
+                        // Don't write the horizon
+                        if block_hash == horizon {
+                            continue;
+                        }
+
+                        self.disconnected_heads_mapping.remove(&block_hash);
+                        self.disconnected_tips_mapping.remove(&block_hash);
+                        self.disconnected_heads_heights.remove(&block_hash);
+
+                        self.write_block(block);
                     }
-
-                    let cur = self.orphan_pool.get(&current).unwrap();
-                    to_write.push_front(cur.clone());
-
-                    current = cur.parent_hash().unwrap();
                 }
-
-                current
-            };
-
-            // Rewind to horizon
-            self.rewind(&horizon).unwrap();
-
-            // Set the canonical tip state as the one belonging to the new tip
-            let state = self.valid_tips_states.remove(&candidate_hash).unwrap();
-            self.canonical_tip_state = state;
-
-            // Write the blocks from the candidate chain
-            for block in to_write {
-                let block_hash = block.block_hash().unwrap();
-                // Don't write the horizon
-                if block_hash == horizon {
-                    continue;
-                }
-
-                self.disconnected_heads_mapping.remove(&block_hash);
-                self.disconnected_tips_mapping.remove(&block_hash);
-                self.disconnected_heads_heights.remove(&block_hash);
-
-                self.write_block(block);
             }
         }
     }

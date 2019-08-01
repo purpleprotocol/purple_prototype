@@ -105,11 +105,28 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
     /// If this functions returns an `Err`, the block will not be appended.
     fn append_condition(block: Arc<Self>, chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr>;
 
+    /// A switch condition determines if a non-canonical chain can become
+    /// canonical based on the associated chain state.
+    fn switch_condition(_tip: Arc<Self>, _chain_state: Self::ChainState) -> SwitchResult { SwitchResult::Switch }
+
     /// Serializes the block.
     fn to_bytes(&self) -> Vec<u8>;
 
     /// Deserializes the block
     fn from_bytes(bytes: &[u8]) -> Result<Arc<Self>, &'static str>;
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SwitchResult {
+    /// Proceed with switching chains.
+    Switch,
+
+    /// The chain will not be switched but it might be able 
+    /// to in the future.
+    MayBeAbleToSwitch,
+
+    /// The chain cannot ever be switched so it can be safely deleted.
+    CannotEverSwitch,
 }
 
 /// Wrapper enum used **only** for serialization/deserialization

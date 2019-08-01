@@ -25,13 +25,13 @@ use std::fmt;
 #[derive(Clone)]
 pub struct HardChainState {
     /// A reference to the associated easy chain.
-    easy_chain: EasyChainRef,
+    pub(crate) easy_chain: EasyChainRef,
 
     /// The height of the last chosen easy block hash.
-    last_easy_height: u64,
+    pub(crate) last_easy_height: u64,
 
     /// Common chain state.
-    pow_state: PowChainState,
+    pub(crate) pow_state: PowChainState,
 }
 
 impl fmt::Debug for HardChainState {
