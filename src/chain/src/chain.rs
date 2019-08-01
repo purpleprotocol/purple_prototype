@@ -199,6 +199,9 @@ pub struct Chain<B: Block> {
     /// Validation states associated with the valid tips
     valid_tips_states: HashMap<Hash, UnflushedChainState<B::ChainState>>,
 
+    /// Buffer storing requests for switching chains
+    switch_requests: HashSet<Hash>,
+
     /// Whether the chain is in archival mode or not
     archival_mode: bool,
 }
@@ -320,6 +323,7 @@ impl<B: Block> Chain<B> {
             disconnected_tips_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
             valid_tips: HashSet::with_capacity(B::MAX_ORPHANS),
             valid_tips_states: HashMap::with_capacity(B::MAX_ORPHANS),
+            switch_requests: HashSet::with_capacity(B::MAX_ORPHANS),
             max_orphan_height: None,
             archival_mode,
             height,
@@ -448,6 +452,47 @@ impl<B: Block> Chain<B> {
         self.db.flush();
 
         Ok(())
+    }
+
+    /// Attempts to flush the switch request buffer, potentially
+    /// yielding a new canonical chain.
+    /// 
+    /// This must be called externally.
+    pub fn flush_switch_buffer(&mut self) {
+        let mut greatest_height = None;
+        let mut greatest_tip = None;
+        
+        for tip_hash in self.switch_requests.iter() {
+            let tip = self.orphan_pool.get(tip_hash).unwrap();
+            let tip_state = self.valid_tips_states.get(tip_hash).unwrap();
+            let condition_result = B::switch_condition(tip.clone(), tip_state.clone().inner());
+
+            match condition_result {
+                SwitchResult::CannotEverSwitch => {
+                    // TODO: Delete branch
+                }
+
+                SwitchResult::MayBeAbleToSwitch => {
+                    // Do nothing
+                }
+
+                SwitchResult::Switch => {
+                    if let Some(height) = greatest_height {
+                        if tip.height() > height {
+                            greatest_height = Some(tip.height());
+                            greatest_tip = Some(tip.clone());
+                        } 
+                    } else {
+                        greatest_height = Some(tip.height());
+                        greatest_tip = Some(tip.clone());
+                    }
+                }
+            }
+        }
+
+        if let Some(tip) = greatest_tip {
+            self.switch(tip);
+        }
     }
 
     fn update_max_orphan_height(&mut self, new_height: u64) {
@@ -855,61 +900,72 @@ impl<B: Block> Chain<B> {
 
             match condition_result {
                 SwitchResult::CannotEverSwitch => {
+                    self.switch_requests.remove(&candidate_hash);
+
                     // TODO: Clean up branch
                 }
 
                 SwitchResult::MayBeAbleToSwitch => {
-                    // TODO: Buffer switch for later check
+                    // Buffer switch for later check
+                    self.switch_requests.insert(candidate_hash.clone());
                 }
 
                 SwitchResult::Switch => {
-                    let mut to_write: VecDeque<Arc<B>> = VecDeque::new();
-                    to_write.push_front(candidate_tip.clone());
-
-                    // Find the horizon block i.e. the common
-                    // ancestor of both the candidate tip and
-                    // the canonical tip.
-                    let horizon = {
-                        let mut current = candidate_tip.parent_hash().unwrap();
-
-                        // Traverse parents until we find a canonical block
-                        loop {
-                            if self.db.get(&current).is_some() {
-                                break;
-                            }
-
-                            let cur = self.orphan_pool.get(&current).unwrap();
-                            to_write.push_front(cur.clone());
-
-                            current = cur.parent_hash().unwrap();
-                        }
-
-                        current
-                    };
-
-                    // Rewind to horizon
-                    self.rewind(&horizon).unwrap();
-
-                    // Set the canonical tip state as the one belonging to the new tip
-                    let state = self.valid_tips_states.remove(&candidate_hash).unwrap();
-                    self.canonical_tip_state = state;
-
-                    // Write the blocks from the candidate chain
-                    for block in to_write {
-                        let block_hash = block.block_hash().unwrap();
-                        // Don't write the horizon
-                        if block_hash == horizon {
-                            continue;
-                        }
-
-                        self.disconnected_heads_mapping.remove(&block_hash);
-                        self.disconnected_tips_mapping.remove(&block_hash);
-                        self.disconnected_heads_heights.remove(&block_hash);
-
-                        self.write_block(block);
-                    }
+                    self.switch(candidate_tip);
                 }
             }
+        }
+    }
+
+    fn switch(&mut self, candidate_tip: Arc<B>) {
+        let candidate_hash = candidate_tip.block_hash().unwrap();
+
+        self.switch_requests.remove(&candidate_hash);
+
+        let mut to_write: VecDeque<Arc<B>> = VecDeque::new();
+        to_write.push_front(candidate_tip.clone());
+
+        // Find the horizon block i.e. the common
+        // ancestor of both the candidate tip and
+        // the canonical tip.
+        let horizon = {
+            let mut current = candidate_tip.parent_hash().unwrap();
+
+            // Traverse parents until we find a canonical block
+            loop {
+                if self.db.get(&current).is_some() {
+                    break;
+                }
+
+                let cur = self.orphan_pool.get(&current).unwrap();
+                to_write.push_front(cur.clone());
+
+                current = cur.parent_hash().unwrap();
+            }
+
+            current
+        };
+
+        // Rewind to horizon
+        self.rewind(&horizon).unwrap();
+
+        // Set the canonical tip state as the one belonging to the new tip
+        let state = self.valid_tips_states.remove(&candidate_hash).unwrap();
+        self.canonical_tip_state = state;
+
+        // Write the blocks from the candidate chain
+        for block in to_write {
+            let block_hash = block.block_hash().unwrap();
+            // Don't write the horizon
+            if block_hash == horizon {
+                continue;
+            }
+
+            self.disconnected_heads_mapping.remove(&block_hash);
+            self.disconnected_tips_mapping.remove(&block_hash);
+            self.disconnected_heads_heights.remove(&block_hash);
+
+            self.write_block(block);
         }
     }
 
