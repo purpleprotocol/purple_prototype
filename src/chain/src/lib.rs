@@ -25,7 +25,9 @@ mod hard_chain;
 mod state_chain;
 mod types;
 mod pow_chain_state;
+mod init;
 
+pub use init::*;
 pub use crate::chain::*;
 pub use block::*;
 pub use easy_chain::block::*;

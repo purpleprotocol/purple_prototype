@@ -54,6 +54,20 @@ impl Flushable for HardChainState {
 
 impl HardChainState {
     pub fn genesis() -> Self {
-        unimplemented!();
+        let easy_ref = crate::init::easy_chain_ref();
+
+        HardChainState {
+            easy_chain: easy_ref,
+            last_easy_height: 0,
+            pow_state: PowChainState::genesis(),
+        }
+    }
+
+    pub fn genesis_init(easy_ref: EasyChainRef) -> Self {
+        HardChainState {
+            easy_chain: easy_ref,
+            last_easy_height: 0,
+            pow_state: PowChainState::genesis(),
+        }
     }
 }

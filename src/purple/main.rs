@@ -115,27 +115,17 @@ fn main() {
     let state_chain_db = PersistentDb::new(state_chain_db.clone(), None);
     let easy_chain_db = PersistentDb::new(easy_chain_db.clone(), None);
     let hard_chain_db = PersistentDb::new(hard_chain_db.clone(), None);
-    let easy_chain = Arc::new(RwLock::new(EasyChain::new(
-        easy_chain_db,
-        PowChainState::genesis(),
+
+    let (easy_chain, hard_chain, state_chain) = chain::init(
+        easy_chain_db, 
+        hard_chain_db, 
+        state_chain_db, 
+        state_db,
         argv.archival_mode,
-    )));
-    let hard_chain = Arc::new(RwLock::new(HardChain::new(
-        hard_chain_db,
-        HardChainState::genesis(),
-        argv.archival_mode,
-    )));
-    let state_chain = Arc::new(RwLock::new(StateChain::new(
-        state_chain_db,
-        ChainState::new(state_db),
-        argv.archival_mode,
-    )));
+    );
 
     info!("Database initialization was successful!");
 
-    let easy_chain = EasyChainRef::new(easy_chain);
-    let hard_chain = HardChainRef::new(hard_chain);
-    let state_chain = StateChainRef::new(state_chain);
     let (easy_tx, easy_rx) = channel(10000);
     let (hard_tx, hard_rx) = channel(10000);
     let (state_tx, state_rx) = channel(10000);

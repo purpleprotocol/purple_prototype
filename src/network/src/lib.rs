@@ -170,25 +170,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
                     test_helpers::init_tempdb(),
                 );
 
-                let easy_chain = Arc::new(RwLock::new(EasyChain::new(
-                    db1,
-                    PowChainState::genesis(),
-                    true,
-                )));
-                let hard_chain = Arc::new(RwLock::new(HardChain::new(
-                    db2,
-                    HardChainState::genesis(),
-                    true,
-                )));
-                let state_chain = Arc::new(RwLock::new(StateChain::new(
-                    db3,
-                    ChainState::new(db4),
-                    true,
-                )));
-
-                let easy_chain = EasyChainRef::new(easy_chain);
-                let hard_chain = HardChainRef::new(hard_chain);
-                let state_chain = StateChainRef::new(state_chain);
+                let (easy_chain, hard_chain, state_chain) = chain::init(db1, db2, db3, db4, true);
 
                 let network = MockNetwork::new(
                     identities[i].0.clone(),

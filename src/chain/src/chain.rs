@@ -470,6 +470,7 @@ impl<B: Block> Chain<B> {
             match condition_result {
                 SwitchResult::CannotEverSwitch => {
                     // TODO: Delete branch
+                    unimplemented!();
                 }
 
                 SwitchResult::MayBeAbleToSwitch => {
