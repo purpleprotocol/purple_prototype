@@ -45,14 +45,16 @@ pub trait Flushable {
 /// Chain state wrapper representing an in-memory state
 /// that is not yet flushed to disk.
 #[derive(Clone, PartialEq, Debug)]
-pub struct UnflushedChainState<S> 
-    where S: Debug + Sized + Flushable + Clone + PartialEq
+pub struct UnflushedChainState<S>
+where
+    S: Debug + Sized + Flushable + Clone + PartialEq,
 {
-    state: S
+    state: S,
 }
 
-impl<S> UnflushedChainState<S> 
-    where S: Debug + Sized + Flushable + Clone + PartialEq
+impl<S> UnflushedChainState<S>
+where
+    S: Debug + Sized + Flushable + Clone + PartialEq,
 {
     pub fn new(state: S) -> UnflushedChainState<S> {
         UnflushedChainState { state }
@@ -73,13 +75,15 @@ impl<S> UnflushedChainState<S>
 /// a modifiable state which is un-flushed, call `Self::modify()`.
 #[derive(Clone, PartialEq, Debug)]
 pub struct FlushedChainState<S>
-    where S: Debug + Sized + Flushable + Clone + PartialEq
+where
+    S: Debug + Sized + Flushable + Clone + PartialEq,
 {
-    state: S
+    state: S,
 }
 
 impl<S> FlushedChainState<S>
-    where S: Debug + Sized + Flushable + Clone + PartialEq
+where
+    S: Debug + Sized + Flushable + Clone + PartialEq,
 {
     pub fn new(state: S) -> FlushedChainState<S> {
         FlushedChainState { state }

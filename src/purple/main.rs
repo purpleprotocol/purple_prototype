@@ -117,9 +117,9 @@ fn main() {
     let hard_chain_db = PersistentDb::new(hard_chain_db.clone(), None);
 
     let (easy_chain, hard_chain, state_chain) = chain::init(
-        easy_chain_db, 
-        hard_chain_db, 
-        state_chain_db, 
+        easy_chain_db,
+        hard_chain_db,
+        state_chain_db,
         state_db,
         argv.archival_mode,
     );

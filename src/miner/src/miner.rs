@@ -19,25 +19,25 @@
   https://github.com/mimblewimble/grin-miner/blob/master/cuckoo-miner/src/miner/miner.rs
 */
 
-use crate::plugin::{SolverCtxWrapper, SolverSolutions, Solution, SolverStats};
-use crate::plugin_config::PluginConfig;
-use crate::solver_instance::SolverInstance;
-use crate::shared_data::JobData;
-use crate::plugin_type::PluginType;
 use crate::error::CuckooMinerError;
 use crate::ffi::PluginLibrary;
+use crate::plugin::{Solution, SolverCtxWrapper, SolverSolutions, SolverStats};
+use crate::plugin_config::PluginConfig;
+use crate::plugin_type::PluginType;
 use crate::pow::proof::Proof;
+use crate::shared_data::JobData;
+use crate::solver_instance::SolverInstance;
 use crate::verify::*;
-use std::sync::Arc;
-use std::sync::mpsc::{Sender, Receiver};
-use std::thread;
-use std::sync::mpsc;
-use std::ptr::NonNull;
-use std::time;
-use std::path::PathBuf;
-use rand::Rng;
-use parking_lot::RwLock;
 use cfg_if::*;
+use parking_lot::RwLock;
+use rand::Rng;
+use std::path::PathBuf;
+use std::ptr::NonNull;
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Arc;
+use std::thread;
+use std::time;
 
 const SO_SUFFIX: &str = ".cuckooplugin";
 
@@ -102,7 +102,7 @@ enum ControlMessage {
 
     /// Resume
     Resume,
-    
+
     /// Solver reporting stopped
     SolverStopped(usize),
 }
@@ -110,7 +110,7 @@ enum ControlMessage {
 #[derive(Debug, PartialEq)]
 enum MinerState {
     Starting,
-    Ready
+    Ready,
 }
 
 #[derive(Debug, PartialEq)]
@@ -158,7 +158,7 @@ impl PurpleMiner {
             solver_loop_txs: vec![],
             solver_stopped_rxs: vec![],
             miner_state: MinerState::Starting,
-            solver_states: vec![]
+            solver_states: vec![],
         }
     }
 
@@ -215,7 +215,6 @@ impl PurpleMiner {
             }
         });
 
-
         // Mark solver as paused
         {
             let mut solver_state = solver_state.write();
@@ -260,7 +259,6 @@ impl PurpleMiner {
             let height = { shared_data.read().height.clone() };
             let job_id = { shared_data.read().job_id.clone() };
             let target_difficulty = { shared_data.read().difficulty.clone() };
-            
 
             // Gen random nonce
             let nonce: u64 = rand::OsRng::new().unwrap().gen();
@@ -282,7 +280,7 @@ impl PurpleMiner {
                 s.stats[instance].iterations = iter_count;
                 if solver.solutions.num_sols > 0 {
                     // Filter solutions that don't meet difficulty check
-                    let mut filtered_sols:Vec<Solution> = vec![];
+                    let mut filtered_sols: Vec<Solution> = vec![];
                     for i in 0..solver.solutions.num_sols {
                         filtered_sols.push(solver.solutions.sols[i as usize]);
                     }
@@ -348,8 +346,15 @@ impl PurpleMiner {
             self.solver_stopped_rxs.push(solver_stopped_rx);
             self.solver_states.push(solver_state);
             thread::spawn(move || {
-                let _ =
-                    PurpleMiner::solver_thread(s, i, sd, control_rx, solver_rx, solver_stopped_tx, solver_state_clone);
+                let _ = PurpleMiner::solver_thread(
+                    s,
+                    i,
+                    sd,
+                    control_rx,
+                    solver_rx,
+                    solver_stopped_tx,
+                    solver_state_clone,
+                );
             });
             i += 1;
         }
@@ -369,11 +374,11 @@ impl PurpleMiner {
 
     pub fn notify(
         &mut self,
-        job_id: u32,        // Job id
-        height: u64,        // Job height
-        header: &[u8],  
-        difficulty: u64,    /* The target difficulty, only sols greater than this difficulty will
-                             * be returned. */
+        job_id: u32, // Job id
+        height: u64, // Job height
+        header: &[u8],
+        difficulty: u64, /* The target difficulty, only sols greater than this difficulty will
+                          * be returned. */
         plugin: PluginType, // Which plugin to use
     ) -> Result<(), CuckooMinerError> {
         #[cfg(not(test))]
@@ -501,7 +506,7 @@ fn get_plugins_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     // #[test]
     // fn it_finds_and_verifies_proofs() {
     //     let mut miner = PurpleMiner::new();
@@ -516,12 +521,11 @@ mod tests {
     //             miner.notify(0, 1, b"", 0, PluginType::Cuckoo19).unwrap();
     //         }
 
-
     //         if let Some(solution) = miner.get_solutions() {
     //             let solution = solution.sols[0];
     //             let nonce = solution.nonce;
     //             let proof = Proof::new(solution.to_u64s(), 19);
-                
+
     //             assert!(verify(b"", nonce as u32, &proof).is_ok());
     //             break;
     //         }

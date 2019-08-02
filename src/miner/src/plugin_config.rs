@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::plugin::SolverParams;
 use crate::error::CuckooMinerError;
 use crate::ffi::PluginLibrary;
+use crate::plugin::SolverParams;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{fmt, io};
@@ -38,7 +38,7 @@ impl PluginConfig {
     /// create new!
     pub fn new(mut plugin_dir: PathBuf, name: &str) -> Result<PluginConfig, CuckooMinerError> {
         let split: Vec<&str> = name.split("_").collect();
-        let edge_bits = u32::from_str(split[split.len()-1]).unwrap();
+        let edge_bits = u32::from_str(split[split.len() - 1]).unwrap();
 
         plugin_dir.push(format!("{}{}", name, SO_SUFFIX).as_str());
         let plugin_file_str = plugin_dir.to_str().ok_or_else(|| {

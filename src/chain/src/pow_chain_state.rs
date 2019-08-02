@@ -21,7 +21,7 @@ use crate::types::*;
 
 #[derive(Clone, PartialEq, Debug)]
 /// Chain state associated with proof-of-work chains.
-/// This is used to calculate the difficulty on the 
+/// This is used to calculate the difficulty on the
 /// `EasyChain` and on the `HardChain`.
 pub struct PowChainState {
     /// The current chain height
@@ -33,7 +33,10 @@ pub struct PowChainState {
 
 impl PowChainState {
     pub fn genesis() -> Self {
-        PowChainState { height: 0, difficulty: 0 }
+        PowChainState {
+            height: 0,
+            difficulty: 0,
+        }
     }
 }
 

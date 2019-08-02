@@ -36,7 +36,11 @@ pub struct HardChainState {
 
 impl fmt::Debug for HardChainState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "HardChainState {{ pow_state: {:?}, last_easy_height: {} }}", self.pow_state, self.last_easy_height)
+        write!(
+            f,
+            "HardChainState {{ pow_state: {:?}, last_easy_height: {} }}",
+            self.pow_state, self.last_easy_height
+        )
     }
 }
 

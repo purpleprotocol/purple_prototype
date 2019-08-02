@@ -17,8 +17,8 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use crate::pow::error::{Error, ErrorKind};
-use num::{PrimInt, ToPrimitive};
 use crate::pow::siphash::siphash24;
+use num::{PrimInt, ToPrimitive};
 use std::fmt;
 use std::hash::Hash;
 use std::io::Cursor;

@@ -20,21 +20,21 @@ use crate::block::Block;
 use crate::chain::ChainErr;
 use crate::hard_chain::block::HardBlock;
 use crate::state_chain::state::ChainState;
-use events::Event;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
 use crypto::Hash;
-use persistence::PersistentDb;
+use events::Event;
 use lazy_static::*;
+use patricia_trie::TrieDBMut;
+use persistence::PersistentDb;
+use persistence::{BlakeDbHasher, Codec};
+use rlp::{Rlp, RlpStream};
 use std::boxed::Box;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
 use std::io::Cursor;
-use std::sync::Arc;
 use std::net::SocketAddr;
-use rlp::{Rlp, RlpStream};
-use persistence::{Codec, BlakeDbHasher};
-use patricia_trie::TrieDBMut;
+use std::sync::Arc;
 
 lazy_static! {
     /// Atomic reference count to state chain genesis block
@@ -141,14 +141,15 @@ impl Block for StateBlock {
     }
 
     fn after_write() -> Option<Box<FnMut(Arc<StateBlock>)>> {
-        let fun = |block| {
+        let fun = |block| {};
 
-        };
-        
         Some(Box::new(fun))
     }
 
-    fn append_condition(block: Arc<StateBlock>, mut chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
+    fn append_condition(
+        block: Arc<StateBlock>,
+        mut chain_state: Self::ChainState,
+    ) -> Result<Self::ChainState, ChainErr> {
         let pool_state = &mut chain_state.pool_state;
 
         if block.epoch != pool_state.epoch {
@@ -164,15 +165,19 @@ impl Block for StateBlock {
                 return Err(ChainErr::BadAppendCondition);
             }
 
-            let raw_root_hash = chain_state.db.retrieve(PersistentDb::ROOT_HASH_KEY).unwrap();
+            let raw_root_hash = chain_state
+                .db
+                .retrieve(PersistentDb::ROOT_HASH_KEY)
+                .unwrap();
             let mut root_hash_slice = [0; 32];
 
             root_hash_slice.copy_from_slice(&raw_root_hash);
 
             let mut root = Hash(root_hash_slice);
-            
+
             {
-                let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut chain_state.db, &mut root);
+                let mut trie =
+                    TrieDBMut::<BlakeDbHasher, Codec>::new(&mut chain_state.db, &mut root);
 
                 if event.validate_apply(&mut trie).is_err() {
                     return Err(ChainErr::BadAppendCondition);
@@ -184,7 +189,7 @@ impl Block for StateBlock {
             // Update root hash entry
             chain_state.db.put(PersistentDb::ROOT_HASH_KEY, &root);
         }
-        
+
         Ok(chain_state)
     }
 
@@ -198,7 +203,7 @@ impl Block for StateBlock {
         }
 
         let events = rlp.out();
-        let events_len = events.len();            
+        let events_len = events.len();
 
         buf.write_u8(Self::BLOCK_TYPE).unwrap();
         buf.write_u32::<BigEndian>(events_len as u32).unwrap();
@@ -318,14 +323,14 @@ impl Block for StateBlock {
                         if data.is_data() {
                             match data.data() {
                                 Ok(data) => Event::from_bytes(&data).map(|e| Arc::new(e)),
-                                Err(_) => Err("Invalid event")
+                                Err(_) => Err("Invalid event"),
                             }
                         } else {
-                            return Err("Non data object")
+                            return Err("Non data object");
                         }
                     })
                     .collect();
-                
+
                 if let Ok(events) = events {
                     events
                 } else {
@@ -355,12 +360,12 @@ impl StateBlock {
     pub const BLOCK_TYPE: u8 = 3;
 
     pub fn new(
-        parent_hash: Option<Hash>, 
-        state_root: Hash, 
-        height: u64, 
-        epoch: u64, 
-        hard_block_hash: Hash, 
-        events: Vec<Arc<Event>>
+        parent_hash: Option<Hash>,
+        state_root: Hash,
+        height: u64,
+        epoch: u64,
+        hard_block_hash: Hash,
+        events: Vec<Arc<Event>>,
     ) -> StateBlock {
         StateBlock {
             parent_hash,
@@ -370,7 +375,7 @@ impl StateBlock {
             state_root,
             events_root: None,
             hash: None,
-            events
+            events,
         }
     }
 
@@ -394,11 +399,11 @@ impl StateBlock {
         buf.write_u64::<BigEndian>(self.height).unwrap();
         buf.write_u64::<BigEndian>(self.epoch).unwrap();
         buf.extend_from_slice(&self.hard_block_hash.0);
-        
+
         if let Some(ref parent_hash) = self.parent_hash {
             buf.extend_from_slice(&parent_hash.0);
         }
-        
+
         buf.extend_from_slice(&self.events_root.unwrap().0);
         buf.extend_from_slice(&self.state_root.0);
         buf

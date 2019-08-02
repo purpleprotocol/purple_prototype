@@ -16,15 +16,15 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::{ChainErr, EasyBlock, HardBlock, StateBlock};
 use crate::types::Flushable;
+use crate::{ChainErr, EasyBlock, HardBlock, StateBlock};
 use chrono::prelude::*;
 use crypto::Hash;
 use std::boxed::Box;
-use std::sync::Arc;
-use std::net::SocketAddr;
 use std::fmt::Debug;
 use std::hash::Hash as HashTrait;
+use std::net::SocketAddr;
+use std::sync::Arc;
 
 /// Generic block interface
 pub trait Block: Debug + PartialEq + Eq + HashTrait {
@@ -46,7 +46,7 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
     /// to become canonical
     #[cfg(not(test))]
     const SWITCH_OFFSET: usize = 2;
-    
+
     #[cfg(test)]
     const SWITCH_OFFSET: usize = 0;
 
@@ -59,7 +59,7 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
     const MAX_HEIGHT: u64 = 10;
 
     /// The number of blocks after which a state checkpoint will be made.
-    /// 
+    ///
     /// This number **MUST** be less or equal than the minimum accepted height.
     const CHECKPOINT_INTERVAL: usize = 5;
 
@@ -67,7 +67,7 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
     /// than `(MAX_HEIGHT + MIN_HEIGHT) / CHECKPOINT_INTERVAL`.
     const MAX_CHECKPOINTS: usize = 4;
 
-    /// How many blocks to keep behind the canonical 
+    /// How many blocks to keep behind the canonical
     /// chain when pruning is enabled. This number should
     /// be equal to `CHECKPOINT_INTERVAL * MAX_CHECKPOINTS`.
     const BLOCKS_TO_KEEP: usize = 100;
@@ -101,13 +101,18 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
 
     /// Condition that must result if successful, returns the state
     /// that is to be associated with the new appended block.
-    /// 
+    ///
     /// If this functions returns an `Err`, the block will not be appended.
-    fn append_condition(block: Arc<Self>, chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr>;
+    fn append_condition(
+        block: Arc<Self>,
+        chain_state: Self::ChainState,
+    ) -> Result<Self::ChainState, ChainErr>;
 
     /// A switch condition determines if a non-canonical chain can become
     /// canonical based on the associated chain state.
-    fn switch_condition(_tip: Arc<Self>, _chain_state: Self::ChainState) -> SwitchResult { SwitchResult::Switch }
+    fn switch_condition(_tip: Arc<Self>, _chain_state: Self::ChainState) -> SwitchResult {
+        SwitchResult::Switch
+    }
 
     /// Serializes the block.
     fn to_bytes(&self) -> Vec<u8>;
@@ -121,7 +126,7 @@ pub enum SwitchResult {
     /// Proceed with switching chains.
     Switch,
 
-    /// The chain will not be switched but it might be able 
+    /// The chain will not be switched but it might be able
     /// to in the future.
     MayBeAbleToSwitch,
 
@@ -142,10 +147,16 @@ impl BlockWrapper {
         let first_byte = bytes[0];
 
         match first_byte {
-            EasyBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::EasyBlock(EasyBlock::from_bytes(bytes)?))),
-            HardBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::HardBlock(HardBlock::from_bytes(bytes)?))),
-            StateBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::StateBlock(StateBlock::from_bytes(bytes)?))),
-            _ => return Err("Invalid block type")
+            EasyBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::EasyBlock(EasyBlock::from_bytes(
+                bytes,
+            )?))),
+            HardBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::HardBlock(HardBlock::from_bytes(
+                bytes,
+            )?))),
+            StateBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::StateBlock(
+                StateBlock::from_bytes(bytes)?,
+            ))),
+            _ => return Err("Invalid block type"),
         }
     }
 

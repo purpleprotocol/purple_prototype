@@ -15,11 +15,11 @@
   You should have received a copy of the GNU General Public License
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 
-  This is a modified version of the following file: 
+  This is a modified version of the following file:
   https://github.com/mimblewimble/grin-miner/blob/master/cuckoo-miner/src/build.rs
 */
 
-#[macro_use] 
+#[macro_use]
 mod macros;
 mod pow;
 mod verify;

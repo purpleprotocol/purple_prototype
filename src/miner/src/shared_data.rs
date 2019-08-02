@@ -19,7 +19,7 @@
   https://github.com/mimblewimble/grin-miner/blob/master/cuckoo-miner/src/miner/types.rs
 */
 
-use crate::plugin::{SolverStats, SolverSolutions};
+use crate::plugin::{SolverSolutions, SolverStats};
 
 /// Data intended to be shared across threads
 pub struct JobData {

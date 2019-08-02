@@ -20,22 +20,22 @@ use crate::block::Block;
 use crate::chain::ChainErr;
 use crate::easy_chain::block::EasyBlock;
 use crate::hard_chain::state::HardChainState;
-use miner::{PROOF_SIZE, Proof};
 use account::NormalAddress;
-use crypto::PublicKey;
 use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
 use crypto::Hash;
+use crypto::PublicKey;
 use lazy_static::*;
+use miner::{Proof, PROOF_SIZE};
 use std::boxed::Box;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
 use std::io::Cursor;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::str;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 lazy_static! {
     /// Atomic reference count to hard chain genesis block
@@ -69,7 +69,7 @@ pub struct HardBlock {
     /// The height of the block.
     height: u64,
 
-    /// The address that will collect the 
+    /// The address that will collect the
     /// rewards earned by the miner.
     collector_address: NormalAddress,
 
@@ -146,14 +146,15 @@ impl Block for HardBlock {
     }
 
     fn after_write() -> Option<Box<FnMut(Arc<HardBlock>)>> {
-        let fun = |block| {
+        let fun = |block| {};
 
-        };
-        
         Some(Box::new(fun))
     }
 
-    fn append_condition(_block: Arc<HardBlock>, chain_state: Self::ChainState) -> Result<Self::ChainState, ChainErr> {
+    fn append_condition(
+        _block: Arc<HardBlock>,
+        chain_state: Self::ChainState,
+    ) -> Result<Self::ChainState, ChainErr> {
         Ok(chain_state)
     }
 
@@ -267,7 +268,7 @@ impl Block for HardBlock {
 
             match NormalAddress::from_bytes(&addr) {
                 Ok(address) => address,
-                _ => return Err("Incorrect address field")
+                _ => return Err("Incorrect address field"),
             }
         } else {
             return Err("Incorrect packet structure 5");
@@ -278,7 +279,7 @@ impl Block for HardBlock {
 
             match Proof::from_bytes(&proof) {
                 Ok(proof) => proof,
-                _ => return Err("Incorrect proof field")
+                _ => return Err("Incorrect proof field"),
             }
         } else {
             return Err("Incorrect packet structure 6");
@@ -290,9 +291,9 @@ impl Block for HardBlock {
             match str::from_utf8(&address_vec) {
                 Ok(result) => match SocketAddr::from_str(result) {
                     Ok(addr) => addr,
-                    Err(_) => return Err("Invalid ip address")
+                    Err(_) => return Err("Invalid ip address"),
                 },
-                Err(_) => return Err("Invalid ip address")
+                Err(_) => return Err("Invalid ip address"),
             }
         } else {
             return Err("Incorrect packet structure 7");
@@ -328,10 +329,10 @@ impl HardBlock {
     pub const BLOCK_TYPE: u8 = 1;
 
     pub fn new(
-        parent_hash: Option<Hash>, 
-        collector_address: NormalAddress, 
-        ip: SocketAddr, 
-        height: u64, 
+        parent_hash: Option<Hash>,
+        collector_address: NormalAddress,
+        ip: SocketAddr,
+        height: u64,
         nonce: u32,
         easy_block_hash: Hash,
         proof: Proof,

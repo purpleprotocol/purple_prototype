@@ -21,7 +21,7 @@ use enum_repr::*;
 #[EnumRepr(type = "usize")]
 #[derive(Copy, Clone, Debug, PartialEq)]
 /// All possible plugins that can be used for mining.
-/// 
+///
 /// Each type is mapped to its index in the loaded plugins list.
 pub enum PluginType {
     Cuckoo19 = 0,

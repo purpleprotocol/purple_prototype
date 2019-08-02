@@ -17,9 +17,9 @@
 */
 
 use crate::parameters::*;
+use crypto::NodeId;
 use events::Event;
 use hashbrown::{HashMap, HashSet};
-use crypto::NodeId;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;

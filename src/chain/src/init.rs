@@ -18,21 +18,22 @@
 
 use crate::easy_chain::chain::*;
 use crate::hard_chain::chain::*;
-use crate::state_chain::chain::*;
-use crate::pow_chain_state::PowChainState;
 use crate::hard_chain::state::HardChainState;
+use crate::pow_chain_state::PowChainState;
+use crate::state_chain::chain::*;
 use crate::state_chain::state::ChainState;
-use std::sync::Arc;
 use lazy_static::*;
 use parking_lot::RwLock;
 use persistence::PersistentDb;
+use std::sync::Arc;
 
 #[cfg(feature = "test")]
 use std::cell::RefCell;
 
 #[cfg(not(feature = "test"))]
 lazy_static! {
-    static ref CHAIN_REFS: Arc<RwLock<Option<(EasyChainRef, HardChainRef, StateChainRef)>>> = Arc::new(RwLock::new(None));
+    static ref CHAIN_REFS: Arc<RwLock<Option<(EasyChainRef, HardChainRef, StateChainRef)>>> =
+        Arc::new(RwLock::new(None));
 }
 
 #[cfg(feature = "test")]
@@ -43,7 +44,7 @@ thread_local! {
 #[cfg(not(feature = "test"))]
 /// Init chain module. Call this before any other function.
 pub fn init(
-    easy_chain_db: PersistentDb, 
+    easy_chain_db: PersistentDb,
     hard_chain_db: PersistentDb,
     state_chain_db: PersistentDb,
     state_db: PersistentDb,
@@ -77,7 +78,7 @@ pub fn init(
 
 #[cfg(feature = "test")]
 pub fn init(
-    easy_chain_db: PersistentDb, 
+    easy_chain_db: PersistentDb,
     hard_chain_db: PersistentDb,
     state_chain_db: PersistentDb,
     state_db: PersistentDb,
