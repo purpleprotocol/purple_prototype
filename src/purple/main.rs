@@ -149,6 +149,8 @@ fn main() {
 
     // Start the tokio runtime
     tokio::run(ok(()).and_then(move |_| {
+        start_chains_switch_poll(easy_chain.clone(), hard_chain.clone(), state_chain.clone());
+
         // Start listening for blocks
         start_block_listeners(
             network.clone(),

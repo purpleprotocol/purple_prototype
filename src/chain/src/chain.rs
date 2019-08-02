@@ -460,6 +460,11 @@ impl<B: Block> Chain<B> {
         Ok(())
     }
 
+    /// Returns true if the chain has buffered switch requests.
+    pub fn has_switch_requests(&self) -> bool {
+        !self.switch_requests.is_empty()
+    }
+
     /// Attempts to flush the switch request buffer, potentially
     /// yielding a new canonical chain.
     ///

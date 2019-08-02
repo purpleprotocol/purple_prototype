@@ -25,6 +25,83 @@ use futures::sync::mpsc::Receiver;
 use parking_lot::Mutex;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::timer::Interval;
+use std::time::{Duration, Instant};
+
+/// Time in milliseconds to poll chains for buffered switch requests.
+const SWITCH_POLL_INTERVAL: u64 = 1;
+
+/// Starts a loop for each chain that will attempt
+/// to perform buffered chain switches.
+pub fn start_chains_switch_poll(
+    easy_chain: EasyChainRef,
+    hard_chain: HardChainRef,
+    state_chain: StateChainRef,
+) {
+    let easy_interval_fut = Interval::new(Instant::now(), Duration::from_millis(SWITCH_POLL_INTERVAL))
+        .fold(easy_chain, |easy_chain, _| {
+            let has_switch_requests = {
+                let chain = easy_chain.chain.read();
+                chain.has_switch_requests()
+            };
+
+            // Flush buffer only if the chain has switch requests
+            //
+            // TODO: Rate limit this
+            if has_switch_requests {
+                let mut chain = easy_chain.chain.write();
+                chain.flush_switch_buffer();
+            }
+
+            ok(easy_chain)
+        })
+        .map_err(|e| warn!("Easy switch poll err: {:?}", e))
+        .and_then(|_| ok(()));
+
+    let hard_interval_fut = Interval::new(Instant::now(), Duration::from_millis(SWITCH_POLL_INTERVAL))
+        .fold(hard_chain, |hard_chain, _| {
+            let has_switch_requests = {
+                let chain = hard_chain.chain.read();
+                chain.has_switch_requests()
+            };
+
+            // Flush buffer only if the chain has switch requests
+            //
+            // TODO: Rate limit this
+            if has_switch_requests {
+                let mut chain = hard_chain.chain.write();
+                chain.flush_switch_buffer();
+            }
+
+            ok(hard_chain)
+        })
+        .map_err(|e| warn!("Hard switch poll err: {:?}", e))
+        .and_then(|_| ok(()));
+
+    let state_interval_fut = Interval::new(Instant::now(), Duration::from_millis(SWITCH_POLL_INTERVAL))
+        .fold(state_chain, |state_chain, _| {
+            let has_switch_requests = {
+                let chain = state_chain.chain.read();
+                chain.has_switch_requests()
+            };
+
+            // Flush buffer only if the chain has switch requests
+            //
+            // TODO: Rate limit this
+            if has_switch_requests {
+                let mut chain = state_chain.chain.write();
+                chain.flush_switch_buffer();
+            }
+
+            ok(state_chain)
+        })
+        .map_err(|e| warn!("State switch poll err: {:?}", e))
+        .and_then(|_| ok(()));
+
+    tokio::spawn(easy_interval_fut);
+    tokio::spawn(hard_interval_fut);
+    tokio::spawn(state_interval_fut);
+}
 
 /// Listens for blocks on chain receivers and
 /// forwards them to their respective chains.
