@@ -18,6 +18,7 @@
 
 use crate::types::*;
 use crate::block::Block;
+use crate::hard_chain::block::HardBlock;
 use crate::chain::ChainErr;
 use crate::pow_chain_state::PowChainState;
 use account::NormalAddress;
@@ -40,14 +41,15 @@ use std::sync::Arc;
 lazy_static! {
     /// Atomic reference count to hard chain genesis block
     static ref GENESIS_RC: Arc<EasyBlock> = {
-        let hash = Hash::random();
+        let hard_block_hash = HardBlock::genesis().block_hash().unwrap();
         let mut block = EasyBlock {
+            hard_block_hash,
             parent_hash: None,
             height: 0,
             nonce: 0,
             proof: Proof::zero(PROOF_SIZE),
             collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
-            hash: Some(hash),
+            hash: None,
             ip: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 44034),
             timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
         };
@@ -65,6 +67,9 @@ pub struct EasyBlock {
 
     /// The hash of the parent block.
     parent_hash: Option<Hash>,
+
+    /// A reference to a block in the hard chain
+    hard_block_hash: Hash,
 
     /// The address that will collect the
     /// rewards earned by the miner.
@@ -167,8 +172,9 @@ impl Block for EasyBlock {
         buf.write_u8(timestamp_len).unwrap();
         buf.write_u32::<BigEndian>(self.nonce).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
-        buf.extend_from_slice(&self.hash.unwrap().0.to_vec());
-        buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
+        buf.extend_from_slice(&self.hard_block_hash.0);
+        buf.extend_from_slice(&self.hash.unwrap().0);
+        buf.extend_from_slice(&self.parent_hash.unwrap().0);
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(address);
@@ -224,7 +230,7 @@ impl Block for EasyBlock {
         let mut buf: Vec<u8> = rdr.into_inner();
         buf.drain(..15);
 
-        let hash = if buf.len() > 32 as usize {
+        let hard_block_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
@@ -233,6 +239,17 @@ impl Block for EasyBlock {
             Hash(hash)
         } else {
             return Err("Incorrect packet structure 1");
+        };
+
+        let hash = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure 2");
         };
 
         let parent_hash = if buf.len() > 32 as usize {
@@ -296,6 +313,7 @@ impl Block for EasyBlock {
 
         Ok(Arc::new(EasyBlock {
             collector_address,
+            hard_block_hash,
             timestamp,
             proof,
             nonce,
@@ -312,6 +330,7 @@ impl EasyBlock {
 
     pub fn new(
         parent_hash: Option<Hash>,
+        hard_block_hash: Hash,
         collector_address: NormalAddress,
         ip: SocketAddr,
         height: u64,
@@ -320,6 +339,7 @@ impl EasyBlock {
     ) -> EasyBlock {
         EasyBlock {
             parent_hash,
+            hard_block_hash,
             collector_address,
             height,
             hash: None,
@@ -376,6 +396,7 @@ impl quickcheck::Arbitrary for EasyBlock {
             parent_hash: Some(quickcheck::Arbitrary::arbitrary(g)),
             hash: Some(quickcheck::Arbitrary::arbitrary(g)),
             ip: quickcheck::Arbitrary::arbitrary(g),
+            hard_block_hash: quickcheck::Arbitrary::arbitrary(g),
             proof: Proof::random(PROOF_SIZE),
             nonce: quickcheck::Arbitrary::arbitrary(g),
             timestamp,

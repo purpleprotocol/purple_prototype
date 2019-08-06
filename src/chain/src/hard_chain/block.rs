@@ -41,10 +41,8 @@ use std::sync::Arc;
 lazy_static! {
     /// Atomic reference count to hard chain genesis block
     static ref GENESIS_RC: Arc<HardBlock> = {
-        let easy_block_hash = EasyBlock::genesis().block_hash().unwrap();
-
         let mut block = HardBlock {
-            easy_block_hash,
+            easy_block_hash: None,
             parent_hash: None,
             proof: Proof::zero(PROOF_SIZE),
             collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
@@ -65,7 +63,7 @@ lazy_static! {
 /// A block belonging to the `HardChain`.
 pub struct HardBlock {
     /// A reference to a block in the `EasyChain`.
-    easy_block_hash: Hash,
+    easy_block_hash: Option<Hash>,
 
     /// The height of the block.
     height: u64,
@@ -161,7 +159,7 @@ impl Block for HardBlock {
             BranchType::Canonical => {
                 // Reject blocks that don't have a corresponding 
                 // block in the easy chain.
-                if let None = chain_state.easy_chain.query(&block.easy_block_hash) {
+                if let None = chain_state.easy_chain.query(&block.easy_block_hash.unwrap()) {
                     return Err(ChainErr::BadAppendCondition);
                 }
 
@@ -193,9 +191,9 @@ impl Block for HardBlock {
         buf.write_u8(timestamp_len).unwrap();
         buf.write_u32::<BigEndian>(self.nonce).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
-        buf.extend_from_slice(&self.hash.unwrap().0.to_vec());
-        buf.extend_from_slice(&self.easy_block_hash.0.to_vec());
-        buf.extend_from_slice(&self.parent_hash.unwrap().0.to_vec());
+        buf.extend_from_slice(&self.hash.unwrap().0);
+        buf.extend_from_slice(&self.easy_block_hash.as_ref().unwrap().0);
+        buf.extend_from_slice(&self.parent_hash.unwrap().0);
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(address);
@@ -334,7 +332,7 @@ impl Block for HardBlock {
 
         Ok(Arc::new(HardBlock {
             timestamp,
-            easy_block_hash,
+            easy_block_hash: Some(easy_block_hash),
             collector_address,
             proof,
             nonce,
@@ -360,7 +358,7 @@ impl HardBlock {
     ) -> HardBlock {
         HardBlock {
             parent_hash,
-            easy_block_hash,
+            easy_block_hash: Some(easy_block_hash),
             collector_address,
             height,
             hash: None,
@@ -395,10 +393,13 @@ impl HardBlock {
         buf.extend_from_slice(&encoded_nonce);
 
         if let Some(parent_hash) = self.parent_hash {
-            buf.extend_from_slice(&parent_hash.0.to_vec());
+            buf.extend_from_slice(&parent_hash.0);
         }
 
-        buf.extend_from_slice(&self.easy_block_hash.0);
+        if let Some(ref easy_block_hash) = self.easy_block_hash {
+            buf.extend_from_slice(&easy_block_hash.0);
+        }
+        
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(addr.as_bytes());
@@ -412,7 +413,7 @@ use quickcheck::*;
 impl Arbitrary for HardBlock {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> HardBlock {
         HardBlock {
-            easy_block_hash: Arbitrary::arbitrary(g),
+            easy_block_hash: Some(Arbitrary::arbitrary(g)),
             height: Arbitrary::arbitrary(g),
             collector_address: Arbitrary::arbitrary(g),
             parent_hash: Some(Arbitrary::arbitrary(g)),
