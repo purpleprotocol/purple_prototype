@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::types::*;
 use crate::block::Block;
 use crate::chain::ChainErr;
 use crate::pow_chain_state::PowChainState;
@@ -147,6 +148,7 @@ impl Block for EasyBlock {
     fn append_condition(
         _block: Arc<EasyBlock>,
         chain_state: Self::ChainState,
+        _branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr> {
         Ok(chain_state)
     }

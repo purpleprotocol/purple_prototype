@@ -271,7 +271,7 @@ impl<B: Block> Chain<B> {
 
             // Apply each block to the state
             while let Some(block) = blocks.pop() {
-                let s = B::append_condition(block.clone(), state.inner()).unwrap();
+                let s = B::append_condition(block.clone(), state.inner(), BranchType::Canonical).unwrap();
                 let s = UnflushedChainState::new(s);
 
                 // Perform checkpoint
@@ -622,7 +622,7 @@ impl<B: Block> Chain<B> {
             for i in 1..=states_to_flush {
                 let cur_height = root_height + i;
                 let block = self.query_by_height(cur_height).unwrap();
-                let new_state = B::append_condition(block.clone(), cur_state.inner()).unwrap();
+                let new_state = B::append_condition(block.clone(), cur_state.inner(), BranchType::Canonical).unwrap();
                 let new_state = UnflushedChainState::new(new_state);
 
                 // Remove checkpointed state
@@ -721,6 +721,7 @@ impl<B: Block> Chain<B> {
                             let append_condition = match B::append_condition(
                                 orphan.clone(),
                                 self.canonical_tip_state.clone().inner(),
+                                BranchType::Canonical,
                             ) {
                                 // Set new tip state if the append can proceed
                                 Ok(new_tip_state) => Some(new_tip_state),
@@ -794,6 +795,7 @@ impl<B: Block> Chain<B> {
                                     match B::append_condition(
                                         orphan.clone(),
                                         self.canonical_tip_state.clone().inner(),
+                                        BranchType::Canonical,
                                     ) {
                                         // Set new tip state if the append can proceed
                                         Ok(new_tip_state) => Some(new_tip_state),
@@ -814,6 +816,7 @@ impl<B: Block> Chain<B> {
                                     match B::append_condition(
                                         orphan.clone(),
                                         parent_state.clone().inner(),
+                                        BranchType::NonCanonical,
                                     ) {
                                         // Set new tip state if the append can proceed
                                         Ok(new_tip_state) => Some(new_tip_state),
@@ -1128,7 +1131,7 @@ impl<B: Block> Chain<B> {
         // branches, valid chains.
         for (head_hash, (largest_height, largest_tip)) in iterable {
             let head = self.orphan_pool.get(head_hash).unwrap();
-            let tip_state = B::append_condition(head.clone(), tip_state.clone().inner());
+            let tip_state = B::append_condition(head.clone(), tip_state.clone().inner(), BranchType::NonCanonical);
 
             if let Ok(tip_state) = tip_state {
                 let largest_tip = self.orphan_pool.get(&largest_tip).unwrap().clone();
@@ -1209,7 +1212,7 @@ impl<B: Block> Chain<B> {
 
                         if let Some(state) = previous.get(&parent_hash) {
                             // TODO: Reduce number of state clones
-                            if let Ok(state) = B::append_condition(e.clone(), state.clone().inner())
+                            if let Ok(state) = B::append_condition(e.clone(), state.clone().inner(), BranchType::NonCanonical)
                             {
                                 // Change head status if we have a match
                                 let status = self.validations_mapping.get_mut(head).unwrap();
@@ -1391,6 +1394,7 @@ impl<B: Block> Chain<B> {
                     match B::append_condition(
                         block.clone(),
                         self.canonical_tip_state.clone().inner(),
+                        BranchType::Canonical,
                     ) {
                         // Set new tip state if the append can proceed
                         Ok(new_tip_state) => Some(new_tip_state),
@@ -1469,7 +1473,7 @@ impl<B: Block> Chain<B> {
                         };
 
                         let tip_state =
-                            match B::append_condition(block.clone(), parent_state.inner()) {
+                            match B::append_condition(block.clone(), parent_state.inner(), BranchType::NonCanonical) {
                                 Ok(new_tip_state) => Some(UnflushedChainState::new(new_tip_state)),
                                 Err(_) => None,
                             };
@@ -1576,6 +1580,7 @@ impl<B: Block> Chain<B> {
                                         match B::append_condition(
                                             block.clone(),
                                             tip_state.clone().inner(),
+                                            BranchType::NonCanonical,
                                         ) {
                                             // Set new tip state if the append can proceed
                                             Ok(new_tip_state) => {
@@ -1716,14 +1721,14 @@ impl<B: Block> Chain<B> {
                                         // Retrieve state associated with the head's parent
                                         let state = self.search_fetch_next_state(head.height() - 1);
                                         let mut state =
-                                            B::append_condition(head.clone(), state.inner())?;
+                                            B::append_condition(head.clone(), state.inner(), BranchType::NonCanonical)?;
 
                                         // Compute tip state
                                         while let Some(b) = visited_stack.pop() {
-                                            state = B::append_condition(b, state)?;
+                                            state = B::append_condition(b, state, BranchType::NonCanonical)?;
                                         }
 
-                                        let state = B::append_condition(block.clone(), state)?;
+                                        let state = B::append_condition(block.clone(), state, BranchType::NonCanonical)?;
                                         UnflushedChainState::new(state)
                                     };
 
@@ -1913,7 +1918,7 @@ impl<B: Block> Chain<B> {
                 let block = B::from_bytes(&self.db.get(&hash).unwrap()).unwrap();
 
                 // Compute next state
-                state = B::append_condition(block, state.clone()).unwrap();
+                state = B::append_condition(block, state.clone(), BranchType::Canonical).unwrap();
 
                 if cur_height == target_height {
                     break;
@@ -2073,6 +2078,7 @@ mod tests {
         fn append_condition(
             block: Arc<DummyBlock>,
             mut chain_state: Self::ChainState,
+            _branch_type: BranchType,
         ) -> Result<Self::ChainState, ChainErr> {
             let valid = chain_state.height() == block.height() - 1;
 

@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::types::*;
 use crate::block::Block;
 use crate::chain::ChainErr;
 use crate::hard_chain::block::HardBlock;
@@ -149,6 +150,7 @@ impl Block for StateBlock {
     fn append_condition(
         block: Arc<StateBlock>,
         mut chain_state: Self::ChainState,
+        _branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr> {
         let pool_state = &mut chain_state.pool_state;
 

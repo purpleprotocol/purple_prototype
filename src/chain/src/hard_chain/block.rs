@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::types::*;
 use crate::block::Block;
 use crate::chain::ChainErr;
 use crate::easy_chain::block::EasyBlock;
@@ -152,9 +153,29 @@ impl Block for HardBlock {
     }
 
     fn append_condition(
-        _block: Arc<HardBlock>,
+        block: Arc<HardBlock>,
         chain_state: Self::ChainState,
+        branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr> {
+        match branch_type {
+            BranchType::Canonical => {
+                // Reject blocks that don't have a corresponding 
+                // block in the easy chain.
+                if let None = chain_state.easy_chain.query(&block.easy_block_hash) {
+                    return Err(ChainErr::BadAppendCondition);
+                }
+
+                unimplemented!();
+            }
+
+            BranchType::NonCanonical => {
+                unimplemented!();
+            }
+        }
+
+        // TODO: Validate difficulty
+        // TODO: Validate proof of work
+
         Ok(chain_state)
     }
 

@@ -37,6 +37,15 @@ pub enum OrphanType {
     DisconnectedTip,
 }
 
+#[derive(Clone, Debug, PartialEq, Copy)]
+pub enum BranchType {
+    /// The canonical chain branch
+    Canonical,
+    
+    /// A non-canonical chain branch
+    NonCanonical,
+}
+
 /// Generic trait for state that can be flushed to disk.
 pub trait Flushable {
     fn flush(&mut self) -> Result<(), ChainErr>;
