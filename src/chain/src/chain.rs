@@ -132,6 +132,54 @@ impl<B: Block> ChainRef<B> {
             }
         }
     }
+
+    /// Appends a block to the chain
+    pub fn append_block(&self, block: Arc<B>) -> Result<(), ChainErr> {
+        let mut chain = self.chain.write();
+        chain.append_block(block)
+    }
+
+    /// Attempts to fetch a block by its hash from the cache
+    /// and if it doesn't succeed it then attempts to retrieve
+    /// it from the orphan pool.
+    pub fn query_orphan(&self, hash: &Hash) -> Option<Arc<B>> {
+        let cache_result = {
+            let mut cache = self.block_cache.lock();
+
+            if let Some(result) = cache.get(hash) {
+                Some(result.clone())
+            } else {
+                None
+            }
+        };
+
+        if let Some(result) = cache_result {
+            Some(result)
+        } else {
+            let chain_result = {
+                let chain = self.chain.read();
+
+                if let Some(result) = chain.query_orphan(hash) {
+                    Some(result)
+                } else {
+                    None
+                }
+            };
+
+            if let Some(result) = chain_result {
+                let mut cache = self.block_cache.lock();
+
+                if cache.get(hash).is_none() {
+                    // Cache result and then return it
+                    cache.put(hash.clone(), result.clone());
+                }
+
+                Some(result)
+            } else {
+                None
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -1335,12 +1383,25 @@ impl<B: Block> Chain<B> {
         B::genesis()
     }
 
+    /// Queries the database for the block with the given hash.
     pub fn query(&self, hash: &Hash) -> Option<Arc<B>> {
-        if let Some(stored) = self.db.get(hash) {
-            Some(B::from_bytes(&stored).unwrap())
-        } else {
-            None
-        }
+        let stored = self.db.get(hash)?;
+        Some(B::from_bytes(&stored).unwrap())
+    }
+
+    /// Queries the current orphans for the block with the given hash.
+    pub fn query_orphan(&self, hash: &Hash) -> Option<Arc<B>> { 
+        self.orphan_pool.get(hash).cloned() 
+    }
+
+    /// Returns the type of the orphan with the given hash if any is found.
+    pub fn orphan_type(&self, hash: &Hash) -> Option<OrphanType> { 
+        self.validations_mapping.get(hash).cloned() 
+    }
+
+    /// Returns the height of the canonical tip
+    pub fn canonical_tip_height(&self) -> u64 {
+        self.canonical_tip.height()
     }
 
     pub fn query_by_height(&self, height: u64) -> Option<Arc<B>> {

@@ -27,6 +27,9 @@ mod pow_chain_state;
 mod state_chain;
 mod types;
 
+#[cfg(test)]
+mod test_helpers;
+
 pub use crate::chain::*;
 pub use block::*;
 pub use easy_chain::block::*;

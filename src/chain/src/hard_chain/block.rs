@@ -155,24 +155,49 @@ impl Block for HardBlock {
         chain_state: Self::ChainState,
         branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr> {
-        match branch_type {
-            BranchType::Canonical => {
-                // Reject blocks that don't have a corresponding 
-                // block in the easy chain.
-                if let None = chain_state.easy_chain.query(&block.easy_block_hash.unwrap()) {
-                    return Err(ChainErr::BadAppendCondition);
-                }
-
-                unimplemented!();
-            }
-
-            BranchType::NonCanonical => {
-                unimplemented!();
-            }
-        }
+        let easy_block_hash = block.easy_block_hash.unwrap();
 
         // TODO: Validate difficulty
         // TODO: Validate proof of work
+
+        {
+            let easy_chain = &chain_state.easy_chain.chain.read();
+
+            match branch_type {
+                // Canonical branch validations
+                BranchType::Canonical => {
+                    if let Some(easy_block) = chain_state.easy_chain.query(&easy_block_hash) {
+                        if easy_block.height() < chain_state.last_easy_height {
+                            return Err(ChainErr::BadAppendCondition);
+                        }
+                        
+                        // The referred block must be the canonical tip
+                        if easy_block.height() != easy_chain.canonical_tip_height() {
+                            return Err(ChainErr::BadAppendCondition);
+                        }
+                    } else {
+                        // Reject blocks that don't have a corresponding 
+                        // block in the easy chain.
+                        return Err(ChainErr::BadAppendCondition);
+                    }
+                }
+
+                // Non-canonical branch validations
+                BranchType::NonCanonical => {
+                    if let Some(easy_block) = chain_state.easy_chain.query(&easy_block_hash) {
+                        unimplemented!();
+                    } else if let Some(easy_block) = easy_chain.query_orphan(&easy_block_hash) {
+                        let orphan_type = easy_chain.orphan_type(&easy_block_hash).unwrap();
+
+                        unimplemented!();
+                    } else {
+                        // Reject blocks that don't have a corresponding 
+                        // block in the easy chain.
+                        return Err(ChainErr::BadAppendCondition);
+                    }
+                }
+            }
+        }
 
         Ok(chain_state)
     }
@@ -429,8 +454,39 @@ impl Arbitrary for HardBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_helpers::*;
 
     quickcheck! {
+        fn append_condition_integration() -> bool {
+            let (easy_chain, hard_chain, state_chain) = init_test_chains();
+            let block_generator = BlockGenerator::new(easy_chain.clone(), hard_chain.clone(), state_chain);
+
+            // Generate 10 sets of 1 valid hard block, 1 invalid hard 
+            // block and 3 valid easy blocks and 2 invalid easy blocks
+            for _ in 0..10 {
+                for _ in 0..3 {
+                    easy_chain.append_block(block_generator.next_valid_easy().unwrap()).unwrap();
+                }
+
+                // Try to append 2 invalid easy blocks
+                assert_eq!(easy_chain.append_block(block_generator.next_invalid_easy().unwrap()), Err(ChainErr::BadAppendCondition));
+                assert_eq!(easy_chain.append_block(block_generator.next_invalid_easy().unwrap()), Err(ChainErr::BadAppendCondition));
+
+                easy_chain.append_block(block_generator.next_valid_easy().unwrap()).unwrap();
+                assert_eq!(hard_chain.append_block(block_generator.next_invalid_hard().unwrap()), Err(ChainErr::BadAppendCondition));
+            }
+
+            {
+                let easy_chain = easy_chain.chain.read();
+                let hard_chain = hard_chain.chain.read();
+            
+                assert_eq!(easy_chain.height(), 30);
+                assert_eq!(hard_chain.height(), 10);
+            }
+
+            true
+        }
+
         fn it_verifies_hashes(block: HardBlock) -> bool {
             let mut block = block.clone();
 

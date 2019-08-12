@@ -18,6 +18,8 @@
 
 use crate::chain::ChainErr;
 use crate::types::*;
+use hashbrown::HashSet;
+use crypto::NodeId;
 
 #[derive(Clone, PartialEq, Debug)]
 /// Chain state associated with proof-of-work chains.
@@ -29,6 +31,14 @@ pub struct PowChainState {
 
     /// Current difficulty
     difficulty: u64,
+
+    /// Set containing validator ids that 
+    /// have mined blocks on the easy chain.
+    easy_validators: HashSet<NodeId>,
+
+    /// Set containing validator ids that 
+    /// have mined blocks on the hard chain.
+    hard_validators: HashSet<NodeId>,
 }
 
 impl PowChainState {
@@ -36,6 +46,8 @@ impl PowChainState {
         PowChainState {
             height: 0,
             difficulty: 0,
+            easy_validators: HashSet::new(),
+            hard_validators: HashSet::new(),
         }
     }
 }
