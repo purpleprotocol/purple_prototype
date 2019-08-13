@@ -18,7 +18,7 @@
 
 use crate::types::*;
 use crate::block::Block;
-use crate::chain::ChainErr;
+use crate::chain::*;
 use crate::easy_chain::block::EasyBlock;
 use crate::hard_chain::state::HardChainState;
 use account::NormalAddress;
@@ -168,17 +168,17 @@ impl Block for HardBlock {
                 BranchType::Canonical => {
                     if let Some(easy_block) = chain_state.easy_chain.query(&easy_block_hash) {
                         if easy_block.height() < chain_state.last_easy_height {
-                            return Err(ChainErr::BadAppendCondition);
+                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadCanonicalEasyHeight));
                         }
                         
                         // The referred block must be the canonical tip
                         if easy_block.height() != easy_chain.canonical_tip_height() {
-                            return Err(ChainErr::BadAppendCondition);
+                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadCanonicalEasyHeight));
                         }
                     } else {
                         // Reject blocks that don't have a corresponding 
                         // block in the easy chain.
-                        return Err(ChainErr::BadAppendCondition);
+                        return Err(ChainErr::BadAppendCondition(AppendCondErr::NoBlockFound));
                     }
                 }
 
@@ -193,7 +193,7 @@ impl Block for HardBlock {
                     } else {
                         // Reject blocks that don't have a corresponding 
                         // block in the easy chain.
-                        return Err(ChainErr::BadAppendCondition);
+                        return Err(ChainErr::BadAppendCondition(AppendCondErr::NoBlockFound));
                     }
                 }
             }
@@ -455,6 +455,13 @@ impl Arbitrary for HardBlock {
 mod tests {
     use super::*;
     use crate::test_helpers::*;
+    use rayon::prelude::*;
+
+    macro_rules! is_enum_variant {
+        ($v:expr, $p:pat) => (
+            if let $p = $v { true } else { false }
+        );
+    }
 
     quickcheck! {
         fn append_condition_integration() -> bool {
@@ -463,18 +470,18 @@ mod tests {
 
             // Generate 10 sets of 1 valid hard block, 1 invalid hard 
             // block and 3 valid easy blocks and 2 invalid easy blocks
-            for _ in 0..10 {
-                for _ in 0..3 {
+            (0..10usize).into_par_iter().for_each(|_| {
+                (0..3usize).into_par_iter().for_each(|_| {
                     easy_chain.append_block(block_generator.next_valid_easy().unwrap()).unwrap();
-                }
+                });
 
                 // Try to append 2 invalid easy blocks
-                assert_eq!(easy_chain.append_block(block_generator.next_invalid_easy().unwrap()), Err(ChainErr::BadAppendCondition));
-                assert_eq!(easy_chain.append_block(block_generator.next_invalid_easy().unwrap()), Err(ChainErr::BadAppendCondition));
+                assert!(is_enum_variant!(easy_chain.append_block(block_generator.next_invalid_easy().unwrap()), Err(ChainErr::BadAppendCondition {..} )));
+                assert!(is_enum_variant!(easy_chain.append_block(block_generator.next_invalid_easy().unwrap()), Err(ChainErr::BadAppendCondition {..} )));
 
-                easy_chain.append_block(block_generator.next_valid_easy().unwrap()).unwrap();
-                assert_eq!(hard_chain.append_block(block_generator.next_invalid_hard().unwrap()), Err(ChainErr::BadAppendCondition));
-            }
+                hard_chain.append_block(block_generator.next_valid_hard().unwrap()).unwrap();
+                assert!(is_enum_variant!(hard_chain.append_block(block_generator.next_invalid_hard().unwrap()), Err(ChainErr::BadAppendCondition {..} )));
+            });
 
             {
                 let easy_chain = easy_chain.chain.read();

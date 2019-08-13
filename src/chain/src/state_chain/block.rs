@@ -18,7 +18,7 @@
 
 use crate::types::*;
 use crate::block::Block;
-use crate::chain::ChainErr;
+use crate::chain::*;
 use crate::hard_chain::block::HardBlock;
 use crate::state_chain::state::ChainState;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -155,7 +155,7 @@ impl Block for StateBlock {
         let pool_state = &mut chain_state.pool_state;
 
         if block.epoch != pool_state.epoch {
-            return Err(ChainErr::BadAppendCondition);
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadEpoch));
         }
 
         // Validate and apply each event in the block
@@ -164,7 +164,7 @@ impl Block for StateBlock {
 
             // TODO: Handle different errors
             if pool_state.account_sent_by_validator(&node_id).is_err() {
-                return Err(ChainErr::BadAppendCondition);
+                return Err(ChainErr::BadAppendCondition(AppendCondErr::BadValidator));
             }
 
             let raw_root_hash = chain_state
@@ -182,7 +182,7 @@ impl Block for StateBlock {
                     TrieDBMut::<BlakeDbHasher, Codec>::new(&mut chain_state.db, &mut root);
 
                 if event.validate_apply(&mut trie).is_err() {
-                    return Err(ChainErr::BadAppendCondition);
+                    return Err(ChainErr::BadAppendCondition(AppendCondErr::BadTransaction));
                 }
             }
 
