@@ -148,32 +148,48 @@ impl VmValue {
         VmValue::check_f64_infinite(val1 * val2)
     }
 
-    fn div_f32(val1: &f32, val2: &f32) -> Option<f32> {
+    fn div_f32(val1: &f32, val2: &f32) -> Result<f32, VmError> {
         if *val2 == 0.0 {
-            panic!("Attempted to divide by zero!")
+            return Err(VmError::DivideByZero);
         }
-        VmValue::check_f32_infinite(val1 / val2)
+
+        match VmValue::check_f32_infinite(val1 / val2) {
+            Some(res) => Ok(res),
+            None => Err(VmError::Infinity),
+        }
     }
 
-    fn div_f64(val1: &f64, val2: &f64) -> Option<f64> {
+    fn div_f64(val1: &f64, val2: &f64) -> Result<f64, VmError> {
         if *val2 == 0.0 {
-            panic!("Attempted to divide by zero!")
+            return Err(VmError::DivideByZero);
         }
-        VmValue::check_f64_infinite(val1 / val2)
+
+        match VmValue::check_f64_infinite(val1 / val2) {
+            Some(res) => Ok(res),
+            None => Err(VmError::Infinity),
+        }
     }
 
-    fn rem_f32(val1: &f32, val2: &f32) -> Option<f32> {
+    fn rem_f32(val1: &f32, val2: &f32) -> Result<f32, VmError> {
         if *val2 == 0.0 {
-            panic!("Attempted to divide by zero!")
+            return Err(VmError::DivideByZero);
         }
-        VmValue::check_f32_infinite(val1 % val2)
+
+        match VmValue::check_f32_infinite(val1 % val2) {
+            Some(res) => Ok(res),
+            None => Err(VmError::Infinity),
+        }
     }
 
-    fn rem_f64(val1: &f64, val2: &f64) -> Option<f64> {
+    fn rem_f64(val1: &f64, val2: &f64) -> Result<f64, VmError> {
         if *val2 == 0.0 {
-            panic!("Attempted to divide by zero!")
+            return Err(VmError::DivideByZero);
         }
-        VmValue::check_f64_infinite(val1 % val2)
+
+        match VmValue::check_f64_infinite(val1 % val2) {
+            Some(res) => Ok(res),
+            None => Err(VmError::Infinity),
+        }
     }
 }
 
@@ -305,14 +321,19 @@ impl Add for VmValue {
             },
             (VmValue::i32Array2(val1), VmValue::i32Array2(val2)) => {
                 let mut result: [i32; 2] = [0; 2];
-
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_add(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array2(result))
@@ -322,10 +343,16 @@ impl Add for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_add(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array4(result))
@@ -335,10 +362,16 @@ impl Add for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_add(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array8(result))
@@ -348,10 +381,16 @@ impl Add for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_add(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array2(result))
@@ -361,10 +400,16 @@ impl Add for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_add(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array4(result))
@@ -374,10 +419,16 @@ impl Add for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_add(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_add(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array8(result))
@@ -387,10 +438,16 @@ impl Add for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sum_f32(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sum_f32(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array2(result))
@@ -400,10 +457,16 @@ impl Add for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sum_f32(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sum_f32(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array4(result))
@@ -413,10 +476,16 @@ impl Add for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sum_f32(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sum_f32(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array8(result))
@@ -426,10 +495,16 @@ impl Add for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sum_f64(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sum_f64(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array2(result))
@@ -439,10 +514,16 @@ impl Add for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sum_f64(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sum_f64(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array4(result))
@@ -452,10 +533,16 @@ impl Add for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sum_f64(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sum_f64(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array8(result))
@@ -491,10 +578,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_sub(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_sub(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array2(result))
@@ -504,10 +597,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_sub(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_sub(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array4(result))
@@ -517,10 +616,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_sub(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_sub(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array8(result))
@@ -530,10 +635,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_sub(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_sub(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array2(result))
@@ -543,10 +654,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_sub(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_sub(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array4(result))
@@ -556,10 +673,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_sub(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_sub(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array8(result))
@@ -569,10 +692,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sub_f32(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sub_f32(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array2(result))
@@ -582,10 +711,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sub_f32(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sub_f32(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array4(result))
@@ -595,10 +730,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sub_f32(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sub_f32(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array8(result))
@@ -608,10 +749,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sub_f64(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sub_f64(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array2(result))
@@ -621,10 +768,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sub_f64(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sub_f64(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array4(result))
@@ -634,10 +787,16 @@ impl Sub for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::sub_f64(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::sub_f64(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array8(result))
@@ -673,10 +832,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_mul(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_mul(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array2(result))
@@ -686,10 +851,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_mul(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_mul(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array4(result))
@@ -699,10 +870,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_mul(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_mul(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array8(result))
@@ -712,10 +889,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_mul(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_mul(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array2(result))
@@ -725,10 +908,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_mul(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_mul(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array4(result))
@@ -738,10 +927,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| a.checked_mul(*b).ok_or(VmError::Overflow));
+                    .map(|(a, b)| match a.checked_mul(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array8(result))
@@ -751,10 +946,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::mul_f32(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::mul_f32(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array2(result))
@@ -764,10 +965,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::mul_f32(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::mul_f32(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array4(result))
@@ -777,10 +984,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::mul_f32(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::mul_f32(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array8(result))
@@ -790,10 +1003,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::mul_f64(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::mul_f64(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array2(result))
@@ -803,10 +1022,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::mul_f64(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::mul_f64(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array4(result))
@@ -816,10 +1041,16 @@ impl Mul for VmValue {
                 let src = val1
                     .iter()
                     .zip(&val2)
-                    .map(|(a, b)| VmValue::mul_f64(a, b).ok_or(VmError::Infinity));
+                    .map(|(a, b)| match VmValue::mul_f64(a, b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Infinity),
+                    });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array8(result))
@@ -854,26 +1085,14 @@ impl Div for VmValue {
                     None => Err(VmError::Overflow),
                 }
             }
-            (VmValue::F32(val1), VmValue::F32(val2)) => {
-                if val2 == 0.0 {
-                    return Err(VmError::DivideByZero);
-                }
-
-                match VmValue::div_f32(&val1, &val2) {
-                    Some(result) => Ok(VmValue::F32(result)),
-                    None => Err(VmError::Overflow),
-                }
-            }
-            (VmValue::F64(val1), VmValue::F64(val2)) => {
-                if val2 == 0.0 {
-                    return Err(VmError::DivideByZero);
-                }
-
-                match VmValue::div_f64(&val1, &val2) {
-                    Some(result) => Ok(VmValue::F64(result)),
-                    None => Err(VmError::Overflow),
-                }
-            }
+            (VmValue::F32(val1), VmValue::F32(val2)) => match VmValue::div_f32(&val1, &val2) {
+                Ok(res) => Ok(VmValue::F32(res)),
+                Err(err) => Err(err),
+            },
+            (VmValue::F64(val1), VmValue::F64(val2)) => match VmValue::div_f64(&val1, &val2) {
+                Ok(res) => Ok(VmValue::F64(res)),
+                Err(err) => Err(err),
+            },
             (VmValue::i32Array2(val1), VmValue::i32Array2(val2)) => {
                 let mut result: [i32; 2] = [0; 2];
                 let src = val1.iter().zip(&val2).map(|(a, b)| {
@@ -881,11 +1100,17 @@ impl Div for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_div(*b).ok_or(VmError::Overflow)
+                    match a.checked_div(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array2(result))
@@ -897,11 +1122,17 @@ impl Div for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_div(*b).ok_or(VmError::Overflow)
+                    match a.checked_div(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array4(result))
@@ -913,11 +1144,17 @@ impl Div for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_div(*b).ok_or(VmError::Overflow)
+                    match a.checked_div(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array8(result))
@@ -929,11 +1166,17 @@ impl Div for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_div(*b).ok_or(VmError::Overflow)
+                    match a.checked_div(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array2(result))
@@ -945,11 +1188,17 @@ impl Div for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_div(*b).ok_or(VmError::Overflow)
+                    match a.checked_div(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array4(result))
@@ -961,107 +1210,95 @@ impl Div for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_div(*b).ok_or(VmError::Overflow)
+                    match a.checked_div(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array8(result))
             }
             (VmValue::f32Array2(val1), VmValue::f32Array2(val2)) => {
                 let mut result: [f32; 2] = [0.0; 2];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::div_f32(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::div_f32(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array2(result))
             }
             (VmValue::f32Array4(val1), VmValue::f32Array4(val2)) => {
                 let mut result: [f32; 4] = [0.0; 4];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::div_f32(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::div_f32(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array4(result))
             }
             (VmValue::f32Array8(val1), VmValue::f32Array8(val2)) => {
                 let mut result: [f32; 8] = [0.0; 8];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::div_f32(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::div_f32(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array8(result))
             }
             (VmValue::f64Array2(val1), VmValue::f64Array2(val2)) => {
                 let mut result: [f64; 2] = [0.0; 2];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::div_f64(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::div_f64(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array2(result))
             }
             (VmValue::f64Array4(val1), VmValue::f64Array4(val2)) => {
                 let mut result: [f64; 4] = [0.0; 4];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::div_f64(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::div_f64(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array4(result))
             }
             (VmValue::f64Array8(val1), VmValue::f64Array8(val2)) => {
                 let mut result: [f64; 8] = [0.0; 8];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::div_f64(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::div_f64(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array8(result))
@@ -1096,26 +1333,14 @@ impl Rem for VmValue {
                     None => Err(VmError::Overflow),
                 }
             }
-            (VmValue::F32(val1), VmValue::F32(val2)) => {
-                if val2 == 0.0 {
-                    return Err(VmError::DivideByZero);
-                }
-
-                match VmValue::rem_f32(&val1, &val2) {
-                    Some(result) => Ok(VmValue::F32(result)),
-                    None => Err(VmError::Overflow),
-                }
-            }
-            (VmValue::F64(val1), VmValue::F64(val2)) => {
-                if val2 == 0.0 {
-                    return Err(VmError::DivideByZero);
-                }
-
-                match VmValue::rem_f64(&val1, &val2) {
-                    Some(result) => Ok(VmValue::F64(result)),
-                    None => Err(VmError::Overflow),
-                }
-            }
+            (VmValue::F32(val1), VmValue::F32(val2)) => match VmValue::rem_f32(&val1, &val2) {
+                Ok(res) => Ok(VmValue::F32(res)),
+                Err(err) => Err(err),
+            },
+            (VmValue::F64(val1), VmValue::F64(val2)) => match VmValue::rem_f64(&val1, &val2) {
+                Ok(res) => Ok(VmValue::F64(res)),
+                Err(err) => Err(err),
+            },
             (VmValue::i32Array2(val1), VmValue::i32Array2(val2)) => {
                 let mut result: [i32; 2] = [0; 2];
                 let src = val1.iter().zip(&val2).map(|(a, b)| {
@@ -1123,11 +1348,17 @@ impl Rem for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_rem(*b).ok_or(VmError::Overflow)
+                    match a.checked_rem(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array2(result))
@@ -1139,11 +1370,17 @@ impl Rem for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_rem(*b).ok_or(VmError::Overflow)
+                    match a.checked_rem(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array4(result))
@@ -1155,11 +1392,17 @@ impl Rem for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_rem(*b).ok_or(VmError::Overflow)
+                    match a.checked_rem(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i32Array8(result))
@@ -1171,11 +1414,17 @@ impl Rem for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_rem(*b).ok_or(VmError::Overflow)
+                    match a.checked_rem(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array2(result))
@@ -1187,11 +1436,17 @@ impl Rem for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_rem(*b).ok_or(VmError::Overflow)
+                    match a.checked_rem(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array4(result))
@@ -1203,107 +1458,95 @@ impl Rem for VmValue {
                         return Err(VmError::DivideByZero);
                     }
 
-                    a.checked_rem(*b).ok_or(VmError::Overflow)
+                    match a.checked_rem(*b) {
+                        Some(res) => Ok(res),
+                        None => Err(VmError::Overflow),
+                    }
                 });
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::i64Array8(result))
             }
             (VmValue::f32Array2(val1), VmValue::f32Array2(val2)) => {
                 let mut result: [f32; 2] = [0.0; 2];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::rem_f32(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::rem_f32(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array2(result))
             }
             (VmValue::f32Array4(val1), VmValue::f32Array4(val2)) => {
                 let mut result: [f32; 4] = [0.0; 4];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::rem_f32(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::rem_f32(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array4(result))
             }
             (VmValue::f32Array8(val1), VmValue::f32Array8(val2)) => {
                 let mut result: [f32; 8] = [0.0; 8];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::rem_f32(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::rem_f32(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f32Array8(result))
             }
             (VmValue::f64Array2(val1), VmValue::f64Array2(val2)) => {
                 let mut result: [f64; 2] = [0.0; 2];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::rem_f64(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::rem_f64(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array2(result))
             }
             (VmValue::f64Array4(val1), VmValue::f64Array4(val2)) => {
                 let mut result: [f64; 4] = [0.0; 4];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::rem_f64(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::rem_f64(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array4(result))
             }
             (VmValue::f64Array8(val1), VmValue::f64Array8(val2)) => {
                 let mut result: [f64; 8] = [0.0; 8];
-                let src = val1.iter().zip(&val2).map(|(a, b)| {
-                    if *b == 0.0 {
-                        return Err(VmError::DivideByZero);
-                    }
-
-                    VmValue::rem_f64(a, b).ok_or(VmError::Infinity)
-                });
+                let src = val1.iter().zip(&val2).map(|(a, b)| VmValue::rem_f64(a, b));
 
                 for (r, v) in result.iter_mut().zip(src) {
-                    *r = v.unwrap();
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
                 }
 
                 Ok(VmValue::f64Array8(result))
@@ -1353,5 +1596,58 @@ impl fmt::Debug for VmValue {
             VmValue::f64Array128(val) => write!(f, "{:?}", val.to_vec()),
             VmValue::f64Array256(val) => write!(f, "{:?}", val.to_vec()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_returns_error_on_overflow_array() {
+        let arr1: VmValue = VmValue::i32Array2([0, 2147483647]);
+        let arr2: VmValue = VmValue::i32Array2([10, 1]);
+        assert_eq!(arr1 + arr2, Err(VmError::Overflow));
+
+        let arr1: VmValue = VmValue::i32Array4([0, 0, 2147483647, 0]);
+        let arr2: VmValue = VmValue::i32Array4([10, 2, 1, 0]);
+        assert_eq!(arr1 + arr2, Err(VmError::Overflow));
+
+        let arr1: VmValue = VmValue::i32Array8([0, 0, 2147483647, 0, 0, 0, 2147483647, 0]);
+        let arr2: VmValue = VmValue::i32Array8([10, 2, 1, 0, 10, 2, 1, 0]);
+        assert_eq!(arr1 + arr2, Err(VmError::Overflow));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_returns_error_on_divide_by_zero() {
+        let val1: VmValue = VmValue::I32(10);
+        let val2: VmValue = VmValue::I32(0);
+        assert_eq!(val1 / val2, Err(VmError::DivideByZero));
+
+        let arr1: VmValue = VmValue::i32Array4([10, 20, 2147483647, 0]);
+        let arr2: VmValue = VmValue::i32Array4([10, 2, 1, 0]);
+        assert_eq!(arr1 / arr2, Err(VmError::DivideByZero));
+
+        let arr1: VmValue = VmValue::i32Array8([10, 0, 2147483647, 20, 30, 40, 2147483647, 0]);
+        let arr2: VmValue = VmValue::i32Array8([10, 2, 1, 0, 10, 2, 1, 10]);
+        assert_eq!(arr1 / arr2, Err(VmError::DivideByZero));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_returns_error_on_remainder_by_zero() {
+        let val1: VmValue = VmValue::I32(10);
+        let val2: VmValue = VmValue::I32(0);
+        assert_eq!(val1 % val2, Err(VmError::DivideByZero));
+
+        let arr1: VmValue = VmValue::i32Array4([10, 20, 2147483647, 0]);
+        let arr2: VmValue = VmValue::i32Array4([10, 2, 1, 0]);
+        assert_eq!(arr1 % arr2, Err(VmError::DivideByZero));
+
+        let arr1: VmValue = VmValue::i32Array8([10, 0, 2147483647, 20, 30, 40, 2147483647, 0]);
+        let arr2: VmValue = VmValue::i32Array8([10, 2, 1, 0, 10, 2, 1, 10]);
+        assert_eq!(arr1 % arr2, Err(VmError::DivideByZero));
     }
 }

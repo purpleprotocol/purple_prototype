@@ -3034,15 +3034,13 @@ fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Resu
 
             // Perform addition
             let mut acc: VmValue = buf[0];
-            println!("{:?}", buf[0]);
             for i in 1..buf.len(){
-                println!("{:?}", buf[i]);
                 acc = match acc + buf[i] {
                     Ok(res) => res,
                     Err(err) => return Err(err)
                 }
             }
-            println!("{:?}", acc);
+
             // Push result back to operand stack
             operand_stack.push(acc);
         }
@@ -3071,15 +3069,10 @@ fn perform_substraction(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
             let to_substract = operand_stack.pop(); // last inserted
             let mut result = operand_stack.pop(); // first inserted
 
-            println!("to sub {:?}", to_substract);
-            println!("result {:?}", result);
-
             result = match result - to_substract{
                 Ok(res) => res,
                 Err(err) => return Err(err)
             };
-
-            println!("result {:?}", result);
 
             // Push result back to operand stack
             operand_stack.push(result);
@@ -3114,15 +3107,13 @@ fn perform_multiplication(op: Instruction, operand_stack: &mut Stack<VmValue>) -
 
             // Perform multiplication
             let mut result: VmValue = buf[0];
-            println!("result {:?}", result);
             for i in 1..buf.len(){
-                println!("val {:?}", buf[i]);
                 result = match result * buf[i] {
                     Ok(res) => res,
                     Err(err) => return Err(err)
                 }
             }
-println!("result {:?}", result);
+            
             // Push result back to operand stack
             operand_stack.push(result);
         }
@@ -3150,15 +3141,11 @@ fn perform_div_signed(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Re
             // Perform signed division
             let divider = operand_stack.pop();
             let mut result = operand_stack.pop();
-            println!("to divide {:?}", divider);
-            println!("result {:?}", result);
 
             result = match result / divider{
                 Ok(res) => res,
                 Err(err) => return Err(err)
             };
-
-            println!("result {:?}", result);
 
             // Push result back to operand stack
             operand_stack.push(result);
@@ -3187,9 +3174,6 @@ fn perform_div_unsigned(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
             // Perform unsigned division
             let divider = operand_stack.pop();
             let mut result = operand_stack.pop();
-            
-println!("to divide {:?}", divider);
-            println!("result {:?}", result);
 
             if !divider.is_positive() || !result.is_positive(){
                 return Err(VmError::UnsignedOperationSignedOperand)
@@ -3200,7 +3184,6 @@ println!("to divide {:?}", divider);
                 Err(err) => return Err(err)
             };
 
-            println!("result {:?}", result);
             // Push result back to operand stack
             operand_stack.push(result);
         }

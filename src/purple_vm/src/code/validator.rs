@@ -24,6 +24,8 @@ use primitives::control_flow::CfOperator;
 use primitives::r#type::VmType;
 use stack::Stack;
 
+const MAX_OPERANDS: usize = 16;
+
 #[derive(Debug)]
 enum Validity {
     Valid,
@@ -176,6 +178,33 @@ impl Validator {
 
                                 ARITY_TRANSITIONS.to_vec()
                             }
+                            // Instruction::Add | Instruction::Mul => {
+                            //     let len = self.operand_stack.len();
+                            //     if len > MAX_OPERANDS || len < 2 {
+                            //         self.state = Validity::IrrefutablyInvalid;
+                            //     }
+
+                            //     OPERATIONS.to_vec()
+                            // }
+                            // Instruction::Sub
+                            // | Instruction::DivSigned
+                            // | Instruction::DivUnsigned
+                            // | Instruction::RemSigned
+                            // | Instruction::RemUnsigned => {
+                            //     if self.operand_stack.len() != 2 {
+                            //         self.state = Validity::IrrefutablyInvalid;
+                            //     }
+
+                            //     OPERATIONS.to_vec()
+                            // }
+                            // Instruction::Min | Instruction::Max => {
+                            //     let len = self.operand_stack.len();
+                            //     if len > MAX_OPERANDS || len < 1 {
+                            //         self.state = Validity::IrrefutablyInvalid;
+                            //     }
+
+                            //     OPERATIONS.to_vec()
+                            // }
                             _ => op.transitions(),
                         };
 
@@ -807,6 +836,17 @@ lazy_static! {
         Transition::Byte(Instruction::i64Const.repr()),
         Transition::Byte(Instruction::f32Const.repr()),
         Transition::Byte(Instruction::f64Const.repr())
+    ];
+    static ref OPERATIONS: Vec<Transition> = vec![
+        Transition::Byte(Instruction::Add.repr()),
+        Transition::Byte(Instruction::Sub.repr()),
+        Transition::Byte(Instruction::Mul.repr()),
+        Transition::Byte(Instruction::DivSigned.repr()),
+        Transition::Byte(Instruction::DivUnsigned.repr()),
+        Transition::Byte(Instruction::RemSigned.repr()),
+        Transition::Byte(Instruction::RemUnsigned.repr()),
+        Transition::Byte(Instruction::Min.repr()),
+        Transition::Byte(Instruction::Max.repr())
     ];
 }
 
@@ -1665,6 +1705,140 @@ mod tests {
             Instruction::i32Const.repr(),
             Instruction::PopOperand.repr(),
             Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        for byte in block {
+            validator.push_op(byte);
+
+            if validator.done() {
+                break;
+            }
+        }
+
+        assert!(!validator.valid());
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_for_div() {
+        let mut validator = Validator::new();
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x03,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            0x00,
+            0x00,
+            0x00,
+            0x03,
+            Instruction::DivSigned.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        for byte in block {
+            validator.push_op(byte);
+
+            if validator.done() {
+                break;
+            }
+        }
+
+        assert!(!validator.valid());
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_for_rem() {
+        let mut validator = Validator::new();
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::RemSigned.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        for byte in block {
+            validator.push_op(byte);
+
+            if validator.done() {
+                break;
+            }
+        }
+
+        assert!(!validator.valid());
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_for_sub() {
+        let mut validator = Validator::new();
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Sub.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        for byte in block {
+            validator.push_op(byte);
+
+            if validator.done() {
+                break;
+            }
+        }
+
+        assert!(!validator.valid());
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_available_for_operation() {
+        let mut validator = Validator::new();
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::Add.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
