@@ -25,7 +25,8 @@ use primitives::control_flow::CfOperator;
 use primitives::r#type::VmType;
 use stack::Stack;
 
-const MAX_OPERANDS: usize = 8;
+/// Maximum allowed operands. 1024
+const OPERAND_STACK_SIZE: usize = 1 >> 20; 
 
 #[derive(Debug)]
 enum Validity {
@@ -181,7 +182,7 @@ impl Validator {
                             }
                             Instruction::Add | Instruction::Mul => {
                                 let len = self.operand_stack.len();
-                                if len > MAX_OPERANDS || len < 2 {
+                                if len > OPERAND_STACK_SIZE || len < 2 {
                                     self.state = Validity::IrrefutablyInvalid;
                                     return;
                                 }
@@ -201,7 +202,7 @@ impl Validator {
                             }
                             Instruction::Min | Instruction::Max => {
                                 let len = self.operand_stack.len();
-                                if len > MAX_OPERANDS || len < 1 {
+                                if len > OPERAND_STACK_SIZE || len < 1 {
                                     self.state = Validity::IrrefutablyInvalid;
                                     return;
                                 }
