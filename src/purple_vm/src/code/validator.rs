@@ -25,7 +25,7 @@ use primitives::control_flow::CfOperator;
 use primitives::r#type::VmType;
 use stack::Stack;
 
-const MAX_OPERANDS: usize = 16;
+const MAX_OPERANDS: usize = 8;
 
 #[derive(Debug)]
 enum Validity {
@@ -1855,7 +1855,7 @@ mod tests {
                 break;
             }
         }
-        
+
         assert!(!validator.valid());
     }
 }
