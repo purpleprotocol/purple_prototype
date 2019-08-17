@@ -39,4 +39,16 @@ pub enum VmError {
 
     /// Integer overflow
     Overflow,
+
+    /// Float overflow
+    Infinity,
+
+    /// Divide by zero
+    DivideByZero,
+
+    /// Used signed (negative) operands on an Unsigned operation
+    UnsignedOperationSignedOperand,
+
+    /// An assertion has failed
+    AssertionFailed,
 }

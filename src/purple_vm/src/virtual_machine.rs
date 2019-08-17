@@ -495,8 +495,50 @@ impl Vm {
                             panic!("Invalid instruction after `BreakIf`. Expected a comparison operator!");
                         }
                     }
+                    Some(Instruction::Eq) => {
+                        let os = self.operand_stack.to_vec();
+                        
+                        // Perform assertion
+                        if perform_comparison(Instruction::Eq, os) { 
+                            ip.increment();
+                        } else {
+                            return Err(VmError::AssertionFailed);
+                        }
+                    }
                     Some(Instruction::Add) => {
-                        perform_addition(Instruction::Add, &mut self.operand_stack);
+                        perform_addition(Instruction::Add, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::Sub) => {
+                        perform_substraction(Instruction::Sub, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::Mul) => {
+                        perform_multiplication(Instruction::Mul, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::DivSigned) => {
+                        perform_div_signed(Instruction::DivSigned, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::DivUnsigned) => {
+                        perform_div_unsigned(Instruction::DivUnsigned, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::RemSigned) => {
+                        perform_rem_signed(Instruction::RemSigned, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::RemUnsigned) => {
+                        perform_rem_unsigned(Instruction::RemUnsigned, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::Min) => {
+                        perform_min(Instruction::Min, &mut self.operand_stack);
+                        ip.increment();
+                    }
+                    Some(Instruction::Max) => {
+                        perform_max(Instruction::Max, &mut self.operand_stack);
                         ip.increment();
                     }
                     Some(Instruction::i32Store)
@@ -1580,7 +1622,7 @@ fn fetch_argv(
                         _        => panic!("Cannot fetch from memory! Invalid instruction!")
                     }
                 } else {
-                    let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
+                    let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                     let mut cursor = Cursor::new(&bytes);
                     let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
 
@@ -2971,8 +3013,7 @@ fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> bool {
     }
 }
 
-// TODO: Handle overflow
-fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) {
+fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
     let len = operand_stack.len();
 
     if len < 2 {
@@ -2992,23 +3033,298 @@ fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) {
             }
 
             // Perform addition
-            let result = buf.iter().fold(None, |acc: Option<VmValue>, x| {
-                if let Some(acc) = acc {
-                    Some(acc + *x)
-                } else {
-                    Some(*x)
+            let mut acc: VmValue = buf[0];
+            for i in 1..buf.len(){
+                acc = match acc + buf[i] {
+                    Ok(res) => res,
+                    Err(err) => return Err(err)
                 }
-            });
+            }
 
             // Push result back to operand stack
-            if let Some(result) = result {
-                operand_stack.push(result);
-            } else {
-                unreachable!();
-            }
+            operand_stack.push(acc);
         }
         _ => panic!(format!(
             "Must receive an addition instruction! Got: {:?}",
+            op
+        )),
+    };
+
+    Ok(())
+}
+
+fn perform_substraction(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError>  {
+    let len = operand_stack.len();
+
+    if len != 2 {
+        panic!(format!(
+            "Cannot perform substraction on {} operands!",
+            len
+        ));
+    }
+
+    match op {
+        Instruction::Sub => {
+            // Perform substraction
+            let to_substract = operand_stack.pop(); // last inserted
+            let mut result = operand_stack.pop(); // first inserted
+
+            result = match result - to_substract{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+
+            // Push result back to operand stack
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive a substraction instruction! Got: {:?}",
+            op
+        )),
+    };
+
+    Ok(())
+}
+
+fn perform_multiplication(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError>  {
+    let len = operand_stack.len();
+
+    if len < 2 {
+        panic!(format!(
+            "Cannot perform multiplication on less than 2 operands! Got: {}",
+            len
+        ));
+    }
+
+    match op {
+        Instruction::Mul => {
+            let mut buf: Vec<VmValue> = Vec::with_capacity(len);
+
+            // Move items from operand stack to buffer
+            for _ in 0..len {
+                buf.push(operand_stack.pop());
+            }
+
+            // Perform multiplication
+            let mut result: VmValue = buf[0];
+            for i in 1..buf.len(){
+                result = match result * buf[i] {
+                    Ok(res) => res,
+                    Err(err) => return Err(err)
+                }
+            }
+            
+            // Push result back to operand stack
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive an multiplication instruction! Got: {:?}",
+            op
+        )),
+    };
+
+    Ok(())
+}
+
+fn perform_div_signed(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+    let len = operand_stack.len();
+
+    if len != 2 {
+        panic!(format!(
+            "Cannot perform signed division on {} operands! Must be 2!",
+            len
+        ));
+    }
+
+    match op {
+        Instruction::DivSigned => {
+            // Perform signed division
+            let divider = operand_stack.pop();
+            let mut result = operand_stack.pop();
+
+            result = match result / divider{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+
+            // Push result back to operand stack
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive an signed division instruction! Got: {:?}",
+            op
+        )),
+    };
+
+    Ok(())
+}
+
+fn perform_div_unsigned(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+    let len = operand_stack.len();
+
+    if len != 2 {
+        panic!(format!(
+            "Cannot perform unsigned division on {} operands! Must be 2!",
+            len
+        ));
+    }
+
+    match op {
+        Instruction::DivUnsigned => {
+            // Perform unsigned division
+            let divider = operand_stack.pop();
+            let mut result = operand_stack.pop();
+
+            if !divider.is_positive() || !result.is_positive(){
+                return Err(VmError::UnsignedOperationSignedOperand)
+            }
+
+            result = match result / divider{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+
+            // Push result back to operand stack
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive an unsigned division instruction! Got: {:?}",
+            op
+        )),
+    };
+
+    Ok(())
+}
+fn perform_rem_signed(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+    let len = operand_stack.len();
+
+    if len != 2 {
+        panic!(format!(
+            "Cannot perform signed remainder instruction on {} operands! Must be 2!",
+            len
+        ));
+    }
+
+    match op {
+        Instruction::RemSigned => {
+            // Perform signed remainder
+            let to_divide = operand_stack.pop();
+            let mut result = operand_stack.pop();
+            
+            result = match result % to_divide{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+
+            // Push result back to operand stack
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive signed remainder instruction! Got: {:?}",
+            op
+        )),
+    };
+
+    Ok(())
+}
+fn perform_rem_unsigned(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+    let len = operand_stack.len();
+
+    if len != 2 {
+        panic!(format!(
+            "Cannot perform unsigned remainder instruction on {} operands! Must be 2!",
+            len
+        ));
+    }
+
+    match op {
+        Instruction::RemUnsigned => {
+            // Perform unsigned remainder
+            let to_divide = operand_stack.pop();
+            let mut result = operand_stack.pop();
+            
+            if !to_divide.is_positive() || !result.is_positive(){
+                return Err(VmError::UnsignedOperationSignedOperand)            
+            }
+
+            result = match result % to_divide{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+
+            // Push result back to operand stack
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive unsigned remainder instruction! Got: {:?}",
+            op
+        )),
+    };
+
+    Ok(())
+}
+
+fn perform_min(op: Instruction, operand_stack: &mut Stack<VmValue>) {
+    let len = operand_stack.len();
+
+    if len < 1 {
+        panic!(format!("Cannot perform min on 0 operands"));
+    }
+
+    match op {
+        Instruction::Min => {
+            let mut buf: Vec<VmValue> = Vec::with_capacity(len);
+
+            // Move items from operand stack to buffer
+            for _ in 0..len {
+                buf.push(operand_stack.pop());
+            }
+            
+            // Perform min
+            let mut result = buf[0];
+            for x in buf.iter() {
+                if x.lt(&result) {
+                    result = *x; 
+                }
+            }
+
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive a min instruction! Got: {:?}",
+            op
+        )),
+    };
+}
+
+fn perform_max(op: Instruction, operand_stack: &mut Stack<VmValue>) {
+    let len = operand_stack.len();
+
+    if len < 1 {
+        panic!(format!("Cannot perform max on 0 operands"));
+    }
+
+    match op {
+        Instruction::Max => {
+            let mut buf: Vec<VmValue> = Vec::with_capacity(len);
+
+            // Move items from operand stack to buffer
+            for _ in 0..len {
+                buf.push(operand_stack.pop());
+            }
+            
+            // Perform max
+            let mut result = buf[0];
+            for x in buf.iter() {
+                if x.gt(&result) {
+                    result = *x; 
+                }
+            }
+
+            operand_stack.push(result);
+        }
+        _ => panic!(format!(
+            "Must receive a max instruction! Got: {:?}",
             op
         )),
     };
@@ -4320,5 +4636,2225 @@ mod tests {
         let result = vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap());
 
         assert_eq!(result, Err(VmError::Overflow));
+    }
+
+    // Helper function to run code blocks
+    fn execute_vm_code_common(block: Vec<u8>) -> Result<Gas, VmError>{
+        let mut vm = Vm::new();
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+        let function = Function {
+            arity: 0,
+            name: "debug_test".to_owned(),
+            block: block,
+            return_type: None,
+            arguments: vec![]
+        };
+
+        let module = Module {
+            module_hash: Hash::NULL_RLP,
+            functions: vec![function],
+            imports: vec![]
+        };
+
+        vm.load(module).unwrap();
+        vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap())
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_addition_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x0a,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x0b,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_addition_reaches_max_value_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x7f,                             // i32 MAX - 1
+            0xff,
+            0xff,
+            0xfe,
+            0x00,                             // 1
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x7f,
+            0xff,
+            0xff,
+            0xff,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_overflows_addition_high_limit_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x7f,                             // i32 MAX
+            0xff,
+            0xff,
+            0xff,
+            0x00,                             // 1
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+        assert_eq!(execute_vm_code_common(block), Err(VmError::Overflow));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_addition_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x0a,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x0b,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_addition_reaches_max_value_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x7f,                             // i64 MAX - 1
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xfe,
+            0x00,                             // 1
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x7f,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_overflows_addition_high_limit_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x7f,                             // i64 MAX
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0x00,                              // 1
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Add.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+        assert_eq!(execute_vm_code_common(block), Err(VmError::Overflow));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_addition_f32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            0x3f,                             // 0.5
+            0x00,
+            0x00,
+            0x00,
+            0x41,                             // 9.5
+            0x18,
+            0x00,
+            0x00,
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0x41,                             // 10
+            0x20,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_addition_f64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f64Const.repr(),
+            Instruction::f64Const.repr(),
+            0x0f,                             // 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012481292144422623
+            0xff,
+            0x00,
+            0xff,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x0f,                             // 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012481187717534078
+            0xff,
+            0x00,
+            0xee,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f64Const.repr(),
+            0x10,                             // 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000024962479861956702
+            0x0f,
+            0x00,
+            0xf6,
+            0x80,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_substraction_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x0b,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Sub.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x0a,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_substraction_reaches_min_value_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x80,                             // i32 MIN + 1
+            0x00,
+            0x00,
+            0x01,
+            0x00,                             // 1
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Sub.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x80,                             // i32 MIN
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_overflows_substraction_lower_limit_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x80,                             // i32 MIN
+            0x00,
+            0x00,
+            0x00,
+            0x00,                             // 1
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Sub.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+        assert_eq!(execute_vm_code_common(block), Err(VmError::Overflow))
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_substraction_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x0b,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Sub.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x0a,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_substraction_reaches_min_value_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x80,                             // i64 MIN + 1
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,                             // 1
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Sub.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x80,                             // i64 MIN
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_overflows_substraction_lower_limit_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x80,                             // i64 MIN
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,                              // 1
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Sub.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+        assert_eq!(execute_vm_code_common(block), Err(VmError::Overflow));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_substraction_f32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            0x41,                             // 10.5
+            0x28,
+            0x00,
+            0x00,
+            0x3f,                             // 0.5
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Sub.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0x41,                             // 10
+            0x20,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_substraction_f64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f64Const.repr(),
+            Instruction::f64Const.repr(),
+            0x0f,                             // 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012481292144422623
+            0xff,
+            0x00,
+            0xff,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x0f,                             // 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012481187717534078
+            0xff,
+            0x00,
+            0xee,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Sub.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f64Const.repr(),
+            0x0e,                             // 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010442688854518057
+            0xf1,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_multiplication_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            0x00,
+            0x00,
+            0x00,
+            0x05,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x0a,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_multiplication_on_multiple_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x04,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            0x00,
+            0x00,
+            0x00,
+            0x05,
+            0x00,
+            0x00,
+            0x00,
+            0x05,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x64,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_overflows_multiplication_higher_limit_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x7f,
+            0xff,
+            0xff,
+            0xff,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            Instruction::Mul.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_eq!(execute_vm_code_common(block), Err(VmError::Overflow));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_overflows_multiplication_lower_limit_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x80,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            Instruction::Mul.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_eq!(execute_vm_code_common(block), Err(VmError::Overflow));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_multiplication_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x05,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x0a,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_overflows_multiplication_higher_limit_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x7f,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            Instruction::Mul.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_eq!(execute_vm_code_common(block), Err(VmError::Overflow));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_overflows_multiplication_lower_limit_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x80,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            Instruction::Mul.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_eq!(execute_vm_code_common(block), Err(VmError::Overflow));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_multiplication_f32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            0x3f,                             // 1.5
+            0xc0,
+            0x00,
+            0x00,
+            0x40,                             // 2.5
+            0x20,
+            0x00,
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0x40,                             // 3.75
+            0x70,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_multiplication_f64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f64Const.repr(),
+            Instruction::f64Const.repr(),
+            0x0f,                             // 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012481292144422623
+            0xff,
+            0x00,
+            0xff,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x40,                             // 2.0
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f64Const.repr(),
+            0x10,                             // 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000024962584288845247
+            0x0f,
+            0x00,
+            0xff,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_unsigned_division_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x0a,
+            0x00,
+            0x00,
+            0x00,
+            0x05,
+            Instruction::DivUnsigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_signed_division_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
+            Instruction::DivSigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 2
+            0x00,
+            0x00,
+            0x02,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_unsigned_division_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x7f,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xfe,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            Instruction::DivUnsigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x3f,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_signed_division_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x80,                             // ‭-9223372036854775808‬
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0xff,                             // -2
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xfe,
+            Instruction::DivSigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x40,                             // 4611686018427387904‬
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_unsigned_division_f32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            0x40,                             // 4.6
+            0x93,
+            0x33,
+            0x33,
+            0x40,                             // 2
+            0x00,
+            0x00,
+            0x00,
+            Instruction::DivUnsigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0x40,                             // 2.3
+            0x13,
+            0x33,
+            0x33,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_signed_division_f32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            0xc0,                             // -4.6
+            0x93,
+            0x33,
+            0x33,
+            0xc0,                             // -2
+            0x00,
+            0x00,
+            0x00,
+            Instruction::DivSigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0x40,                             // 2.3
+            0x13,
+            0x33,
+            0x33,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_unsigned_remainder_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x0a,
+            0x00,
+            0x00,
+            0x00,
+            0x03,
+            Instruction::RemUnsigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_signed_remainder_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            0xff,                             // -3
+            0xff,
+            0xff,
+            0xfd,
+            Instruction::RemSigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -1
+            0xff,
+            0xff,
+            0xff,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_unsigned_remainder_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x11,                             // 1234567897891011123
+            0x22,
+            0x10,
+            0xf6,
+            0x4c,
+            0xe4,
+            0xfa,
+            0x33,
+            0x00,                             // 2
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            Instruction::RemUnsigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x00,                             // 1
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_signed_remainder_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0xee,                             // -1234567897891011123
+            0xdd,
+            0xef,
+            0x09,
+            0xb3,
+            0x1b,
+            0x05,
+            0xcd,
+            0x00,                             // 2
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            Instruction::RemSigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0xff,                             // -1
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_unsigned_remainder_f32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            0x41,                             // 20.5
+            0xa4,
+            0x00,
+            0x00,
+            0x40,                             // 2
+            0x00,
+            0x00,
+            0x00,
+            Instruction::RemUnsigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0x3f,                             // 0.5
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_signed_remainder_f32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            0xc1,                             // -20.5
+            0xa4,
+            0x00,
+            0x00,
+            0xc0,                             // -2
+            0x00,
+            0x00,
+            0x00,
+            Instruction::RemSigned.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0xbf,                             // -0.5
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_min_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x05,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 20591
+            0x00,
+            0x50,
+            0x6f,
+            0x00,                             // 8953
+            0x00,
+            0x22,
+            0xf9,
+            0x00,                             // 14920
+            0x00,
+            0x3a,
+            0x48,
+            0x00,                             // 4174
+            0x00,
+            0x10,
+            0x4e,
+            0x00,                             // 16275
+            0x00,
+            0x3f,
+            0x93,
+            Instruction::Min.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 4174
+            0x00,
+            0x10,
+            0x4e,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_min_i32_2() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x07,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 20591
+            0x00,
+            0x50,
+            0x6f,
+            0x00,                             // 8953
+            0x00,
+            0x22,
+            0xf9,
+            0xff,                             // -375537
+            0xfa,
+            0x45,
+            0x0f,
+            0x00,                             // 14920
+            0x00,
+            0x3a,
+            0x48,
+            0x00,                             // 4174
+            0x00,
+            0x10,
+            0x4e,
+            0xff,                             // -3755379
+            0xc6,
+            0xb2,
+            0x8d,
+            0x00,                             // 16275
+            0x00,
+            0x3f,
+            0x93,
+            Instruction::Min.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -3755379
+            0xc6,
+            0xb2,
+            0x8d,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_min_i32_3() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x08,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 20591
+            0x00,
+            0x50,
+            0x6f,
+            0x00,                             // 8953
+            0x00,
+            0x22,
+            0xf9,
+            0xff,                             // -375537
+            0xfa,
+            0x45,
+            0x0f,
+            0x00,                             // 14920
+            0x00,
+            0x3a,
+            0x48,
+            0x00,                             // 4174
+            0x00,
+            0x10,
+            0x4e,
+            0x80,                             // -2147483648
+            0x00,
+            0x00,
+            0x00,
+            0xff,                             // -3755379
+            0xc6,
+            0xb2,
+            0x8d,
+            0x00,                             // 16275
+            0x00,
+            0x3f,
+            0x93,
+            Instruction::Min.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x80,                             // -2147483648
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_max_i32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x05,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 20591
+            0x00,
+            0x50,
+            0x6f,
+            0x00,                             // 8953
+            0x00,
+            0x22,
+            0xf9,
+            0x00,                             // 14920
+            0x00,
+            0x3a,
+            0x48,
+            0x00,                             // 4174
+            0x00,
+            0x10,
+            0x4e,
+            0x00,                             // 16275
+            0x00,
+            0x3f,
+            0x93,
+            Instruction::Max.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 20591
+            0x00,
+            0x50,
+            0x6f,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_max_i32_2() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x07,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 20591
+            0x00,
+            0x50,
+            0x6f,
+            0x00,                             // 8953
+            0x00,
+            0x22,
+            0xf9,
+            0xff,                             // -375537
+            0xfa,
+            0x45,
+            0x0f,
+            0x00,                             // 14920
+            0x00,
+            0x3a,
+            0x48,
+            0x00,                             // 4174
+            0x00,
+            0x10,
+            0x4e,
+            0xff,                             // -3755379
+            0xc6,
+            0xb2,
+            0x8d,
+            0x00,                             // 16275
+            0x00,
+            0x3f,
+            0x93,
+            Instruction::Max.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 20591
+            0x00,
+            0x50,
+            0x6f,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_max_i32_3() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x08,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 20591
+            0x00,
+            0x50,
+            0x6f,
+            0x00,                             // 8953
+            0x00,
+            0x22,
+            0xf9,
+            0xff,                             // -375537
+            0xfa,
+            0x45,
+            0x0f,
+            0x00,                             // 14920
+            0x00,
+            0x3a,
+            0x48,
+            0x00,                             // 4174
+            0x00,
+            0x10,
+            0x4e,
+            0x7f,                             // 2147483647
+            0xff,
+            0xff,
+            0xff,
+            0xff,                             // -3755379
+            0xc6,
+            0xb2,
+            0x8d,
+            0x00,                             // 16275
+            0x00,
+            0x3f,
+            0x93,
+            Instruction::Max.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x7f,                             // 2147483647
+            0xff,
+            0xff,
+            0xff,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_min_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x03,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x11,                             // ‭1236858285285558588‬   112A 340E ABF1 C93C‬
+            0x2a,
+            0x34,
+            0x0e,
+            0xab,
+            0xf1,
+            0xc9,
+            0x3c,
+            0x32,                             // ‭3658975365245698789‬   ‭32C7 4AB5 6760 02E5‬
+            0xc7,
+            0x4a,
+            0xb5,
+            0x67,
+            0x60,
+            0x02,
+            0xe5,
+            0x0f,                             // ‭1111111123658796589‬   ‭F6B 75AE 17AA EE2D‬
+            0x6b,
+            0x75,
+            0xae,
+            0x17,
+            0xaa,
+            0xee,
+            0x2d,
+            Instruction::Min.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x0f,                             // ‭1111111123658796589‬   ‭F6B 75AE 17AA EE2D‬
+            0x6b,
+            0x75,
+            0xae,
+            0x17,
+            0xaa,
+            0xee,
+            0x2d,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_min_i64_2() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x04,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x11,                             // ‭1236858285285558588‬   112A 340E ABF1 C93C‬
+            0x2a,
+            0x34,
+            0x0e,
+            0xab,
+            0xf1,
+            0xc9,
+            0x3c,
+            0x80,                             // -9223372036854775808
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x32,                             // ‭3658975365245698789‬   ‭32C7 4AB5 6760 02E5‬
+            0xc7,
+            0x4a,
+            0xb5,
+            0x67,
+            0x60,
+            0x02,
+            0xe5,
+            0x0f,                             // ‭1111111123658796589‬   ‭F6B 75AE 17AA EE2D‬
+            0x6b,
+            0x75,
+            0xae,
+            0x17,
+            0xaa,
+            0xee,
+            0x2d,
+            Instruction::Min.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x80,                             // -9223372036854775808
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_max_i64() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x03,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x11,                             // ‭1236858285285558588‬   112A 340E ABF1 C93C‬
+            0x2a,
+            0x34,
+            0x0e,
+            0xab,
+            0xf1,
+            0xc9,
+            0x3c,
+            0x32,                             // ‭3658975365245698789‬   ‭32C7 4AB5 6760 02E5‬
+            0xc7,
+            0x4a,
+            0xb5,
+            0x67,
+            0x60,
+            0x02,
+            0xe5,
+            0x0f,                             // ‭1111111123658796589‬   ‭F6B 75AE 17AA EE2D‬
+            0x6b,
+            0x75,
+            0xae,
+            0x17,
+            0xaa,
+            0xee,
+            0x2d,
+            Instruction::Max.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x32,                             // ‭3658975365245698789‬   ‭32C7 4AB5 6760 02E5‬
+            0xc7,
+            0x4a,
+            0xb5,
+            0x67,
+            0x60,
+            0x02,
+            0xe5,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_max_i64_2() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x04,
+            0x00,
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            Instruction::i64Const.repr(),
+            0x11,                             // ‭1236858285285558588‬   112A 340E ABF1 C93C‬
+            0x2a,
+            0x34,
+            0x0e,
+            0xab,
+            0xf1,
+            0xc9,
+            0x3c,
+            0x7f,                             // 9223372036854775807
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0x32,                             // ‭3658975365245698789‬   ‭32C7 4AB5 6760 02E5‬
+            0xc7,
+            0x4a,
+            0xb5,
+            0x67,
+            0x60,
+            0x02,
+            0xe5,
+            0x0f,                             // ‭1111111123658796589‬   ‭F6B 75AE 17AA EE2D‬
+            0x6b,
+            0x75,
+            0xae,
+            0x17,
+            0xaa,
+            0xee,
+            0x2d,
+            Instruction::Max.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x7f,                             // 9223372036854775807
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_min_f32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x05,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            0x40,                             // 2.5
+            0x20,
+            0x00,
+            0x00,
+            0x41,                             // 25.5
+            0xcc,
+            0x00,
+            0x00,
+            0xc2,                             // -65.5
+            0x83,
+            0x00,
+            0x00,
+            0xc2,                             // -100.1
+            0xc8,
+            0x33,
+            0x33,
+            0x44,                             // 1000.1
+            0x7a,
+            0x06,
+            0x66,
+            Instruction::Min.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0xc2,                             // -100.1
+            0xc8,
+            0x33,
+            0x33,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_max_f32() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x05,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            0x40,                             // 2.5
+            0x20,
+            0x00,
+            0x00,
+            0x41,                             // 25.5
+            0xcc,
+            0x00,
+            0x00,
+            0xc2,                             // -65.5
+            0x83,
+            0x00,
+            0x00,
+            0xc2,                             // -100.1
+            0xc8,
+            0x33,
+            0x33,
+            0x44,                             // 1000.1
+            0x7a,
+            0x06,
+            0x66,
+            Instruction::Max.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0x44,                             // 1000.1
+            0x7a,
+            0x06,
+            0x66,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
     }
 }
