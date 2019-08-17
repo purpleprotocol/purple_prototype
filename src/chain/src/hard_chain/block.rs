@@ -152,14 +152,16 @@ impl Block for HardBlock {
 
     fn append_condition(
         block: Arc<HardBlock>,
-        chain_state: Self::ChainState,
+        mut chain_state: Self::ChainState,
         branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr> {
         let easy_block_hash = block.easy_block_hash.unwrap();
+        let mut easy_height = None;
 
-        // TODO: Validate difficulty
+        // TODO: Validate difficulty. Issue #118
         // TODO: Validate proof of work
 
+        // Validate against easy chain
         {
             let easy_chain = &chain_state.easy_chain.chain.read();
 
@@ -167,14 +169,18 @@ impl Block for HardBlock {
                 // Canonical branch validations
                 BranchType::Canonical => {
                     if let Some(easy_block) = chain_state.easy_chain.query(&easy_block_hash) {
-                        if easy_block.height() < chain_state.last_easy_height {
-                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadCanonicalEasyHeight));
+                        let easy_block_height = easy_block.height();
+                        
+                        if easy_block_height < chain_state.last_easy_height {
+                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadEasyHeight));
                         }
                         
                         // The referred block must be the canonical tip
-                        if easy_block.height() != easy_chain.canonical_tip_height() {
-                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadCanonicalEasyHeight));
+                        if easy_block_height != easy_chain.canonical_tip_height() {
+                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadEasyHeight));
                         }
+
+                        easy_height = Some(easy_block_height);
                     } else {
                         // Reject blocks that don't have a corresponding 
                         // block in the easy chain.
@@ -185,11 +191,34 @@ impl Block for HardBlock {
                 // Non-canonical branch validations
                 BranchType::NonCanonical => {
                     if let Some(easy_block) = chain_state.easy_chain.query(&easy_block_hash) {
-                        unimplemented!();
+                        let easy_block_height = easy_block.height();
+                        
+                        if easy_block_height < chain_state.last_easy_height {
+                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadEasyHeight));
+                        }
+
+                        easy_height = Some(easy_block_height);
                     } else if let Some(easy_block) = easy_chain.query_orphan(&easy_block_hash) {
                         let orphan_type = easy_chain.orphan_type(&easy_block_hash).unwrap();
+                        let easy_block_height = easy_block.height();
 
-                        unimplemented!();
+                        if easy_block_height < chain_state.last_easy_height {
+                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadEasyHeight));
+                        }
+
+                        match orphan_type {
+                            OrphanType::BelongsToDisconnected
+                            | OrphanType::DisconnectedTip => {
+                                return Err(ChainErr::BadAppendCondition(AppendCondErr::Default));
+                            }
+
+                            OrphanType::BelongsToValidChain
+                            | OrphanType::ValidChainTip => {
+                                // Do nothing
+                            }
+                        }
+
+                        easy_height = Some(easy_block_height);
                     } else {
                         // Reject blocks that don't have a corresponding 
                         // block in the easy chain.
@@ -198,6 +227,9 @@ impl Block for HardBlock {
                 }
             }
         }
+
+        // Set the new easy height in the chain state
+        chain_state.last_easy_height = easy_height.unwrap();
 
         Ok(chain_state)
     }

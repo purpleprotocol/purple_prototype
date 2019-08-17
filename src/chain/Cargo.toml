@@ -30,5 +30,9 @@ hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde
 rayon = "1.0.3"
 test-helpers = { path = "../util/test-helpers" }
 
+[dev-dependencies.miner]
+features = ["test"]
+path = "../miner" 
+
 [features]
 test = []

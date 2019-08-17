@@ -30,6 +30,7 @@ fs_extra = "1.1.0"
 
 [features]
 default = []
+test = []
 avx = []
 gpu = []
 cpu = []

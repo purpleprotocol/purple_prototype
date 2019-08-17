@@ -66,8 +66,8 @@ pub enum ChainErr {
 #[derive(Clone, Debug, PartialEq)]
 pub enum AppendCondErr {
     /// The referenced easy block's height is lower 
-    /// than the canonical height of the easy chain.
-    BadCanonicalEasyHeight,
+    /// than the height of the easy chain.
+    BadEasyHeight,
 
     /// Default reason, mostly used for testing.
     Default,

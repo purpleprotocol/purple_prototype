@@ -43,6 +43,15 @@ impl Proof {
         }
     }
 
+    #[cfg(feature = "test")]
+    /// A proof that will always validate. Only used for testing.
+    pub fn test_proof(proof_size: usize) -> Proof {
+        Proof {
+            edge_bits: 0,
+            nonces: vec![0; proof_size],
+        }
+    }
+
     /// Builds a proof with all bytes zeroed out
     pub fn zero(proof_size: usize) -> Proof {
         Proof {
