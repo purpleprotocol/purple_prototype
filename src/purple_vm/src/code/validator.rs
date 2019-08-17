@@ -19,6 +19,7 @@
 use bitvec::Bits;
 use code::transition::Transition;
 use frame::Frame;
+use instruction_set::OPS_LIST;
 use instruction_set::{Instruction, CT_FLOW_OPS};
 use primitives::control_flow::CfOperator;
 use primitives::r#type::VmType;
@@ -178,33 +179,35 @@ impl Validator {
 
                                 ARITY_TRANSITIONS.to_vec()
                             }
-                            // Instruction::Add | Instruction::Mul => {
-                            //     let len = self.operand_stack.len();
-                            //     if len > MAX_OPERANDS || len < 2 {
-                            //         self.state = Validity::IrrefutablyInvalid;
-                            //     }
+                            Instruction::Add | Instruction::Mul => {
+                                let len = self.operand_stack.len();
+                                if len > MAX_OPERANDS || len < 2 {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
+                                DEFAULT_TRANSITIONS.to_vec()
+                            }
+                            Instruction::Sub
+                            | Instruction::DivSigned
+                            | Instruction::DivUnsigned
+                            | Instruction::RemSigned
+                            | Instruction::RemUnsigned => {
+                                if self.operand_stack.len() != 2 {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
 
-                            //     OPERATIONS.to_vec()
-                            // }
-                            // Instruction::Sub
-                            // | Instruction::DivSigned
-                            // | Instruction::DivUnsigned
-                            // | Instruction::RemSigned
-                            // | Instruction::RemUnsigned => {
-                            //     if self.operand_stack.len() != 2 {
-                            //         self.state = Validity::IrrefutablyInvalid;
-                            //     }
+                                DEFAULT_TRANSITIONS.to_vec()
+                            }
+                            Instruction::Min | Instruction::Max => {
+                                let len = self.operand_stack.len();
+                                if len > MAX_OPERANDS || len < 1 {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
 
-                            //     OPERATIONS.to_vec()
-                            // }
-                            // Instruction::Min | Instruction::Max => {
-                            //     let len = self.operand_stack.len();
-                            //     if len > MAX_OPERANDS || len < 1 {
-                            //         self.state = Validity::IrrefutablyInvalid;
-                            //     }
-
-                            //     OPERATIONS.to_vec()
-                            // }
+                                DEFAULT_TRANSITIONS.to_vec()
+                            }
                             _ => op.transitions(),
                         };
 
@@ -848,6 +851,8 @@ lazy_static! {
         Transition::Byte(Instruction::Min.repr()),
         Transition::Byte(Instruction::Max.repr())
     ];
+    static ref DEFAULT_TRANSITIONS: Vec<Transition> =
+        OPS_LIST.iter().map(|op| Transition::Op(*op)).collect();
 }
 
 #[cfg(test)]
@@ -1850,7 +1855,7 @@ mod tests {
                 break;
             }
         }
-
+        
         assert!(!validator.valid());
     }
 }
