@@ -25,8 +25,8 @@ use primitives::control_flow::CfOperator;
 use primitives::r#type::VmType;
 use stack::Stack;
 
-/// Maximum allowed operands. 1024
-const OPERAND_STACK_SIZE: usize = 1 >> 20; 
+/// Maximum allowed operands.
+const OPERAND_STACK_SIZE: usize = 1024; 
 
 #[derive(Debug)]
 enum Validity {
