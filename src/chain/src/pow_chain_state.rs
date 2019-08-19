@@ -27,18 +27,21 @@ use crypto::NodeId;
 /// `EasyChain` and on the `HardChain`.
 pub struct PowChainState {
     /// The current chain height
-    height: u64,
+    pub(crate) height: u64,
 
     /// Current difficulty
-    difficulty: u64,
+    pub(crate) difficulty: u64,
+
+    /// Current edge bits
+    pub(crate) edge_bits: u8,
 
     /// Set containing validator ids that 
     /// have mined blocks on the easy chain.
-    easy_validators: HashSet<NodeId>,
+    pub(crate) easy_validators: HashSet<NodeId>,
 
     /// Set containing validator ids that 
     /// have mined blocks on the hard chain.
-    hard_validators: HashSet<NodeId>,
+    pub(crate) hard_validators: HashSet<NodeId>,
 }
 
 impl PowChainState {
@@ -46,6 +49,7 @@ impl PowChainState {
         PowChainState {
             height: 0,
             difficulty: 0,
+            edge_bits: miner::MIN_EDGE_BITS,
             easy_validators: HashSet::new(),
             hard_validators: HashSet::new(),
         }

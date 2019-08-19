@@ -8,7 +8,7 @@ use std::fmt;
 use std::io::Cursor;
 use std::iter;
 
-const MIN_EDGE_BITS: u8 = 24;
+pub const MIN_EDGE_BITS: u8 = 24;
 
 #[derive(Clone, PartialOrd, PartialEq)]
 pub struct Proof {

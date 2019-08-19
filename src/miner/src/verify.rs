@@ -86,11 +86,17 @@ pub fn verify(
     }
 
     if proof.edge_bits < MIN_EDGE_BITS || proof.edge_bits > MAX_EDGE_BITS {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test"))]
         {
             // Allow 19 bit edges in tests
             if proof.edge_bits != 19 {
                 return Err(VerifyError::UnsupportedEdgeBits);
+            }
+
+            // Proofs with 0 edge bits are always valid 
+            // when in we are in the test environment.
+            if proof.edge_bits == 0 {
+                return Ok(())
             }
         }
 

@@ -155,11 +155,23 @@ impl Block for HardBlock {
         mut chain_state: Self::ChainState,
         branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr> {
+        let block_hash = block.block_hash().unwrap();
         let easy_block_hash = block.easy_block_hash.unwrap();
         let mut easy_height = None;
 
         // TODO: Validate difficulty. Issue #118
-        // TODO: Validate proof of work
+        let difficulty = 0;
+
+        #[cfg(test)]
+        let edge_bits = 0;
+
+        #[cfg(not(test))]
+        let edge_bits = chain_state.pow_state.edge_bits;
+        
+        // Validate proof of work
+        if let Err(_) = miner::verify(&block_hash.0, block.nonce, difficulty, edge_bits, &block.proof) {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadProof));
+        }
 
         // Validate against easy chain
         {
@@ -498,32 +510,9 @@ mod tests {
     quickcheck! {
         fn append_condition_integration() -> bool {
             let (easy_chain, hard_chain, state_chain) = init_test_chains();
-            let block_generator = BlockGenerator::new(easy_chain.clone(), hard_chain.clone(), state_chain);
+            let test_set = chain_test_set(50, 10, false, false);
 
-            // Generate 10 sets of 1 valid hard block, 1 invalid hard 
-            // block and 3 valid easy blocks and 2 invalid easy blocks
-            (0..10usize).into_par_iter().for_each(|_| {
-                (0..3usize).into_par_iter().for_each(|_| {
-                    easy_chain.append_block(block_generator.next_valid_easy().unwrap()).unwrap();
-                });
-
-                // Try to append 2 invalid easy blocks
-                assert!(is_enum_variant!(easy_chain.append_block(block_generator.next_invalid_easy().unwrap()), Err(ChainErr::BadAppendCondition {..} )));
-                assert!(is_enum_variant!(easy_chain.append_block(block_generator.next_invalid_easy().unwrap()), Err(ChainErr::BadAppendCondition {..} )));
-
-                hard_chain.append_block(block_generator.next_valid_hard().unwrap()).unwrap();
-                assert!(is_enum_variant!(hard_chain.append_block(block_generator.next_invalid_hard().unwrap()), Err(ChainErr::BadAppendCondition {..} )));
-            });
-
-            {
-                let easy_chain = easy_chain.chain.read();
-                let hard_chain = hard_chain.chain.read();
-            
-                assert_eq!(easy_chain.height(), 30);
-                assert_eq!(hard_chain.height(), 10);
-            }
-
-            true
+            false
         }
 
         fn it_verifies_hashes(block: HardBlock) -> bool {

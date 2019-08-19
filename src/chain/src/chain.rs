@@ -85,6 +85,9 @@ pub enum AppendCondErr {
     /// Validation failed because of an invalid and potentially 
     /// byzantine action performed by a validator node.
     BadValidator,
+
+    /// The block's proof of work is invalid
+    BadProof,
 }
 
 lazy_static! {

@@ -32,7 +32,9 @@ use account::NormalAddress;
 use miner::Proof;
 use parking_lot::RwLock;
 use std::sync::Arc;
-use rand::Rng;
+use graphlib::{VertexId, Graph};
+use hashbrown::HashSet;
+use rand::prelude::*;
 
 pub fn init_test_chains() -> (EasyChainRef, HardChainRef, StateChainRef) {
     let easy_db = test_helpers::init_tempdb();
@@ -49,108 +51,283 @@ pub fn init_test_chains() -> (EasyChainRef, HardChainRef, StateChainRef) {
     (easy_chain_ref, hard_chain_ref, state_chain_ref)
 }
 
-/// Utility class for generating blocks for testing. Use this in 
-/// tandem with a pair of initialized chains.
-pub struct BlockGenerator {
-    easy_chain_ref: EasyChainRef,
-    hard_chain_ref: HardChainRef,
-    state_chain_ref: StateChainRef,
+/// Wrapper struct around a block test set
+#[derive(Clone, Debug)]
+pub struct BlockTestSet {
+    pub hard_blocks: Vec<Arc<HardBlock>>,
+    pub easy_blocks: Vec<Arc<EasyBlock>>,
+    pub state_blocks: Vec<Arc<StateBlock>>,
+    pub easy_canonical: Arc<EasyBlock>,
+    pub hard_canonical: Arc<HardBlock>,
+    pub state_canonical: Arc<StateBlock>,
 }
 
-impl BlockGenerator {
-    pub fn new(
-        easy_chain_ref: EasyChainRef,
-        hard_chain_ref: HardChainRef,
-        state_chain_ref: StateChainRef,
-    ) -> BlockGenerator {
-        BlockGenerator {
-            easy_chain_ref,
-            hard_chain_ref,
-            state_chain_ref,
+impl BlockTestSet {
+    pub fn new() -> BlockTestSet {
+        BlockTestSet {
+            hard_blocks: Vec::new(),
+            easy_blocks: Vec::new(),
+            state_blocks: Vec::new(),
+            easy_canonical: EasyBlock::genesis(),
+            hard_canonical: HardBlock::genesis(),
+            state_canonical: StateBlock::genesis(),
         }
     }
+}
 
-    /// Returns a generated valid easy block if possible.
-    pub fn next_valid_easy(&self) -> Option<Arc<EasyBlock>> {
-        let easy_chain = self.easy_chain_ref.chain.read();
-        let hard_chain = self.hard_chain_ref.chain.read();
-
-        let easy_canonical = easy_chain.canonical_tip();
-        let hard_canonical = hard_chain.canonical_tip();
-        let hard_hash = hard_canonical.block_hash().unwrap();
-
-        let mut easy_block = EasyBlock::new(
-            easy_canonical.block_hash(), 
-            hard_hash, 
-            NormalAddress::random(), 
-            crate::random_socket_addr(), 
-            easy_canonical.height() + 1, 
-            0,
-            Proof::test_proof(42),
-        );
-
-        easy_block.compute_hash();
-        Some(Arc::new(easy_block))
+/// Generates a test set of blocks with the given depth and fork rate. If the 
+/// generate byzantine flag is given, byzantine blocks will also be generated.
+/// 
+/// A fork rate of 10 means that the probability of a fork is 50%. 0 means that
+/// the probability is 0%.
+pub fn chain_test_set(
+    depth: usize, 
+    fork_rate: u64, 
+    generate_byzantine: bool,
+    generate_state: bool
+) -> BlockTestSet {
+    if depth < 5 {
+        panic!("Invalid depth parameter! Minimum is 5.");
     }
 
-    /// Returns a generated valid hard block if possible.
-    pub fn next_valid_hard(&self) -> Option<Arc<HardBlock>> {
-        let easy_chain = self.easy_chain_ref.chain.read();
-        let hard_chain = self.hard_chain_ref.chain.read();
-
-        let easy_canonical = easy_chain.canonical_tip();
-        let hard_canonical = hard_chain.canonical_tip();
-        let easy_hash = easy_canonical.block_hash().unwrap();
-
-        let mut hard_block = HardBlock::new(
-            hard_canonical.block_hash(), 
-            NormalAddress::random(),
-            crate::random_socket_addr(),
-            hard_canonical.height() + 1, 
-            0,
-            easy_hash, 
-            Proof::test_proof(42),
-        );
-
-        hard_block.compute_hash();
-        Some(Arc::new(hard_block))
+    if fork_rate > 10 {
+        panic!("Invalid fork rate parameter! Must be a number between 0 and 10.");
     }
 
-    /// Returns a generated valid state block if possible.
-    pub fn next_valid_state(&self) -> Option<Arc<EasyBlock>> {
-        unimplemented!();
-    }
+    let mut easy_chain_buf: Graph<Arc<EasyBlock>> = Graph::new();
+    let mut easy_canonical_tip: Option<VertexId> = None;
+    let mut hard_chain_buf: Graph<Arc<HardBlock>> = Graph::new();
+    let mut hard_canonical_tip: Option<VertexId> = None;
+    let mut state_chain_buf: Graph<Arc<StateBlock>> = Graph::new();
+    let mut state_canonical_tip: Option<VertexId> = None;
+    let mut cur_hard_height: u64 = 0;
+    let mut rng = rand::thread_rng();
+        
+    // For each iteration, generate one hard block and several easy
+    // blocks along with the associated state blocks.
+    loop {
+        // Stop at desired depth
+        if cur_hard_height >= depth as u64 {
+            break;
+        }
 
-    /// Returns a generated invalid easy block if possible.
-    pub fn next_invalid_easy(&self) -> Option<Arc<EasyBlock>> {
-        let mut rng = rand::thread_rng();
-        let random = rng.gen_range(0, 2);
-        let byzantine_action = match random {
-            0 => EasyByzantineActions::HardHashWithLowerHeight,
-            1 => EasyByzantineActions::InvalidHardParentHash,
-            _ => panic!(),
+        let easy_blocks_to_generate = rng.gen_range(0, 8);
+        let last_hard = if let Some(ref id) = hard_canonical_tip {
+            hard_chain_buf.fetch(id).unwrap().clone()
+        } else {
+            HardBlock::genesis()
         };
 
-        match byzantine_action {
-            EasyByzantineActions::HardHashWithLowerHeight => {
-                unimplemented!();
+        let mut last_easy = if let Some(ref id) = easy_canonical_tip {
+            easy_chain_buf.fetch(id).unwrap().clone()
+        } else {
+            EasyBlock::genesis()
+        };
+
+        let mut last_easy_height = last_easy.height() + 1;
+
+        // Generate random amount of easy blocks for this step
+        for _ in 0..easy_blocks_to_generate {
+            let mut easy_block = EasyBlock::new(
+                last_easy.block_hash(), 
+                last_hard.block_hash().unwrap(), 
+                NormalAddress::random(), 
+                crate::random_socket_addr(), 
+                last_easy_height, 
+                0,
+                Proof::test_proof(42),
+            );
+
+            easy_block.compute_hash();
+            let easy_block = Arc::new(easy_block);
+
+            // Set last easy
+            last_easy = easy_block.clone();
+
+            // Append the block to the graph
+            let id = easy_chain_buf.add_vertex(easy_block);
+
+            // Add edge between last canonical tip and new one
+            if let Some(ref tip_id) = easy_canonical_tip {
+                easy_chain_buf.add_edge(tip_id, &id).unwrap();
+            }
+            
+            easy_canonical_tip = Some(id);
+
+            let random_num = rng.gen_range(0, 100);
+            let fork_chance = if fork_rate == 0 {
+                0
+            } else {
+                (fork_rate * 100) / 20
+            };
+
+            let will_fork = random_num < fork_chance;
+
+            // Generate a fork
+            if will_fork {
+                let mut easy_block = EasyBlock::new(
+                    last_easy.block_hash(), 
+                    last_hard.block_hash().unwrap(), 
+                    NormalAddress::random(), 
+                    crate::random_socket_addr(), 
+                    last_easy_height, 
+                    0,
+                    Proof::test_proof(42),
+                );
+
+                easy_block.compute_hash();
+                let easy_block = Arc::new(easy_block);
+
+                // Append the block to the graph
+                let id = easy_chain_buf.add_vertex(easy_block);
+
+                // Add edge between last canonical tip and new one
+                if let Some(ref tip_id) = easy_canonical_tip {
+                    easy_chain_buf.add_edge(tip_id, &id).unwrap();
+                }
+
+                let random_num = rng.gen_range(0, 100);
+                let fork_chance = if fork_rate == 0 {
+                    0
+                } else {
+                    (fork_rate * 100) / 20
+                };
+
+                // Fork one of the past tips if this is true
+                let will_fork = random_num < fork_chance;
+
+                if will_fork {
+                    let tip = easy_chain_buf
+                        .tips()
+                        .filter(|t| {
+                            let tip = easy_chain_buf.fetch(t).unwrap();
+                            Some(**t) != easy_canonical_tip && tip.height() < cur_hard_height
+                        })
+                        .cloned()
+                        .choose(&mut rng);
+
+                    // Add block with the tip's parent hash
+                    if let Some(ref tip_id) = tip {
+                        let tip = easy_chain_buf.fetch(tip_id).unwrap().clone();
+                        let mut easy_block = EasyBlock::new(
+                            tip.block_hash(), 
+                            last_hard.block_hash().unwrap(), 
+                            NormalAddress::random(), 
+                            crate::random_socket_addr(), 
+                            tip.height() + 1, 
+                            0,
+                            Proof::test_proof(42),
+                        );
+
+                        easy_block.compute_hash();
+                        let easy_block = Arc::new(easy_block);
+
+                        // Append the block to the graph
+                        let id = easy_chain_buf.add_vertex(easy_block);
+
+                        easy_chain_buf.add_edge(tip_id, &id).unwrap();
+                    }
+                }
             }
 
-            EasyByzantineActions::InvalidHardParentHash => {
-                unimplemented!();
+            last_easy_height += 1;
+        }
+
+        // Generate byzantine easy blocks
+        if generate_byzantine {
+            let mut rng = rand::thread_rng();
+            let random = rng.gen_range(0, 2);
+            let byzantine_action = match random {
+                0 => EasyByzantineActions::HardHashWithLowerHeight,
+                1 => EasyByzantineActions::InvalidHardParentHash,
+                _ => panic!(),
+            };
+
+            match byzantine_action {
+                EasyByzantineActions::HardHashWithLowerHeight => {
+                    unimplemented!();
+                }
+
+                EasyByzantineActions::InvalidHardParentHash => {
+                    unimplemented!();
+                }
             }
+        }
+
+        let last_hard_hash = last_hard.block_hash().unwrap();
+
+        // Generate one new hard block
+        let mut hard_block = HardBlock::new(
+            Some(last_hard_hash), 
+            NormalAddress::random(),
+            crate::random_socket_addr(),
+            last_hard.height() + 1, 
+            0,
+            last_easy.block_hash().unwrap(), 
+            Proof::test_proof(42),
+        );
+        hard_block.compute_hash();
+        let hard_block = Arc::new(hard_block);
+
+        // Set current height
+        cur_hard_height = hard_block.height();
+
+        // Append hard block to the graph
+        let id = hard_chain_buf.add_vertex(hard_block);
+
+        // Add edge between last canonical tip and new one
+        if let Some(ref tip_id) = hard_canonical_tip {
+            hard_chain_buf.add_edge(tip_id, &id).unwrap();
+        }
+
+        // Set new hard canonical tip
+        hard_canonical_tip = Some(id);
+
+        // Generate byzantine hard block
+        if generate_byzantine {
+            unimplemented!();
+        }
+
+        // Generate state blocks
+        if generate_state {
+            unimplemented!();
         }
     }
 
-    /// Returns a generated invalid hard block if possible.
-    pub fn next_invalid_hard(&self) -> Option<Arc<HardBlock>> {
-        unimplemented!();
+    // Assemble test set
+    let mut test_set = BlockTestSet::new();
+    let easy_ids: Vec<&VertexId> = easy_chain_buf.vertices().collect();
+    let hard_ids: Vec<&VertexId> = hard_chain_buf.vertices().collect();
+    let state_ids: Vec<&VertexId> = state_chain_buf.vertices().collect();
+
+    test_set.easy_blocks = easy_ids
+        .iter()
+        .map(|id| easy_chain_buf.fetch(id).unwrap().clone())
+        .collect();
+
+    test_set.hard_blocks = hard_ids
+        .iter()
+        .map(|id| hard_chain_buf.fetch(id).unwrap().clone())
+        .collect();
+
+    test_set.state_blocks = state_ids
+        .iter()
+        .map(|id| state_chain_buf.fetch(id).unwrap().clone())
+        .collect();
+
+    if let Some(ref id) = easy_canonical_tip {
+        test_set.easy_canonical = easy_chain_buf.fetch(id).unwrap().clone();
     }
 
-    /// Returns a generated invalid state block if possible.
-    pub fn next_invalid_state(&self) -> Option<Arc<EasyBlock>> {
-        unimplemented!();
+    if let Some(ref id) = hard_canonical_tip {
+        test_set.hard_canonical = hard_chain_buf.fetch(id).unwrap().clone();
     }
+
+    if let Some(ref id) = state_canonical_tip {
+        test_set.state_canonical = state_chain_buf.fetch(id).unwrap().clone();
+    }
+
+    test_set
 }
 
 /// Enum representing byzantine actions that
