@@ -186,13 +186,10 @@ impl Block for HardBlock {
                         if easy_block_height < chain_state.last_easy_height {
                             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadEasyHeight));
                         }
-                        
-                        // The referred block must be the canonical tip
-                        if easy_block_height != easy_chain.canonical_tip_height() {
-                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadEasyHeight));
-                        }
 
                         easy_height = Some(easy_block_height);
+                    } else if easy_block_hash == EasyBlock::genesis().block_hash().unwrap() && chain_state.last_easy_height == 0 { // The referenced easy block is the genesis block
+                        // Do nothing. Validation is successful in this case.
                     } else {
                         // Reject blocks that don't have a corresponding 
                         // block in the easy chain.
@@ -500,6 +497,7 @@ mod tests {
     use super::*;
     use crate::test_helpers::*;
     use rayon::prelude::*;
+    use hashbrown::HashSet;
 
     macro_rules! is_enum_variant {
         ($v:expr, $p:pat) => (
@@ -509,10 +507,65 @@ mod tests {
 
     quickcheck! {
         fn append_condition_integration() -> bool {
-            let (easy_chain, hard_chain, state_chain) = init_test_chains();
+            let (easy_chain, hard_chain, _) = init_test_chains();
             let test_set = chain_test_set(50, 10, false, false);
+            let MAX_ITERATIONS = 15000;
+            let mut cur_iterations = 0;
 
-            false
+            let mut easy_blocks: HashSet<Arc<EasyBlock>> = test_set.easy_blocks.iter().cloned().collect();
+            let mut hard_blocks: HashSet<Arc<HardBlock>> = test_set.hard_blocks.iter().cloned().collect();
+            let mut easy_appended = HashSet::new();
+            let mut hard_appended = HashSet::new();
+            let mut easy_to_append = Vec::new();
+            let mut hard_to_append = Vec::new();
+
+            // For each iteration, try to append as many blocks as possible
+            loop {
+                if cur_iterations >= MAX_ITERATIONS {
+                    panic!("Exceeded iterations limit");
+                }
+
+                for b in easy_blocks.iter() {
+                    if let Ok(_) = easy_chain.append_block(b.clone()) {
+                        easy_to_append.push(b.clone());
+                    } 
+                } 
+
+                for b in hard_blocks.iter() {
+                    if let Ok(_) = hard_chain.append_block(b.clone()) {
+                        hard_to_append.push(b.clone());
+                    } 
+                } 
+
+                for b in easy_to_append.iter() {
+                    easy_blocks.remove(b);
+                    easy_appended.insert(b.clone());
+                    
+                }
+
+                for b in hard_to_append.iter() {
+                    hard_blocks.remove(b);
+                    hard_appended.insert(b.clone());
+                }
+
+                //std::thread::sleep_ms(140);
+
+                if easy_blocks.is_empty() && hard_blocks.is_empty() {
+                    break;
+                }
+
+                cur_iterations += 1;
+            }
+
+            {
+                let hard_chain = hard_chain.chain.read();
+                let easy_chain = easy_chain.chain.read();
+            
+                assert_eq!(hard_chain.canonical_tip_height(), test_set.hard_canonical.height());
+                assert_eq!(easy_chain.canonical_tip_height(), test_set.easy_canonical.height());
+            }
+
+            true
         }
 
         fn it_verifies_hashes(block: HardBlock) -> bool {

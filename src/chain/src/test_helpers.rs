@@ -327,6 +327,10 @@ pub fn chain_test_set(
         test_set.state_canonical = state_chain_buf.fetch(id).unwrap().clone();
     }
 
+    // The hard test set must have at least one block
+    // which follows the genesis block.
+    assert!(test_set.hard_blocks.iter().any(|b| b.parent_hash().unwrap() == HardBlock::genesis().block_hash().unwrap()));
+
     test_set
 }
 
