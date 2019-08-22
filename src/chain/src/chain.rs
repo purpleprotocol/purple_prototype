@@ -855,7 +855,8 @@ impl<B: Block> Chain<B> {
                         }
                     } else {
                         let mut new_prev_valid_tips = prev_valid_tips.clone();
-                        let mut obsolete = HashSet::new();
+                        let mut obsolete = HashSet::with_capacity(orphans.len());
+                        let mut to_cleanup = Vec::with_capacity(orphans.len());
                         let mut buf: Vec<(Hash, u64, B::ChainState)> =
                             Vec::with_capacity(orphans.len());
 
@@ -882,7 +883,7 @@ impl<B: Block> Chain<B> {
                                 if let Some(new_state) = new_state {
                                     buf.push((o.clone(), i_h.clone(), new_state));
                                 } else {
-                                    // TODO: Maybe cleanup here? Issue #109
+                                    to_cleanup.push(o.clone());
                                 }
                             } else if prev_valid_tips.contains(&orphan_parent) {
                                 let append_condition = {
@@ -919,9 +920,8 @@ impl<B: Block> Chain<B> {
                                     new_prev_valid_tips.remove(&orphan_parent);
                                     new_prev_valid_tips.insert(o.clone());
                                 } else {
-                                    // TODO: Maybe cleanup here? Issue #109
+                                    to_cleanup.push(o.clone());
                                 }
-                            } else {
                             }
                         }
 
@@ -929,6 +929,11 @@ impl<B: Block> Chain<B> {
                         for b in obsolete.iter() {
                             self.valid_tips.remove(&b);
                             self.valid_tips_states.remove(&b);
+                        }
+
+                        // Cleanup obsolete branches
+                        for b in to_cleanup.iter() {
+                            self.cleanup_paths(b);
                         }
 
                         prev_valid_tips = new_prev_valid_tips;
@@ -1202,6 +1207,7 @@ impl<B: Block> Chain<B> {
             });
 
         let mut to_write: Vec<(Hash, Arc<B>, u64, B::ChainState)> = Vec::new();
+        let mut to_cleanup = Vec::new();
 
         // For each matching head, make the descending
         // branches, valid chains.
@@ -1215,10 +1221,16 @@ impl<B: Block> Chain<B> {
                 let inverse_h = largest_height - tip_height;
                 to_write.push((head_hash.clone(), largest_tip, inverse_h, tip_state));
             } else {
-                // TODO: Maybe cleanup here? Issue #109
+                to_cleanup.push(head_hash.clone());
             }
         }
 
+        // Cleanup obsolete paths
+        for b in to_cleanup.iter() {
+            self.cleanup_paths(b);
+        }
+
+        // Write changes
         for (head_hash, new_tip, inverse_h, tip_state) in to_write {
             *status = OrphanType::BelongsToValidChain;
 
@@ -1274,7 +1286,8 @@ impl<B: Block> Chain<B> {
                 let heights_entry = self.heights_mapping.get(&cur_height);
 
                 if let Some(heights_entry) = heights_entry {
-                    let mut matched_set = HashSet::new();
+                    let mut matched_set = HashSet::with_capacity(heights_entry.len());
+                    let mut to_cleanup = Vec::with_capacity(heights_entry.len());
                     let mut new_previous_set = HashMap::with_capacity(previous.len());
 
                     // Find entries in the next height that have
@@ -1308,9 +1321,14 @@ impl<B: Block> Chain<B> {
 
                                 *status = OrphanType::BelongsToValidChain;
                             } else {
-                                // TODO: Maybe cleanup here? Issue #109
+                                to_cleanup.push(parent_hash);
                             }
                         }
+                    }
+
+                    // Cleanup obsolete branches
+                    for b in to_cleanup.iter() {
+                        self.cleanup_paths(b);
                     }
 
                     let previous_keys: HashSet<Hash> = previous.keys().cloned().collect();
@@ -1988,6 +2006,64 @@ impl<B: Block> Chain<B> {
 
             UnflushedChainState::new(state)
         }
+    }
+
+    /// Cleans up any blocks that descend from the start block.
+    /// 
+    /// TODO: Soft delete and then finally delete asynchronously.
+    fn cleanup_paths(&mut self, start: &Hash) {
+        // Remove start block and initialize height and previous set
+        let start_block = self.orphan_pool.remove(start).unwrap();
+        let mut height = start_block.height() + 1;
+        let mut previous_set: HashSet<Hash> = HashSet::new();
+        previous_set.insert(start.clone());
+
+        // Cleanup start block
+        self.cleanup_block_data(height, start);
+
+        // Loop through heights to look for matching blocks
+        loop {
+            let mut new_previous_set = HashSet::new();
+
+            // Mark for deletion each matching block that we find
+            if let Some(blocks) = self.heights_mapping.get(&height) {
+                let iter = blocks
+                    .keys()
+                    .filter(|k| {
+                        let block = self.orphan_pool.get(k).unwrap();
+                        let parent_hash = block.parent_hash().unwrap();
+                        previous_set.contains(&parent_hash) 
+                    });
+
+                for block_hash in iter {
+                    new_previous_set.insert(block_hash.clone());
+                }
+
+                previous_set = new_previous_set;
+            } else {
+                break;
+            }
+
+            for block_hash in previous_set.iter() {
+                self.cleanup_block_data(height, block_hash);
+            }
+
+            height += 1;
+        }
+    }
+
+    /// Cleans up any associated block data to the given hash
+    fn cleanup_block_data(&mut self, block_height: u64, block_hash: &Hash) {
+        let blocks = self.heights_mapping.get_mut(&block_height).unwrap();
+
+        // Remove any information related to the block.
+        self.orphan_pool.remove(block_hash);
+        self.disconnected_heads_heights.remove(block_hash);
+        self.disconnected_tips_mapping.remove(block_hash);
+        self.validations_mapping.remove(block_hash);
+        self.disconnected_heads_mapping.remove(block_hash);
+        self.valid_tips_states.remove(block_hash);
+        blocks.remove(block_hash);
     }
 }
 

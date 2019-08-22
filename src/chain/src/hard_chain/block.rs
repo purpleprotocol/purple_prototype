@@ -190,6 +190,7 @@ impl Block for HardBlock {
                         easy_height = Some(easy_block_height);
                     } else if easy_block_hash == EasyBlock::genesis().block_hash().unwrap() && chain_state.last_easy_height == 0 { // The referenced easy block is the genesis block
                         // Do nothing. Validation is successful in this case.
+                        easy_height = Some(0);
                     } else {
                         // Reject blocks that don't have a corresponding 
                         // block in the easy chain.
