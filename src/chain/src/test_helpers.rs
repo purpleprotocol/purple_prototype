@@ -33,7 +33,8 @@ use miner::Proof;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use graphlib::{VertexId, Graph};
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
+use crypto::Hash;
 use rand::prelude::*;
 
 pub fn init_test_chains() -> (EasyChainRef, HardChainRef, StateChainRef) {
@@ -54,6 +55,9 @@ pub fn init_test_chains() -> (EasyChainRef, HardChainRef, StateChainRef) {
 /// Wrapper struct around a block test set
 #[derive(Clone, Debug)]
 pub struct BlockTestSet {
+    pub hard_graph: Graph<Arc<HardBlock>>,
+    pub easy_graph: Graph<Arc<EasyBlock>>,
+    pub state_graph: Graph<Arc<StateBlock>>,
     pub hard_blocks: Vec<Arc<HardBlock>>,
     pub easy_blocks: Vec<Arc<EasyBlock>>,
     pub state_blocks: Vec<Arc<StateBlock>>,
@@ -65,6 +69,9 @@ pub struct BlockTestSet {
 impl BlockTestSet {
     pub fn new() -> BlockTestSet {
         BlockTestSet {
+            easy_graph: Graph::new(),
+            hard_graph: Graph::new(),
+            state_graph: Graph::new(),
             hard_blocks: Vec::new(),
             easy_blocks: Vec::new(),
             state_blocks: Vec::new(),
@@ -235,7 +242,6 @@ pub fn chain_test_set(
 
         // Generate byzantine easy blocks
         if generate_byzantine {
-            let mut rng = rand::thread_rng();
             let random = rng.gen_range(0, 2);
             let byzantine_action = match random {
                 0 => EasyByzantineActions::HardHashWithLowerHeight,
@@ -326,6 +332,10 @@ pub fn chain_test_set(
     if let Some(ref id) = state_canonical_tip {
         test_set.state_canonical = state_chain_buf.fetch(id).unwrap().clone();
     }
+
+    test_set.easy_graph = easy_chain_buf;
+    test_set.hard_graph = hard_chain_buf;
+    test_set.state_graph = state_chain_buf;
 
     // The hard test set must have at least one block
     // which follows the genesis block.

@@ -513,6 +513,10 @@ mod tests {
             let MAX_ITERATIONS = 15000;
             let mut cur_iterations = 0;
 
+            let easy_graph = test_set.easy_graph.clone();
+            let hard_graph = test_set.hard_graph.clone();
+            let state_graph = test_set.state_graph.clone();
+
             let mut easy_blocks: HashSet<Arc<EasyBlock>> = test_set.easy_blocks.iter().cloned().collect();
             let mut hard_blocks: HashSet<Arc<HardBlock>> = test_set.hard_blocks.iter().cloned().collect();
             let mut easy_appended = HashSet::new();
@@ -520,10 +524,53 @@ mod tests {
             let mut easy_to_append = Vec::new();
             let mut hard_to_append = Vec::new();
 
+            // Un-comment this to add failed test cases to
+            // `src/test/failed_cases`. These can then be 
+            // visualized by using graphviz. 
+            std::panic::set_hook(Box::new(move |_| {
+                use std::path::Path;
+                use std::fs::File;
+
+                let case_id = crypto::gen_bytes(12);
+                let case_id = hex::encode(&case_id);
+
+                println!("Adding failed case with id {} to src/test/failed_cases...", &case_id);
+                
+                let timestamp = Utc::now();
+                let timestamp = timestamp.to_rfc3339();
+                let failed_path = Path::new("src/test/failed_cases");
+                let dir_name = format!("src/test/failed_cases/{}-{}", timestamp, case_id);
+                let dir_path = Path::new(&dir_name);
+
+                // Create failed cases dir if it does not exist
+                if std::fs::metadata(&failed_path).is_err() {
+                    std::fs::create_dir(failed_path).unwrap();
+                }
+
+                // Create graphs dir
+                std::fs::create_dir(&dir_path).unwrap();
+
+                // Assemble graphs paths
+                let easy_path = dir_path.join("easy_graph.dot");
+                let hard_path = dir_path.join("hard_graph.dot");
+                let state_path = dir_path.join("state_graph.dot");
+
+                // Create files
+                let mut easy_f = File::create(easy_path).unwrap();
+                let mut hard_f = File::create(hard_path).unwrap();
+                let mut state_f = File::create(state_path).unwrap();
+
+                // Write graphs data
+                easy_graph.to_dot("easy_chain", &mut easy_f);
+                hard_graph.to_dot("hard_chain", &mut hard_f);
+                state_graph.to_dot("state_chain", &mut state_f);
+            }));
+
             // For each iteration, try to append as many blocks as possible
             loop {
                 if cur_iterations >= MAX_ITERATIONS {
-                    panic!("Exceeded iterations limit");
+                    //panic!("Exceeded iterations limit");
+                    break;
                 }
 
                 for b in easy_blocks.iter() {

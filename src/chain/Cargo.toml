@@ -22,7 +22,7 @@ miner = { path = "../miner" }
 persistence = { path = "../persistence" }
 bin-tools = { path = "../util/bin-tools/" }
 hashdb = "0.3.0"
-graphlib = "0.4.0"
+graphlib = { git = "https://github.com/purpleprotocol/graphlib", features = ["dot"] }
 rand = "^0.6.0"
 quickcheck = "0.7.2"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }

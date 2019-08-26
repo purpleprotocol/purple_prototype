@@ -1297,18 +1297,19 @@ impl<B: Block> Chain<B> {
                     // Update status of all matches
                     for m in iter {
                         let e = self.orphan_pool.get(m).unwrap();
+                        let block_hash = e.block_hash().unwrap();
                         let parent_hash = e.parent_hash().unwrap();
 
                         if let Some(state) = previous.get(&parent_hash) {
                             // TODO: Reduce number of state clones
                             if let Ok(state) = B::append_condition(e.clone(), state.clone().inner(), BranchType::NonCanonical)
                             {
+                                let block_hash = e.block_hash().unwrap();
+
                                 // Change head status if we have a match
                                 let status = self.validations_mapping.get_mut(head).unwrap();
-
                                 *status = OrphanType::BelongsToValidChain;
 
-                                let block_hash = e.block_hash().unwrap();
                                 self.valid_tips_states.remove(&parent_hash);
                                 self.valid_tips.remove(&parent_hash);
                                 self.disconnected_heads_mapping.remove(&parent_hash);
@@ -1318,10 +1319,9 @@ impl<B: Block> Chain<B> {
                                 matched_set.insert(parent_hash);
 
                                 let status = self.validations_mapping.get_mut(m).unwrap();
-
                                 *status = OrphanType::BelongsToValidChain;
                             } else {
-                                to_cleanup.push(parent_hash);
+                                to_cleanup.push(block_hash);
                             }
                         }
                     }
@@ -2014,15 +2014,20 @@ impl<B: Block> Chain<B> {
     fn cleanup_paths(&mut self, start: &Hash) {
         // Remove start block and initialize height and previous set
         let start_block = self.orphan_pool.remove(start).unwrap();
-        let mut height = start_block.height() + 1;
+        let start_height = start_block.height();
+        let mut height = start_height + 1;
         let mut previous_set: HashSet<Hash> = HashSet::new();
         previous_set.insert(start.clone());
 
         // Cleanup start block
-        self.cleanup_block_data(height, start);
+        self.cleanup_block_data(start_height, start);
 
         // Loop through heights to look for matching blocks
         loop {
+            if previous_set.is_empty() {
+                break;
+            }
+
             let mut new_previous_set = HashSet::new();
 
             // Mark for deletion each matching block that we find
