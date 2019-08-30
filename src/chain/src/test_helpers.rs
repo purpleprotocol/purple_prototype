@@ -154,6 +154,9 @@ pub fn chain_test_set(
             // Append the block to the graph
             let id = easy_chain_buf.add_vertex(easy_block);
 
+            // Gen label
+            let _ = easy_chain_buf.label(&id).unwrap();
+
             // Add edge between last canonical tip and new one
             if let Some(ref tip_id) = easy_canonical_tip {
                 easy_chain_buf.add_edge(tip_id, &id).unwrap();
@@ -187,6 +190,9 @@ pub fn chain_test_set(
 
                 // Append the block to the graph
                 let id = easy_chain_buf.add_vertex(easy_block);
+                
+                // Gen label
+                let _ = easy_chain_buf.label(&id).unwrap();
 
                 // Add edge between last canonical tip and new one
                 if let Some(ref tip_id) = easy_canonical_tip {
@@ -231,6 +237,9 @@ pub fn chain_test_set(
 
                         // Append the block to the graph
                         let id = easy_chain_buf.add_vertex(easy_block);
+
+                        // Gen label
+                        let _ = easy_chain_buf.label(&id).unwrap();
 
                         easy_chain_buf.add_edge(tip_id, &id).unwrap();
                     }
@@ -280,6 +289,9 @@ pub fn chain_test_set(
 
         // Append hard block to the graph
         let id = hard_chain_buf.add_vertex(hard_block);
+
+        // Gen label
+        let _ = hard_chain_buf.label(&id).unwrap();
 
         // Add edge between last canonical tip and new one
         if let Some(ref tip_id) = hard_canonical_tip {

@@ -85,6 +85,12 @@ impl std::fmt::Debug for Hash {
     }
 }
 
+impl std::fmt::Display for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(self.0))
+    }
+}
+
 impl Encodable for Hash {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream.append(&self.0.to_vec());

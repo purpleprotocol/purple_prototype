@@ -167,6 +167,13 @@ impl<B: Block> ChainRef<B> {
         chain.append_block(block)
     }
 
+    /// Returns true if there is any block in the canonical
+    /// chain with the given `Hash`.
+    pub fn is_canonical(&self, block_hash: &Hash) -> bool {
+        let chain = self.chain.read();
+        chain.is_canonical(block_hash)
+    }
+
     /// Attempts to fetch a block by its hash from the cache
     /// and if it doesn't succeed it then attempts to retrieve
     /// it from the orphan pool.
@@ -534,6 +541,12 @@ impl<B: Block> Chain<B> {
         self.db.flush();
 
         Ok(())
+    }
+
+    /// Returns true if there is any canonical block in the chain
+    /// with the given `Hash`.
+    pub fn is_canonical(&self, block_hash: &Hash) -> bool {
+        self.db.get(block_hash).is_some()
     }
 
     /// Returns true if the chain has buffered switch requests.

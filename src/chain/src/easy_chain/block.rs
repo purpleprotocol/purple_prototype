@@ -69,7 +69,7 @@ pub struct EasyBlock {
     parent_hash: Option<Hash>,
 
     /// A reference to a block in the hard chain
-    hard_block_hash: Hash,
+    pub(crate) hard_block_hash: Hash,
 
     /// The address that will collect the
     /// rewards earned by the miner.

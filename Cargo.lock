@@ -784,7 +784,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "graphlib"
 version = "0.4.0"
-source = "git+https://github.com/purpleprotocol/graphlib#a3c2fb072f28b96dc749dbc674fd2330562a24f9"
+source = "git+https://github.com/purpleprotocol/graphlib#7fa6c771e95a78cdcbb7da82bb0259ac2f04d8eb"
 dependencies = [
  "dot 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",

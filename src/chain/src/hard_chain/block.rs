@@ -497,8 +497,10 @@ impl Arbitrary for HardBlock {
 mod tests {
     use super::*;
     use crate::test_helpers::*;
+    use graphlib::VertexId;
     use rayon::prelude::*;
-    use hashbrown::HashSet;
+    use hashbrown::{HashMap, HashSet};
+    use parking_lot::Mutex;
 
     macro_rules! is_enum_variant {
         ($v:expr, $p:pat) => (
@@ -510,7 +512,7 @@ mod tests {
         fn append_condition_integration() -> bool {
             let (easy_chain, hard_chain, _) = init_test_chains();
             let test_set = chain_test_set(50, 10, false, false);
-            let MAX_ITERATIONS = 15000;
+            let MAX_ITERATIONS = 8000;
             let mut cur_iterations = 0;
 
             let easy_graph = test_set.easy_graph.clone();
@@ -519,8 +521,18 @@ mod tests {
 
             let mut easy_blocks: HashSet<Arc<EasyBlock>> = test_set.easy_blocks.iter().cloned().collect();
             let mut hard_blocks: HashSet<Arc<HardBlock>> = test_set.hard_blocks.iter().cloned().collect();
-            let mut easy_appended = HashSet::new();
-            let mut hard_appended = HashSet::new();
+            let easy_appended: Arc<Mutex<HashSet<Arc<EasyBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
+            let hard_appended: Arc<Mutex<HashSet<Arc<HardBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
+            let easy_non_canonical: Arc<Mutex<HashSet<Arc<EasyBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
+            let hard_non_canonical: Arc<Mutex<HashSet<Arc<HardBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
+            let easy_rejected: Arc<Mutex<HashMap<Arc<EasyBlock>, ChainErr>>> = Arc::new(Mutex::new(HashMap::new()));
+            let hard_rejected: Arc<Mutex<HashMap<Arc<HardBlock>, ChainErr>>> = Arc::new(Mutex::new(HashMap::new()));
+            let easy_appended_clone = easy_appended.clone();
+            let hard_appended_clone = hard_appended.clone();
+            let easy_non_canonical_clone = easy_non_canonical.clone();
+            let hard_non_canonical_clone = hard_non_canonical.clone();
+            let easy_rejected_clone = easy_rejected.clone();
+            let hard_rejected_clone = hard_rejected.clone();
             let mut easy_to_append = Vec::new();
             let mut hard_to_append = Vec::new();
 
@@ -530,6 +542,15 @@ mod tests {
             std::panic::set_hook(Box::new(move |_| {
                 use std::path::Path;
                 use std::fs::File;
+
+                let mut easy_graph = easy_graph.clone();
+                let mut hard_graph = hard_graph.clone();
+                let easy_appended = easy_appended_clone.lock();
+                let hard_appended = hard_appended_clone.lock();
+                let easy_non_canonical = easy_non_canonical_clone.lock();
+                let hard_non_canonical = hard_non_canonical_clone.lock();
+                let easy_rejected = easy_rejected_clone.lock();
+                let hard_rejected = hard_rejected_clone.lock();
 
                 let case_id = crypto::gen_bytes(12);
                 let case_id = hex::encode(&case_id);
@@ -555,15 +576,70 @@ mod tests {
                 let hard_path = dir_path.join("hard_graph.dot");
                 let state_path = dir_path.join("state_graph.dot");
 
+                let easy_hm: HashMap<VertexId, Arc<EasyBlock>> = easy_graph
+                    .vertices()
+                    .cloned()
+                    .map(|id| (id, easy_graph.fetch(&id).unwrap().clone()))
+                    .collect();
+
+                let hard_hm: HashMap<VertexId, Arc<HardBlock>> = hard_graph
+                    .vertices()
+                    .cloned()
+                    .map(|id| (id, hard_graph.fetch(&id).unwrap().clone()))
+                    .collect();
+
+                // Map labels so we can see which blocks were appended
+                easy_graph.map_labels(|id, _| {
+                    let block = easy_hm.get(id).unwrap();
+                    let block_hash = block.block_hash().unwrap();
+                    let suffix = if easy_appended.contains(block) {
+                        "CANONICAL".to_owned()
+                    } else if let Some(r) = easy_rejected.get(block) {
+                        map_reason(r)
+                    } else if easy_non_canonical.contains(block) {
+                        "NON_CANONICAL".to_owned()
+                    } else {
+                        "NOT_APPENDED".to_owned()
+                    };
+
+                    let block_hash = format!("{}", block_hash);
+                    let block_hash = &block_hash[..6];
+                    let hard_hash = format!("{}", block.hard_block_hash);
+                    let hard_hash = &hard_hash[..6];
+
+                    format!("N_{}_H{}_HH{}_{}", block_hash, block.height(), hard_hash, suffix)
+                });
+
+                hard_graph.map_labels(|id, _| {
+                    let block = hard_hm.get(id).unwrap();
+                    let block_hash = block.block_hash().unwrap();
+                    let suffix = if hard_appended.contains(block) {
+                        "CANONICAL".to_owned()
+                    } else if let Some(r) = hard_rejected.get(block) {
+                        map_reason(r)
+                    } else if hard_non_canonical.contains(block) {
+                        "NON_CANONICAL".to_owned()
+                    } else {
+                        "NOT_APPENDED".to_owned()
+                    };
+
+                    let block_hash = format!("{}", block_hash);
+                    let block_hash = &block_hash[..6];
+                    let easy_hash = format!("{}", block.easy_block_hash.unwrap());
+                    let easy_hash = &easy_hash[..6];
+
+                    format!("N_{}_H{}_EH{}_{}", block_hash, block.height(), easy_hash, suffix)
+                });
+
                 // Create files
                 let mut easy_f = File::create(easy_path).unwrap();
                 let mut hard_f = File::create(hard_path).unwrap();
                 let mut state_f = File::create(state_path).unwrap();
 
                 // Write graphs data
-                easy_graph.to_dot("easy_chain", &mut easy_f);
-                hard_graph.to_dot("hard_chain", &mut hard_f);
-                state_graph.to_dot("state_chain", &mut state_f);
+                easy_graph.to_dot("easy_chain", &mut easy_f).unwrap();
+                hard_graph.to_dot("hard_chain", &mut hard_f).unwrap();
+                state_graph.to_dot("state_chain", &mut state_f).unwrap();
             }));
 
             // For each iteration, try to append as many blocks as possible
@@ -574,26 +650,65 @@ mod tests {
                 }
 
                 for b in easy_blocks.iter() {
-                    if let Ok(_) = easy_chain.append_block(b.clone()) {
-                        easy_to_append.push(b.clone());
-                    } 
+                    match easy_chain.append_block(b.clone()) {
+                        Ok(_) => {
+                            easy_to_append.push(b.clone());
+                        }
+
+                        Err(reason) => {
+                            if let ChainErr::BadHeight = reason {
+                                // Do nothing
+                            } else {
+                                let mut easy_rejected = easy_rejected.lock();
+                                easy_rejected.insert(b.clone(), reason);
+                            }
+                        }
+                    }
                 } 
 
                 for b in hard_blocks.iter() {
-                    if let Ok(_) = hard_chain.append_block(b.clone()) {
-                        hard_to_append.push(b.clone());
-                    } 
+                    match hard_chain.append_block(b.clone()) {
+                        Ok(_) => {
+                            hard_to_append.push(b.clone());
+                        }
+
+                        Err(reason) => {
+                            if let ChainErr::BadHeight = reason {
+                                // Do nothing
+                            } else {
+                                let mut hard_rejected = hard_rejected.lock();
+                                hard_rejected.insert(b.clone(), reason);
+                            }
+                        }
+                    }
                 } 
 
                 for b in easy_to_append.iter() {
-                    easy_blocks.remove(b);
-                    easy_appended.insert(b.clone());
+                    let block_hash = b.block_hash().unwrap();
                     
+                    easy_blocks.remove(b);
+
+                    if easy_chain.is_canonical(&block_hash) {
+                        let mut easy_appended = easy_appended.lock();
+                        easy_appended.insert(b.clone());
+                    } else {
+                        let mut easy_non_canonical = easy_non_canonical.lock();
+                        easy_non_canonical.insert(b.clone());
+                    }
                 }
 
                 for b in hard_to_append.iter() {
+                    let block_hash = b.block_hash().unwrap();
+                    
                     hard_blocks.remove(b);
-                    hard_appended.insert(b.clone());
+
+                    if hard_chain.is_canonical(&block_hash) {
+                        let mut hard_appended = hard_appended.lock();
+                        hard_appended.insert(b.clone());
+                    } else {
+                        let mut hard_non_canonical = hard_non_canonical.lock();
+                        hard_non_canonical.insert(b.clone());
+                    }
                 }
 
                 //std::thread::sleep_ms(140);
@@ -629,6 +744,78 @@ mod tests {
             HardBlock::from_bytes(&HardBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
 
             true
+        }
+    }
+
+    fn map_reason(reason: &ChainErr) -> String {
+        let base = "REJECTED";
+
+        match reason {
+            ChainErr::AlreadyInChain => {
+                format!("{}_DUPLICATE", base)
+            }
+
+            ChainErr::BadHeight => {
+                format!("{}_BADHEIGHT", base)
+            }
+
+            ChainErr::CannotRewindPastRootBlock => {
+                format!("{}_CANNOTREWIND", base)
+            }
+
+            ChainErr::InvalidParent => {
+                format!("{}_BADPARENT", base)
+            }
+
+            ChainErr::NoCheckpointFound => {
+                format!("{}_NOCHECKPOINT", base)
+            }
+
+            ChainErr::NoParentHash => {
+                format!("{}_NOPARENTHASH", base)
+            }
+
+            ChainErr::NoSuchBlock => {
+                format!("{}_NOBLOCK", base)
+            }
+
+            ChainErr::TooManyOrphans => {
+                format!("{}_ORPHANSFULL", base)
+            }
+
+            ChainErr::BadAppendCondition(reason) => {
+                let reason = match reason {
+                    AppendCondErr::BadEasyHeight => {
+                        "BADHEIGHT"
+                    }
+
+                    AppendCondErr::BadEpoch => {
+                        "BADEPOCH"
+                    }
+
+                    AppendCondErr::BadProof => {
+                        "BADPROOF"
+                    }
+
+                    AppendCondErr::BadTransaction => {
+                        "BADTX"
+                    }
+
+                    AppendCondErr::BadValidator => {
+                        "BADVALIDATOR"
+                    }
+
+                    AppendCondErr::Default => {
+                        "DEFAULT"
+                    }
+
+                    AppendCondErr::NoBlockFound => {
+                        "NOBLOCK"
+                    }
+                };
+
+                format!("{}_BADAPPCOND_{}", base, reason)
+            }
         }
     }
 }
