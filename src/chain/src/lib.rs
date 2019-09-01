@@ -20,7 +20,6 @@
 
 mod block;
 mod chain;
-mod easy_chain;
 mod hard_chain;
 mod init;
 mod pow_chain_state;
@@ -32,11 +31,8 @@ mod test_helpers;
 
 pub use crate::chain::*;
 pub use block::*;
-pub use easy_chain::block::*;
-pub use easy_chain::chain::*;
 pub use hard_chain::block::*;
 pub use hard_chain::chain::*;
-pub use hard_chain::state::*;
 pub use init::*;
 pub use pow_chain_state::*;
 pub use state_chain::block::*;

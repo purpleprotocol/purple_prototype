@@ -2088,7 +2088,6 @@ impl<B: Block> Chain<B> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::easy_chain::block::EasyBlock;
     use byteorder::WriteBytesExt;
     use chrono::prelude::*;
     use quickcheck::*;

@@ -34,30 +34,9 @@ const SWITCH_POLL_INTERVAL: u64 = 1;
 /// Starts a loop for each chain that will attempt
 /// to perform buffered chain switches.
 pub fn start_chains_switch_poll(
-    easy_chain: EasyChainRef,
     hard_chain: HardChainRef,
     state_chain: StateChainRef,
 ) {
-    let easy_interval_fut = Interval::new(Instant::now(), Duration::from_millis(SWITCH_POLL_INTERVAL))
-        .fold(easy_chain, |easy_chain, _| {
-            let has_switch_requests = {
-                let chain = easy_chain.chain.read();
-                chain.has_switch_requests()
-            };
-
-            // Flush buffer only if the chain has switch requests
-            //
-            // TODO: Rate limit this
-            if has_switch_requests {
-                let mut chain = easy_chain.chain.write();
-                chain.flush_switch_buffer();
-            }
-
-            ok(easy_chain)
-        })
-        .map_err(|e| warn!("Easy switch poll err: {:?}", e))
-        .and_then(|_| ok(()));
-
     let hard_interval_fut = Interval::new(Instant::now(), Duration::from_millis(SWITCH_POLL_INTERVAL))
         .fold(hard_chain, |hard_chain, _| {
             let has_switch_requests = {
@@ -98,7 +77,6 @@ pub fn start_chains_switch_poll(
         .map_err(|e| warn!("State switch poll err: {:?}", e))
         .and_then(|_| ok(()));
 
-    tokio::spawn(easy_interval_fut);
     tokio::spawn(hard_interval_fut);
     tokio::spawn(state_interval_fut);
 }
@@ -107,48 +85,11 @@ pub fn start_chains_switch_poll(
 /// forwards them to their respective chains.
 pub fn start_block_listeners(
     network: Arc<Mutex<Network>>,
-    easy_chain: EasyChainRef,
     hard_chain: HardChainRef,
     state_chain: StateChainRef,
-    easy_receiver: Receiver<(SocketAddr, Arc<EasyBlock>)>,
     hard_receiver: Receiver<(SocketAddr, Arc<HardBlock>)>,
     state_receiver: Receiver<(SocketAddr, Arc<StateBlock>)>,
 ) {
-    let loop_fut_easy = easy_receiver
-        .fold(
-            (network.clone(), easy_chain),
-            |(network, easy_chain), (addr, block)| {
-                debug!("Received EasyBlock {:?}", block.block_hash().unwrap());
-                let chain_result = {
-                    let mut chain = easy_chain.chain.write();
-                    chain.append_block(block.clone())
-                };
-
-                match chain_result {
-                    Ok(()) => {
-                        let network = network.lock();
-
-                        // Forward block
-                        let mut packet = ForwardBlock::new(
-                            network.our_node_id().clone(),
-                            Arc::new(BlockWrapper::EasyBlock(block)),
-                        );
-                        network
-                            .send_to_all_unsigned_except(&addr, &mut packet)
-                            .unwrap();
-                    }
-                    Err(err) => info!(
-                        "Chain Error for block {:?}: {:?}",
-                        block.block_hash().unwrap(),
-                        err
-                    ),
-                }
-
-                ok((network, easy_chain))
-            },
-        )
-        .and_then(|_| ok(()));
-
     let loop_fut_hard = hard_receiver
         .fold(
             (network.clone(), hard_chain),
@@ -219,7 +160,6 @@ pub fn start_block_listeners(
         )
         .and_then(|_| ok(()));
 
-    tokio::spawn(loop_fut_easy);
     tokio::spawn(loop_fut_hard);
     tokio::spawn(loop_fut_state);
 }

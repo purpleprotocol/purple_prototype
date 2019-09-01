@@ -85,13 +85,11 @@ fn main() {
     let state_db_path = storage_path.join("state_db");
     let state_chain_db_path = storage_path.join("state_chain_db");
     let hard_chain_db_path = storage_path.join("hard_chain_db");
-    let easy_chain_db_path = storage_path.join("easy_chain_db");
 
     let storage_wal_path = storage_path.join("node_storage_wal");
     let state_wal_path = storage_path.join("state_db_wal");
     let state_chain_wal_path = storage_path.join("state_chain_db_wal");
     let hard_chain_wal_path = storage_path.join("hard_chain_db_wal");
-    let easy_chain_wal_path = storage_path.join("easy_chain_db_wal");
 
     let storage_db = Arc::new(persistence::open_database(
         &storage_db_path,
@@ -106,18 +104,12 @@ fn main() {
         &hard_chain_db_path,
         &hard_chain_wal_path,
     ));
-    let easy_chain_db = Arc::new(persistence::open_database(
-        &easy_chain_db_path,
-        &easy_chain_wal_path,
-    ));
     let mut node_storage = PersistentDb::new(storage_db.clone(), None);
     let state_db = PersistentDb::new(state_db.clone(), None);
     let state_chain_db = PersistentDb::new(state_chain_db.clone(), None);
-    let easy_chain_db = PersistentDb::new(easy_chain_db.clone(), None);
     let hard_chain_db = PersistentDb::new(hard_chain_db.clone(), None);
 
-    let (easy_chain, hard_chain, state_chain) = chain::init(
-        easy_chain_db,
+    let ( hard_chain, state_chain) = chain::init(
         hard_chain_db,
         state_chain_db,
         state_db,
@@ -126,7 +118,6 @@ fn main() {
 
     info!("Database initialization was successful!");
 
-    let (easy_tx, easy_rx) = channel(10000);
     let (hard_tx, hard_rx) = channel(10000);
     let (state_tx, state_rx) = channel(10000);
 
@@ -138,10 +129,8 @@ fn main() {
         argv.network_name.to_owned(),
         skey,
         argv.max_peers,
-        easy_tx,
         hard_tx,
         state_tx,
-        easy_chain.clone(),
         hard_chain.clone(),
         state_chain.clone(),
     )));
@@ -149,15 +138,13 @@ fn main() {
 
     // Start the tokio runtime
     tokio::run(ok(()).and_then(move |_| {
-        start_chains_switch_poll(easy_chain.clone(), hard_chain.clone(), state_chain.clone());
+        start_chains_switch_poll(hard_chain.clone(), state_chain.clone());
 
         // Start listening for blocks
         start_block_listeners(
             network.clone(),
-            easy_chain,
             hard_chain,
             state_chain,
-            easy_rx,
             hard_rx,
             state_rx,
         );

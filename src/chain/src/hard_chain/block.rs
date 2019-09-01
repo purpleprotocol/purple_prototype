@@ -19,8 +19,7 @@
 use crate::types::*;
 use crate::block::Block;
 use crate::chain::*;
-use crate::easy_chain::block::EasyBlock;
-use crate::hard_chain::state::HardChainState;
+use crate::pow_chain_state::PowChainState;
 use account::NormalAddress;
 use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -42,7 +41,6 @@ lazy_static! {
     /// Atomic reference count to hard chain genesis block
     static ref GENESIS_RC: Arc<HardBlock> = {
         let mut block = HardBlock {
-            easy_block_hash: None,
             parent_hash: None,
             proof: Proof::zero(PROOF_SIZE),
             collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
@@ -62,9 +60,6 @@ lazy_static! {
 #[derive(Clone, Debug)]
 /// A block belonging to the `HardChain`.
 pub struct HardBlock {
-    /// A reference to a block in the `EasyChain`.
-    easy_block_hash: Option<Hash>,
-
     /// The height of the block.
     height: u64,
 
@@ -110,7 +105,7 @@ impl HashTrait for HardBlock {
 }
 
 impl Block for HardBlock {
-    type ChainState = HardChainState;
+    type ChainState = PowChainState;
 
     fn genesis() -> Arc<HardBlock> {
         GENESIS_RC.clone()
@@ -120,8 +115,8 @@ impl Block for HardBlock {
         self == GENESIS_RC.as_ref()
     }
 
-    fn genesis_state() -> HardChainState {
-        HardChainState::genesis()
+    fn genesis_state() -> PowChainState {
+        PowChainState::genesis()
     }
 
     fn height(&self) -> u64 {
@@ -156,8 +151,6 @@ impl Block for HardBlock {
         branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr> {
         let block_hash = block.block_hash().unwrap();
-        let easy_block_hash = block.easy_block_hash.unwrap();
-        let mut easy_height = None;
 
         // TODO: Validate difficulty. Issue #118
         let difficulty = 0;
@@ -166,80 +159,12 @@ impl Block for HardBlock {
         let edge_bits = 0;
 
         #[cfg(not(test))]
-        let edge_bits = chain_state.pow_state.edge_bits;
+        let edge_bits = chain_state.edge_bits;
         
         // Validate proof of work
         if let Err(_) = miner::verify(&block_hash.0, block.nonce, difficulty, edge_bits, &block.proof) {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadProof));
         }
-
-        // Validate against easy chain
-        {
-            let easy_chain = &chain_state.easy_chain.chain.read();
-
-            match branch_type {
-                // Canonical branch validations
-                BranchType::Canonical => {
-                    if let Some(easy_block) = chain_state.easy_chain.query(&easy_block_hash) {
-                        let easy_block_height = easy_block.height();
-                        
-                        if easy_block_height < chain_state.last_easy_height {
-                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadEasyHeight));
-                        }
-
-                        easy_height = Some(easy_block_height);
-                    } else if easy_block_hash == EasyBlock::genesis().block_hash().unwrap() && chain_state.last_easy_height == 0 { // The referenced easy block is the genesis block
-                        // Do nothing. Validation is successful in this case.
-                        easy_height = Some(0);
-                    } else {
-                        // Reject blocks that don't have a corresponding 
-                        // block in the easy chain.
-                        return Err(ChainErr::BadAppendCondition(AppendCondErr::NoBlockFound));
-                    }
-                }
-
-                // Non-canonical branch validations
-                BranchType::NonCanonical => {
-                    if let Some(easy_block) = chain_state.easy_chain.query(&easy_block_hash) {
-                        let easy_block_height = easy_block.height();
-                        
-                        if easy_block_height < chain_state.last_easy_height {
-                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadEasyHeight));
-                        }
-
-                        easy_height = Some(easy_block_height);
-                    } else if let Some(easy_block) = easy_chain.query_orphan(&easy_block_hash) {
-                        let orphan_type = easy_chain.orphan_type(&easy_block_hash).unwrap();
-                        let easy_block_height = easy_block.height();
-
-                        if easy_block_height < chain_state.last_easy_height {
-                            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadEasyHeight));
-                        }
-
-                        match orphan_type {
-                            OrphanType::BelongsToDisconnected
-                            | OrphanType::DisconnectedTip => {
-                                return Err(ChainErr::BadAppendCondition(AppendCondErr::Default));
-                            }
-
-                            OrphanType::BelongsToValidChain
-                            | OrphanType::ValidChainTip => {
-                                // Do nothing
-                            }
-                        }
-
-                        easy_height = Some(easy_block_height);
-                    } else {
-                        // Reject blocks that don't have a corresponding 
-                        // block in the easy chain.
-                        return Err(ChainErr::BadAppendCondition(AppendCondErr::NoBlockFound));
-                    }
-                }
-            }
-        }
-
-        // Set the new easy height in the chain state
-        chain_state.last_easy_height = easy_height.unwrap();
 
         Ok(chain_state)
     }
@@ -259,7 +184,6 @@ impl Block for HardBlock {
         buf.write_u32::<BigEndian>(self.nonce).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
         buf.extend_from_slice(&self.hash.unwrap().0);
-        buf.extend_from_slice(&self.easy_block_hash.as_ref().unwrap().0);
         buf.extend_from_slice(&self.parent_hash.unwrap().0);
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&self.proof.to_bytes());
@@ -327,17 +251,6 @@ impl Block for HardBlock {
             return Err("Incorrect packet structure 1");
         };
 
-        let easy_block_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure 2");
-        };
-
         let parent_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
@@ -399,7 +312,6 @@ impl Block for HardBlock {
 
         Ok(Arc::new(HardBlock {
             timestamp,
-            easy_block_hash: Some(easy_block_hash),
             collector_address,
             proof,
             nonce,
@@ -420,12 +332,10 @@ impl HardBlock {
         ip: SocketAddr,
         height: u64,
         nonce: u32,
-        easy_block_hash: Hash,
         proof: Proof,
     ) -> HardBlock {
         HardBlock {
             parent_hash,
-            easy_block_hash: Some(easy_block_hash),
             collector_address,
             height,
             hash: None,
@@ -462,10 +372,6 @@ impl HardBlock {
         if let Some(parent_hash) = self.parent_hash {
             buf.extend_from_slice(&parent_hash.0);
         }
-
-        if let Some(ref easy_block_hash) = self.easy_block_hash {
-            buf.extend_from_slice(&easy_block_hash.0);
-        }
         
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&self.proof.to_bytes());
@@ -480,7 +386,6 @@ use quickcheck::*;
 impl Arbitrary for HardBlock {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> HardBlock {
         HardBlock {
-            easy_block_hash: Some(Arbitrary::arbitrary(g)),
             height: Arbitrary::arbitrary(g),
             collector_address: Arbitrary::arbitrary(g),
             parent_hash: Some(Arbitrary::arbitrary(g)),
@@ -493,329 +398,251 @@ impl Arbitrary for HardBlock {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::test_helpers::*;
-    use graphlib::VertexId;
-    use rayon::prelude::*;
-    use hashbrown::{HashMap, HashSet};
-    use parking_lot::Mutex;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::test_helpers::*;
+//     use graphlib::VertexId;
+//     use rayon::prelude::*;
+//     use hashbrown::{HashMap, HashSet};
+//     use parking_lot::Mutex;
 
-    macro_rules! is_enum_variant {
-        ($v:expr, $p:pat) => (
-            if let $p = $v { true } else { false }
-        );
-    }
+//     macro_rules! is_enum_variant {
+//         ($v:expr, $p:pat) => (
+//             if let $p = $v { true } else { false }
+//         );
+//     }
 
-    quickcheck! {
-        fn append_condition_integration() -> bool {
-            let (easy_chain, hard_chain, _) = init_test_chains();
-            let test_set = chain_test_set(50, 10, false, false);
-            let MAX_ITERATIONS = 8000;
-            let mut cur_iterations = 0;
+//     quickcheck! {
+//         fn append_condition_integration() -> bool {
+//             let (hard_chain, _) = init_test_chains();
+//             let test_set = chain_test_set(50, 10, false, false);
+//             let MAX_ITERATIONS = 8000;
+//             let mut cur_iterations = 0;
 
-            let easy_graph = test_set.easy_graph.clone();
-            let hard_graph = test_set.hard_graph.clone();
-            let state_graph = test_set.state_graph.clone();
+//             let hard_graph = test_set.hard_graph.clone();
+//             let state_graph = test_set.state_graph.clone();
 
-            let mut easy_blocks: HashSet<Arc<EasyBlock>> = test_set.easy_blocks.iter().cloned().collect();
-            let mut hard_blocks: HashSet<Arc<HardBlock>> = test_set.hard_blocks.iter().cloned().collect();
-            let easy_appended: Arc<Mutex<HashSet<Arc<EasyBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
-            let hard_appended: Arc<Mutex<HashSet<Arc<HardBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
-            let easy_non_canonical: Arc<Mutex<HashSet<Arc<EasyBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
-            let hard_non_canonical: Arc<Mutex<HashSet<Arc<HardBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
-            let easy_rejected: Arc<Mutex<HashMap<Arc<EasyBlock>, ChainErr>>> = Arc::new(Mutex::new(HashMap::new()));
-            let hard_rejected: Arc<Mutex<HashMap<Arc<HardBlock>, ChainErr>>> = Arc::new(Mutex::new(HashMap::new()));
-            let easy_appended_clone = easy_appended.clone();
-            let hard_appended_clone = hard_appended.clone();
-            let easy_non_canonical_clone = easy_non_canonical.clone();
-            let hard_non_canonical_clone = hard_non_canonical.clone();
-            let easy_rejected_clone = easy_rejected.clone();
-            let hard_rejected_clone = hard_rejected.clone();
-            let mut easy_to_append = Vec::new();
-            let mut hard_to_append = Vec::new();
+//             let mut hard_blocks: HashSet<Arc<HardBlock>> = test_set.hard_blocks.iter().cloned().collect();
+//             let hard_appended: Arc<Mutex<HashSet<Arc<HardBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
+//             let hard_non_canonical: Arc<Mutex<HashSet<Arc<HardBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
+//             let hard_rejected: Arc<Mutex<HashMap<Arc<HardBlock>, ChainErr>>> = Arc::new(Mutex::new(HashMap::new()));
+//             let hard_appended_clone = hard_appended.clone();
+//             let hard_non_canonical_clone = hard_non_canonical.clone();
+//             let hard_rejected_clone = hard_rejected.clone();
+//             let mut hard_to_append = Vec::new();
 
-            // Un-comment this to add failed test cases to
-            // `src/test/failed_cases`. These can then be 
-            // visualized by using graphviz. 
-            std::panic::set_hook(Box::new(move |_| {
-                use std::path::Path;
-                use std::fs::File;
+//             // Un-comment this to add failed test cases to
+//             // `src/test/failed_cases`. These can then be 
+//             // visualized by using graphviz. 
+//             std::panic::set_hook(Box::new(move |_| {
+//                 use std::path::Path;
+//                 use std::fs::File;
 
-                let mut easy_graph = easy_graph.clone();
-                let mut hard_graph = hard_graph.clone();
-                let easy_appended = easy_appended_clone.lock();
-                let hard_appended = hard_appended_clone.lock();
-                let easy_non_canonical = easy_non_canonical_clone.lock();
-                let hard_non_canonical = hard_non_canonical_clone.lock();
-                let easy_rejected = easy_rejected_clone.lock();
-                let hard_rejected = hard_rejected_clone.lock();
+//                 let mut hard_graph = hard_graph.clone();
+//                 let hard_appended = hard_appended_clone.lock();
+//                 let hard_non_canonical = hard_non_canonical_clone.lock();
+//                 let hard_rejected = hard_rejected_clone.lock();
 
-                let case_id = crypto::gen_bytes(12);
-                let case_id = hex::encode(&case_id);
+//                 let case_id = crypto::gen_bytes(12);
+//                 let case_id = hex::encode(&case_id);
 
-                println!("Adding failed case with id {} to src/test/failed_cases...", &case_id);
+//                 println!("Adding failed case with id {} to src/test/failed_cases...", &case_id);
                 
-                let timestamp = Utc::now();
-                let timestamp = timestamp.to_rfc3339();
-                let failed_path = Path::new("src/test/failed_cases");
-                let dir_name = format!("src/test/failed_cases/{}-{}", timestamp, case_id);
-                let dir_path = Path::new(&dir_name);
+//                 let timestamp = Utc::now();
+//                 let timestamp = timestamp.to_rfc3339();
+//                 let failed_path = Path::new("src/test/failed_cases");
+//                 let dir_name = format!("src/test/failed_cases/{}-{}", timestamp, case_id);
+//                 let dir_path = Path::new(&dir_name);
 
-                // Create failed cases dir if it does not exist
-                if std::fs::metadata(&failed_path).is_err() {
-                    std::fs::create_dir(failed_path).unwrap();
-                }
+//                 // Create failed cases dir if it does not exist
+//                 if std::fs::metadata(&failed_path).is_err() {
+//                     std::fs::create_dir(failed_path).unwrap();
+//                 }
 
-                // Create graphs dir
-                std::fs::create_dir(&dir_path).unwrap();
+//                 // Create graphs dir
+//                 std::fs::create_dir(&dir_path).unwrap();
 
-                // Assemble graphs paths
-                let easy_path = dir_path.join("easy_graph.dot");
-                let hard_path = dir_path.join("hard_graph.dot");
-                let state_path = dir_path.join("state_graph.dot");
+//                 // Assemble graphs paths
+//                 let hard_path = dir_path.join("hard_graph.dot");
+//                 let state_path = dir_path.join("state_graph.dot");
 
-                let easy_hm: HashMap<VertexId, Arc<EasyBlock>> = easy_graph
-                    .vertices()
-                    .cloned()
-                    .map(|id| (id, easy_graph.fetch(&id).unwrap().clone()))
-                    .collect();
+//                 let hard_hm: HashMap<VertexId, Arc<HardBlock>> = hard_graph
+//                     .vertices()
+//                     .cloned()
+//                     .map(|id| (id, hard_graph.fetch(&id).unwrap().clone()))
+//                     .collect();
 
-                let hard_hm: HashMap<VertexId, Arc<HardBlock>> = hard_graph
-                    .vertices()
-                    .cloned()
-                    .map(|id| (id, hard_graph.fetch(&id).unwrap().clone()))
-                    .collect();
+//                 // Map labels so we can see which blocks were appended
+//                 hard_graph.map_labels(|id, _| {
+//                     let block = hard_hm.get(id).unwrap();
+//                     let block_hash = block.block_hash().unwrap();
+//                     let suffix = if hard_appended.contains(block) {
+//                         "CANONICAL".to_owned()
+//                     } else if let Some(r) = hard_rejected.get(block) {
+//                         map_reason(r)
+//                     } else if hard_non_canonical.contains(block) {
+//                         "NON_CANONICAL".to_owned()
+//                     } else {
+//                         "NOT_APPENDED".to_owned()
+//                     };
 
-                // Map labels so we can see which blocks were appended
-                easy_graph.map_labels(|id, _| {
-                    let block = easy_hm.get(id).unwrap();
-                    let block_hash = block.block_hash().unwrap();
-                    let suffix = if easy_appended.contains(block) {
-                        "CANONICAL".to_owned()
-                    } else if let Some(r) = easy_rejected.get(block) {
-                        map_reason(r)
-                    } else if easy_non_canonical.contains(block) {
-                        "NON_CANONICAL".to_owned()
-                    } else {
-                        "NOT_APPENDED".to_owned()
-                    };
+//                     let block_hash = format!("{}", block_hash);
+//                     let block_hash = &block_hash[..6];
 
-                    let block_hash = format!("{}", block_hash);
-                    let block_hash = &block_hash[..6];
-                    let hard_hash = format!("{}", block.hard_block_hash);
-                    let hard_hash = &hard_hash[..6];
+//                     format!("N_{}_H{}_{}", block_hash, block.height(), suffix)
+//                 });
 
-                    format!("N_{}_H{}_HH{}_{}", block_hash, block.height(), hard_hash, suffix)
-                });
+//                 // Create files
+//                 let mut hard_f = File::create(hard_path).unwrap();
+//                 let mut state_f = File::create(state_path).unwrap();
 
-                hard_graph.map_labels(|id, _| {
-                    let block = hard_hm.get(id).unwrap();
-                    let block_hash = block.block_hash().unwrap();
-                    let suffix = if hard_appended.contains(block) {
-                        "CANONICAL".to_owned()
-                    } else if let Some(r) = hard_rejected.get(block) {
-                        map_reason(r)
-                    } else if hard_non_canonical.contains(block) {
-                        "NON_CANONICAL".to_owned()
-                    } else {
-                        "NOT_APPENDED".to_owned()
-                    };
+//                 // Write graphs data
+//                 hard_graph.to_dot("hard_chain", &mut hard_f).unwrap();
+//                 state_graph.to_dot("state_chain", &mut state_f).unwrap();
+//             }));
 
-                    let block_hash = format!("{}", block_hash);
-                    let block_hash = &block_hash[..6];
-                    let easy_hash = format!("{}", block.easy_block_hash.unwrap());
-                    let easy_hash = &easy_hash[..6];
+//             // For each iteration, try to append as many blocks as possible
+//             loop {
+//                 if cur_iterations >= MAX_ITERATIONS {
+//                     //panic!("Exceeded iterations limit");
+//                     break;
+//                 }
 
-                    format!("N_{}_H{}_EH{}_{}", block_hash, block.height(), easy_hash, suffix)
-                });
+//                 for b in hard_blocks.iter() {
+//                     match hard_chain.append_block(b.clone()) {
+//                         Ok(_) => {
+//                             hard_to_append.push(b.clone());
+//                         }
 
-                // Create files
-                let mut easy_f = File::create(easy_path).unwrap();
-                let mut hard_f = File::create(hard_path).unwrap();
-                let mut state_f = File::create(state_path).unwrap();
+//                         Err(reason) => {
+//                             if let ChainErr::BadHeight = reason {
+//                                 // Do nothing
+//                             } else {
+//                                 let mut hard_rejected = hard_rejected.lock();
+//                                 hard_rejected.insert(b.clone(), reason);
+//                             }
+//                         }
+//                     }
+//                 } 
 
-                // Write graphs data
-                easy_graph.to_dot("easy_chain", &mut easy_f).unwrap();
-                hard_graph.to_dot("hard_chain", &mut hard_f).unwrap();
-                state_graph.to_dot("state_chain", &mut state_f).unwrap();
-            }));
-
-            // For each iteration, try to append as many blocks as possible
-            loop {
-                if cur_iterations >= MAX_ITERATIONS {
-                    //panic!("Exceeded iterations limit");
-                    break;
-                }
-
-                for b in easy_blocks.iter() {
-                    match easy_chain.append_block(b.clone()) {
-                        Ok(_) => {
-                            easy_to_append.push(b.clone());
-                        }
-
-                        Err(reason) => {
-                            if let ChainErr::BadHeight = reason {
-                                // Do nothing
-                            } else {
-                                let mut easy_rejected = easy_rejected.lock();
-                                easy_rejected.insert(b.clone(), reason);
-                            }
-                        }
-                    }
-                } 
-
-                for b in hard_blocks.iter() {
-                    match hard_chain.append_block(b.clone()) {
-                        Ok(_) => {
-                            hard_to_append.push(b.clone());
-                        }
-
-                        Err(reason) => {
-                            if let ChainErr::BadHeight = reason {
-                                // Do nothing
-                            } else {
-                                let mut hard_rejected = hard_rejected.lock();
-                                hard_rejected.insert(b.clone(), reason);
-                            }
-                        }
-                    }
-                } 
-
-                for b in easy_to_append.iter() {
-                    let block_hash = b.block_hash().unwrap();
+//                 for b in hard_to_append.iter() {
+//                     let block_hash = b.block_hash().unwrap();
                     
-                    easy_blocks.remove(b);
+//                     hard_blocks.remove(b);
 
-                    if easy_chain.is_canonical(&block_hash) {
-                        let mut easy_appended = easy_appended.lock();
-                        easy_appended.insert(b.clone());
-                    } else {
-                        let mut easy_non_canonical = easy_non_canonical.lock();
-                        easy_non_canonical.insert(b.clone());
-                    }
-                }
+//                     if hard_chain.is_canonical(&block_hash) {
+//                         let mut hard_appended = hard_appended.lock();
+//                         hard_appended.insert(b.clone());
+//                     } else {
+//                         let mut hard_non_canonical = hard_non_canonical.lock();
+//                         hard_non_canonical.insert(b.clone());
+//                     }
+//                 }
 
-                for b in hard_to_append.iter() {
-                    let block_hash = b.block_hash().unwrap();
-                    
-                    hard_blocks.remove(b);
+//                 //std::thread::sleep_ms(140);
 
-                    if hard_chain.is_canonical(&block_hash) {
-                        let mut hard_appended = hard_appended.lock();
-                        hard_appended.insert(b.clone());
-                    } else {
-                        let mut hard_non_canonical = hard_non_canonical.lock();
-                        hard_non_canonical.insert(b.clone());
-                    }
-                }
+//                 if hard_blocks.is_empty() {
+//                     break;
+//                 }
 
-                //std::thread::sleep_ms(140);
+//                 cur_iterations += 1;
+//             }
 
-                if easy_blocks.is_empty() && hard_blocks.is_empty() {
-                    break;
-                }
-
-                cur_iterations += 1;
-            }
-
-            {
-                let hard_chain = hard_chain.chain.read();
-                let easy_chain = easy_chain.chain.read();
+//             {
+//                 let hard_chain = hard_chain.chain.read();
             
-                assert_eq!(hard_chain.canonical_tip_height(), test_set.hard_canonical.height());
-                assert_eq!(easy_chain.canonical_tip_height(), test_set.easy_canonical.height());
-            }
+//                 assert_eq!(hard_chain.canonical_tip_height(), test_set.hard_canonical.height());
+//             }
 
-            true
-        }
+//             true
+//         }
 
-        fn it_verifies_hashes(block: HardBlock) -> bool {
-            let mut block = block.clone();
+//         fn it_verifies_hashes(block: HardBlock) -> bool {
+//             let mut block = block.clone();
 
-            assert!(!block.verify_hash());
+//             assert!(!block.verify_hash());
 
-            block.compute_hash();
-            block.verify_hash()
-        }
+//             block.compute_hash();
+//             block.verify_hash()
+//         }
 
-        fn serialize_deserialize(block: HardBlock) -> bool {
-            HardBlock::from_bytes(&HardBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
+//         fn serialize_deserialize(block: HardBlock) -> bool {
+//             HardBlock::from_bytes(&HardBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
 
-            true
-        }
-    }
+//             true
+//         }
+//     }
 
-    fn map_reason(reason: &ChainErr) -> String {
-        let base = "REJECTED";
+//     fn map_reason(reason: &ChainErr) -> String {
+//         let base = "REJECTED";
 
-        match reason {
-            ChainErr::AlreadyInChain => {
-                format!("{}_DUPLICATE", base)
-            }
+//         match reason {
+//             ChainErr::AlreadyInChain => {
+//                 format!("{}_DUPLICATE", base)
+//             }
 
-            ChainErr::BadHeight => {
-                format!("{}_BADHEIGHT", base)
-            }
+//             ChainErr::BadHeight => {
+//                 format!("{}_BADHEIGHT", base)
+//             }
 
-            ChainErr::CannotRewindPastRootBlock => {
-                format!("{}_CANNOTREWIND", base)
-            }
+//             ChainErr::CannotRewindPastRootBlock => {
+//                 format!("{}_CANNOTREWIND", base)
+//             }
 
-            ChainErr::InvalidParent => {
-                format!("{}_BADPARENT", base)
-            }
+//             ChainErr::InvalidParent => {
+//                 format!("{}_BADPARENT", base)
+//             }
 
-            ChainErr::NoCheckpointFound => {
-                format!("{}_NOCHECKPOINT", base)
-            }
+//             ChainErr::NoCheckpointFound => {
+//                 format!("{}_NOCHECKPOINT", base)
+//             }
 
-            ChainErr::NoParentHash => {
-                format!("{}_NOPARENTHASH", base)
-            }
+//             ChainErr::NoParentHash => {
+//                 format!("{}_NOPARENTHASH", base)
+//             }
 
-            ChainErr::NoSuchBlock => {
-                format!("{}_NOBLOCK", base)
-            }
+//             ChainErr::NoSuchBlock => {
+//                 format!("{}_NOBLOCK", base)
+//             }
 
-            ChainErr::TooManyOrphans => {
-                format!("{}_ORPHANSFULL", base)
-            }
+//             ChainErr::TooManyOrphans => {
+//                 format!("{}_ORPHANSFULL", base)
+//             }
 
-            ChainErr::BadAppendCondition(reason) => {
-                let reason = match reason {
-                    AppendCondErr::BadEasyHeight => {
-                        "BADHEIGHT"
-                    }
+//             ChainErr::BadAppendCondition(reason) => {
+//                 let reason = match reason {
+//                     AppendCondErr::BadEasyHeight => {
+//                         "BADHEIGHT"
+//                     }
 
-                    AppendCondErr::BadEpoch => {
-                        "BADEPOCH"
-                    }
+//                     AppendCondErr::BadEpoch => {
+//                         "BADEPOCH"
+//                     }
 
-                    AppendCondErr::BadProof => {
-                        "BADPROOF"
-                    }
+//                     AppendCondErr::BadProof => {
+//                         "BADPROOF"
+//                     }
 
-                    AppendCondErr::BadTransaction => {
-                        "BADTX"
-                    }
+//                     AppendCondErr::BadTransaction => {
+//                         "BADTX"
+//                     }
 
-                    AppendCondErr::BadValidator => {
-                        "BADVALIDATOR"
-                    }
+//                     AppendCondErr::BadValidator => {
+//                         "BADVALIDATOR"
+//                     }
 
-                    AppendCondErr::Default => {
-                        "DEFAULT"
-                    }
+//                     AppendCondErr::Default => {
+//                         "DEFAULT"
+//                     }
 
-                    AppendCondErr::NoBlockFound => {
-                        "NOBLOCK"
-                    }
-                };
+//                     AppendCondErr::NoBlockFound => {
+//                         "NOBLOCK"
+//                     }
+//                 };
 
-                format!("{}_BADAPPCOND_{}", base, reason)
-            }
-        }
-    }
-}
+//                 format!("{}_BADAPPCOND_{}", base, reason)
+//             }
+//         }
+//     }
+// }

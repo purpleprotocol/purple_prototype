@@ -204,26 +204,6 @@ impl Packet for ForwardBlock {
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         match *packet.block {
-            BlockWrapper::EasyBlock(ref block) => {
-                let easy_chain = network.easy_chain_ref();
-
-                // Do not push block to queue if we already
-                // have it stored in the chain.
-                if easy_chain.query(&block.block_hash().unwrap()).is_some() {
-                    Ok(())
-                } else {
-                    let mut sender = network.easy_chain_sender().clone();
-
-                    #[cfg(not(test))]
-                    sender.try_send((addr.clone(), block.clone())).unwrap();
-
-                    #[cfg(test)]
-                    sender.send((addr.clone(), block.clone())).unwrap();
-
-                    Ok(())
-                }
-            }
-
             BlockWrapper::HardBlock(ref block) => {
                 let hard_chain = network.hard_chain_ref();
 
@@ -289,9 +269,6 @@ use quickcheck::Arbitrary;
 use crypto::Identity;
 
 #[cfg(test)]
-use chain::EasyBlock;
-
-#[cfg(test)]
 impl Arbitrary for ForwardBlock {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> ForwardBlock {
         let (pk, _) = crypto::gen_kx_keypair();
@@ -310,19 +287,19 @@ impl Arbitrary for ForwardBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chain::EasyBlock;
+    use chain::HardBlock;
 
     quickcheck! {
         fn serialize_deserialize(tx: Arc<ForwardBlock>) -> bool {
             tx == ForwardBlock::from_bytes(&ForwardBlock::to_bytes(&tx)).unwrap()
         }
 
-        fn verify_signature(block: Arc<EasyBlock>) -> bool {
+        fn verify_signature(block: Arc<HardBlock>) -> bool {
             let id = Identity::new();
             let timestamp = Utc::now();
             let mut packet = ForwardBlock {
                 node_id: NodeId(*id.pkey()),
-                block: Arc::new(BlockWrapper::EasyBlock(block)),
+                block: Arc::new(BlockWrapper::HardBlock(block)),
                 signature: None,
                 timestamp
             };

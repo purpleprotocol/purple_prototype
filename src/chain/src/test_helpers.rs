@@ -20,10 +20,7 @@
 
 use crate::block::Block;
 use crate::hard_chain::chain::*;
-use crate::hard_chain::state::*;
 use crate::hard_chain::block::*;
-use crate::easy_chain::chain::*;
-use crate::easy_chain::block::*;
 use crate::state_chain::chain::*;
 use crate::state_chain::state::*;
 use crate::state_chain::block::*;
@@ -37,31 +34,26 @@ use hashbrown::{HashMap, HashSet};
 use crypto::Hash;
 use rand::prelude::*;
 
-pub fn init_test_chains() -> (EasyChainRef, HardChainRef, StateChainRef) {
+pub fn init_test_chains() -> (HardChainRef, StateChainRef) {
     let easy_db = test_helpers::init_tempdb();
     let hard_db = test_helpers::init_tempdb();
     let state_db = test_helpers::init_tempdb();
     let state_storage_db = test_helpers::init_tempdb();
-    let easy_chain = Arc::new(RwLock::new(EasyChain::new(easy_db, PowChainState::genesis(), true)));
-    let easy_chain_ref = EasyChainRef::new(easy_chain);
-    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_db, HardChainState::genesis_init(easy_chain_ref.clone()), true)));
+    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_db, PowChainState::genesis(), true)));
     let hard_chain_ref = HardChainRef::new(hard_chain);
     let state_chain = Arc::new(RwLock::new(StateChain::new(state_db, ChainState::new(state_storage_db), true))); // TODO: Replace this with genesis state
     let state_chain_ref = StateChainRef::new(state_chain);
 
-    (easy_chain_ref, hard_chain_ref, state_chain_ref)
+    (hard_chain_ref, state_chain_ref)
 }
 
 /// Wrapper struct around a block test set
 #[derive(Clone, Debug)]
 pub struct BlockTestSet {
     pub hard_graph: Graph<Arc<HardBlock>>,
-    pub easy_graph: Graph<Arc<EasyBlock>>,
     pub state_graph: Graph<Arc<StateBlock>>,
     pub hard_blocks: Vec<Arc<HardBlock>>,
-    pub easy_blocks: Vec<Arc<EasyBlock>>,
     pub state_blocks: Vec<Arc<StateBlock>>,
-    pub easy_canonical: Arc<EasyBlock>,
     pub hard_canonical: Arc<HardBlock>,
     pub state_canonical: Arc<StateBlock>,
 }
@@ -69,13 +61,10 @@ pub struct BlockTestSet {
 impl BlockTestSet {
     pub fn new() -> BlockTestSet {
         BlockTestSet {
-            easy_graph: Graph::new(),
             hard_graph: Graph::new(),
             state_graph: Graph::new(),
             hard_blocks: Vec::new(),
-            easy_blocks: Vec::new(),
             state_blocks: Vec::new(),
-            easy_canonical: EasyBlock::genesis(),
             hard_canonical: HardBlock::genesis(),
             state_canonical: StateBlock::genesis(),
         }
@@ -101,8 +90,6 @@ pub fn chain_test_set(
         panic!("Invalid fork rate parameter! Must be a number between 0 and 10.");
     }
 
-    let mut easy_chain_buf: Graph<Arc<EasyBlock>> = Graph::new();
-    let mut easy_canonical_tip: Option<VertexId> = None;
     let mut hard_chain_buf: Graph<Arc<HardBlock>> = Graph::new();
     let mut hard_canonical_tip: Option<VertexId> = None;
     let mut state_chain_buf: Graph<Arc<StateBlock>> = Graph::new();
@@ -118,156 +105,149 @@ pub fn chain_test_set(
             break;
         }
 
-        let easy_blocks_to_generate = rng.gen_range(0, 8);
         let last_hard = if let Some(ref id) = hard_canonical_tip {
             hard_chain_buf.fetch(id).unwrap().clone()
         } else {
             HardBlock::genesis()
         };
 
-        let mut last_easy = if let Some(ref id) = easy_canonical_tip {
-            easy_chain_buf.fetch(id).unwrap().clone()
-        } else {
-            EasyBlock::genesis()
-        };
+        // let mut last_easy_height = last_easy.height() + 1;
 
-        let mut last_easy_height = last_easy.height() + 1;
+        // // Generate random amount of easy blocks for this step
+        // for _ in 0..easy_blocks_to_generate {
+        //     let mut easy_block = EasyBlock::new(
+        //         last_easy.block_hash(), 
+        //         last_hard.block_hash().unwrap(), 
+        //         NormalAddress::random(), 
+        //         crate::random_socket_addr(), 
+        //         last_easy_height, 
+        //         0,
+        //         Proof::test_proof(42),
+        //     );
 
-        // Generate random amount of easy blocks for this step
-        for _ in 0..easy_blocks_to_generate {
-            let mut easy_block = EasyBlock::new(
-                last_easy.block_hash(), 
-                last_hard.block_hash().unwrap(), 
-                NormalAddress::random(), 
-                crate::random_socket_addr(), 
-                last_easy_height, 
-                0,
-                Proof::test_proof(42),
-            );
+        //     easy_block.compute_hash();
+        //     let easy_block = Arc::new(easy_block);
 
-            easy_block.compute_hash();
-            let easy_block = Arc::new(easy_block);
+        //     // Set last easy
+        //     last_easy = easy_block.clone();
 
-            // Set last easy
-            last_easy = easy_block.clone();
+        //     // Append the block to the graph
+        //     let id = easy_chain_buf.add_vertex(easy_block);
 
-            // Append the block to the graph
-            let id = easy_chain_buf.add_vertex(easy_block);
+        //     // Gen label
+        //     let _ = easy_chain_buf.label(&id).unwrap();
 
-            // Gen label
-            let _ = easy_chain_buf.label(&id).unwrap();
-
-            // Add edge between last canonical tip and new one
-            if let Some(ref tip_id) = easy_canonical_tip {
-                easy_chain_buf.add_edge(tip_id, &id).unwrap();
-            }
+        //     // Add edge between last canonical tip and new one
+        //     if let Some(ref tip_id) = easy_canonical_tip {
+        //         easy_chain_buf.add_edge(tip_id, &id).unwrap();
+        //     }
             
-            easy_canonical_tip = Some(id);
+        //     easy_canonical_tip = Some(id);
 
-            let random_num = rng.gen_range(0, 100);
-            let fork_chance = if fork_rate == 0 {
-                0
-            } else {
-                (fork_rate * 100) / 20
-            };
+        //     let random_num = rng.gen_range(0, 100);
+        //     let fork_chance = if fork_rate == 0 {
+        //         0
+        //     } else {
+        //         (fork_rate * 100) / 20
+        //     };
 
-            let will_fork = random_num < fork_chance;
+        //     let will_fork = random_num < fork_chance;
 
-            // Generate a fork
-            if will_fork {
-                let mut easy_block = EasyBlock::new(
-                    last_easy.block_hash(), 
-                    last_hard.block_hash().unwrap(), 
-                    NormalAddress::random(), 
-                    crate::random_socket_addr(), 
-                    last_easy_height, 
-                    0,
-                    Proof::test_proof(42),
-                );
+        //     // Generate a fork
+        //     if will_fork {
+        //         let mut easy_block = EasyBlock::new(
+        //             last_easy.block_hash(), 
+        //             last_hard.block_hash().unwrap(), 
+        //             NormalAddress::random(), 
+        //             crate::random_socket_addr(), 
+        //             last_easy_height, 
+        //             0,
+        //             Proof::test_proof(42),
+        //         );
 
-                easy_block.compute_hash();
-                let easy_block = Arc::new(easy_block);
+        //         easy_block.compute_hash();
+        //         let easy_block = Arc::new(easy_block);
 
-                // Append the block to the graph
-                let id = easy_chain_buf.add_vertex(easy_block);
+        //         // Append the block to the graph
+        //         let id = easy_chain_buf.add_vertex(easy_block);
                 
-                // Gen label
-                let _ = easy_chain_buf.label(&id).unwrap();
+        //         // Gen label
+        //         let _ = easy_chain_buf.label(&id).unwrap();
 
-                // Add edge between last canonical tip and new one
-                if let Some(ref tip_id) = easy_canonical_tip {
-                    easy_chain_buf.add_edge(tip_id, &id).unwrap();
-                }
+        //         // Add edge between last canonical tip and new one
+        //         if let Some(ref tip_id) = easy_canonical_tip {
+        //             easy_chain_buf.add_edge(tip_id, &id).unwrap();
+        //         }
 
-                let random_num = rng.gen_range(0, 100);
-                let fork_chance = if fork_rate == 0 {
-                    0
-                } else {
-                    (fork_rate * 100) / 20
-                };
+        //         let random_num = rng.gen_range(0, 100);
+        //         let fork_chance = if fork_rate == 0 {
+        //             0
+        //         } else {
+        //             (fork_rate * 100) / 20
+        //         };
 
-                // Fork one of the past tips if this is true
-                let will_fork = random_num < fork_chance;
+        //         // Fork one of the past tips if this is true
+        //         let will_fork = random_num < fork_chance;
 
-                if will_fork {
-                    let tip = easy_chain_buf
-                        .tips()
-                        .filter(|t| {
-                            let tip = easy_chain_buf.fetch(t).unwrap();
-                            Some(**t) != easy_canonical_tip && tip.height() < cur_hard_height
-                        })
-                        .cloned()
-                        .choose(&mut rng);
+        //         if will_fork {
+        //             let tip = easy_chain_buf
+        //                 .tips()
+        //                 .filter(|t| {
+        //                     let tip = easy_chain_buf.fetch(t).unwrap();
+        //                     Some(**t) != easy_canonical_tip && tip.height() < cur_hard_height
+        //                 })
+        //                 .cloned()
+        //                 .choose(&mut rng);
 
-                    // Add block with the tip's parent hash
-                    if let Some(ref tip_id) = tip {
-                        let tip = easy_chain_buf.fetch(tip_id).unwrap().clone();
-                        let mut easy_block = EasyBlock::new(
-                            tip.block_hash(), 
-                            last_hard.block_hash().unwrap(), 
-                            NormalAddress::random(), 
-                            crate::random_socket_addr(), 
-                            tip.height() + 1, 
-                            0,
-                            Proof::test_proof(42),
-                        );
+        //             // Add block with the tip's parent hash
+        //             if let Some(ref tip_id) = tip {
+        //                 let tip = easy_chain_buf.fetch(tip_id).unwrap().clone();
+        //                 let mut easy_block = EasyBlock::new(
+        //                     tip.block_hash(), 
+        //                     last_hard.block_hash().unwrap(), 
+        //                     NormalAddress::random(), 
+        //                     crate::random_socket_addr(), 
+        //                     tip.height() + 1, 
+        //                     0,
+        //                     Proof::test_proof(42),
+        //                 );
 
-                        easy_block.compute_hash();
-                        let easy_block = Arc::new(easy_block);
+        //                 easy_block.compute_hash();
+        //                 let easy_block = Arc::new(easy_block);
 
-                        // Append the block to the graph
-                        let id = easy_chain_buf.add_vertex(easy_block);
+        //                 // Append the block to the graph
+        //                 let id = easy_chain_buf.add_vertex(easy_block);
 
-                        // Gen label
-                        let _ = easy_chain_buf.label(&id).unwrap();
+        //                 // Gen label
+        //                 let _ = easy_chain_buf.label(&id).unwrap();
 
-                        easy_chain_buf.add_edge(tip_id, &id).unwrap();
-                    }
-                }
-            }
+        //                 easy_chain_buf.add_edge(tip_id, &id).unwrap();
+        //             }
+        //         }
+        //     }
 
-            last_easy_height += 1;
-        }
+        //     last_easy_height += 1;
+        // }
 
         // Generate byzantine easy blocks
-        if generate_byzantine {
-            let random = rng.gen_range(0, 2);
-            let byzantine_action = match random {
-                0 => EasyByzantineActions::HardHashWithLowerHeight,
-                1 => EasyByzantineActions::InvalidHardParentHash,
-                _ => panic!(),
-            };
+        // if generate_byzantine {
+        //     let random = rng.gen_range(0, 2);
+        //     let byzantine_action = match random {
+        //         0 => EasyByzantineActions::HardHashWithLowerHeight,
+        //         1 => EasyByzantineActions::InvalidHardParentHash,
+        //         _ => panic!(),
+        //     };
 
-            match byzantine_action {
-                EasyByzantineActions::HardHashWithLowerHeight => {
-                    unimplemented!();
-                }
+        //     match byzantine_action {
+        //         EasyByzantineActions::HardHashWithLowerHeight => {
+        //             unimplemented!();
+        //         }
 
-                EasyByzantineActions::InvalidHardParentHash => {
-                    unimplemented!();
-                }
-            }
-        }
+        //         EasyByzantineActions::InvalidHardParentHash => {
+        //             unimplemented!();
+        //         }
+        //     }
+        // }
 
         let last_hard_hash = last_hard.block_hash().unwrap();
 
@@ -278,7 +258,6 @@ pub fn chain_test_set(
             crate::random_socket_addr(),
             last_hard.height() + 1, 
             0,
-            last_easy.block_hash().unwrap(), 
             Proof::test_proof(42),
         );
         hard_block.compute_hash();
@@ -314,14 +293,8 @@ pub fn chain_test_set(
 
     // Assemble test set
     let mut test_set = BlockTestSet::new();
-    let easy_ids: Vec<&VertexId> = easy_chain_buf.vertices().collect();
     let hard_ids: Vec<&VertexId> = hard_chain_buf.vertices().collect();
     let state_ids: Vec<&VertexId> = state_chain_buf.vertices().collect();
-
-    test_set.easy_blocks = easy_ids
-        .iter()
-        .map(|id| easy_chain_buf.fetch(id).unwrap().clone())
-        .collect();
 
     test_set.hard_blocks = hard_ids
         .iter()
@@ -333,10 +306,6 @@ pub fn chain_test_set(
         .map(|id| state_chain_buf.fetch(id).unwrap().clone())
         .collect();
 
-    if let Some(ref id) = easy_canonical_tip {
-        test_set.easy_canonical = easy_chain_buf.fetch(id).unwrap().clone();
-    }
-
     if let Some(ref id) = hard_canonical_tip {
         test_set.hard_canonical = hard_chain_buf.fetch(id).unwrap().clone();
     }
@@ -345,7 +314,6 @@ pub fn chain_test_set(
         test_set.state_canonical = state_chain_buf.fetch(id).unwrap().clone();
     }
 
-    test_set.easy_graph = easy_chain_buf;
     test_set.hard_graph = hard_chain_buf;
     test_set.state_graph = state_chain_buf;
 
@@ -354,23 +322,4 @@ pub fn chain_test_set(
     assert!(test_set.hard_blocks.iter().any(|b| b.parent_hash().unwrap() == HardBlock::genesis().block_hash().unwrap()));
 
     test_set
-}
-
-/// Enum representing byzantine actions that
-/// are performed on the easy chain.
-/// 
-/// TODO: Add as many actions as possible
-#[derive(Debug, Clone, PartialEq)]
-enum EasyByzantineActions {
-    /// A byzantine action consisting of sending
-    /// a valid hard block but with a referenced
-    /// easy block that has a lower height than 
-    /// the last referenced block.
-    HardHashWithLowerHeight,
-
-    /// A byzantine action consisting of sending
-    /// a block that has all the correct fields 
-    /// except the referenced hard block having
-    /// an invalid parent hash.
-    InvalidHardParentHash,
 }

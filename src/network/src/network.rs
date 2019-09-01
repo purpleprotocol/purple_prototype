@@ -45,9 +45,6 @@ pub struct Network {
     /// Our secret key
     pub(crate) secret_key: Sk,
 
-    /// Reference to the `EasyChain`
-    easy_chain_ref: EasyChainRef,
-
     /// Reference to the `HardChain`
     hard_chain_ref: HardChainRef,
 
@@ -59,9 +56,6 @@ pub struct Network {
 
     /// Sender to `HardChain` block buffer
     hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
-
-    /// Sender to `EasyChain` block buffer
-    easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
 
     /// The name of the network we are on
     network_name: String,
@@ -76,10 +70,8 @@ impl Network {
         network_name: String,
         secret_key: Sk,
         max_peers: usize,
-        easy_chain_sender: Sender<(SocketAddr, Arc<EasyBlock>)>,
         hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
         state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
-        easy_chain_ref: EasyChainRef,
         hard_chain_ref: HardChainRef,
         state_chain_ref: StateChainRef,
     ) -> Network {
@@ -89,10 +81,8 @@ impl Network {
             network_name,
             secret_key,
             max_peers,
-            easy_chain_sender,
             hard_chain_sender,
             state_chain_sender,
-            easy_chain_ref,
             hard_chain_ref,
             state_chain_ref,
         }
@@ -222,20 +212,12 @@ impl NetworkInterface for Network {
         Ok(())
     }
 
-    fn easy_chain_ref(&self) -> EasyChainRef {
-        self.easy_chain_ref.clone()
-    }
-
     fn hard_chain_ref(&self) -> HardChainRef {
         self.hard_chain_ref.clone()
     }
 
     fn state_chain_ref(&self) -> StateChainRef {
         self.state_chain_ref.clone()
-    }
-
-    fn easy_chain_sender(&self) -> &Sender<(SocketAddr, Arc<EasyBlock>)> {
-        &self.easy_chain_sender
     }
 
     fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)> {

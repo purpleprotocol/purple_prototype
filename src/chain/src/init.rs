@@ -16,9 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::easy_chain::chain::*;
 use crate::hard_chain::chain::*;
-use crate::hard_chain::state::HardChainState;
 use crate::pow_chain_state::PowChainState;
 use crate::state_chain::chain::*;
 use crate::state_chain::state::ChainState;
@@ -32,33 +30,26 @@ use std::cell::RefCell;
 
 #[cfg(not(feature = "test"))]
 lazy_static! {
-    static ref CHAIN_REFS: Arc<RwLock<Option<(EasyChainRef, HardChainRef, StateChainRef)>>> =
+    static ref CHAIN_REFS: Arc<RwLock<Option<(HardChainRef, StateChainRef)>>> =
         Arc::new(RwLock::new(None));
 }
 
 #[cfg(feature = "test")]
 thread_local! {
-    static CHAIN_REFS: RefCell<Option<(EasyChainRef, HardChainRef, StateChainRef)>> = RefCell::new(None);
+    static CHAIN_REFS: RefCell<Option<(HardChainRef, StateChainRef)>> = RefCell::new(None);
 }
 
 #[cfg(not(feature = "test"))]
 /// Init chain module. Call this before any other function.
 pub fn init(
-    easy_chain_db: PersistentDb,
     hard_chain_db: PersistentDb,
     state_chain_db: PersistentDb,
     state_db: PersistentDb,
     archival_mode: bool,
-) -> (EasyChainRef, HardChainRef, StateChainRef) {
-    let easy_chain = Arc::new(RwLock::new(EasyChain::new(
-        easy_chain_db,
-        PowChainState::genesis(),
-        archival_mode,
-    )));
-    let easy_chain = EasyChainRef::new(easy_chain);
+) -> (HardChainRef, StateChainRef) {
     let hard_chain = Arc::new(RwLock::new(HardChain::new(
         hard_chain_db,
-        HardChainState::genesis_init(easy_chain.clone()),
+        PowChainState::genesis(),
         archival_mode,
     )));
     let state_chain = Arc::new(RwLock::new(StateChain::new(
@@ -73,26 +64,19 @@ pub fn init(
     let mut refs = CHAIN_REFS.write();
     *refs = Some((easy_chain.clone(), hard_chain.clone(), state_chain.clone()));
 
-    (easy_chain, hard_chain, state_chain)
+    (hard_chain, state_chain)
 }
 
 #[cfg(feature = "test")]
 pub fn init(
-    easy_chain_db: PersistentDb,
     hard_chain_db: PersistentDb,
     state_chain_db: PersistentDb,
     state_db: PersistentDb,
     archival_mode: bool,
-) -> (EasyChainRef, HardChainRef, StateChainRef) {
-    let easy_chain = Arc::new(RwLock::new(EasyChain::new(
-        easy_chain_db,
-        PowChainState::genesis(),
-        archival_mode,
-    )));
-    let easy_chain = EasyChainRef::new(easy_chain);
+) -> (HardChainRef, StateChainRef) {
     let hard_chain = Arc::new(RwLock::new(HardChain::new(
         hard_chain_db,
-        HardChainState::genesis_init(easy_chain.clone()),
+        PowChainState::genesis(),
         archival_mode,
     )));
     let state_chain = Arc::new(RwLock::new(StateChain::new(
@@ -106,20 +90,20 @@ pub fn init(
 
     CHAIN_REFS.with(|refs| {
         let mut refs = refs.borrow_mut();
-        *refs = Some((easy_chain.clone(), hard_chain.clone(), state_chain.clone()));
+        *refs = Some((hard_chain.clone(), state_chain.clone()));
     });
 
-    (easy_chain, hard_chain, state_chain)
+    (hard_chain, state_chain)
 }
 
 #[cfg(not(feature = "test"))]
-pub fn chain_refs() -> (EasyChainRef, HardChainRef, StateChainRef) {
+pub fn chain_refs() -> (HardChainRef, StateChainRef) {
     let refs = CHAIN_REFS.read();
     refs.clone().unwrap()
 }
 
 #[cfg(feature = "test")]
-pub fn chain_refs() -> (EasyChainRef, HardChainRef, StateChainRef) {
+pub fn chain_refs() -> (HardChainRef, StateChainRef) {
     CHAIN_REFS.with(|refs| {
         let refs = refs.borrow();
         refs.clone().unwrap()
@@ -127,27 +111,9 @@ pub fn chain_refs() -> (EasyChainRef, HardChainRef, StateChainRef) {
 }
 
 #[cfg(not(feature = "test"))]
-pub fn easy_chain_ref() -> EasyChainRef {
-    let refs = CHAIN_REFS.read();
-    let (easy_ref, _, _) = refs.clone().unwrap();
-
-    easy_ref
-}
-
-#[cfg(feature = "test")]
-pub fn easy_chain_ref() -> EasyChainRef {
-    CHAIN_REFS.with(|refs| {
-        let refs = refs.borrow();
-        let (easy_ref, _, _) = refs.clone().unwrap();
-
-        easy_ref
-    })
-}
-
-#[cfg(not(feature = "test"))]
 pub fn hard_chain_ref() -> HardChainRef {
     let refs = CHAIN_REFS.read();
-    let (_, hard_ref, _) = refs.clone().unwrap();
+    let (hard_ref, _) = refs.clone().unwrap();
 
     hard_ref
 }
@@ -156,7 +122,7 @@ pub fn hard_chain_ref() -> HardChainRef {
 pub fn hard_chain_ref() -> HardChainRef {
     CHAIN_REFS.with(|refs| {
         let refs = refs.borrow();
-        let (_, hard_ref, _) = refs.clone().unwrap();
+        let (hard_ref, _) = refs.clone().unwrap();
 
         hard_ref
     })
@@ -174,7 +140,7 @@ pub fn state_chain_ref() -> StateChainRef {
 pub fn state_chain_ref() -> StateChainRef {
     CHAIN_REFS.with(|refs| {
         let refs = refs.borrow();
-        let (_, _, state_ref) = refs.clone().unwrap();
+        let (_, state_ref) = refs.clone().unwrap();
 
         state_ref
     })

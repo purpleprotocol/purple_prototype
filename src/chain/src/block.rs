@@ -17,7 +17,7 @@
 */
 
 use crate::types::{Flushable, BranchType};
-use crate::{ChainErr, EasyBlock, HardBlock, StateBlock};
+use crate::{ChainErr, HardBlock, StateBlock};
 use chrono::prelude::*;
 use crypto::Hash;
 use std::boxed::Box;
@@ -138,7 +138,6 @@ pub enum SwitchResult {
 /// Wrapper enum used **only** for serialization/deserialization
 #[derive(Clone, Debug, PartialEq)]
 pub enum BlockWrapper {
-    EasyBlock(Arc<EasyBlock>),
     HardBlock(Arc<HardBlock>),
     StateBlock(Arc<StateBlock>),
 }
@@ -148,9 +147,6 @@ impl BlockWrapper {
         let first_byte = bytes[0];
 
         match first_byte {
-            EasyBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::EasyBlock(EasyBlock::from_bytes(
-                bytes,
-            )?))),
             HardBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::HardBlock(HardBlock::from_bytes(
                 bytes,
             )?))),
@@ -163,7 +159,6 @@ impl BlockWrapper {
 
     pub fn to_bytes(&self) -> Vec<u8> {
         match self {
-            BlockWrapper::EasyBlock(block) => block.to_bytes(),
             BlockWrapper::HardBlock(block) => block.to_bytes(),
             BlockWrapper::StateBlock(block) => block.to_bytes(),
         }
@@ -171,7 +166,6 @@ impl BlockWrapper {
 
     pub fn block_hash(&self) -> Option<Hash> {
         match self {
-            BlockWrapper::EasyBlock(block) => block.block_hash(),
             BlockWrapper::HardBlock(block) => block.block_hash(),
             BlockWrapper::StateBlock(block) => block.block_hash(),
         }
@@ -183,12 +177,11 @@ impl quickcheck::Arbitrary for BlockWrapper {
         use rand::Rng;
 
         let mut rng = rand::thread_rng();
-        let random = rng.gen_range(0, 3);
+        let random = rng.gen_range(0, 2);
 
         match random {
-            0 => BlockWrapper::EasyBlock(quickcheck::Arbitrary::arbitrary(g)),
-            1 => BlockWrapper::HardBlock(quickcheck::Arbitrary::arbitrary(g)),
-            2 => BlockWrapper::StateBlock(quickcheck::Arbitrary::arbitrary(g)),
+            0 => BlockWrapper::HardBlock(quickcheck::Arbitrary::arbitrary(g)),
+            1 => BlockWrapper::StateBlock(quickcheck::Arbitrary::arbitrary(g)),
             _ => panic!(),
         }
     }
