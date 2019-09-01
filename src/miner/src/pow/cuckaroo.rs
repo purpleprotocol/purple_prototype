@@ -25,18 +25,15 @@
 
 #[macro_use]
 use crate::pow::common::*;
+use crate::pow::error::{Error, ErrorKind};
 use crate::pow::pow_ctx::PoWContext;
 use crate::pow::proof::Proof;
-use crate::pow::error::{Error, ErrorKind};
 use crate::pow::siphash::siphash_block;
 
 /// Instantiate a new CuckarooContext as a PowContext. Note that this can't
 /// be moved in the PoWContext trait as this particular trait needs to be
 /// convertible to an object trait.
-pub fn new_cuckaroo_ctx<T>(
-    edge_bits: u8,
-    proof_size: usize,
-) -> Result<CuckarooContext<T>, Error>
+pub fn new_cuckaroo_ctx<T>(edge_bits: u8, proof_size: usize) -> Result<CuckarooContext<T>, Error>
 where
     T: EdgeType + 'static,
 {
@@ -134,7 +131,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use byteorder::{WriteBytesExt, LittleEndian};
+    use byteorder::{LittleEndian, WriteBytesExt};
 
     // empty header, nonce 71
     static V1_19_HASH: [u64; 4] = [
@@ -170,9 +167,13 @@ mod test {
     fn cuckaroo19_vectors() {
         let mut ctx = new_impl::<u64>(19, 42);
         ctx.params.siphash_keys = V1_19_HASH.clone();
-        assert!(ctx.verify(&Proof::new(V1_19_SOL.to_vec().clone(), 19)).is_ok());
+        assert!(ctx
+            .verify(&Proof::new(V1_19_SOL.to_vec().clone(), 19))
+            .is_ok());
         ctx.params.siphash_keys = V2_19_HASH.clone();
-        assert!(ctx.verify(&Proof::new(V2_19_SOL.to_vec().clone(), 19)).is_ok());
+        assert!(ctx
+            .verify(&Proof::new(V2_19_SOL.to_vec().clone(), 19))
+            .is_ok());
         assert!(ctx.verify(&Proof::zero(42)).is_err());
     }
 

@@ -18,6 +18,7 @@ failure = "0.1.5"
 lazy_static = "1.2.0"
 serde = "1.0.91"
 num = "0.2"
+bin-tools = { path = "../util/bin-tools" }
 crypto = { path = "../crypto" }
 
 [dev-dependencies]
@@ -29,6 +30,7 @@ fs_extra = "1.1.0"
 
 [features]
 default = []
+test = []
 avx = []
 gpu = []
 cpu = []

@@ -1,6 +1,8 @@
-mod siphash;
-mod error;
 mod common;
-pub mod pow_ctx;
 pub mod cuckaroo;
+mod error;
+pub mod pow_ctx;
 pub mod proof;
+mod siphash;
+
+pub use proof::*;

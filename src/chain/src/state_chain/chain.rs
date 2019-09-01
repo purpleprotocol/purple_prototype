@@ -24,7 +24,7 @@ pub type StateChainRef = ChainRef<StateBlock>;
 /// The state chain is responsible for storing blocks
 /// that are produced by the validator pool and which
 /// contain transactions that modify the trie state.
-/// 
+///
 /// A `StateBlock` contains multiple `Events`, which
 /// in turn, contain transactions.
 pub type StateChain = Chain<StateBlock>;

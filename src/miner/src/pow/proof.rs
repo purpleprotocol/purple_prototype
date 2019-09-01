@@ -1,12 +1,14 @@
 use crate::verify::PROOF_SIZE;
-use byteorder::{WriteBytesExt, LittleEndian};
-use crypto::Hash;
-use std::fmt;
-use std::iter;
-use rand::*;
+use bin_tools::*;
 use bitvec::Bits;
+use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
+use crypto::Hash;
+use rand::*;
+use std::fmt;
+use std::io::Cursor;
+use std::iter;
 
-const MIN_EDGE_BITS: u8 = 24;
+pub const MIN_EDGE_BITS: u8 = 24;
 
 #[derive(Clone, PartialOrd, PartialEq)]
 pub struct Proof {
@@ -38,6 +40,15 @@ impl Proof {
         Proof {
             edge_bits,
             nonces: in_nonces,
+        }
+    }
+
+    #[cfg(feature = "test")]
+    /// A proof that will always validate. Only used for testing.
+    pub fn test_proof(proof_size: usize) -> Proof {
+        Proof {
+            edge_bits: 0,
+            nonces: vec![0; proof_size],
         }
     }
 
@@ -82,7 +93,7 @@ impl Proof {
         }
 
         crypto::hash_slice(&buf)
-    } 
+    }
 
     /// The difficulty is the number of leading
     /// 0 bits found in the hash of the proof.
@@ -112,8 +123,45 @@ impl Proof {
 
             difficulty
         };
-        
+
         max!(1, difficulty)
+    }
+
+    /// Serializes the proof to a binary format
+    ///
+    /// Binary Structure:
+    /// 1) Edge bits - 8bits
+    /// 2) Proof     - 64bits * PROOF_SIZE
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(1 + 8 * PROOF_SIZE);
+
+        buf.extend_from_slice(&[self.edge_bits]);
+
+        for nonce in self.nonces.iter() {
+            buf.extend_from_slice(&encode_be_u64!(*nonce));
+        }
+
+        buf
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Proof, &'static str> {
+        if bytes.len() != 1 + 8 * PROOF_SIZE {
+            return Err("Invalid slice length");
+        }
+
+        let mut cursor = Cursor::new(bytes);
+        let mut nonces = Vec::with_capacity(PROOF_SIZE);
+        let edge_bits = cursor.read_u8().unwrap();
+
+        for _ in 0..PROOF_SIZE {
+            if let Ok(result) = cursor.read_u64::<BigEndian>() {
+                nonces.push(result);
+            } else {
+                return Err("Bad nonce");
+            };
+        }
+
+        Ok(Proof::new(nonces, edge_bits))
     }
 }
 
@@ -127,6 +175,11 @@ mod tests {
             let proof = Proof::random(PROOF_SIZE);
             let difficulty = proof.to_difficulty();
             true
+        }
+
+        fn it_serializes_and_deserializes_proof() -> bool {
+            let proof = Proof::random(PROOF_SIZE);
+            Proof::from_bytes(&proof.to_bytes()).unwrap() == proof
         }
     }
 }

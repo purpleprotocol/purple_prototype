@@ -126,7 +126,7 @@
 
 // 	#[test]
 // 	fn proof_hash() {
-// 		let mut in_nonces: Vec<u64> = [0u64; 42].to_vec(); 
+// 		let mut in_nonces: Vec<u64> = [0u64; 42].to_vec();
 // 		let proof = Proof::new(in_nonces.clone(), DEFAULT_MIN_EDGE_BITS);
 // 		let hash_str = format!("{:?}", proof.hash());
 // 		assert_eq!(&hash_str, "Hash(5fa5af8a4c86dd0ef5e78a59e2de015e1cbd7af8c7830074885f3ccb61608bc5)");

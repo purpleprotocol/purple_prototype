@@ -16,10 +16,10 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::types::*;
 use crate::chain::ChainErr;
-use persistence::PersistentDb;
+use crate::types::*;
 use consensus::PoolState;
+use persistence::PersistentDb;
 
 /// Wrapper over the `StateChain` associated chain state.
 #[derive(Clone, Debug)]
@@ -39,11 +39,11 @@ impl PartialEq for ChainState {
 
 impl ChainState {
     const POOL_STATE_KEY: &'static [u8] = b"pool_state";
-    
+
     pub fn new(db: PersistentDb) -> ChainState {
         ChainState {
             db,
-            pool_state: PoolState::new(0, 1000) // TODO: Retrieve/calculate pool state from database
+            pool_state: PoolState::new(0, 1000), // TODO: Retrieve/calculate pool state from database
         }
     }
 }

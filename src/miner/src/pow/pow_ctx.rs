@@ -1,6 +1,6 @@
-use crate::pow::proof::Proof;
-use crate::pow::error::Error;
 use crate::pow::common::EdgeType;
+use crate::pow::error::Error;
+use crate::pow::proof::Proof;
 
 /// Generic trait for a solver/verifier providing common interface into Cuckoo-family PoW
 /// Mostly used for verification, but also for test mining if necessary

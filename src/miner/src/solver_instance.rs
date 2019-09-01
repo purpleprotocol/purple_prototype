@@ -19,10 +19,10 @@
   https://github.com/mimblewimble/grin-miner/blob/master/cuckoo-miner/src/miner/types.rs
 */
 
-use crate::ffi::PluginLibrary;
 use crate::error::CuckooMinerError;
+use crate::ffi::PluginLibrary;
+use crate::plugin::{SolverSolutions, SolverStats};
 use crate::plugin_config::PluginConfig;
-use crate::plugin::{SolverStats, SolverSolutions};
 
 /// Holds a loaded lib + config + stats
 /// 1 instance = 1 device on 1 controlling thread

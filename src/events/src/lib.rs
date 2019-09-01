@@ -48,11 +48,11 @@ pub use leave::*;
 use causality::Stamp;
 use crypto::Hash;
 use crypto::NodeId;
-use std::hash::Hash as HashTrait;
-use std::hash::Hasher;
-use persistence::Codec;
 use patricia_trie::TrieDBMut;
 use persistence::BlakeDbHasher;
+use persistence::Codec;
+use std::hash::Hash as HashTrait;
+use std::hash::Hasher;
 
 #[derive(Clone, Debug)]
 pub enum Event {

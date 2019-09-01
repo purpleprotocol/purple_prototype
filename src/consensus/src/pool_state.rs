@@ -16,12 +16,12 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::validator_state::ValidatorState;
 use crate::error::ConsensusErr;
 use crate::parameters::*;
-use crypto::NodeId;
+use crate::validator_state::ValidatorState;
 use causality::Stamp;
-use hashbrown::{HashSet, HashMap};
+use crypto::NodeId;
+use hashbrown::{HashMap, HashSet};
 
 /// Validator pool state
 #[derive(Clone, PartialEq, Debug)]
@@ -44,7 +44,7 @@ impl PoolState {
         Self {
             epoch,
             remaining_events,
-            validators: HashMap::new()
+            validators: HashMap::new(),
         }
     }
 
@@ -52,7 +52,7 @@ impl PoolState {
     /// sent by the validator with the given id.
     pub fn account_sent_by_validator(&mut self, node_id: &NodeId) -> Result<(), ConsensusErr> {
         let validators_len = self.validators.len();
-        
+
         if let Some(state) = self.validators.get_mut(node_id) {
             if state.allowed_to_send {
                 if self.remaining_events > 0 {
@@ -74,9 +74,7 @@ impl PoolState {
             return Err(ConsensusErr::NoValidatorWithId);
         }
 
-        let other_validators = self.validators
-            .iter_mut()
-            .filter(|(id, _)| *id != node_id);
+        let other_validators = self.validators.iter_mut().filter(|(id, _)| *id != node_id);
 
         // Update the states of the other validators i.e.
         // increment the number of events sent and possibly
@@ -108,7 +106,7 @@ impl PoolState {
     }
 
     /// Performs an injection of new validators and allocated
-    /// events that the whole pool can produce. 
+    /// events that the whole pool can produce.
     pub fn inject(&mut self, validator_set: &HashMap<NodeId, u64>, allocated: u64) {
         let mut fork_stack: Vec<(Stamp, Option<NodeId>)> = vec![(Stamp::seed(), None)];
         let mut forked = vec![];
@@ -158,16 +156,15 @@ impl PoolState {
                     }
 
                     // Fetch or create the validator state
-                    let validator_state =
-                        if let Some(state) = self.validators.get_mut(&node_id) {
-                            state
-                        } else {
-                            self.validators.insert(
-                                node_id.clone(),
-                                ValidatorState::new(true, allocated.clone(), idx, Stamp::seed(), None),
-                            );
-                            self.validators.get_mut(&node_id).unwrap()
-                        };
+                    let validator_state = if let Some(state) = self.validators.get_mut(&node_id) {
+                        state
+                    } else {
+                        self.validators.insert(
+                            node_id.clone(),
+                            ValidatorState::new(true, allocated.clone(), idx, Stamp::seed(), None),
+                        );
+                        self.validators.get_mut(&node_id).unwrap()
+                    };
 
                     // Update the stamp of the validator state
                     validator_state.allowed_to_send = true;
@@ -209,12 +206,8 @@ mod tests {
             .collect();
 
         node_ids.sort_unstable();
-        
-        let ids_hm = node_ids
-            .iter()
-            .cloned()
-            .map(|id| (id, 500))
-            .collect();
+
+        let ids_hm = node_ids.iter().cloned().map(|id| (id, 500)).collect();
 
         let mut pool_state = PoolState::new(0, 1000);
         pool_state.inject(&ids_hm, 500);
@@ -224,21 +217,125 @@ mod tests {
             pool_state.account_sent_by_validator(&node_ids[i]).unwrap();
         }
 
-        assert!(pool_state.validators.get(&node_ids[0]).unwrap().allowed_to_send);
-        assert!(!pool_state.validators.get(&node_ids[1]).unwrap().allowed_to_send);
-        assert!(!pool_state.validators.get(&node_ids[2]).unwrap().allowed_to_send);
-        assert!(!pool_state.validators.get(&node_ids[3]).unwrap().allowed_to_send);
+        assert!(
+            pool_state
+                .validators
+                .get(&node_ids[0])
+                .unwrap()
+                .allowed_to_send
+        );
+        assert!(
+            !pool_state
+                .validators
+                .get(&node_ids[1])
+                .unwrap()
+                .allowed_to_send
+        );
+        assert!(
+            !pool_state
+                .validators
+                .get(&node_ids[2])
+                .unwrap()
+                .allowed_to_send
+        );
+        assert!(
+            !pool_state
+                .validators
+                .get(&node_ids[3])
+                .unwrap()
+                .allowed_to_send
+        );
 
-        assert_eq!(pool_state.validators.get(&node_ids[0]).unwrap().followers.as_ref().unwrap(), &set![node_ids[1].clone(), node_ids[2].clone(), node_ids[3].clone()]);
-        assert_eq!(pool_state.validators.get(&node_ids[1]).unwrap().followers.as_ref().unwrap(), &set![node_ids[2].clone(), node_ids[3].clone()]);
-        assert_eq!(pool_state.validators.get(&node_ids[2]).unwrap().followers.as_ref().unwrap(), &set![node_ids[3].clone()]);
-        assert_eq!(pool_state.validators.get(&node_ids[3]).unwrap().followers.as_ref().unwrap(), &HashSet::new());
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[0])
+                .unwrap()
+                .followers
+                .as_ref()
+                .unwrap(),
+            &set![
+                node_ids[1].clone(),
+                node_ids[2].clone(),
+                node_ids[3].clone()
+            ]
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[1])
+                .unwrap()
+                .followers
+                .as_ref()
+                .unwrap(),
+            &set![node_ids[2].clone(), node_ids[3].clone()]
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[2])
+                .unwrap()
+                .followers
+                .as_ref()
+                .unwrap(),
+            &set![node_ids[3].clone()]
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[3])
+                .unwrap()
+                .followers
+                .as_ref()
+                .unwrap(),
+            &HashSet::new()
+        );
 
         pool_state.account_sent_by_validator(&node_ids[0]).unwrap();
-        assert_eq!(pool_state.validators.get(&node_ids[0]).unwrap().followers.as_ref().unwrap(), &HashSet::new());
-        assert_eq!(pool_state.validators.get(&node_ids[1]).unwrap().followers.as_ref().unwrap(), &set![node_ids[0].clone(), node_ids[2].clone(), node_ids[3].clone()]);
-        assert_eq!(pool_state.validators.get(&node_ids[2]).unwrap().followers.as_ref().unwrap(), &set![node_ids[0].clone(), node_ids[3].clone()]);
-        assert_eq!(pool_state.validators.get(&node_ids[3]).unwrap().followers.as_ref().unwrap(), &set![node_ids[0].clone()]);
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[0])
+                .unwrap()
+                .followers
+                .as_ref()
+                .unwrap(),
+            &HashSet::new()
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[1])
+                .unwrap()
+                .followers
+                .as_ref()
+                .unwrap(),
+            &set![
+                node_ids[0].clone(),
+                node_ids[2].clone(),
+                node_ids[3].clone()
+            ]
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[2])
+                .unwrap()
+                .followers
+                .as_ref()
+                .unwrap(),
+            &set![node_ids[0].clone(), node_ids[3].clone()]
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[3])
+                .unwrap()
+                .followers
+                .as_ref()
+                .unwrap(),
+            &set![node_ids[0].clone()]
+        );
 
         pool_state.account_sent_by_validator(&node_ids[1]).unwrap();
         pool_state.account_sent_by_validator(&node_ids[4]).unwrap();
@@ -253,7 +350,7 @@ mod tests {
         let non_belonging_id = {
             let (pk, _) = crypto::gen_keypair();
             NodeId::from_pkey(pk)
-        }; 
+        };
 
         let mut node_ids: Vec<NodeId> = (0..10)
             .into_iter()
@@ -264,17 +361,16 @@ mod tests {
             .collect();
 
         node_ids.sort_unstable();
-        
-        let ids_hm = node_ids
-            .iter()
-            .cloned()
-            .map(|id| (id, 500))
-            .collect();
+
+        let ids_hm = node_ids.iter().cloned().map(|id| (id, 500)).collect();
 
         let mut pool_state = PoolState::new(0, 1000);
         pool_state.inject(&ids_hm, 500);
 
-        assert_eq!(pool_state.account_sent_by_validator(&non_belonging_id), Err(ConsensusErr::NoValidatorWithId));
+        assert_eq!(
+            pool_state.account_sent_by_validator(&non_belonging_id),
+            Err(ConsensusErr::NoValidatorWithId)
+        );
     }
 
     #[test]
@@ -288,12 +384,8 @@ mod tests {
             .collect();
 
         node_ids.sort_unstable();
-        
-        let ids_hm = node_ids
-            .iter()
-            .cloned()
-            .map(|id| (id, 500))
-            .collect();
+
+        let ids_hm = node_ids.iter().cloned().map(|id| (id, 500)).collect();
 
         let mut pool_state = PoolState::new(0, 1000);
         pool_state.inject(&ids_hm, 500);
@@ -303,7 +395,10 @@ mod tests {
             pool_state.account_sent_by_validator(&node_ids[i]).unwrap();
         }
 
-        assert_eq!(pool_state.account_sent_by_validator(&node_ids[2]), Err(ConsensusErr::NotAllowedToSend));
+        assert_eq!(
+            pool_state.account_sent_by_validator(&node_ids[2]),
+            Err(ConsensusErr::NotAllowedToSend)
+        );
     }
 
     #[test]
@@ -317,12 +412,8 @@ mod tests {
             .collect();
 
         node_ids.sort_unstable();
-        
-        let ids_hm = node_ids
-            .iter()
-            .cloned()
-            .map(|id| (id, 1))
-            .collect();
+
+        let ids_hm = node_ids.iter().cloned().map(|id| (id, 1)).collect();
 
         let mut pool_state = PoolState::new(0, 500);
         pool_state.inject(&ids_hm, 500);
@@ -332,7 +423,10 @@ mod tests {
             pool_state.account_sent_by_validator(&node_ids[i]).unwrap();
         }
 
-        assert_eq!(pool_state.account_sent_by_validator(&node_ids[0]), Err(ConsensusErr::NoMoreEvents));
+        assert_eq!(
+            pool_state.account_sent_by_validator(&node_ids[0]),
+            Err(ConsensusErr::NoMoreEvents)
+        );
     }
 
     #[test]
@@ -346,12 +440,8 @@ mod tests {
             .collect();
 
         node_ids.sort_unstable();
-        
-        let ids_hm = node_ids
-            .iter()
-            .cloned()
-            .map(|id| (id, 500))
-            .collect();
+
+        let ids_hm = node_ids.iter().cloned().map(|id| (id, 500)).collect();
 
         let mut pool_state = PoolState::new(0, 0);
         pool_state.inject(&ids_hm, 2);
@@ -359,7 +449,10 @@ mod tests {
         pool_state.account_sent_by_validator(&node_ids[0]).unwrap();
         pool_state.account_sent_by_validator(&node_ids[1]).unwrap();
 
-        assert_eq!(pool_state.account_sent_by_validator(&node_ids[2]), Err(ConsensusErr::NoMoreEventsPool));
+        assert_eq!(
+            pool_state.account_sent_by_validator(&node_ids[2]),
+            Err(ConsensusErr::NoMoreEventsPool)
+        );
     }
 
     #[test]
@@ -373,25 +466,91 @@ mod tests {
             .collect();
 
         node_ids.sort_unstable();
-        
-        let ids_hm = node_ids
-            .iter()
-            .cloned()
-            .map(|id| (id, 500))
-            .collect();
+
+        let ids_hm = node_ids.iter().cloned().map(|id| (id, 500)).collect();
 
         let mut pool_state = PoolState::new(0, 1000);
         pool_state.inject(&ids_hm, 500);
 
-        assert_eq!(pool_state.validators.get(&node_ids[0]).unwrap().validator_idx, 0);
-        assert_eq!(pool_state.validators.get(&node_ids[1]).unwrap().validator_idx, 1);
-        assert_eq!(pool_state.validators.get(&node_ids[2]).unwrap().validator_idx, 2);
-        assert_eq!(pool_state.validators.get(&node_ids[3]).unwrap().validator_idx, 3);
-        assert_eq!(pool_state.validators.get(&node_ids[4]).unwrap().validator_idx, 4);
-        assert_eq!(pool_state.validators.get(&node_ids[5]).unwrap().validator_idx, 5);
-        assert_eq!(pool_state.validators.get(&node_ids[6]).unwrap().validator_idx, 6);
-        assert_eq!(pool_state.validators.get(&node_ids[7]).unwrap().validator_idx, 7);
-        assert_eq!(pool_state.validators.get(&node_ids[8]).unwrap().validator_idx, 8);
-        assert_eq!(pool_state.validators.get(&node_ids[9]).unwrap().validator_idx, 9);
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[0])
+                .unwrap()
+                .validator_idx,
+            0
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[1])
+                .unwrap()
+                .validator_idx,
+            1
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[2])
+                .unwrap()
+                .validator_idx,
+            2
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[3])
+                .unwrap()
+                .validator_idx,
+            3
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[4])
+                .unwrap()
+                .validator_idx,
+            4
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[5])
+                .unwrap()
+                .validator_idx,
+            5
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[6])
+                .unwrap()
+                .validator_idx,
+            6
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[7])
+                .unwrap()
+                .validator_idx,
+            7
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[8])
+                .unwrap()
+                .validator_idx,
+            8
+        );
+        assert_eq!(
+            pool_state
+                .validators
+                .get(&node_ids[9])
+                .unwrap()
+                .validator_idx,
+            9
+        );
     }
 }

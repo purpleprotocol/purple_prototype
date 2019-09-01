@@ -20,25 +20,27 @@
 
 mod block;
 mod chain;
-mod easy_chain;
 mod hard_chain;
+mod init;
+mod pow_chain_state;
 mod state_chain;
 mod types;
-mod pow_chain_state;
+
+#[cfg(test)]
+mod test_helpers;
 
 pub use crate::chain::*;
 pub use block::*;
-pub use easy_chain::block::*;
-pub use easy_chain::chain::*;
 pub use hard_chain::block::*;
 pub use hard_chain::chain::*;
+pub use init::*;
+pub use pow_chain_state::*;
 pub use state_chain::block::*;
 pub use state_chain::chain::*;
 pub use state_chain::state::*;
-pub use pow_chain_state::*;
 
 #[cfg(test)]
-use std::net::{SocketAddr, IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 #[cfg(test)]
 use rand::prelude::*;

@@ -123,13 +123,7 @@ use crypto::SecretKey;
 #[cfg(test)]
 /// Test helper for initializing mock networks. Also initializes
 /// listener threads.
-pub fn init_test_networks(
-    peers: usize,
-) -> Vec<(
-    Arc<Mutex<MockNetwork>>,
-    SocketAddr,
-    NodeId,
-)> {
+pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketAddr, NodeId)> {
     let mut mailboxes = HashMap::new();
     let addresses: Vec<SocketAddr> = (0..peers)
         .into_iter()
@@ -143,17 +137,13 @@ pub fn init_test_networks(
         .collect();
 
     let mut address_mappings = HashMap::new();
-    let mut networks: Vec<(
-        Arc<Mutex<MockNetwork>>,
-        SocketAddr,
-        NodeId,
-    )> = Vec::with_capacity(peers);
+    let mut networks: Vec<(Arc<Mutex<MockNetwork>>, SocketAddr, NodeId)> =
+        Vec::with_capacity(peers);
 
     for i in 0..peers {
         let (rx, tx) = channel();
         let (rx1, tx1) = channel();
         let (rx2, tx2) = channel();
-        let (rx3, tx3) = channel();
         address_mappings.insert(addresses[i].clone(), identities[i].0.clone());
         mailboxes.insert(identities[i].0.clone(), rx);
         let mb_clone = mailboxes.clone();
@@ -162,7 +152,7 @@ pub fn init_test_networks(
         let a_clone = addresses.clone();
 
         let (s, r) = channel();
-        
+
         thread::Builder::new()
             .name(format!("Peer {}", i + 1))
             .spawn(move || {
@@ -172,28 +162,13 @@ pub fn init_test_networks(
                 let addresses = a_clone;
                 let temp_dir = TempDir::new("storage").unwrap();
 
-                let (db1, db2, db3, db4) = (
-                    test_helpers::init_tempdb(),
+                let (db1, db2, db3) = (
                     test_helpers::init_tempdb(),
                     test_helpers::init_tempdb(),
                     test_helpers::init_tempdb(),
                 );
 
-                let easy_chain = Arc::new(RwLock::new(EasyChain::new(
-                    db1,
-                    PowChainState::genesis(),
-                    true,
-                )));
-                let hard_chain = Arc::new(RwLock::new(HardChain::new(
-                    db2,
-                    PowChainState::genesis(),
-                    true,
-                )));
-                let state_chain = Arc::new(RwLock::new(StateChain::new(db3, ChainState::new(db4), true)));
-
-                let easy_chain = EasyChainRef::new(easy_chain);
-                let hard_chain = HardChainRef::new(hard_chain);
-                let state_chain = StateChainRef::new(state_chain);
+                let (hard_chain, state_chain) = chain::init(db1, db2, db3, true);
 
                 let network = MockNetwork::new(
                     identities[i].0.clone(),
@@ -205,8 +180,6 @@ pub fn init_test_networks(
                     address_mappings.clone(),
                     rx1,
                     rx2,
-                    rx3,
-                    easy_chain,
                     hard_chain,
                     state_chain,
                 );
@@ -218,7 +191,6 @@ pub fn init_test_networks(
                     network,
                     Arc::new(Mutex::new(tx1)),
                     Arc::new(Mutex::new(tx2)),
-                    Arc::new(Mutex::new(tx3)),
                 )
             })
             .unwrap();
@@ -226,11 +198,7 @@ pub fn init_test_networks(
         // Wait for thread to build and send us the network object
         let network = r.recv().unwrap();
 
-        networks.push((
-            network,
-            addresses[i].clone(),
-            identities[i].0.clone(),
-        ));
+        networks.push((network, addresses[i].clone(), identities[i].0.clone()));
     }
 
     for i in 0..peers {

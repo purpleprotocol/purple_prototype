@@ -18,15 +18,15 @@
 
 use crate::candidate::Candidate;
 use crate::parameters::*;
+use crate::pool_state::PoolState;
 use crate::validation::ValidationResp;
 use crate::validator_state::ValidatorState;
-use crate::pool_state::PoolState;
 use causality::Stamp;
 use crypto::Hash;
+use crypto::NodeId;
 use events::Event;
 use graphlib::{Graph, VertexId};
 use hashbrown::{HashMap, HashSet};
-use crypto::NodeId;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -100,7 +100,12 @@ impl CausalGraph {
     }
 
     #[cfg(test)]
-    pub fn new_with_test_mode(node_id: NodeId, root_event: Arc<Event>, epoch: u64, allocated: u64) -> CausalGraph {
+    pub fn new_with_test_mode(
+        node_id: NodeId,
+        root_event: Arc<Event>,
+        epoch: u64,
+        allocated: u64,
+    ) -> CausalGraph {
         let mut graph = Graph::new();
         let mut lookup_table = HashMap::new();
         let mut ends = HashMap::new();
@@ -330,12 +335,19 @@ impl CausalGraph {
                                         candidate.votes += 1;
                                         candidate.voters.insert(
                                             event.clone(),
-                                            (0, HashSet::with_capacity(self.pool_state.validators.len())),
+                                            (
+                                                0,
+                                                HashSet::with_capacity(
+                                                    self.pool_state.validators.len(),
+                                                ),
+                                            ),
                                         );
                                         candidate.voters_ids.insert(event.node_id());
 
                                         if candidate.votes
-                                            >= proposal_requirement(self.pool_state.validators.len() as u16)
+                                            >= proposal_requirement(
+                                                self.pool_state.validators.len() as u16,
+                                            )
                                         {
                                             // Enter proposal stage
                                             candidate.proposal_stage = true;
@@ -367,7 +379,7 @@ impl CausalGraph {
                                                 // and remove it from the voters set.
                                                 if *vote_count
                                                     >= proposal_requirement(
-                                                        self.pool_state.validators.len() as u16
+                                                        self.pool_state.validators.len() as u16,
                                                     )
                                                 {
                                                     candidate.proposals += 1;
@@ -386,7 +398,9 @@ impl CausalGraph {
 
                                         // The candidate can be advanced into the total order
                                         if c.proposals
-                                            >= required_proposals(self.pool_state.validators.len() as u16)
+                                            >= required_proposals(
+                                                self.pool_state.validators.len() as u16
+                                            )
                                         {
                                             to_advance.push(c.clone());
                                         }
@@ -585,8 +599,10 @@ impl CausalGraph {
         allocated: u64,
         followers: Option<HashSet<NodeId>>,
     ) {
-        self.pool_state.validators
-            .insert(id, ValidatorState::new(can_send, allocated, idx, stamp, None));
+        self.pool_state.validators.insert(
+            id,
+            ValidatorState::new(can_send, allocated, idx, stamp, None),
+        );
     }
 
     pub fn empty(&self) -> bool {
@@ -597,8 +613,8 @@ impl CausalGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crypto::{Hash, Identity};
     use crypto::NodeId;
+    use crypto::{Hash, Identity};
     use quickcheck::*;
     use rand::*;
 

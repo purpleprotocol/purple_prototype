@@ -16,12 +16,12 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::pow::proof::Proof;
-use crate::pow::pow_ctx::PoWContext;
 use crate::pow::cuckaroo::*;
-use std::boxed::Box;
-use parking_lot::Mutex;
+use crate::pow::pow_ctx::PoWContext;
+use crate::pow::proof::Proof;
 use lazy_static::*;
+use parking_lot::Mutex;
+use std::boxed::Box;
 
 const MIN_EDGE_BITS: u8 = 24;
 const MAX_EDGE_BITS: u8 = 31;
@@ -29,18 +29,27 @@ pub const PROOF_SIZE: usize = 42;
 
 #[cfg(test)]
 lazy_static! {
-    static ref CUCKOO_19: Mutex<CuckarooContext<u64>> = Mutex::new(new_cuckaroo_ctx(19, PROOF_SIZE).unwrap());
+    static ref CUCKOO_19: Mutex<CuckarooContext<u64>> =
+        Mutex::new(new_cuckaroo_ctx(19, PROOF_SIZE).unwrap());
 }
 
 lazy_static! {
-    static ref CUCKOO_24: Mutex<CuckarooContext<u64>> = Mutex::new(new_cuckaroo_ctx(24, PROOF_SIZE).unwrap());
-    static ref CUCKOO_25: Mutex<CuckarooContext<u64>> = Mutex::new(new_cuckaroo_ctx(25, PROOF_SIZE).unwrap());
-    static ref CUCKOO_26: Mutex<CuckarooContext<u64>> = Mutex::new(new_cuckaroo_ctx(26, PROOF_SIZE).unwrap());
-    static ref CUCKOO_27: Mutex<CuckarooContext<u64>> = Mutex::new(new_cuckaroo_ctx(27, PROOF_SIZE).unwrap());
-    static ref CUCKOO_28: Mutex<CuckarooContext<u64>> = Mutex::new(new_cuckaroo_ctx(28, PROOF_SIZE).unwrap());
-    static ref CUCKOO_29: Mutex<CuckarooContext<u64>> = Mutex::new(new_cuckaroo_ctx(29, PROOF_SIZE).unwrap());
-    static ref CUCKOO_30: Mutex<CuckarooContext<u64>> = Mutex::new(new_cuckaroo_ctx(30, PROOF_SIZE).unwrap());
-    static ref CUCKOO_31: Mutex<CuckarooContext<u64>> = Mutex::new(new_cuckaroo_ctx(31, PROOF_SIZE).unwrap());
+    static ref CUCKOO_24: Mutex<CuckarooContext<u64>> =
+        Mutex::new(new_cuckaroo_ctx(24, PROOF_SIZE).unwrap());
+    static ref CUCKOO_25: Mutex<CuckarooContext<u64>> =
+        Mutex::new(new_cuckaroo_ctx(25, PROOF_SIZE).unwrap());
+    static ref CUCKOO_26: Mutex<CuckarooContext<u64>> =
+        Mutex::new(new_cuckaroo_ctx(26, PROOF_SIZE).unwrap());
+    static ref CUCKOO_27: Mutex<CuckarooContext<u64>> =
+        Mutex::new(new_cuckaroo_ctx(27, PROOF_SIZE).unwrap());
+    static ref CUCKOO_28: Mutex<CuckarooContext<u64>> =
+        Mutex::new(new_cuckaroo_ctx(28, PROOF_SIZE).unwrap());
+    static ref CUCKOO_29: Mutex<CuckarooContext<u64>> =
+        Mutex::new(new_cuckaroo_ctx(29, PROOF_SIZE).unwrap());
+    static ref CUCKOO_30: Mutex<CuckarooContext<u64>> =
+        Mutex::new(new_cuckaroo_ctx(30, PROOF_SIZE).unwrap());
+    static ref CUCKOO_31: Mutex<CuckarooContext<u64>> =
+        Mutex::new(new_cuckaroo_ctx(31, PROOF_SIZE).unwrap());
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -56,23 +65,41 @@ pub enum VerifyError {
 
     /// The difficulty does not match the target
     LowDifficulty,
+
+    /// Proof with lower edge bits than target has been provided
+    LowEdgeBits,
+
+    /// The provided proof has invalid edge bits
+    BadEdgeBits,
 }
 
 /// Verifies the given header and `Proof`.
-pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -> Result<(), VerifyError> {
+pub fn verify(
+    header: &[u8],
+    nonce: u32,
+    target_difficulty: u8,
+    target_edge_bits: u8,
+    proof: &Proof,
+) -> Result<(), VerifyError> {
     if proof.proof_size() != PROOF_SIZE {
         return Err(VerifyError::InvalidProofLength);
     }
-    
+
     if proof.edge_bits < MIN_EDGE_BITS || proof.edge_bits > MAX_EDGE_BITS {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test"))]
         {
+            // Proofs with 0 edge bits are always valid 
+            // when in we are in the test environment.
+            if proof.edge_bits == 0 {
+                return Ok(())
+            }
+
             // Allow 19 bit edges in tests
             if proof.edge_bits != 19 {
                 return Err(VerifyError::UnsupportedEdgeBits);
             }
         }
-        
+
         #[cfg(not(test))]
         return Err(VerifyError::UnsupportedEdgeBits);
     }
@@ -80,16 +107,17 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
     if proof.to_difficulty() < target_difficulty {
         return Err(VerifyError::LowDifficulty);
     }
-    
+
     match proof.edge_bits {
         #[cfg(test)]
         19 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+
             let mut ctx = CUCKOO_19.lock();
-            ctx.set_header_nonce(
-                header.to_vec(),
-                Some(nonce),
-                false
-            ).unwrap();
+            ctx.set_header_nonce(header.to_vec(), Some(nonce), false)
+                .unwrap();
 
             if let Err(err) = ctx.verify(proof) {
                 println!("DEBUG ERR: {:?}", err);
@@ -98,12 +126,13 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         24 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+
             let mut ctx = CUCKOO_24.lock();
-            ctx.set_header_nonce(
-                header.to_vec(),
-                Some(nonce),
-                false
-            ).unwrap();
+            ctx.set_header_nonce(header.to_vec(), Some(nonce), false)
+                .unwrap();
 
             if let Err(_) = ctx.verify(proof) {
                 return Err(VerifyError::InvalidProof);
@@ -111,12 +140,13 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         25 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+
             let mut ctx = CUCKOO_25.lock();
-            ctx.set_header_nonce(
-                header.to_vec(),
-                Some(nonce),
-                false
-            ).unwrap();
+            ctx.set_header_nonce(header.to_vec(), Some(nonce), false)
+                .unwrap();
 
             if let Err(_) = ctx.verify(proof) {
                 return Err(VerifyError::InvalidProof);
@@ -124,12 +154,13 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         26 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+
             let mut ctx = CUCKOO_26.lock();
-            ctx.set_header_nonce(
-                header.to_vec(),
-                Some(nonce),
-                false
-            ).unwrap();
+            ctx.set_header_nonce(header.to_vec(), Some(nonce), false)
+                .unwrap();
 
             if let Err(_) = ctx.verify(proof) {
                 return Err(VerifyError::InvalidProof);
@@ -137,12 +168,13 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         27 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+
             let mut ctx = CUCKOO_27.lock();
-            ctx.set_header_nonce(
-                header.to_vec(),
-                Some(nonce),
-                false
-            ).unwrap();
+            ctx.set_header_nonce(header.to_vec(), Some(nonce), false)
+                .unwrap();
 
             if let Err(_) = ctx.verify(proof) {
                 return Err(VerifyError::InvalidProof);
@@ -150,12 +182,13 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         28 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+
             let mut ctx = CUCKOO_28.lock();
-            ctx.set_header_nonce(
-                header.to_vec(),
-                Some(nonce),
-                false
-            ).unwrap();
+            ctx.set_header_nonce(header.to_vec(), Some(nonce), false)
+                .unwrap();
 
             if let Err(_) = ctx.verify(proof) {
                 return Err(VerifyError::InvalidProof);
@@ -163,12 +196,13 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         29 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+
             let mut ctx = CUCKOO_29.lock();
-            ctx.set_header_nonce(
-                header.to_vec(),
-                Some(nonce),
-                false
-            ).unwrap();
+            ctx.set_header_nonce(header.to_vec(), Some(nonce), false)
+                .unwrap();
 
             if let Err(_) = ctx.verify(proof) {
                 return Err(VerifyError::InvalidProof);
@@ -176,12 +210,13 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         30 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+
             let mut ctx = CUCKOO_30.lock();
-            ctx.set_header_nonce(
-                header.to_vec(),
-                Some(nonce),
-                false
-            ).unwrap();
+            ctx.set_header_nonce(header.to_vec(), Some(nonce), false)
+                .unwrap();
 
             if let Err(_) = ctx.verify(proof) {
                 return Err(VerifyError::InvalidProof);
@@ -189,12 +224,13 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         31 => {
+            if proof.edge_bits < target_edge_bits {
+                return Err(VerifyError::LowEdgeBits);
+            }
+
             let mut ctx = CUCKOO_31.lock();
-            ctx.set_header_nonce(
-                header.to_vec(),
-                Some(nonce),
-                false
-            ).unwrap();
+            ctx.set_header_nonce(header.to_vec(), Some(nonce), false)
+                .unwrap();
 
             if let Err(_) = ctx.verify(proof) {
                 return Err(VerifyError::InvalidProof);
@@ -202,7 +238,7 @@ pub fn verify(header: &[u8], nonce: u32, target_difficulty: u8, proof: &Proof) -
         }
 
         _ => {
-            unreachable!();
+            return Err(VerifyError::BadEdgeBits);
         }
     }
 

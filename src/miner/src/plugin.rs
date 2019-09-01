@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This file was taken from the grin-miner source: 
+//! This file was taken from the grin-miner source:
 //! https://github.com/mimblewimble/grin-miner/blob/master/plugin/src/lib.rs
 
 #![deny(non_upper_case_globals)]

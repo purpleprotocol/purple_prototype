@@ -16,8 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::NodeId;
 use causality::Stamp;
+use crypto::NodeId;
 use hashbrown::HashSet;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -28,7 +28,7 @@ pub struct ValidatorState {
 
     /// Number of events sent by different validators
     /// since the last sent block of the validator.
-    /// 
+    ///
     /// This is `None` if the validator has not yet
     /// sent an initial event.
     pub(crate) followers: Option<HashSet<NodeId>>,
@@ -48,11 +48,11 @@ pub struct ValidatorState {
 
 impl ValidatorState {
     pub fn new(
-        allowed_to_send: bool, 
-        remaining_events: u64, 
-        idx: usize, 
+        allowed_to_send: bool,
+        remaining_events: u64,
+        idx: usize,
         init_stamp: Stamp,
-        followers: Option<HashSet<NodeId>>
+        followers: Option<HashSet<NodeId>>,
     ) -> ValidatorState {
         ValidatorState {
             allowed_to_send,

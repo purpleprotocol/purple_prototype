@@ -107,19 +107,11 @@ pub trait NetworkInterface {
     /// Returns an iterator on the listed peers
     fn peers<'a>(&'a self) -> Box<dyn Iterator<Item = (&SocketAddr, &Peer)> + 'a>;
 
-    /// Returns a reference to the `EasyChain`.
-    fn easy_chain_ref(&self) -> EasyChainRef;
-
     /// Returns a reference to the `HardChain`.
     fn hard_chain_ref(&self) -> HardChainRef;
 
     /// Returns a reference to the `StateChain`.
     fn state_chain_ref(&self) -> StateChainRef;
-
-    /// Returns a reference to a `EasyChain` mpsc sender.
-    /// Use this to buffer blocks that are to be appended
-    /// to the chain.
-    fn easy_chain_sender(&self) -> &Sender<(SocketAddr, Arc<EasyBlock>)>;
 
     /// Returns a reference to a `HardChain` mpsc sender.
     /// Use this to buffer blocks that are to be appended

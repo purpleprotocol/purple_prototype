@@ -18,20 +18,21 @@
 
 #![allow(non_snake_case)]
 
-#[macro_use] mod macros;
+#[macro_use]
+mod macros;
 
 mod candidate;
 mod causal_graph;
 mod consensus_machine;
+mod error;
 pub mod parameters;
+mod pool_state;
 mod validation;
 mod validator_state;
-mod pool_state;
-mod error;
 
-pub use error::*;
 pub use candidate::*;
 pub use consensus_machine::*;
+pub use error::*;
+pub use pool_state::*;
 pub use validation::*;
 pub use validator_state::*;
-pub use pool_state::*;

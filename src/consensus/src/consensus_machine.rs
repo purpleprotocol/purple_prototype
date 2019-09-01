@@ -20,9 +20,9 @@ use crate::causal_graph::CausalGraph;
 use crate::validation::ValidationResp;
 use crate::validator_state::ValidatorState;
 use causality::Stamp;
+use crypto::NodeId;
 use events::Event;
 use hashbrown::HashMap;
-use crypto::NodeId;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -52,7 +52,7 @@ impl ConsensusMachine {
     ) -> ConsensusMachine {
         ConsensusMachine {
             causal_graph: CausalGraph::new(node_id, root_event, epoch, remaining_blocks),
-            allocated_events
+            allocated_events,
         }
     }
 
@@ -69,9 +69,11 @@ impl ConsensusMachine {
     }
 
     /// Performs an injection of new validators and allocated
-    /// blocks that the whole pool can produce. 
+    /// blocks that the whole pool can produce.
     pub fn inject(&mut self, validator_set: &HashMap<NodeId, u64>, allocated: u64) {
-        self.causal_graph.pool_state.inject(validator_set, allocated);
+        self.causal_graph
+            .pool_state
+            .inject(validator_set, allocated);
     }
 
     /// Attempts to push an atomic reference to an

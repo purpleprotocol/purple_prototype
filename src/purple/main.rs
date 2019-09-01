@@ -46,6 +46,7 @@ use clap::{App, Arg};
 use crypto::{Identity, NodeId, SecretKey as Sk};
 use elastic_array::ElasticArray128;
 use futures::future::ok;
+use futures::sync::mpsc::channel;
 use futures::Future;
 use hashdb::HashDB;
 use mimalloc::MiMalloc;
@@ -53,12 +54,11 @@ use network::*;
 use parking_lot::{Mutex, RwLock};
 use persistence::PersistentDb;
 use rocksdb::{ColumnFamilyDescriptor, DB};
-use std::path::Path;
-use std::sync::atomic::AtomicBool;
-use futures::sync::mpsc::channel;
-use std::sync::Arc;
-use std::path::PathBuf;
 use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 // Use mimalloc allocator
 #[global_allocator]
@@ -85,46 +85,39 @@ fn main() {
     let state_db_path = storage_path.join("state_db");
     let state_chain_db_path = storage_path.join("state_chain_db");
     let hard_chain_db_path = storage_path.join("hard_chain_db");
-    let easy_chain_db_path = storage_path.join("easy_chain_db");
 
     let storage_wal_path = storage_path.join("node_storage_wal");
     let state_wal_path = storage_path.join("state_db_wal");
     let state_chain_wal_path = storage_path.join("state_chain_db_wal");
     let hard_chain_wal_path = storage_path.join("hard_chain_db_wal");
-    let easy_chain_wal_path = storage_path.join("easy_chain_db_wal");
 
-    let storage_db = Arc::new(persistence::open_database(&storage_db_path, &storage_wal_path));
+    let storage_db = Arc::new(persistence::open_database(
+        &storage_db_path,
+        &storage_wal_path,
+    ));
     let state_db = Arc::new(persistence::open_database(&state_db_path, &state_wal_path));
-    let state_chain_db = Arc::new(persistence::open_database(&state_chain_db_path, &state_chain_wal_path));
-    let hard_chain_db = Arc::new(persistence::open_database(&hard_chain_db_path, &hard_chain_wal_path));
-    let easy_chain_db = Arc::new(persistence::open_database(&easy_chain_db_path, &easy_chain_wal_path));
+    let state_chain_db = Arc::new(persistence::open_database(
+        &state_chain_db_path,
+        &state_chain_wal_path,
+    ));
+    let hard_chain_db = Arc::new(persistence::open_database(
+        &hard_chain_db_path,
+        &hard_chain_wal_path,
+    ));
     let mut node_storage = PersistentDb::new(storage_db.clone(), None);
     let state_db = PersistentDb::new(state_db.clone(), None);
     let state_chain_db = PersistentDb::new(state_chain_db.clone(), None);
-    let easy_chain_db = PersistentDb::new(easy_chain_db.clone(), None);
     let hard_chain_db = PersistentDb::new(hard_chain_db.clone(), None);
-    let easy_chain = Arc::new(RwLock::new(EasyChain::new(
-        easy_chain_db,
-        PowChainState::genesis(),
-        argv.archival_mode,
-    )));
-    let hard_chain = Arc::new(RwLock::new(HardChain::new(
+
+    let ( hard_chain, state_chain) = chain::init(
         hard_chain_db,
-        PowChainState::genesis(),
-        argv.archival_mode,
-    )));
-    let state_chain = Arc::new(RwLock::new(StateChain::new(
         state_chain_db,
-        ChainState::new(state_db),
+        state_db,
         argv.archival_mode,
-    )));
+    );
 
     info!("Database initialization was successful!");
 
-    let easy_chain = EasyChainRef::new(easy_chain);
-    let hard_chain = HardChainRef::new(hard_chain);
-    let state_chain = StateChainRef::new(state_chain);
-    let (easy_tx, easy_rx) = channel(10000);
     let (hard_tx, hard_rx) = channel(10000);
     let (state_tx, state_rx) = channel(10000);
 
@@ -136,10 +129,8 @@ fn main() {
         argv.network_name.to_owned(),
         skey,
         argv.max_peers,
-        easy_tx,
         hard_tx,
         state_tx,
-        easy_chain.clone(),
         hard_chain.clone(),
         state_chain.clone(),
     )));
@@ -147,13 +138,13 @@ fn main() {
 
     // Start the tokio runtime
     tokio::run(ok(()).and_then(move |_| {
+        start_chains_switch_poll(hard_chain.clone(), state_chain.clone());
+
         // Start listening for blocks
         start_block_listeners(
             network.clone(),
-            easy_chain,
             hard_chain,
             state_chain,
-            easy_rx,
             hard_rx,
             state_rx,
         );

@@ -147,7 +147,9 @@ fn process_connection(
 
                 writer
                     .poll_write(&packet)
-                    .map_err(|err| warn!("write failed = {:?}", err));
+                    .map_err(|err| warn!("write failed = {:?}", err))
+                    .and_then(|_| Ok(()))
+                    .unwrap();
 
                 peer.sent_connect = true;
             }
@@ -157,7 +159,9 @@ fn process_connection(
         if let Some(packet) = peer.outbound_buffer.pop_back() {
             writer
                 .poll_write(&packet)
-                .map_err(|err| warn!("write failed = {:?}", err));
+                .map_err(|err| warn!("write failed = {:?}", err))
+                .and_then(|_| Ok(()))
+                .unwrap();
         }
 
         ok(writer)
