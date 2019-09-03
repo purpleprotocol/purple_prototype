@@ -198,15 +198,26 @@ fn process_connection(
                 })
                 .map(move |(reader, result)| {
                     // TODO: Handle other errors as well
-                    if let Err(NetworkErr::InvalidConnectPacket) = result {
-                        let network = network_clone.clone();
+                    match result {
+                        Ok(_) => { }, // Do nothing
+                        Err(NetworkErr::InvalidConnectPacket) => {
+                            let network = network_clone.clone();
 
-                        // Flag socket for connection refusal if we
-                        // have received an invalid connect packet.
-                        refuse_connection.store(true, Ordering::Relaxed);
+                            // Flag socket for connection refusal if we
+                            // have received an invalid connect packet.
+                            refuse_connection.store(true, Ordering::Relaxed);
 
-                        // Also, ban the peer
-                        network.lock().ban_ip(&addr).unwrap();
+                            // Also, ban the peer
+                            network.lock().ban_ip(&addr).unwrap();
+                        }
+
+                        Err(NetworkErr::SelfConnect) => {
+                            refuse_connection.store(true, Ordering::Relaxed);
+                        }
+
+                        err => {
+                            warn!("Packet process error for {}: {:?}", addr.clone(), err);
+                        }
                     }
 
                     reader

@@ -200,46 +200,52 @@ impl Packet for Connect {
 
         let our_node_id = network.our_node_id().clone();
         let node_id = packet.node_id.clone();
-        let mut our_pk = None;
 
-        {
-            let node_id = node_id.clone();
-            let peer = network.fetch_peer_mut(addr)?;
-            let kx_key = packet.kx_key.clone();
+        // Avoid connecting to ourselves
+        if our_node_id != node_id {
+            let mut our_pk = None;
 
-            // Compute session keys
-            let result = match conn_type {
-                ConnectionType::Client => crypto::client_sk(&peer.pk, &peer.sk, &kx_key),
-                ConnectionType::Server => crypto::server_sk(&peer.pk, &peer.sk, &kx_key),
-            };
+            {
+                let node_id = node_id.clone();
+                let peer = network.fetch_peer_mut(addr)?;
+                let kx_key = packet.kx_key.clone();
 
-            let (rx, tx) = if let Ok(result) = result {
-                result
-            } else {
-                return Err(NetworkErr::InvalidConnectPacket);
-            };
+                // Compute session keys
+                let result = match conn_type {
+                    ConnectionType::Client => crypto::client_sk(&peer.pk, &peer.sk, &kx_key),
+                    ConnectionType::Server => crypto::server_sk(&peer.pk, &peer.sk, &kx_key),
+                };
 
-            // Set generated session keys
-            peer.rx = Some(rx);
-            peer.tx = Some(tx);
+                let (rx, tx) = if let Ok(result) = result {
+                    result
+                } else {
+                    return Err(NetworkErr::InvalidConnectPacket);
+                };
 
-            // Mark peer as having sent a connect packet
-            peer.sent_connect = true;
+                // Set generated session keys
+                peer.rx = Some(rx);
+                peer.tx = Some(tx);
 
-            // Set node id
-            peer.id = Some(node_id);
+                // Mark peer as having sent a connect packet
+                peer.sent_connect = true;
 
-            our_pk = Some(peer.pk.clone());
+                // Set node id
+                peer.id = Some(node_id);
+
+                our_pk = Some(peer.pk.clone());
+            }
+
+            // If we are the server, also send a connect packet back
+            if let ConnectionType::Server = conn_type {
+                debug!("Sending connect packet to {}", addr);
+                let mut packet = Connect::new(our_node_id, our_pk.unwrap());
+                network.send_raw_unsigned::<Connect>(addr, &mut packet)?;
+            }
+
+            Ok(())
+        } else {
+            Err(NetworkErr::SelfConnect)
         }
-
-        // If we are the server, also send a connect packet back
-        if let ConnectionType::Server = conn_type {
-            debug!("Sending connect packet to {}", addr);
-            let mut packet = Connect::new(our_node_id, our_pk.unwrap());
-            network.send_raw_unsigned::<Connect>(addr, &mut packet)?;
-        }
-
-        Ok(())
     }
 }
 

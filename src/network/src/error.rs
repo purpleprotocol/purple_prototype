@@ -57,4 +57,7 @@ pub enum NetworkErr {
 
     /// The network version found in the packet is invalid
     BadVersion,
+
+    /// We have connected to ourselves
+    SelfConnect,
 }
