@@ -32,7 +32,7 @@ use std::time::Duration;
 use tokio::executor::Spawn;
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::prelude::future::ok;
+use tokio::prelude::future::{ok, err};
 use tokio::prelude::*;
 use tokio_io_timeout::TimeoutStream;
 
@@ -133,38 +133,42 @@ fn process_connection(
     let writer_iter = stream::iter_ok::<_, ()>(iter::repeat(()));
     let socket_writer = writer_iter.fold(writer, move |mut writer, _| {
         let mut network = network_clone.lock();
-        let peer = network.peers.get_mut(&addr).unwrap();
+        
+        if let Some(peer) = network.peers.get_mut(&addr) {
+            // Write a connect packet if we are the client
+            // and we have not yet sent a connect packet.
+            if let ConnectionType::Client = client_or_server {
+                if !peer.sent_connect {
+                    // Send `Connect` packet.
+                    let mut connect = Connect::new(node_id.clone(), peer.pk);
+                    connect.sign(&skey);
 
-        // Write a connect packet if we are the client
-        // and we have not yet sent a connect packet.
-        if let ConnectionType::Client = client_or_server {
-            if !peer.sent_connect {
-                // Send `Connect` packet.
-                let mut connect = Connect::new(node_id.clone(), peer.pk);
-                connect.sign(&skey);
+                    let packet = connect.to_bytes();
+                    debug!("Sending connect packet to {}", addr);
 
-                let packet = connect.to_bytes();
+                    writer
+                        .poll_write(&packet)
+                        .map_err(|err| warn!("write failed = {:?}", err))
+                        .and_then(|_| Ok(()))
+                        .unwrap();
 
+                    peer.sent_connect = true;
+                }
+            }
+
+            // Pop packet from outbound buffer and write it to the socket.
+            if let Some(packet) = peer.outbound_buffer.pop_back() {
                 writer
                     .poll_write(&packet)
                     .map_err(|err| warn!("write failed = {:?}", err))
                     .and_then(|_| Ok(()))
                     .unwrap();
-
-                peer.sent_connect = true;
             }
-        }
 
-        // Pop packet from outbound buffer and write it to the socket.
-        if let Some(packet) = peer.outbound_buffer.pop_back() {
-            writer
-                .poll_write(&packet)
-                .map_err(|err| warn!("write failed = {:?}", err))
-                .and_then(|_| Ok(()))
-                .unwrap();
+            ok(writer)
+        } else {
+            err(())
         }
-
-        ok(writer)
     });
 
     let socket_reader = iter
