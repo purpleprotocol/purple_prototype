@@ -171,11 +171,21 @@ impl NetworkInterface for Network {
         exception: &SocketAddr,
         packet: &mut P,
     ) -> Result<(), NetworkErr> {
-        unimplemented!();
+        if packet.signature().is_none() {
+            packet.sign(&self.secret_key);
+        }
+
+        let packet = packet.to_bytes();
+        self.send_to_all_except(exception, &packet)
     }
 
     fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr> {
-        unimplemented!();
+        if packet.signature().is_none() {
+            packet.sign(&self.secret_key);
+        }
+
+        let packet = packet.to_bytes();
+        self.send_to_all(&packet)
     }
 
     fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {

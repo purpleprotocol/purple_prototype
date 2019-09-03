@@ -29,7 +29,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::executor::Spawn;
 
-const BOOTNODES: &'static [&'static str] = &["139.162.133.241:44034"];
+const BOOTNODES: &'static [&'static str] = &["209.250.247.111:44034"];
 
 pub fn bootstrap(
     network: Arc<Mutex<Network>>,

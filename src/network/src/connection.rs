@@ -45,7 +45,7 @@ pub fn start_listener(network: Arc<Mutex<Network>>, accept_connections: Arc<Atom
     info!("Starting TCP listener on port {}", PORT);
 
     // Bind the server's socket.
-    let addr = format!("127.0.0.1:{}", PORT).parse().unwrap();
+    let addr = format!("0.0.0.0:{}", PORT).parse().unwrap();
     let listener = TcpListener::bind(&addr).expect("unable to bind TCP listener");
     let accept_connections_clone = accept_connections.clone();
 
