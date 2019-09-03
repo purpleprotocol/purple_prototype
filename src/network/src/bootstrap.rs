@@ -29,13 +29,12 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::executor::Spawn;
 
-const BOOTNODES: &'static [&'static str] = &["95.179.130.222:44034"];
-
-pub fn bootstrap(
+pub fn bootstrap<'a>(
     network: Arc<Mutex<Network>>,
     accept_connections: Arc<AtomicBool>,
     db: PersistentDb,
     max_peers: usize,
+    bootnodes: Vec<SocketAddr>,
 ) -> Spawn {
     info!("Bootstrapping...");
 
@@ -65,9 +64,6 @@ pub fn bootstrap(
                 // Connect to bootstrap nodes if we haven't
                 // yet reached the maximum amount of peers.
                 if network_clone.lock().peer_count() < max_peers {
-                    let bootnodes: Vec<SocketAddr> =
-                        BOOTNODES.iter().map(|addr| addr.parse().unwrap()).collect();
-
                     let accept_connections = accept_connections_clone.clone();
                     let network = network_clone.clone();
 
@@ -86,9 +82,6 @@ pub fn bootstrap(
 
         tokio::spawn(fut)
     } else {
-        let bootnodes: Vec<SocketAddr> =
-            BOOTNODES.iter().map(|addr| addr.parse().unwrap()).collect();
-
         let mut peers_to_connect: Vec<SocketAddr> = Vec::with_capacity(bootnodes.len());
 
         for addr in bootnodes.iter().take(max_peers) {
