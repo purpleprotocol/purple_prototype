@@ -234,6 +234,7 @@ impl Packet for Connect {
 
         // If we are the server, also send a connect packet back
         if let ConnectionType::Server = conn_type {
+            debug!("Sending connect packet to {}", addr);
             let mut packet = Connect::new(our_node_id, our_pk.unwrap());
             network.send_raw_unsigned::<Connect>(addr, &mut packet)?;
         }

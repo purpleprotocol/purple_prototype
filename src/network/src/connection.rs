@@ -130,10 +130,10 @@ fn process_connection(
     let network = network_clone.clone();
     let refuse_connection_clone = refuse_connection.clone();
 
-    let writer_iter = stream::iter_ok::<_, ()>(iter::repeat(()));
+    let writer_iter = stream::iter_ok::<_, &'static str>(iter::repeat(()));
     let socket_writer = writer_iter.fold(writer, move |mut writer, _| {
         let mut network = network_clone.lock();
-        
+
         if let Some(peer) = network.peers.get_mut(&addr) {
             // Write a connect packet if we are the client
             // and we have not yet sent a connect packet.
@@ -143,8 +143,9 @@ fn process_connection(
                     let mut connect = Connect::new(node_id.clone(), peer.pk);
                     connect.sign(&skey);
 
-                    let packet = connect.to_bytes();
+                    let mut packet = connect.to_bytes();
                     debug!("Sending connect packet to {}", addr);
+                    attach_newline(&mut packet);
 
                     writer
                         .poll_write(&packet)
@@ -157,7 +158,8 @@ fn process_connection(
             }
 
             // Pop packet from outbound buffer and write it to the socket.
-            if let Some(packet) = peer.outbound_buffer.pop_back() {
+            if let Some(mut packet) = peer.outbound_buffer.pop_back() {
+                attach_newline(&mut packet);
                 writer
                     .poll_write(&packet)
                     .map_err(|err| warn!("write failed = {:?}", err))
@@ -167,7 +169,7 @@ fn process_connection(
 
             ok(writer)
         } else {
-            err(())
+            err("no peer found")
         }
     });
 
@@ -189,41 +191,60 @@ fn process_connection(
             let network_clone = network.clone();
             let refuse_connection = refuse_connection.clone();
 
-            line.map(move |(reader, message)| {
-                let result = network.lock().process_packet(&addr, &message);
-                (reader, result)
-            })
-            .map(move |(reader, result)| {
-                // TODO: Handle other errors as well
-                if let Err(NetworkErr::InvalidConnectPacket) = result {
-                    let network = network_clone.clone();
+            line
+                .map(move |(reader, message)| {
+                    let result = network.lock().process_packet(&addr, &message);
+                    (reader, result)
+                })
+                .map(move |(reader, result)| {
+                    // TODO: Handle other errors as well
+                    if let Err(NetworkErr::InvalidConnectPacket) = result {
+                        let network = network_clone.clone();
 
-                    // Flag socket for connection refusal if we
-                    // have received an invalid connect packet.
-                    refuse_connection.store(true, Ordering::Relaxed);
+                        // Flag socket for connection refusal if we
+                        // have received an invalid connect packet.
+                        refuse_connection.store(true, Ordering::Relaxed);
 
-                    // Also, ban the peer
-                    network.lock().ban_ip(&addr).unwrap();
-                }
+                        // Also, ban the peer
+                        network.lock().ban_ip(&addr).unwrap();
+                    }
 
-                reader
-            })
+                    reader
+                })
         });
+
+    // let socket_reader = tokio::io::lines(reader)
+    //     .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
+    //     .map_err(|e| warn!("Socket read error: {}", e))
+    //     .map(|message| {
+    //         let result = network.lock().process_packet(&addr, message.as_bytes());
+    //         result
+    //     })
+    //     .map(|result| {
+    //         // TODO: Handle other errors as well
+    //         if let Err(NetworkErr::InvalidConnectPacket) = result {
+    //             let network = network_clone.clone();
+
+    //             // Flag socket for connection refusal if we
+    //             // have received an invalid connect packet.
+    //             refuse_connection.store(true, Ordering::Relaxed);
+
+    //             // Also, ban the peer
+    //             network.lock().ban_ip(&addr).unwrap();
+    //         }
+
+    //         Ok(())
+    //     })
+    //     .and_then(|_| ok(()));
 
     // Now that we've got futures representing each half of the socket, we
     // use the `select` combinator to wait for either half to be done to
     // tear down the other. Then we spawn off the result.
     let network = network_clone2.clone();
-    let socket_reader = socket_reader.map_err(|_| ());
-    let socket_writer = socket_writer.map_err(|_| ());
+    let socket_reader = socket_reader.map_err(|e| { warn!("Socket read error: {}", e); () });
+    let socket_writer = socket_writer.map_err(|e| { warn!("Socket write error: {}", e); () });
 
     let accept_connections = accept_connections.clone();
-
-    // Spawn task to process socket writing
-    tokio::spawn(socket_writer.then(move |_| {
-        debug!("Write half of {} closed", addr);
-        Ok(())
-    }));
 
     // Spawn a task to process the connection
     tokio::spawn(socket_reader.then(move |_| {
@@ -237,7 +258,16 @@ fn process_connection(
 
         info!("Connection to {} closed", addr);
         Ok(())
+    }));
+
+    tokio::spawn(socket_writer.then(move |_| {
+        debug!("Write half of {} closed", addr);
+        Ok(())
     }))
+}
+
+fn attach_newline(buf: &mut Vec<u8>) {
+    buf.push(b'\n');
 }
 
 // #[cfg(test)]
