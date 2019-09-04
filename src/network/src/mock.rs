@@ -114,7 +114,7 @@ impl NetworkInterface for MockNetwork {
         if let Some(mailbox) = self.mailboxes.get(&id) {
             let peer = self.peers.get(peer).unwrap();
             let key = peer.rx.as_ref().unwrap();
-            let packet = crate::common::wrap_packet(packet, key);
+            let packet = crate::common::wrap_encrypt_packet(packet, key);
             mailbox.send((self.ip.clone(), packet)).unwrap();
             Ok(())
         } else {
@@ -278,7 +278,7 @@ impl NetworkInterface for MockNetwork {
         } else {
             debug!("Received packet from {}: {}", addr, hex::encode(packet));
 
-            let packet = crate::common::unwrap_packet(packet, tx.as_ref().unwrap())?;
+            let packet = crate::common::unwrap_decrypt_packet(packet, tx.as_ref().unwrap())?;
             let packet_type = packet[0];
 
             match packet_type {

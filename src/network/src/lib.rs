@@ -56,6 +56,7 @@ mod network;
 mod packet;
 pub mod packets;
 mod peer;
+mod header;
 
 pub use bootstrap::*;
 pub use connection::*;
