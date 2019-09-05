@@ -286,19 +286,11 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
-    fn fetch_peer(&self, peer: &SocketAddr) -> Result<&Peer, NetworkErr> {
-        unimplemented!();
-    }
-
-    fn fetch_peer_mut(&mut self, peer: &SocketAddr) -> Result<&mut Peer, NetworkErr> {
-        unimplemented!();
-    }
-
     fn our_node_id(&self) -> &NodeId {
         &self.node_id
     }
 
-    fn peers<'a>(&'a self) -> Box<dyn Iterator<Item = (&SocketAddr, &Peer)> + 'a> {
-        unimplemented!();
+    fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>> {
+        self.peers.clone()
     }
 }

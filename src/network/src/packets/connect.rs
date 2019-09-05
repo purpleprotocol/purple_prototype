@@ -204,8 +204,14 @@ impl Packet for Connect {
             let mut our_pk = None;
 
             {
+                let peers = network.peers();
+                let mut peers = peers.write();
                 let node_id = node_id.clone();
-                let peer = network.fetch_peer_mut(addr)?;
+                let mut peer = if let Some(peer) = peers.get_mut(addr) {
+                    peer
+                } else {
+                    return Err(NetworkErr::PeerNotFound);
+                };
                 let kx_key = packet.kx_key.clone();
 
                 // Compute session keys
@@ -319,13 +325,17 @@ mod tests {
         thread::sleep(Duration::from_millis(1600));
 
         let peer1 = {
-            let network2 = network2_c.lock();
-            network2.peers.get(&addr1).unwrap().clone()
+            let network = network2_c.lock();
+            let peers = network.peers();
+            let peers = peers.read();
+            peers.get(&addr1).unwrap().clone()
         };
 
         let peer2 = {
-            let network1 = network1_c.lock();
-            network1.peers.get(&addr2).unwrap().clone()
+            let network = network1_c.lock();
+            let peers = network.peers();
+            let peers = peers.read();
+            peers.get(&addr2).unwrap().clone()
         };
 
         // Check if the peers have the same session keys

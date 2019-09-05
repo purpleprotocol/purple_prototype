@@ -247,7 +247,7 @@ fn process_connection(
                             } else {
                                 // We are expecting an un-encrypted `Connect` packet
                                 // so we make it just pass through.
-                                buf.copy_from_slice(&buffer);
+                                buf = buffer;
                             }
 
                             buf

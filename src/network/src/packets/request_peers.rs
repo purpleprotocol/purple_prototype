@@ -206,8 +206,10 @@ impl Packet for RequestPeers {
 
         let num_of_peers = packet.requested_peers as usize;
         let our_node_id = network.our_node_id();
-        let addresses: Vec<SocketAddr> = network
-            .peers()
+        let peers = network.peers();
+        let peers = peers.read(); 
+        let addresses: Vec<SocketAddr> = peers
+            .iter()
             // Don't send the address of the requester
             .filter(|(peer_addr, peer)| {
                 peer.id.is_some() && peer.id != Some(packet.node_id.clone()) && *peer_addr != addr

@@ -22,6 +22,8 @@ use crate::packet::Packet;
 use crate::peer::Peer;
 use crypto::NodeId;
 use std::net::SocketAddr;
+use parking_lot::RwLock;
+use hashbrown::HashMap;
 use std::sync::Arc;
 
 #[cfg(not(test))]
@@ -93,19 +95,11 @@ pub trait NetworkInterface {
     /// Bans any further connections from the given ip.
     fn ban_ip(&self, peer: &SocketAddr) -> Result<(), NetworkErr>;
 
-    /// Attempts to retrieve a reference to
-    /// the peer entry of the given `NodeId`.
-    fn fetch_peer(&self, peer: &SocketAddr) -> Result<&Peer, NetworkErr>;
-
-    /// Attempts to retrieve a mutable reference to
-    /// the peer entry of the given ip.
-    fn fetch_peer_mut(&mut self, peer: &SocketAddr) -> Result<&mut Peer, NetworkErr>;
-
     /// Returns a reference to our node id.
     fn our_node_id(&self) -> &NodeId;
 
-    /// Returns an iterator on the listed peers
-    fn peers<'a>(&'a self) -> Box<dyn Iterator<Item = (&SocketAddr, &Peer)> + 'a>;
+    /// Returns a reference to the peer table RwLock.
+    fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>>;
 
     /// Returns a reference to the `HardChain`.
     fn hard_chain_ref(&self) -> HardChainRef;
