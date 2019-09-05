@@ -26,6 +26,7 @@ extern crate log;
 #[cfg(test)]
 extern crate tempdir;
 
+extern crate bytes;
 extern crate byteorder;
 extern crate chain;
 extern crate chrono;

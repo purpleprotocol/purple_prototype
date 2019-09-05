@@ -95,7 +95,7 @@ pub fn decode_header(header: &[u8]) -> Result<PacketHeader, NetworkErr> {
 }
 
 /// Verifies the CRC32 checksum of the packet returning `Err(NetworkErr::BadCRC32)` if invalid. 
-pub fn verify_crc32(header: PacketHeader, packet: &[u8]) -> Result<(), NetworkErr> {
+pub fn verify_crc32(header: &PacketHeader, packet: &[u8]) -> Result<(), NetworkErr> {
     let mut crc32 = Hasher::new();
 
     crc32.update(packet);

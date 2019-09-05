@@ -126,7 +126,7 @@ fn main() {
     info!("Setting up the network...");
 
     let (node_id, skey) = fetch_credentials(&mut node_storage);
-    let network = Arc::new(Mutex::new(Network::new(
+    let network = Network::new(
         node_id,
         argv.network_name.to_owned(),
         skey,
@@ -135,7 +135,7 @@ fn main() {
         state_tx,
         hard_chain.clone(),
         state_chain.clone(),
-    )));
+    );
     let accept_connections = Arc::new(AtomicBool::new(true));
 
     // Start the tokio runtime

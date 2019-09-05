@@ -22,7 +22,6 @@ use futures::Future;
 use futures::Stream;
 use hashdb::HashDB;
 use network::Network;
-use parking_lot::Mutex;
 use persistence::PersistentDb;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
@@ -30,7 +29,7 @@ use std::sync::Arc;
 use tokio::executor::Spawn;
 
 pub fn bootstrap<'a>(
-    network: Arc<Mutex<Network>>,
+    network: Network,
     accept_connections: Arc<AtomicBool>,
     db: PersistentDb,
     max_peers: usize,
@@ -63,7 +62,7 @@ pub fn bootstrap<'a>(
             .and_then(move |_| {
                 // Connect to bootstrap nodes if we haven't
                 // yet reached the maximum amount of peers.
-                if network_clone.lock().peer_count() < max_peers {
+                if network_clone.peer_count() < max_peers {
                     let accept_connections = accept_connections_clone.clone();
                     let network = network_clone.clone();
 
