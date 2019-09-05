@@ -7,7 +7,6 @@ publish = false
 [dependencies]
 serde = "1.0.59"
 serde_derive = "1.0.59"
-bytes = "0.4.12"
 rand = "0.6.0"
 byteorder = "1.2.7"
 chrono = "0.4.6"

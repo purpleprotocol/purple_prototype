@@ -36,7 +36,6 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::future::{ok, err};
 use tokio::prelude::*;
 use tokio_io_timeout::TimeoutStream;
-use bytes::BytesMut;
 
 /// Purple network port
 pub const PORT: u16 = 44034;
@@ -181,7 +180,7 @@ fn process_connection(
             let network_clone = network.clone();
 
             // Read header
-            let line = io::read_exact(reader, BytesMut::with_capacity(common::HEADER_SIZE))
+            let line = io::read_exact(reader, vec![0; common::HEADER_SIZE])
                 // Decode header
                 .and_then(move |(reader, buffer)| {
                     let header = common::decode_header(&buffer).map_err(|err| 
@@ -207,7 +206,7 @@ fn process_connection(
                 .and_then(move |(reader, header)| {
                     io::read_exact(
                         reader, 
-                        BytesMut::with_capacity(header.packet_len as usize)
+                        vec![0; header.packet_len as usize]
                     ).map(|(reader, buffer)| (reader, header, buffer))
                 })
                 // Verify crc32 checksum
@@ -222,7 +221,7 @@ fn process_connection(
                     Ok((reader, header, buffer))
                 })
                 // Decrypt packet
-                .and_then(move |(reader, header, mut buffer)|{
+                .and_then(move |(reader, header, buffer)|{
                     let network = network_clone;
                     let packet: Vec<u8> = {
                         let mut peers = network.peers.write();
@@ -234,7 +233,7 @@ fn process_connection(
                             if peer.sent_connect {
                                 // Decode nonce which is always the
                                 // first 12 bytes in the packet.
-                                let nonce_buf = buffer.split_to(11);
+                                let (nonce_buf, buffer) = buffer.split_at(12);
                                 let mut nonce: [u8; 12] = [0; 12];
                                 nonce.copy_from_slice(&nonce_buf);
                                 let nonce = Nonce(nonce);
@@ -313,7 +312,7 @@ fn process_connection(
     // use the `select` combinator to wait for either half to be done to
     // tear down the other. Then we spawn off the result.
     let network = network_clone2.clone();
-    let socket_reader = socket_reader.map_err(|e| { warn!("Socket read error: {}", e); () });
+    let socket_reader = socket_reader.map_err(|e| { warn!("{}", e); () });
     let socket_writer = socket_writer.map_err(|e| { warn!("Socket write error: {}", e); () });
 
     let accept_connections = accept_connections.clone();

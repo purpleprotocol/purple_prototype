@@ -197,5 +197,12 @@ mod tests {
             assert_eq!(packet, unwrap_decrypt_packet(&wrap_encrypt_packet(&packet, &key), &key).unwrap());
             true
         }
+
+        fn decode_header(packet: Vec<u8>) -> bool {
+            let wrapped = wrap_packet(&packet);
+            let (header, tail) = wrapped.split_at(7);
+            super::decode_header(&header).unwrap();
+            true
+        }
     }
 }
