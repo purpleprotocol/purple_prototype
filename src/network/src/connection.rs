@@ -22,7 +22,7 @@ use crate::interface::NetworkInterface;
 use crate::network::Network;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
-use crate::peer::{ConnectionType, Peer};
+use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
 use crypto::Nonce;
 use std::io::BufReader;
 use std::iter;
@@ -35,6 +35,7 @@ use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::future::{ok, err};
 use tokio::prelude::*;
+use tokio::sync::mpsc;
 use tokio_io_timeout::TimeoutStream;
 
 /// Purple network port
@@ -101,8 +102,11 @@ fn process_connection(
         ConnectionType::Server => info!("Received connection request from {}", addr),
     };
 
+    // Create outbound channel
+    let (outbound_sender, outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
+
     // Create new peer and add it to the peer table
-    let peer = Peer::new(None, addr, client_or_server);
+    let peer = Peer::new(None, addr, client_or_server, Some(outbound_sender));
 
     let (node_id, skey) = {
         if let Err(NetworkErr::MaximumPeersReached) = network.add_peer(addr, peer.clone()) {
@@ -124,55 +128,68 @@ fn process_connection(
     let iter = stream::iter_ok::<_, io::Error>(iter::repeat(()));
     let network_clone = network.clone();
     let network_clone2 = network.clone();
+    let network_clone3 = network.clone();
     let refuse_connection_clone = refuse_connection.clone();
+    let socket_writer = ok(())
+        .and_then(move |_| {
+            let mut writer = writer;
+            let mut peers = network_clone3.peers.write();
 
-    let writer_iter = stream::iter_ok::<_, &'static str>(iter::repeat(()));
-    let socket_writer = writer_iter.fold(writer, move |mut writer, _| {
-        let mut peers = network_clone.peers.write();
+            if let Some(peer) = peers.get_mut(&addr) {
+                // Write a connect packet if we are the client
+                // and we have not yet sent a connect packet.
+                if let ConnectionType::Client = client_or_server {
+                    if !peer.sent_connect {
+                        // Send `Connect` packet.
+                        let mut connect = Connect::new(node_id.clone(), peer.pk);
+                        connect.sign(&skey);
 
-        if let Some(peer) = peers.get_mut(&addr) {
-            // Write a connect packet if we are the client
-            // and we have not yet sent a connect packet.
-            if let ConnectionType::Client = client_or_server {
-                if !peer.sent_connect {
-                    // Send `Connect` packet.
-                    let mut connect = Connect::new(node_id.clone(), peer.pk);
-                    connect.sign(&skey);
+                        let packet = connect.to_bytes();
+                        let packet = crate::common::wrap_packet(&packet);
+                        debug!("Sending connect packet to {}", addr);
 
-                    let packet = connect.to_bytes();
-                    let packet = crate::common::wrap_packet(&packet);
-                    debug!("Sending connect packet to {}", addr);
+                        writer
+                            .poll_write(&packet)
+                            .map_err(|err| warn!("write failed = {:?}", err))
+                            .and_then(|_| Ok(()))
+                            .unwrap();
 
-                    writer
-                        .poll_write(&packet)
-                        .map_err(|err| warn!("write failed = {:?}", err))
-                        .and_then(|_| Ok(()))
-                        .unwrap();
-
-                    peer.sent_connect = true;
-                    return ok(writer);
+                        peer.sent_connect = true;
+                        return ok(writer);
+                    }
                 }
-            }
-
-            if let Some(ref rx) = peer.rx {
-                // Pop packet from outbound buffer and write it to the socket.
-                if let Some(ref packet) = peer.outbound_buffer.pop_back() {
-                    let packet = crate::common::wrap_encrypt_packet(packet, rx);
-
-                    writer
-                        .poll_write(&packet)
-                        .map_err(|err| warn!("write failed = {:?}", err))
-                        .and_then(|_| Ok(()))
-                        .unwrap();
-                }
+            } else {
+                return err("no peer found");
             }
 
             ok(writer)
-        } else {
-            err("no peer found")
-        }
-    });
+        })
+        .and_then(move |writer| {
+            let fut = outbound_receiver
+                .map_err(|err| format!("{}", err))
+                .fold(writer, move |mut writer, packet| {
+                    let peers = network_clone.peers.read();
 
+                    if let Some(peer) = peers.get(&addr) {
+                        if let Some(ref rx) = peer.rx {
+                            let packet = crate::common::wrap_encrypt_packet(&packet, rx);
+
+                            writer
+                                .poll_write(&packet)
+                                .map_err(|err| warn!("write failed = {:?}", err))
+                                .and_then(|_| Ok(()))
+                                .unwrap();
+                        }
+
+                        ok(writer)
+                    } else {
+                        err("no peer found")
+                    }
+                });
+            
+            ok(fut)
+        });
+        
     let socket_reader = iter
         .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
         .fold(reader, move |reader, _| {
@@ -262,15 +279,14 @@ fn process_connection(
                     };
 
                     Ok((reader, header, packet))
+                })
+                .and_then(move |(reader, _, vec)| {
+                    if vec.len() == 0 {
+                        Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
+                    } else {
+                        Ok((reader, vec))
+                    }
                 });
-
-            let line = line.and_then(move |(reader, _, vec)| {
-                if vec.len() == 0 {
-                    Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
-                } else {
-                    Ok((reader, vec))
-                }
-            });
 
             let network_clone = network.clone();
             let refuse_connection = refuse_connection.clone();

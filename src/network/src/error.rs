@@ -63,4 +63,7 @@ pub enum NetworkErr {
 
     /// We have connected to ourselves
     SelfConnect,
+
+    /// Could not send a packet. Maybe the outbound buffer is full?
+    CouldNotSend,
 }

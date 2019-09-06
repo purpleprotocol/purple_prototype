@@ -160,16 +160,46 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
-    fn send_to_peer(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
-        unimplemented!();
+    fn send_to_peer(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {
+        let peers = self.peers.read();
+
+        if let Some(peer) = peers.get(peer) {
+            peer.send_packet(packet)
+        } else {
+            Err(NetworkErr::PeerNotFound)
+        }
     }
 
     fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr> {
-        unimplemented!();
+        let peers = self.peers.read();
+        
+        if peers.is_empty() {
+            return Err(NetworkErr::NoPeers);
+        }
+
+        for (addr, peer) in peers.iter() {
+            peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
+        }
+
+        Ok(())
     }
 
     fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
-        unimplemented!();
+        let peers = self.peers.read();
+        
+        if peers.is_empty() {
+            return Err(NetworkErr::NoPeers);
+        }
+
+        let iter = peers
+            .iter()
+            .filter(|(addr, _)| *addr != exception);
+
+        for (addr, peer) in iter {
+            peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
+        }
+
+        Ok(())
     }
 
     fn send_to_all_unsigned_except<P: Packet>(
@@ -194,8 +224,14 @@ impl NetworkInterface for Network {
         self.send_to_all(&packet)
     }
 
-    fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
-        unimplemented!();
+    fn send_raw(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {
+        let peers = self.peers.read();
+
+        if let Some(peer) = peers.get(peer) {
+            peer.send_packet(packet)
+        } else {
+            Err(NetworkErr::PeerNotFound)
+        }
     }
 
     fn send_unsigned<P: Packet>(
@@ -208,7 +244,7 @@ impl NetworkInterface for Network {
         }
 
         let packet = packet.to_bytes();
-        self.send_to_peer(peer, &packet)?;
+        self.send_to_peer(peer, packet)?;
 
         Ok(())
     }
@@ -223,7 +259,7 @@ impl NetworkInterface for Network {
         }
 
         let packet = packet.to_bytes();
-        self.send_raw(peer, &packet)?;
+        self.send_raw(peer, packet)?;
 
         Ok(())
     }

@@ -50,7 +50,7 @@ pub trait NetworkInterface {
     fn disconnect_from_ip(&mut self, ip: &SocketAddr) -> Result<(), NetworkErr>;
 
     /// Sends a packet to a specific peer.
-    fn send_to_peer(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
+    fn send_to_peer(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr>;
 
     /// Sends a packet to all peers.
     fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr>;
@@ -77,7 +77,7 @@ pub trait NetworkInterface {
 
     /// Sends a raw packet to a specific peer. This
     /// means that the packet will be un-encrypted.
-    fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
+    fn send_raw(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr>;
 
     /// This behaves similarly to `send_unsigned()` but it sends a raw packet.
     fn send_raw_unsigned<P: Packet>(

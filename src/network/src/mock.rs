@@ -75,7 +75,7 @@ impl NetworkInterface for MockNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client);
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None);
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
@@ -87,7 +87,7 @@ impl NetworkInterface for MockNetwork {
             peers.insert(address.clone(), peer);
         }
 
-        self.send_raw(address, &connect).unwrap();
+        self.send_raw(address, connect).unwrap();
         Ok(())
     }
 
@@ -112,7 +112,7 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
-    fn send_to_peer(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+    fn send_to_peer(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {
         let id = if let Some(id) = self.address_mappings.get(peer) {
             id
         } else {
@@ -123,7 +123,7 @@ impl NetworkInterface for MockNetwork {
             let peers = self.peers.read();
             let peer = peers.get(peer).unwrap();
             let key = peer.rx.as_ref().unwrap();
-            let packet = crate::common::wrap_encrypt_packet(packet, key);
+            let packet = crate::common::wrap_encrypt_packet(&packet, key);
             mailbox.send((self.ip.clone(), packet)).unwrap();
             Ok(())
         } else {
@@ -131,7 +131,7 @@ impl NetworkInterface for MockNetwork {
         }
     }
 
-    fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+    fn send_raw(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {
         let id = if let Some(id) = self.address_mappings.get(peer) {
             id
         } else {
@@ -139,7 +139,7 @@ impl NetworkInterface for MockNetwork {
         };
 
         if let Some(mailbox) = self.mailboxes.get(&id) {
-            mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
+            mailbox.send((self.ip.clone(), packet)).unwrap();
             Ok(())
         } else {
             Err(NetworkErr::PeerNotFound)
@@ -209,7 +209,7 @@ impl NetworkInterface for MockNetwork {
         }
 
         let packet = packet.to_bytes();
-        self.send_to_peer(peer, &packet)?;
+        self.send_to_peer(peer, packet)?;
 
         Ok(())
     }
@@ -224,7 +224,7 @@ impl NetworkInterface for MockNetwork {
         }
 
         let packet = packet.to_bytes();
-        self.send_raw(peer, &packet)?;
+        self.send_raw(peer, packet)?;
 
         Ok(())
     }
@@ -257,7 +257,7 @@ impl NetworkInterface for MockNetwork {
             if peers.get(addr).is_none() {
                 peers.insert(
                     addr.clone(),
-                    Peer::new(None, addr.clone(), ConnectionType::Server),
+                    Peer::new(None, addr.clone(), ConnectionType::Server, None),
                 );
             }
 
