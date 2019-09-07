@@ -16,9 +16,10 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::error::NetworkErr;
 use crypto::NodeId;
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
-use std::collections::VecDeque;
+use tokio::sync::mpsc::Sender;
 use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
 
@@ -29,7 +30,7 @@ pub enum ConnectionType {
 }
 
 /// Size of the outbound buffer.
-pub const OUTBOUND_BUF_SIZE: usize = 1000;
+pub const OUTBOUND_BUF_SIZE: usize = 8000;
 
 #[derive(Debug, Clone)]
 pub struct Peer {
@@ -53,7 +54,7 @@ pub struct Peer {
     /// The ip address of the peer
     pub ip: SocketAddr,
 
-    /// Wether the peer has send a `Connect` packet or not.
+    /// Wether the peer has sent a `Connect` packet or not.
     pub sent_connect: bool,
 
     /// Wether we have asked the peer to send us a peer list
@@ -62,7 +63,7 @@ pub struct Peer {
 
     /// Buffer storing packets that are to be
     /// sent to the peer.
-    pub outbound_buffer: VecDeque<Vec<u8>>,
+    pub outbound_buffer: Option<Sender<Vec<u8>>>,
 
     /// Session generated public key
     pub pk: Pk,
@@ -78,9 +79,13 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn new(id: Option<NodeId>, ip: SocketAddr, connection_type: ConnectionType) -> Peer {
+    pub fn new(
+        id: Option<NodeId>, 
+        ip: SocketAddr, 
+        connection_type: ConnectionType, 
+        outbound_buffer: Option<Sender<Vec<u8>>>,
+    ) -> Peer {
         let (pk, sk) = gen_kx_keypair();
-        let outbound_buffer = VecDeque::with_capacity(OUTBOUND_BUF_SIZE);
 
         Peer {
             id: id,
@@ -105,6 +110,12 @@ impl Peer {
     pub fn set_session_keys(&mut self, rx: SessionKey, tx: SessionKey) {
         self.rx = Some(rx);
         self.tx = Some(tx);
+    }
+
+    /// Attempts to place a packet in the outbound buffer of a `Peer`.
+    pub fn send_packet(&self, packet: Vec<u8>) -> Result<(), NetworkErr> {
+        let mut sender = self.outbound_buffer.as_ref().unwrap().clone();
+        sender.try_send(packet).map_err(|_| NetworkErr::CouldNotSend)
     }
 }
 

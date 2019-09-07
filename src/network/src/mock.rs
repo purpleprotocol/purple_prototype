@@ -25,7 +25,7 @@ use chain::*;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
 use hashbrown::HashMap;
-use parking_lot::Mutex;
+use parking_lot::{RwLock, Mutex};
 use std::net::SocketAddr;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
@@ -39,6 +39,7 @@ pub struct MockNetwork {
 
     /// Our receiver
     rx: Receiver<(SocketAddr, Vec<u8>)>,
+
     /// Reference to the `HardChain`
     hard_chain_ref: HardChainRef,
 
@@ -55,7 +56,7 @@ pub struct MockNetwork {
     pub(crate) address_mappings: HashMap<SocketAddr, NodeId>,
 
     /// Mapping between connected peers and their information
-    pub(crate) peers: HashMap<SocketAddr, Peer>,
+    pub(crate) peers: Arc<RwLock<HashMap<SocketAddr, Peer>>>,
 
     /// Our ip
     ip: SocketAddr,
@@ -74,15 +75,19 @@ impl NetworkInterface for MockNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client);
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None);
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
 
         peer.sent_connect = true;
-        self.peers.insert(address.clone(), peer);
-        self.send_raw(address, &connect).unwrap();
+        
+        {
+            let mut peers = self.peers.write(); 
+            peers.insert(address.clone(), peer);
+        }
 
+        self.send_raw(address, &connect).unwrap();
         Ok(())
     }
 
@@ -91,20 +96,23 @@ impl NetworkInterface for MockNetwork {
     }
 
     fn is_connected_to(&self, address: &SocketAddr) -> bool {
-        self.peers.get(address).is_some()
+        let peers = self.peers.read();
+        peers.get(address).is_some()
     }
 
     fn disconnect(&mut self, peer: &NodeId) -> Result<(), NetworkErr> {
-        self.peers.retain(|_, p| p.id.as_ref() != Some(peer));
+        let mut peers = self.peers.write();
+        peers.retain(|_, p| p.id.as_ref() != Some(peer));
         Ok(())
     }
 
     fn disconnect_from_ip(&mut self, ip: &SocketAddr) -> Result<(), NetworkErr> {
-        self.peers.remove(ip);
+        let mut peers = self.peers.write();
+        peers.remove(ip);
         Ok(())
     }
 
-    fn send_to_peer(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+    fn send_to_peer(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {
         let id = if let Some(id) = self.address_mappings.get(peer) {
             id
         } else {
@@ -112,9 +120,10 @@ impl NetworkInterface for MockNetwork {
         };
 
         if let Some(mailbox) = self.mailboxes.get(&id) {
-            let peer = self.peers.get(peer).unwrap();
+            let peers = self.peers.read();
+            let peer = peers.get(peer).unwrap();
             let key = peer.rx.as_ref().unwrap();
-            let packet = crate::common::wrap_packet(packet, key);
+            let packet = crate::common::wrap_encrypt_packet(&packet, key);
             mailbox.send((self.ip.clone(), packet)).unwrap();
             Ok(())
         } else {
@@ -200,7 +209,7 @@ impl NetworkInterface for MockNetwork {
         }
 
         let packet = packet.to_bytes();
-        self.send_to_peer(peer, &packet)?;
+        self.send_to_peer(peer, packet)?;
 
         Ok(())
     }
@@ -241,16 +250,18 @@ impl NetworkInterface for MockNetwork {
             panic!("We received a packet from ourselves! This is illegal");
         }
 
-        // Insert to peer table if this is the first received packet.
-        if self.peers.get(addr).is_none() {
-            self.peers.insert(
-                addr.clone(),
-                Peer::new(None, addr.clone(), ConnectionType::Server),
-            );
-        }
-
         let (tx, is_none_id, conn_type) = {
-            let peer = self.peers.get(addr).unwrap();
+            let mut peers = self.peers.write();
+
+            // Insert to peer table if this is the first received packet.
+            if peers.get(addr).is_none() {
+                peers.insert(
+                    addr.clone(),
+                    Peer::new(None, addr.clone(), ConnectionType::Server, None),
+                );
+            }
+
+            let peer = peers.get(addr).unwrap();
             (peer.tx.clone(), peer.id.is_none(), peer.connection_type)
         };
 
@@ -278,7 +289,7 @@ impl NetworkInterface for MockNetwork {
         } else {
             debug!("Received packet from {}: {}", addr, hex::encode(packet));
 
-            let packet = crate::common::unwrap_packet(packet, tx.as_ref().unwrap())?;
+            let packet = crate::common::unwrap_decrypt_packet(packet, tx.as_ref().unwrap())?;
             let packet_type = packet[0];
 
             match packet_type {
@@ -310,28 +321,12 @@ impl NetworkInterface for MockNetwork {
         unimplemented!();
     }
 
-    fn fetch_peer(&self, peer: &SocketAddr) -> Result<&Peer, NetworkErr> {
-        if let Some(peer) = self.peers.get(peer) {
-            Ok(peer)
-        } else {
-            Err(NetworkErr::PeerNotFound)
-        }
-    }
-
-    fn fetch_peer_mut(&mut self, peer: &SocketAddr) -> Result<&mut Peer, NetworkErr> {
-        if let Some(peer) = self.peers.get_mut(peer) {
-            Ok(peer)
-        } else {
-            Err(NetworkErr::PeerNotFound)
-        }
-    }
-
     fn our_node_id(&self) -> &NodeId {
         &self.node_id
     }
 
-    fn peers<'a>(&'a self) -> Box<dyn Iterator<Item = (&SocketAddr, &Peer)> + 'a> {
-        Box::new(self.peers.iter())
+    fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>> {
+        self.peers.clone()
     }
 }
 
@@ -357,7 +352,7 @@ impl MockNetwork {
             state_chain_sender,
             hard_chain_ref,
             state_chain_ref,
-            peers: HashMap::new(),
+            peers: Arc::new(RwLock::new(HashMap::new())),
             node_id,
             secret_key,
             ip,

@@ -22,20 +22,18 @@ use futures::Future;
 use futures::Stream;
 use hashdb::HashDB;
 use network::Network;
-use parking_lot::Mutex;
 use persistence::PersistentDb;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::executor::Spawn;
 
-const BOOTNODES: &'static [&'static str] = &["139.162.133.241:44034"];
-
-pub fn bootstrap(
-    network: Arc<Mutex<Network>>,
+pub fn bootstrap<'a>(
+    network: Network,
     accept_connections: Arc<AtomicBool>,
     db: PersistentDb,
     max_peers: usize,
+    bootnodes: Vec<SocketAddr>,
 ) -> Spawn {
     info!("Bootstrapping...");
 
@@ -64,10 +62,7 @@ pub fn bootstrap(
             .and_then(move |_| {
                 // Connect to bootstrap nodes if we haven't
                 // yet reached the maximum amount of peers.
-                if network_clone.lock().peer_count() < max_peers {
-                    let bootnodes: Vec<SocketAddr> =
-                        BOOTNODES.iter().map(|addr| addr.parse().unwrap()).collect();
-
+                if network_clone.peer_count() < max_peers {
                     let accept_connections = accept_connections_clone.clone();
                     let network = network_clone.clone();
 
@@ -86,9 +81,6 @@ pub fn bootstrap(
 
         tokio::spawn(fut)
     } else {
-        let bootnodes: Vec<SocketAddr> =
-            BOOTNODES.iter().map(|addr| addr.parse().unwrap()).collect();
-
         let mut peers_to_connect: Vec<SocketAddr> = Vec::with_capacity(bootnodes.len());
 
         for addr in bootnodes.iter().take(max_peers) {

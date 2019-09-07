@@ -78,8 +78,7 @@ impl Packet for Connect {
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
         let packet_type: u8 = Self::PACKET_TYPE;
-
-        let mut signature = if let Some(signature) = &self.signature {
+        let signature = if let Some(signature) = &self.signature {
             signature.inner_bytes()
         } else {
             panic!("Signature field is missing");
@@ -103,7 +102,6 @@ impl Packet for Connect {
         buffer.extend_from_slice(&node_id.0);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(timestamp.as_bytes());
-
         buffer
     }
 
@@ -200,45 +198,58 @@ impl Packet for Connect {
 
         let our_node_id = network.our_node_id().clone();
         let node_id = packet.node_id.clone();
-        let mut our_pk = None;
 
-        {
-            let node_id = node_id.clone();
-            let peer = network.fetch_peer_mut(addr)?;
-            let kx_key = packet.kx_key.clone();
+        // Avoid connecting to ourselves
+        if our_node_id != node_id {
+            let mut our_pk = None;
 
-            // Compute session keys
-            let result = match conn_type {
-                ConnectionType::Client => crypto::client_sk(&peer.pk, &peer.sk, &kx_key),
-                ConnectionType::Server => crypto::server_sk(&peer.pk, &peer.sk, &kx_key),
-            };
+            {
+                let peers = network.peers();
+                let mut peers = peers.write();
+                let node_id = node_id.clone();
+                let mut peer = if let Some(peer) = peers.get_mut(addr) {
+                    peer
+                } else {
+                    return Err(NetworkErr::PeerNotFound);
+                };
+                let kx_key = packet.kx_key.clone();
 
-            let (rx, tx) = if let Ok(result) = result {
-                result
-            } else {
-                return Err(NetworkErr::InvalidConnectPacket);
-            };
+                // Compute session keys
+                let result = match conn_type {
+                    ConnectionType::Client => crypto::client_sk(&peer.pk, &peer.sk, &kx_key),
+                    ConnectionType::Server => crypto::server_sk(&peer.pk, &peer.sk, &kx_key),
+                };
 
-            // Set generated session keys
-            peer.rx = Some(rx);
-            peer.tx = Some(tx);
+                let (rx, tx) = if let Ok(result) = result {
+                    result
+                } else {
+                    return Err(NetworkErr::InvalidConnectPacket);
+                };
 
-            // Mark peer as having sent a connect packet
-            peer.sent_connect = true;
+                // Set generated session keys
+                peer.rx = Some(rx);
+                peer.tx = Some(tx);
 
-            // Set node id
-            peer.id = Some(node_id);
+                // Mark peer as having sent a connect packet
+                peer.sent_connect = true;
 
-            our_pk = Some(peer.pk.clone());
+                // Set node id
+                peer.id = Some(node_id);
+
+                our_pk = Some(peer.pk.clone());
+            }
+
+            // If we are the server, also send a connect packet back
+            if let ConnectionType::Server = conn_type {
+                debug!("Sending connect packet to {}", addr);
+                let mut packet = Connect::new(our_node_id, our_pk.unwrap());
+                network.send_raw_unsigned::<Connect>(addr, &mut packet)?;
+            }
+
+            Ok(())
+        } else {
+            Err(NetworkErr::SelfConnect)
         }
-
-        // If we are the server, also send a connect packet back
-        if let ConnectionType::Server = conn_type {
-            let mut packet = Connect::new(our_node_id, our_pk.unwrap());
-            network.send_raw_unsigned::<Connect>(addr, &mut packet)?;
-        }
-
-        Ok(())
     }
 }
 
@@ -314,13 +325,17 @@ mod tests {
         thread::sleep(Duration::from_millis(1600));
 
         let peer1 = {
-            let network2 = network2_c.lock();
-            network2.peers.get(&addr1).unwrap().clone()
+            let network = network2_c.lock();
+            let peers = network.peers();
+            let peers = peers.read();
+            peers.get(&addr1).unwrap().clone()
         };
 
         let peer2 = {
-            let network1 = network1_c.lock();
-            network1.peers.get(&addr2).unwrap().clone()
+            let network = network1_c.lock();
+            let peers = network.peers();
+            let peers = peers.read();
+            peers.get(&addr2).unwrap().clone()
         };
 
         // Check if the peers have the same session keys

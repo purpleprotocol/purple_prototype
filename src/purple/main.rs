@@ -59,12 +59,14 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::net::SocketAddr;
 
 // Use mimalloc allocator
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
 const DEFAULT_NETWORK_NAME: &'static str = "purple";
+const BOOTNODES: &'static [&'static str] = &["95.179.130.222:44034"];
 
 fn main() {
     env_logger::init();
@@ -109,7 +111,7 @@ fn main() {
     let state_chain_db = PersistentDb::new(state_chain_db.clone(), None);
     let hard_chain_db = PersistentDb::new(hard_chain_db.clone(), None);
 
-    let ( hard_chain, state_chain) = chain::init(
+    let (hard_chain, state_chain) = chain::init(
         hard_chain_db,
         state_chain_db,
         state_db,
@@ -124,7 +126,7 @@ fn main() {
     info!("Setting up the network...");
 
     let (node_id, skey) = fetch_credentials(&mut node_storage);
-    let network = Arc::new(Mutex::new(Network::new(
+    let network = Network::new(
         node_id,
         argv.network_name.to_owned(),
         skey,
@@ -133,7 +135,7 @@ fn main() {
         state_tx,
         hard_chain.clone(),
         state_chain.clone(),
-    )));
+    );
     let accept_connections = Arc::new(AtomicBool::new(true));
 
     // Start the tokio runtime
@@ -158,6 +160,7 @@ fn main() {
             accept_connections,
             node_storage.clone(),
             argv.max_peers,
+            argv.bootnodes.clone()
         );
 
         Ok(())
@@ -202,6 +205,7 @@ fn get_storage_path(network_name: &str) -> PathBuf {
 
 struct Argv {
     network_name: String,
+    bootnodes: Vec<SocketAddr>,
     mempool_size: u16,
     max_peers: usize,
     no_mempool: bool,
@@ -238,6 +242,19 @@ fn parse_cli_args() -> Argv {
             Arg::with_name("no_rpc")
                 .long("no-rpc")
                 .help("Start the node without the json-rpc interface")
+        )
+        .arg(
+            Arg::with_name("no_bootnodes")
+                .long("no-bootnodes")
+                .help("Start the node without attempting to connect to any bootnode")
+        )
+        .arg(
+            Arg::with_name("bootnodes")
+                .long("bootnodes")
+                .value_name("IP_ADDRESES")
+                .min_values(1)
+                .conflicts_with("no_bootnodes")
+                .help("A list of bootnodes to initially connect to")
         )
         .arg(
             Arg::with_name("interactive")
@@ -293,14 +310,29 @@ fn parse_cli_args() -> Argv {
         8
     };
 
+    let bootnodes: Vec<SocketAddr> = if let Some(bootnodes) = matches.values_of("bootnodes") {
+        bootnodes
+            .map(|addr| unwrap!(addr.parse(), "Bad value for <IP_ADDRESSES>"))
+            .collect()
+    } else {
+        BOOTNODES.iter().map(|addr| addr.parse().unwrap()).collect()
+    };
+
     let archival_mode: bool = !matches.is_present("prune");
     let mine_easy: bool = matches.is_present("mine_easy");
     let mine_hard: bool = matches.is_present("mine_hard");
     let no_mempool: bool = matches.is_present("no_mempool");
     let interactive: bool = matches.is_present("interactive");
     let wipe: bool = matches.is_present("wipe");
+    let no_bootnodes: bool = matches.is_present("no_bootnodes");
+    let bootnodes = if no_bootnodes {
+        Vec::new()
+    } else {
+        bootnodes
+    };
 
     Argv {
+        bootnodes,
         network_name,
         mine_easy,
         mine_hard,

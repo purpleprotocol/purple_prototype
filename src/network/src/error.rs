@@ -55,6 +55,16 @@ pub enum NetworkErr {
     /// The CRC32 checksum was invalid
     BadCRC32,
 
+    /// The provided header is invalid
+    BadHeader,
+
     /// The network version found in the packet is invalid
     BadVersion,
+
+    /// We have connected to ourselves
+    SelfConnect,
+
+    /// Could not send a packet. Maybe the outbound buffer is full? 
+    /// Or maybe the peer does not have an encryption key ready?
+    CouldNotSend,
 }

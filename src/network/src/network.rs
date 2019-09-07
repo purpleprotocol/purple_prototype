@@ -24,7 +24,7 @@ use chain::*;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
 use hashbrown::{HashMap, HashSet};
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use Peer;
@@ -35,9 +35,10 @@ use std::sync::mpsc::Sender;
 #[cfg(not(test))]
 use futures::sync::mpsc::Sender;
 
+#[derive(Clone)]
 pub struct Network {
     /// Mapping between connected ips and peer information
-    pub(crate) peers: HashMap<SocketAddr, Peer>,
+    pub(crate) peers: Arc<RwLock<HashMap<SocketAddr, Peer>>>,
 
     /// Our node id
     pub(crate) node_id: NodeId,
@@ -76,7 +77,7 @@ impl Network {
         state_chain_ref: StateChainRef,
     ) -> Network {
         Network {
-            peers: HashMap::with_capacity(max_peers),
+            peers: Arc::new(RwLock::new(HashMap::with_capacity(max_peers))),
             node_id,
             network_name,
             secret_key,
@@ -90,7 +91,7 @@ impl Network {
 
     pub fn add_peer(&mut self, addr: SocketAddr, peer: Peer) -> Result<(), NetworkErr> {
         if self.peer_count() < self.max_peers {
-            self.peers.insert(addr, peer);
+            self.peers.write().insert(addr, peer);
             Ok(())
         } else {
             Err(NetworkErr::MaximumPeersReached)
@@ -99,7 +100,7 @@ impl Network {
 
     /// Returns the number of listed peers.
     pub fn peer_count(&self) -> usize {
-        self.peers.len()
+        self.peers.read().len()
     }
 
     /// Returns a reference to the stored secret key.
@@ -110,23 +111,27 @@ impl Network {
     /// Sets the node id of the peer with the given address.
     ///
     /// This function will panic if there is no entry for the given address.
-    pub fn set_node_id(&mut self, addr: &SocketAddr, node_id: NodeId) {
-        match self.peers.get_mut(addr) {
+    pub fn set_node_id(&self, addr: &SocketAddr, node_id: NodeId) {
+        let mut peers = self.peers.write();
+        
+        match peers.get_mut(addr) {
             Some(peer) => peer.set_id(node_id),
             None => panic!("There is no listed peer with the given address!"),
         };
     }
 
     /// Removes the peer entry with the given address.
-    pub fn remove_peer_with_addr(&mut self, addr: &SocketAddr) {
-        self.peers.remove(addr);
+    pub fn remove_peer_with_addr(&self, addr: &SocketAddr) {
+        self.peers.write().remove(addr);
     }
 
     /// Returns true if the peer with the given address has a `None` id field.
     ///
     /// This function will panic if there is no entry for the given address.
     pub fn is_none_id(&self, addr: &SocketAddr) -> bool {
-        match self.peers.get(addr) {
+        let peers = self.peers.read();
+        
+        match peers.get(addr) {
             Some(peer) => peer.id.is_none(),
             None => panic!("There is no listed peer with the given address!"),
         }
@@ -143,7 +148,8 @@ impl NetworkInterface for Network {
     }
 
     fn is_connected_to(&self, address: &SocketAddr) -> bool {
-        self.peers.get(address).is_some()
+        let peers = self.peers.read();
+        peers.get(address).is_some()
     }
 
     fn disconnect(&mut self, peer: &NodeId) -> Result<(), NetworkErr> {
@@ -154,16 +160,57 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
-    fn send_to_peer(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
-        unimplemented!();
+    fn send_to_peer(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {
+        let peers = self.peers.read();
+
+        if let Some(peer) = peers.get(peer) {
+            if let Some(ref rx) = peer.rx {
+                let packet = crate::common::wrap_encrypt_packet(&packet, rx);
+                peer.send_packet(packet)
+            } else {
+                Err(NetworkErr::CouldNotSend)
+            }
+        } else {
+            Err(NetworkErr::PeerNotFound)
+        }
     }
 
     fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr> {
-        unimplemented!();
+        let peers = self.peers.read();
+        
+        if peers.is_empty() {
+            return Err(NetworkErr::NoPeers);
+        }
+
+        for (addr, peer) in peers.iter() {
+            if let Some(ref rx) = peer.rx {
+                let packet = crate::common::wrap_encrypt_packet(&packet, rx);
+                peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
+            }
+        }
+
+        Ok(())
     }
 
     fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
-        unimplemented!();
+        let peers = self.peers.read();
+        
+        if peers.is_empty() {
+            return Err(NetworkErr::NoPeers);
+        }
+
+        let iter = peers
+            .iter()
+            .filter(|(addr, _)| *addr != exception);
+
+        for (addr, peer) in iter {
+            if let Some(ref rx) = peer.rx {
+                let packet = crate::common::wrap_encrypt_packet(&packet, rx);
+                peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
+            }
+        }
+
+        Ok(())
     }
 
     fn send_to_all_unsigned_except<P: Packet>(
@@ -171,15 +218,32 @@ impl NetworkInterface for Network {
         exception: &SocketAddr,
         packet: &mut P,
     ) -> Result<(), NetworkErr> {
-        unimplemented!();
+        if packet.signature().is_none() {
+            packet.sign(&self.secret_key);
+        }
+
+        let packet = packet.to_bytes();
+        self.send_to_all_except(exception, &packet)
     }
 
     fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr> {
-        unimplemented!();
+        if packet.signature().is_none() {
+            packet.sign(&self.secret_key);
+        }
+
+        let packet = packet.to_bytes();
+        self.send_to_all(&packet)
     }
 
     fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
-        unimplemented!();
+        let peers = self.peers.read();
+
+        if let Some(peer) = peers.get(peer) {
+            let packet = crate::common::wrap_packet(&packet);
+            peer.send_packet(packet)
+        } else {
+            Err(NetworkErr::PeerNotFound)
+        }
     }
 
     fn send_unsigned<P: Packet>(
@@ -192,7 +256,7 @@ impl NetworkInterface for Network {
         }
 
         let packet = packet.to_bytes();
-        self.send_to_peer(peer, &packet)?;
+        self.send_to_peer(peer, packet)?;
 
         Ok(())
     }
@@ -230,7 +294,8 @@ impl NetworkInterface for Network {
 
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         let (is_none_id, conn_type) = {
-            let peer = self.peers.get(peer).unwrap();
+            let peers = self.peers.read();
+            let peer = peers.get(peer).unwrap();
             (peer.id.is_none(), peer.connection_type)
         };
 
@@ -269,27 +334,11 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
-    fn fetch_peer(&self, peer: &SocketAddr) -> Result<&Peer, NetworkErr> {
-        if let Some(peer) = self.peers.get(peer) {
-            Ok(peer)
-        } else {
-            Err(NetworkErr::PeerNotFound)
-        }
-    }
-
-    fn fetch_peer_mut(&mut self, peer: &SocketAddr) -> Result<&mut Peer, NetworkErr> {
-        if let Some(peer) = self.peers.get_mut(peer) {
-            Ok(peer)
-        } else {
-            Err(NetworkErr::PeerNotFound)
-        }
-    }
-
     fn our_node_id(&self) -> &NodeId {
         &self.node_id
     }
 
-    fn peers<'a>(&'a self) -> Box<dyn Iterator<Item = (&SocketAddr, &Peer)> + 'a> {
-        Box::new(self.peers.iter())
+    fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>> {
+        self.peers.clone()
     }
 }

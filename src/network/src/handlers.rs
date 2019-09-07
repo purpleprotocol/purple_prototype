@@ -84,7 +84,7 @@ pub fn start_chains_switch_poll(
 /// Listens for blocks on chain receivers and
 /// forwards them to their respective chains.
 pub fn start_block_listeners(
-    network: Arc<Mutex<Network>>,
+    network: Network,
     hard_chain: HardChainRef,
     state_chain: StateChainRef,
     hard_receiver: Receiver<(SocketAddr, Arc<HardBlock>)>,
@@ -102,8 +102,6 @@ pub fn start_block_listeners(
 
                 match chain_result {
                     Ok(()) => {
-                        let network = network.lock();
-
                         // Forward block
                         let mut packet = ForwardBlock::new(
                             network.our_node_id().clone(),
@@ -137,8 +135,6 @@ pub fn start_block_listeners(
 
                 match chain_result {
                     Ok(()) => {
-                        let network = network.lock();
-
                         // Forward block
                         let mut packet = ForwardBlock::new(
                             network.our_node_id().clone(),

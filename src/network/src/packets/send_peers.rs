@@ -103,8 +103,7 @@ impl Packet for SendPeers {
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
         let packet_type: u8 = Self::PACKET_TYPE;
-
-        let mut signature = if let Some(signature) = &self.signature {
+        let signature = if let Some(signature) = &self.signature {
             signature.inner_bytes()
         } else {
             panic!("Signature field is missing");
@@ -131,7 +130,6 @@ impl Packet for SendPeers {
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(timestamp.as_bytes());
         buffer.extend_from_slice(&peers);
-
         buffer
     }
 
@@ -252,7 +250,13 @@ impl Packet for SendPeers {
         debug!("Received SendPeers packet from: {:?}", addr);
 
         {
-            let peer = network.fetch_peer_mut(addr)?;
+            let peers = network.peers();
+            let mut peers = peers.write();
+            let mut peer = if let Some(peer) = peers.get_mut(addr) {
+                peer
+            } else {
+                return Err(NetworkErr::PeerNotFound);
+            };
 
             // Check if we have received more peers than we have asked
             if let Some(num_of_peers) = peer.requested_peers {
@@ -389,7 +393,9 @@ mod tests {
             let node_id = network.our_node_id().clone();
 
             let peer_id = {
-                let peer = network.fetch_peer_mut(&addr1).unwrap();
+                let peers = network.peers();
+                let mut peers = peers.write();
+                let mut peer = peers.get_mut(&addr1).unwrap();
                 peer.requested_peers = Some(3);
                 peer.id.as_ref().cloned().unwrap()
             };
@@ -410,11 +416,11 @@ mod tests {
         let network4 = network4_cc.lock();
         let network5 = network5_cc.lock();
 
-        assert_eq!(network1.peers.len(), 4);
-        assert_eq!(network2.peers.len(), 4);
-        assert_eq!(network3.peers.len(), 2);
-        assert_eq!(network4.peers.len(), 2);
-        assert_eq!(network5.peers.len(), 2);
+        assert_eq!(network1.peers().read().len(), 4);
+        assert_eq!(network2.peers().read().len(), 4);
+        assert_eq!(network3.peers().read().len(), 2);
+        assert_eq!(network4.peers().read().len(), 2);
+        assert_eq!(network5.peers().read().len(), 2);
     }
 
     quickcheck! {
