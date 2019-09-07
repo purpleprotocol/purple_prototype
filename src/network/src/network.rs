@@ -164,7 +164,12 @@ impl NetworkInterface for Network {
         let peers = self.peers.read();
 
         if let Some(peer) = peers.get(peer) {
-            peer.send_packet(packet)
+            if let Some(ref rx) = peer.rx {
+                let packet = crate::common::wrap_encrypt_packet(&packet, rx);
+                peer.send_packet(packet)
+            } else {
+                Err(NetworkErr::CouldNotSend)
+            }
         } else {
             Err(NetworkErr::PeerNotFound)
         }
@@ -178,7 +183,10 @@ impl NetworkInterface for Network {
         }
 
         for (addr, peer) in peers.iter() {
-            peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
+            if let Some(ref rx) = peer.rx {
+                let packet = crate::common::wrap_encrypt_packet(&packet, rx);
+                peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
+            }
         }
 
         Ok(())
@@ -196,7 +204,10 @@ impl NetworkInterface for Network {
             .filter(|(addr, _)| *addr != exception);
 
         for (addr, peer) in iter {
-            peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
+            if let Some(ref rx) = peer.rx {
+                let packet = crate::common::wrap_encrypt_packet(&packet, rx);
+                peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
+            }
         }
 
         Ok(())

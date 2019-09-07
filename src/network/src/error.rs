@@ -64,6 +64,7 @@ pub enum NetworkErr {
     /// We have connected to ourselves
     SelfConnect,
 
-    /// Could not send a packet. Maybe the outbound buffer is full?
+    /// Could not send a packet. Maybe the outbound buffer is full? 
+    /// Or maybe the peer does not have an encryption key ready?
     CouldNotSend,
 }

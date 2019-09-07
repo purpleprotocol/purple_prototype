@@ -166,16 +166,12 @@ fn process_connection(
                 .fold(writer, move |mut writer, packet| {
                     let peers = network_clone.peers.read();
 
-                    if let Some(peer) = peers.get(&addr) {
-                        if let Some(ref rx) = peer.rx {
-                            let packet = crate::common::wrap_encrypt_packet(&packet, rx);
-
-                            writer
-                                .poll_write(&packet)
-                                .map_err(|err| warn!("write failed = {:?}", err))
-                                .and_then(|_| Ok(()))
-                                .unwrap();
-                        }
+                    if peers.get(&addr).is_some() {
+                        writer
+                            .poll_write(&packet)
+                            .map_err(|err| warn!("write failed = {:?}", err))
+                            .and_then(|_| Ok(()))
+                            .unwrap();
 
                         ok(writer)
                     } else {
@@ -309,6 +305,7 @@ fn process_connection(
                             refuse_connection.store(true, Ordering::Relaxed);
 
                             // Also, ban the peer
+                            info!("Banning peer {}", addr);
                             network.ban_ip(&addr).unwrap();
                         }
 
