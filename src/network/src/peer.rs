@@ -54,7 +54,7 @@ pub struct Peer {
     /// The ip address of the peer
     pub ip: SocketAddr,
 
-    /// Wether the peer has send a `Connect` packet or not.
+    /// Wether the peer has sent a `Connect` packet or not.
     pub sent_connect: bool,
 
     /// Wether we have asked the peer to send us a peer list

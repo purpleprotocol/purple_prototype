@@ -136,27 +136,23 @@ fn process_connection(
             let mut peers = network_clone3.peers.write();
 
             if let Some(peer) = peers.get_mut(&addr) {
-                // Write a connect packet if we are the client
-                // and we have not yet sent a connect packet.
+                // Write a connect packet if we are the client.
                 if let ConnectionType::Client = client_or_server {
-                    if !peer.sent_connect {
-                        // Send `Connect` packet.
-                        let mut connect = Connect::new(node_id.clone(), peer.pk);
-                        connect.sign(&skey);
+                    // Send `Connect` packet.
+                    let mut connect = Connect::new(node_id.clone(), peer.pk);
+                    connect.sign(&skey);
 
-                        let packet = connect.to_bytes();
-                        let packet = crate::common::wrap_packet(&packet);
-                        debug!("Sending connect packet to {}", addr);
+                    let packet = connect.to_bytes();
+                    let packet = crate::common::wrap_packet(&packet);
+                    debug!("Sending connect packet to {}", addr);
 
-                        writer
-                            .poll_write(&packet)
-                            .map_err(|err| warn!("write failed = {:?}", err))
-                            .and_then(|_| Ok(()))
-                            .unwrap();
+                    writer
+                        .poll_write(&packet)
+                        .map_err(|err| warn!("write failed = {:?}", err))
+                        .and_then(|_| Ok(()))
+                        .unwrap();
 
-                        peer.sent_connect = true;
-                        return ok(writer);
-                    }
+                    return ok(writer);
                 }
             } else {
                 return err("no peer found");
