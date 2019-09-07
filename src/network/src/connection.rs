@@ -187,7 +187,12 @@ fn process_connection(
                     }
                 });
             
-            ok(fut)
+            tokio::spawn(fut.then(move |_| {
+                debug!("Write half of {} closed", addr);
+                Ok(())
+            }));
+
+            ok(())
         });
         
     let socket_reader = iter
@@ -346,10 +351,7 @@ fn process_connection(
         ok(())
     }));
 
-    tokio::spawn(socket_writer.then(move |_| {
-        debug!("Write half of {} closed", addr);
-        Ok(())
-    }))
+    tokio::spawn(socket_writer)
 }
 
 // #[cfg(test)]
