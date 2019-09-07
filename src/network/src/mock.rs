@@ -87,7 +87,7 @@ impl NetworkInterface for MockNetwork {
             peers.insert(address.clone(), peer);
         }
 
-        self.send_raw(address, connect).unwrap();
+        self.send_raw(address, &connect).unwrap();
         Ok(())
     }
 
@@ -131,7 +131,7 @@ impl NetworkInterface for MockNetwork {
         }
     }
 
-    fn send_raw(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {
+    fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         let id = if let Some(id) = self.address_mappings.get(peer) {
             id
         } else {
@@ -139,7 +139,7 @@ impl NetworkInterface for MockNetwork {
         };
 
         if let Some(mailbox) = self.mailboxes.get(&id) {
-            mailbox.send((self.ip.clone(), packet)).unwrap();
+            mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
             Ok(())
         } else {
             Err(NetworkErr::PeerNotFound)
@@ -224,7 +224,7 @@ impl NetworkInterface for MockNetwork {
         }
 
         let packet = packet.to_bytes();
-        self.send_raw(peer, packet)?;
+        self.send_raw(peer, &packet)?;
 
         Ok(())
     }

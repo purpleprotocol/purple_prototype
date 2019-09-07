@@ -77,7 +77,7 @@ pub trait NetworkInterface {
 
     /// Sends a raw packet to a specific peer. This
     /// means that the packet will be un-encrypted.
-    fn send_raw(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr>;
+    fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
 
     /// This behaves similarly to `send_unsigned()` but it sends a raw packet.
     fn send_raw_unsigned<P: Packet>(

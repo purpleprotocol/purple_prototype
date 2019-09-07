@@ -235,10 +235,11 @@ impl NetworkInterface for Network {
         self.send_to_all(&packet)
     }
 
-    fn send_raw(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {
+    fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
 
         if let Some(peer) = peers.get(peer) {
+            let packet = crate::common::wrap_packet(&packet);
             peer.send_packet(packet)
         } else {
             Err(NetworkErr::PeerNotFound)
@@ -270,7 +271,7 @@ impl NetworkInterface for Network {
         }
 
         let packet = packet.to_bytes();
-        self.send_raw(peer, packet)?;
+        self.send_raw(peer, &packet)?;
 
         Ok(())
     }
