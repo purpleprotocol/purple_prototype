@@ -16,15 +16,25 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod connect;
-pub mod forward_block;
-pub mod request_peers;
-pub mod send_peers;
-pub mod ping;
-pub mod pong;
-pub use self::connect::*;
-pub use self::forward_block::*;
-pub use self::request_peers::*;
-pub use self::send_peers::*;
-pub use self::ping::*;
-pub use self::pong::*;
+use crate::packet::Packet;
+use crypto::{NodeId, Signature};
+use chrono::prelude::*;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pong {
+    node_id: NodeId,
+    timestamp: DateTime<Utc>,
+    signature: Option<Signature>,
+}
+
+impl Pong {
+    pub const PACKET_TYPE: u8 = 6;
+
+    pub fn new(node_id: NodeId) -> Pong {
+        Pong {
+            node_id: node_id,
+            timestamp: Utc::now(),
+            signature: None,
+        }
+    }
+}
