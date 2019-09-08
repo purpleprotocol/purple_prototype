@@ -59,7 +59,7 @@ pub struct Network {
     hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
 
     /// The name of the network we are on
-    network_name: String,
+    pub(crate) network_name: String,
 
     /// Maximum number of allowed peers, default is 8
     pub(crate) max_peers: usize,
@@ -165,7 +165,7 @@ impl NetworkInterface for Network {
 
         if let Some(peer) = peers.get(peer) {
             if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(&packet, rx);
+                let packet = crate::common::wrap_encrypt_packet(&packet, rx, self.network_name.as_str());
                 peer.send_packet(packet)
             } else {
                 Err(NetworkErr::CouldNotSend)
@@ -184,7 +184,7 @@ impl NetworkInterface for Network {
 
         for (addr, peer) in peers.iter() {
             if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(&packet, rx);
+                let packet = crate::common::wrap_encrypt_packet(&packet, rx, self.network_name.as_str());
                 peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
             }
         }
@@ -205,7 +205,7 @@ impl NetworkInterface for Network {
 
         for (addr, peer) in iter {
             if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(&packet, rx);
+                let packet = crate::common::wrap_encrypt_packet(&packet, rx, self.network_name.as_str());
                 peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
             }
         }
@@ -239,7 +239,7 @@ impl NetworkInterface for Network {
         let peers = self.peers.read();
 
         if let Some(peer) = peers.get(peer) {
-            let packet = crate::common::wrap_packet(&packet);
+            let packet = crate::common::wrap_packet(&packet, self.network_name.as_str());
             peer.send_packet(packet)
         } else {
             Err(NetworkErr::PeerNotFound)

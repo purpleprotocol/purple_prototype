@@ -126,45 +126,43 @@ fn process_connection(
     // iterator to each line off the socket. This "loop" is then
     // terminated with an error once we hit EOF on the socket.
     let iter = stream::iter_ok::<_, io::Error>(iter::repeat(()));
-    let network_clone = network.clone();
-    let network_clone2 = network.clone();
-    let network_clone3 = network.clone();
     let refuse_connection_clone = refuse_connection.clone();
-    let socket_writer = ok(())
-        .and_then(move |_| {
+    let socket_writer = ok(network.clone())
+        .and_then(move |network| {
             let mut writer = writer;
-            let mut peers = network_clone3.peers.write();
 
-            if let Some(peer) = peers.get_mut(&addr) {
-                // Write a connect packet if we are the client.
-                if let ConnectionType::Client = client_or_server {
-                    // Send `Connect` packet.
-                    let mut connect = Connect::new(node_id.clone(), peer.pk);
-                    connect.sign(&skey);
+            {
+                let mut peers = network.peers.write();
 
-                    let packet = connect.to_bytes();
-                    let packet = crate::common::wrap_packet(&packet);
-                    debug!("Sending connect packet to {}", addr);
+                if let Some(peer) = peers.get_mut(&addr) {
+                    // Write a connect packet if we are the client.
+                    if let ConnectionType::Client = client_or_server {
+                        // Send `Connect` packet.
+                        let mut connect = Connect::new(node_id.clone(), peer.pk);
+                        connect.sign(&skey);
 
-                    writer
-                        .poll_write(&packet)
-                        .map_err(|err| warn!("write failed = {:?}", err))
-                        .and_then(|_| Ok(()))
-                        .unwrap();
+                        let packet = connect.to_bytes();
+                        let packet = crate::common::wrap_packet(&packet, network.network_name.as_str());
+                        debug!("Sending connect packet to {}", addr);
 
-                    return ok(writer);
+                        writer
+                            .poll_write(&packet)
+                            .map_err(|err| warn!("write failed = {:?}", err))
+                            .and_then(|_| Ok(()))
+                            .unwrap();
+                    }
+                } else {
+                    return err("no peer found");
                 }
-            } else {
-                return err("no peer found");
             }
 
-            ok(writer)
+            ok((writer, network))
         })
-        .and_then(move |writer| {
+        .and_then(move |(writer, network)| {
             let fut = outbound_receiver
                 .map_err(|err| format!("{}", err))
                 .fold(writer, move |mut writer, packet| {
-                    let peers = network_clone.peers.read();
+                    let peers = network.peers.read();
 
                     if peers.get(&addr).is_some() {
                         writer
@@ -189,10 +187,7 @@ fn process_connection(
         
     let socket_reader = iter
         .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
-        .fold(reader, move |reader, _| {
-            let mut network = network.clone();
-            let network_clone = network.clone();
-
+        .fold((reader, network.clone()), move |(reader, network), _| {
             // Read header
             let line = io::read_exact(reader, vec![0; common::HEADER_SIZE])
                 // Decode header
@@ -214,29 +209,28 @@ fn process_connection(
                         );
                     }
 
-                    Ok((reader, header))
+                    Ok((reader, network, header))
                 })
                 // Read packet from stream
-                .and_then(move |(reader, header)| {
+                .and_then(move |(reader, network, header)| {
                     io::read_exact(
                         reader, 
                         vec![0; header.packet_len as usize]
-                    ).map(|(reader, buffer)| (reader, header, buffer))
+                    ).map(|(reader, buffer)| (reader, network, header, buffer))
                 })
                 // Verify crc32 checksum
-                .and_then(move |(reader, header, buffer)| {
-                    common::verify_crc32(&header, &buffer).map_err(|err| 
+                .and_then(move |(reader, network, header, buffer)| {
+                    common::verify_crc32(&header, &buffer, network.network_name.as_str()).map_err(|err| 
                         io::Error::new(
                             io::ErrorKind::Other,
                             format!("Header read error for {}: {:?}", addr, err)
                         )
                     )?;
 
-                    Ok((reader, header, buffer))
+                    Ok((reader, network, header, buffer))
                 })
                 // Decrypt packet
-                .and_then(move |(reader, header, buffer)|{
-                    let network = network_clone;
+                .and_then(move |(reader, network, header, buffer)|{
                     let packet: Vec<u8> = {
                         let mut peers = network.peers.write();
 
@@ -275,31 +269,28 @@ fn process_connection(
                         }
                     };
 
-                    Ok((reader, header, packet))
+                    Ok((reader, network, header, packet))
                 })
-                .and_then(move |(reader, _, vec)| {
+                .and_then(move |(reader, network, _, vec)| {
                     if vec.len() == 0 {
                         Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
                     } else {
-                        Ok((reader, vec))
+                        Ok((reader, network, vec))
                     }
                 });
 
-            let network_clone = network.clone();
             let refuse_connection = refuse_connection.clone();
 
             line
-                .map(move |(reader, message)| {
+                .map(move |(reader, mut network, message)| {
                     let result = network.process_packet(&addr, &message);
-                    (reader, result)
+                    (reader, network, result)
                 })
-                .map(move |(reader, result)| {
+                .map(move |(reader, network, result)| {
                     // TODO: Handle other errors as well
                     match result {
                         Ok(_) => { }, // Do nothing
                         Err(NetworkErr::InvalidConnectPacket) => {
-                            let network = network_clone.clone();
-
                             // Flag socket for connection refusal if we
                             // have received an invalid connect packet.
                             refuse_connection.store(true, Ordering::Relaxed);
@@ -318,14 +309,13 @@ fn process_connection(
                         }
                     }
 
-                    reader
+                    (reader, network)
                 })
         });
 
     // Now that we've got futures representing each half of the socket, we
     // use the `select` combinator to wait for either half to be done to
     // tear down the other. Then we spawn off the result.
-    let network = network_clone2.clone();
     let socket_reader = socket_reader.map_err(|e| { warn!("{}", e); () });
     let socket_writer = socket_writer.map_err(|e| { warn!("Socket write error: {}", e); () });
 
