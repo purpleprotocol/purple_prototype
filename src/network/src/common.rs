@@ -27,24 +27,25 @@ pub const NETWORK_VERSION: u8 = 0;
 pub const HEADER_SIZE: usize = 7; // Total of 7 bytes. 1 + 2 + 4;
 
 /// Encrypts and wraps a packet with the default network header
-pub fn wrap_encrypt_packet(packet: &[u8], key: &SessionKey) -> Vec<u8> {
+pub fn wrap_encrypt_packet(packet: &[u8], key: &SessionKey, network_name: &str) -> Vec<u8> {
     let (encrypted, nonce) = crypto::seal(packet, key);
-    wrap_packet(&[&nonce.0, encrypted.as_slice()].concat())
+    wrap_packet(&[&nonce.0, encrypted.as_slice()].concat(), network_name)
 }
 
 /// Wraps a packet without encrypting it.
 /// 
 /// ### Header fields
-/// 1) Network layer version   - 8bits
-/// 2) Packet length           - 16bits
-/// 3) CRC32 of packet + nonce - 32bits
-/// 4) Packet                  - Binary of packet length
-pub fn wrap_packet(packet: &[u8]) -> Vec<u8> {
+/// 1) Network layer version          - 8bits
+/// 2) Packet length                  - 16bits
+/// 3) CRC32 of packet + network name - 32bits
+/// 4) Packet                         - Binary of packet length
+pub fn wrap_packet(packet: &[u8], network_name: &str) -> Vec<u8> {
     let packet_len = packet.len();
     let mut buf: Vec<u8> = Vec::with_capacity(HEADER_SIZE + packet_len);
     let mut crc32 = Hasher::new();
 
     crc32.update(packet);
+    crc32.update(network_name.as_bytes());
     let crc32 = crc32.finalize();
 
     buf.write_u8(NETWORK_VERSION).unwrap();
@@ -95,10 +96,11 @@ pub fn decode_header(header: &[u8]) -> Result<PacketHeader, NetworkErr> {
 }
 
 /// Verifies the CRC32 checksum of the packet returning `Err(NetworkErr::BadCRC32)` if invalid. 
-pub fn verify_crc32(header: &PacketHeader, packet: &[u8]) -> Result<(), NetworkErr> {
+pub fn verify_crc32(header: &PacketHeader, packet: &[u8], network_name: &str) -> Result<(), NetworkErr> {
     let mut crc32 = Hasher::new();
 
     crc32.update(packet);
+    crc32.update(network_name.as_bytes());
     let crc32 = crc32.finalize();
 
     // Check CRC32 checksum
@@ -194,12 +196,12 @@ mod tests {
         fn wrap_encrypt_unwrap(packet: Vec<u8>) -> bool {
             let key = SessionKey([0; 32]);
 
-            assert_eq!(packet, unwrap_decrypt_packet(&wrap_encrypt_packet(&packet, &key), &key).unwrap());
+            assert_eq!(packet, unwrap_decrypt_packet(&wrap_encrypt_packet(&packet, &key, "test"), &key).unwrap());
             true
         }
 
         fn decode_header(packet: Vec<u8>) -> bool {
-            let wrapped = wrap_packet(&packet);
+            let wrapped = wrap_packet(&packet, "test");
             let (header, tail) = wrapped.split_at(7);
             super::decode_header(&header).unwrap();
             true

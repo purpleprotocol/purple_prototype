@@ -123,7 +123,7 @@ impl NetworkInterface for MockNetwork {
             let peers = self.peers.read();
             let peer = peers.get(peer).unwrap();
             let key = peer.rx.as_ref().unwrap();
-            let packet = crate::common::wrap_encrypt_packet(&packet, key);
+            let packet = crate::common::wrap_encrypt_packet(&packet, key, self.network_name.as_str());
             mailbox.send((self.ip.clone(), packet)).unwrap();
             Ok(())
         } else {
