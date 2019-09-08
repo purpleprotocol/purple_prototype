@@ -121,7 +121,7 @@ pub fn decrypt(packet: &[u8], nonce: &Nonce, key: &SessionKey) -> Result<Vec<u8>
 
 #[cfg(test)]
 /// Attempts to decrypt a packet. Only used for testing
-pub fn unwrap_decrypt_packet(packet: &[u8], key: &SessionKey) -> Result<Vec<u8>, NetworkErr> {
+pub fn unwrap_decrypt_packet(packet: &[u8], key: &SessionKey, network_name: &str) -> Result<Vec<u8>, NetworkErr> {
     let mut rdr = Cursor::new(packet.to_vec());
     let version = if let Ok(result) = rdr.read_u8() {
         result
@@ -177,6 +177,7 @@ pub fn unwrap_decrypt_packet(packet: &[u8], key: &SessionKey) -> Result<Vec<u8>,
 
     crc32.update(&nonce.0);
     crc32.update(&packet);
+    crc32.update(network_name.as_bytes());
 
     let crc32 = crc32.finalize();
 
@@ -196,7 +197,7 @@ mod tests {
         fn wrap_encrypt_unwrap(packet: Vec<u8>) -> bool {
             let key = SessionKey([0; 32]);
 
-            assert_eq!(packet, unwrap_decrypt_packet(&wrap_encrypt_packet(&packet, &key, "test"), &key).unwrap());
+            assert_eq!(packet, unwrap_decrypt_packet(&wrap_encrypt_packet(&packet, &key, "test"), &key, "test").unwrap());
             true
         }
 
