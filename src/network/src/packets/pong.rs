@@ -16,9 +16,14 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::error::NetworkErr;
 use crate::packet::Packet;
-use crypto::{NodeId, Signature};
+use crate::interface::NetworkInterface;
+use crate::peer::ConnectionType;
 use chrono::prelude::*;
+use crypto::{PublicKey as Pk, SecretKey as Sk, NodeId, Signature};
+use std::net::SocketAddr;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pong {
@@ -37,4 +42,62 @@ impl Pong {
             signature: None,
         }
     }
+}
+
+impl Packet for Pong {
+    fn sign(&mut self, skey: &Sk) {
+        // Assemble data
+        let message = assemble_message(&self);
+
+        // Sign data
+        let signature = crypto::sign(&message, skey);
+
+        // Attach signature to struct
+        self.signature = Some(signature);
+    }
+
+    fn verify_sig(&self) -> bool {
+        let message = assemble_message(&self);
+
+        match self.signature {
+            Some(ref sig) => crypto::verify(&message, sig, &self.node_id.0),
+            None => false,
+        }
+    }
+
+    fn signature(&self) -> Option<&Signature> {
+        self.signature.as_ref()
+    }
+
+    fn timestamp(&self) -> DateTime<Utc> {
+        self.timestamp.clone()
+    }
+
+    fn handle<N: NetworkInterface>(
+        network: &mut N,
+        addr: &SocketAddr,
+        packet: &Pong,
+        _conn_type: ConnectionType,
+    ) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        unimplemented!();
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Arc<Pong>, NetworkErr> {
+        unimplemented!();
+    }
+}
+
+fn assemble_message(obj: &Pong) -> Vec<u8> {
+    let node_id = (obj.node_id.0).0;
+    let timestamp = obj.timestamp.to_rfc3339();
+    let mut buf: Vec<u8> = Vec::with_capacity(1 + 32 + timestamp.len());
+
+    buf.extend_from_slice(&[Pong::PACKET_TYPE]);
+    buf.extend_from_slice(&node_id);
+    buf.extend_from_slice(timestamp.as_bytes());
+    buf
 }

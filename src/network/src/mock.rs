@@ -290,26 +290,7 @@ impl NetworkInterface for MockNetwork {
             debug!("Received packet from {}: {}", addr, hex::encode(packet));
 
             let packet = crate::common::unwrap_decrypt_packet(packet, tx.as_ref().unwrap(), self.network_name.as_str())?;
-            let packet_type = packet[0];
-
-            match packet_type {
-                RequestPeers::PACKET_TYPE => match RequestPeers::from_bytes(&packet) {
-                    Ok(packet) => RequestPeers::handle(self, addr, &packet, conn_type)?,
-                    _ => return Err(NetworkErr::PacketParseErr),
-                },
-
-                SendPeers::PACKET_TYPE => match SendPeers::from_bytes(&packet) {
-                    Ok(packet) => SendPeers::handle(self, addr, &packet, conn_type)?,
-                    _ => return Err(NetworkErr::PacketParseErr),
-                },
-
-                _ => {
-                    debug!("Could not parse packet from {}", addr);
-                    return Err(NetworkErr::PacketParseErr);
-                }
-            }
-
-            Ok(())
+            crate::common::handle_packet(self, conn_type, addr, &packet)
         }
     }
 

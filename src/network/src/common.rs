@@ -17,11 +17,16 @@
 */
 
 use crate::error::NetworkErr;
+use crate::interface::NetworkInterface;
 use crate::header::PacketHeader;
+use crate::packets::*;
+use crate::packet::Packet;
+use crate::peer::ConnectionType;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::crc32fast::Hasher;
 use crypto::{Nonce, SessionKey};
 use std::io::Cursor;
+use std::net::SocketAddr;
 
 pub const NETWORK_VERSION: u8 = 0;
 pub const HEADER_SIZE: usize = 7; // Total of 7 bytes. 1 + 2 + 4;
@@ -117,6 +122,40 @@ pub fn decrypt(packet: &[u8], nonce: &Nonce, key: &SessionKey) -> Result<Vec<u8>
         Ok(result) => Ok(result),
         Err(_) => Err(NetworkErr::EncryptionErr),
     }
+}
+
+/// Parses and handles a packet.
+pub fn handle_packet<N: NetworkInterface>(network: &mut N, conn_type: ConnectionType, peer_addr: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+    let packet_type = packet[0];
+
+    match packet_type {
+        Ping::PACKET_TYPE => match Ping::from_bytes(&packet) {
+            Ok(packet) => Ping::handle(network, peer_addr, &packet, conn_type)?,
+            _ => return Err(NetworkErr::PacketParseErr),
+        },
+
+        Pong::PACKET_TYPE => match Pong::from_bytes(&packet) {
+            Ok(packet) => Pong::handle(network, peer_addr, &packet, conn_type)?,
+            _ => return Err(NetworkErr::PacketParseErr),
+        },
+
+        RequestPeers::PACKET_TYPE => match RequestPeers::from_bytes(&packet) {
+            Ok(packet) => RequestPeers::handle(network, peer_addr, &packet, conn_type)?,
+            _ => return Err(NetworkErr::PacketParseErr),
+        },
+
+        SendPeers::PACKET_TYPE => match SendPeers::from_bytes(&packet) {
+            Ok(packet) => SendPeers::handle(network, peer_addr, &packet, conn_type)?,
+            _ => return Err(NetworkErr::PacketParseErr),
+        },
+
+        _ => {
+            debug!("Could not parse packet from {}", peer_addr);
+            return Err(NetworkErr::PacketParseErr);
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

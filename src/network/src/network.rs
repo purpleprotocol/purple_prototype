@@ -322,7 +322,7 @@ impl NetworkInterface for Network {
             }
         } else {
             info!("{}: {}", peer, hex::encode(packet));
-            Ok(())
+            crate::common::handle_packet(self, conn_type, peer, &packet)
         }
     }
 
