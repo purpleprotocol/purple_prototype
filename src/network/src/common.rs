@@ -129,25 +129,25 @@ pub fn handle_packet<N: NetworkInterface>(network: &mut N, conn_type: Connection
     let packet_type = packet[0];
 
     match packet_type {
-        Ping::PACKET_TYPE => match Ping::from_bytes(&packet) {
+        Ping::PACKET_TYPE => match Ping::from_bytes(packet) {
             Ok(packet) => Ping::handle(network, peer_addr, &packet, conn_type)?,
             _ => return Err(NetworkErr::PacketParseErr),
-        },
+        }
 
-        Pong::PACKET_TYPE => match Pong::from_bytes(&packet) {
+        Pong::PACKET_TYPE => match Pong::from_bytes(packet) {
             Ok(packet) => Pong::handle(network, peer_addr, &packet, conn_type)?,
             _ => return Err(NetworkErr::PacketParseErr),
-        },
+        }
 
-        RequestPeers::PACKET_TYPE => match RequestPeers::from_bytes(&packet) {
+        RequestPeers::PACKET_TYPE => match RequestPeers::from_bytes(packet) {
             Ok(packet) => RequestPeers::handle(network, peer_addr, &packet, conn_type)?,
             _ => return Err(NetworkErr::PacketParseErr),
-        },
+        }
 
-        SendPeers::PACKET_TYPE => match SendPeers::from_bytes(&packet) {
+        SendPeers::PACKET_TYPE => match SendPeers::from_bytes(packet) {
             Ok(packet) => SendPeers::handle(network, peer_addr, &packet, conn_type)?,
             _ => return Err(NetworkErr::PacketParseErr),
-        },
+        }
 
         _ => {
             debug!("Could not parse packet from {}", peer_addr);

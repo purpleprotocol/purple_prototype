@@ -47,7 +47,7 @@ pub struct SendPeers {
 }
 
 impl SendPeers {
-    pub const PACKET_TYPE: u8 = 3;
+    pub const PACKET_TYPE: u8 = 5;
 
     pub fn new(node_id: NodeId, peers: Vec<SocketAddr>) -> SendPeers {
         SendPeers {
@@ -116,7 +116,7 @@ impl Packet for SendPeers {
         let peers_len = peers.len();
 
         // Packet structure:
-        // 1) Packet type(3)   - 8bits
+        // 1) Packet type(5)   - 8bits
         // 2) Timestamp length - 8bits
         // 3) Peers length     - 16bits
         // 4) Node id          - 32byte binary

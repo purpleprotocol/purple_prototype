@@ -39,7 +39,7 @@ pub struct ForwardBlock {
 }
 
 impl ForwardBlock {
-    pub const PACKET_TYPE: u8 = 4;
+    pub const PACKET_TYPE: u8 = 6;
 
     pub fn new(node_id: NodeId, block: Arc<BlockWrapper>) -> ForwardBlock {
         ForwardBlock {
@@ -88,7 +88,7 @@ impl Packet for ForwardBlock {
         let block = self.block.to_bytes();
 
         // Packet structure:
-        // 1) Packet type(4)   - 8bits
+        // 1) Packet type(6)   - 8bits
         // 2) Timestamp length - 8bits
         // 3) Block length     - 32bits
         // 4) Node id          - 32byte binary

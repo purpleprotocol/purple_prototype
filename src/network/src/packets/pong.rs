@@ -20,10 +20,13 @@ use crate::error::NetworkErr;
 use crate::packet::Packet;
 use crate::interface::NetworkInterface;
 use crate::peer::ConnectionType;
+use byteorder::{ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
 use crypto::{PublicKey as Pk, SecretKey as Sk, NodeId, Signature};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::io::Cursor;
+use std::str;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pong {
@@ -33,7 +36,7 @@ pub struct Pong {
 }
 
 impl Pong {
-    pub const PACKET_TYPE: u8 = 6;
+    pub const PACKET_TYPE: u8 = 3;
 
     pub fn new(node_id: NodeId) -> Pong {
         Pong {
@@ -83,11 +86,94 @@ impl Packet for Pong {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        unimplemented!();
+        let mut buffer: Vec<u8> = Vec::new();
+        let signature = if let Some(signature) = &self.signature {
+            signature.inner_bytes()
+        } else {
+            panic!("Signature field is missing");
+        };
+
+        let timestamp = self.timestamp().to_rfc3339();
+        let timestamp_length = timestamp.len() as u8;
+        let node_id = &self.node_id.0;
+
+        // Pong packet structure:
+        // 1) Packet type(3)   - 8bits
+        // 2) Timestamp length - 8bits
+        // 4) Node id          - 32byte binary
+        // 5) Signature        - 64byte binary
+        // 6) Timestamp        - Binary of timestamp length
+        buffer.write_u8(Self::PACKET_TYPE).unwrap();
+        buffer.write_u8(timestamp_length).unwrap();
+        buffer.extend_from_slice(&node_id.0);
+        buffer.extend_from_slice(&signature);
+        buffer.extend_from_slice(timestamp.as_bytes());
+        buffer
     }
 
-    fn from_bytes(bytes: &[u8]) -> Result<Arc<Pong>, NetworkErr> {
-        unimplemented!();
+    fn from_bytes(bin: &[u8]) -> Result<Arc<Pong>, NetworkErr> {
+        let mut rdr = Cursor::new(bin.to_vec());
+        let packet_type = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        if packet_type != Self::PACKET_TYPE {
+            return Err(NetworkErr::BadFormat);
+        }
+
+        rdr.set_position(1);
+
+        let timestamp_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        // Consume cursor
+        let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..2).collect();
+
+        let node_id = if buf.len() > 32 as usize {
+            let node_id_vec: Vec<u8> = buf.drain(..32).collect();
+            let mut b = [0; 32];
+
+            b.copy_from_slice(&node_id_vec);
+
+            NodeId(Pk(b))
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64).collect();
+            Signature::new(&sig_vec)
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        let timestamp = if buf.len() == timestamp_len as usize {
+            let result: Vec<u8> = buf.drain(..timestamp_len as usize).collect();
+
+            match str::from_utf8(&result) {
+                Ok(result) => match DateTime::parse_from_rfc3339(result) {
+                    Ok(result) => Utc.from_utc_datetime(&result.naive_utc()),
+                    _ => return Err(NetworkErr::BadFormat),
+                },
+                Err(_) => return Err(NetworkErr::BadFormat),
+            }
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        let packet = Pong {
+            node_id,
+            timestamp,
+            signature: Some(signature),
+        };
+
+        Ok(Arc::new(packet))
     }
 }
 
@@ -100,4 +186,35 @@ fn assemble_message(obj: &Pong) -> Vec<u8> {
     buf.extend_from_slice(&node_id);
     buf.extend_from_slice(timestamp.as_bytes());
     buf
+}
+
+#[cfg(test)]
+use quickcheck::Arbitrary;
+
+#[cfg(test)]
+use crypto::Identity;
+
+#[cfg(test)]
+impl Arbitrary for Pong {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Pong {
+        let id = Identity::new();
+        let timestamp = Utc::now();
+
+        Pong {
+            node_id: NodeId(*id.pkey()),
+            timestamp,
+            signature: Some(Arbitrary::arbitrary(g)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(packet: Arc<Pong>) -> bool {
+            packet == Pong::from_bytes(&Pong::to_bytes(&packet)).unwrap()
+        }
+    }
 }

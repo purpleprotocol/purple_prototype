@@ -46,7 +46,7 @@ pub struct RequestPeers {
 }
 
 impl RequestPeers {
-    pub const PACKET_TYPE: u8 = 2;
+    pub const PACKET_TYPE: u8 = 4;
 
     pub fn new(node_id: NodeId, requested_peers: u8) -> RequestPeers {
         RequestPeers {
@@ -102,7 +102,7 @@ impl Packet for RequestPeers {
         let node_id = &self.node_id.0;
 
         // Packet structure:
-        // 1) Packet type(2)   - 8bits
+        // 1) Packet type(4)   - 8bits
         // 2) Timestamp length - 8bits
         // 3) Requested peers  - 8bits
         // 4) Node id          - 32byte binary
