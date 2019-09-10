@@ -22,6 +22,8 @@ extern crate serde_derive;
 extern crate quickcheck;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate bin_tools;
 
 #[cfg(test)]
 extern crate tempdir;

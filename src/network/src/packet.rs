@@ -24,8 +24,14 @@ use crypto::{SecretKey as Sk, Signature};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+/// The type id of a packet.
+pub type PacketType = u8;
+
 /// Generic packet interface
 pub trait Packet {
+    /// The type of the packet.
+    const PACKET_TYPE: PacketType;
+
     /// Signs the packet with the given `SecretKey`.
     fn sign(&mut self, sk: &Sk);
 
@@ -40,9 +46,6 @@ pub trait Packet {
 
     /// Returns a reference to the signature field of the packet.
     fn signature(&self) -> Option<&Signature>;
-
-    // Returns the timestamp of the packet.
-    fn timestamp(&self) -> DateTime<Utc>;
 
     /// Callback that handles a `Packet` after it has been parsed.
     fn handle<N: NetworkInterface>(

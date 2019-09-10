@@ -20,34 +20,33 @@ use crate::error::NetworkErr;
 use crate::packet::Packet;
 use crate::interface::NetworkInterface;
 use crate::peer::ConnectionType;
-use byteorder::{ReadBytesExt, WriteBytesExt};
+use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
 use chrono::prelude::*;
 use crypto::{PublicKey as Pk, SecretKey as Sk, NodeId, Signature};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::io::Cursor;
-use std::str;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pong {
     node_id: NodeId,
-    timestamp: DateTime<Utc>,
+    nonce: u64,
     signature: Option<Signature>,
 }
 
 impl Pong {
-    pub const PACKET_TYPE: u8 = 3;
-
-    pub fn new(node_id: NodeId) -> Pong {
+    pub fn new(node_id: NodeId, nonce: u64) -> Pong {
         Pong {
             node_id: node_id,
-            timestamp: Utc::now(),
+            nonce,
             signature: None,
         }
     }
 }
 
 impl Packet for Pong {
+    const PACKET_TYPE: u8 = 3;
+
     fn sign(&mut self, skey: &Sk) {
         // Assemble data
         let message = assemble_message(&self);
@@ -72,10 +71,6 @@ impl Packet for Pong {
         self.signature.as_ref()
     }
 
-    fn timestamp(&self) -> DateTime<Utc> {
-        self.timestamp.clone()
-    }
-
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
@@ -93,21 +88,17 @@ impl Packet for Pong {
             panic!("Signature field is missing");
         };
 
-        let timestamp = self.timestamp().to_rfc3339();
-        let timestamp_length = timestamp.len() as u8;
         let node_id = &self.node_id.0;
 
         // Pong packet structure:
         // 1) Packet type(3)   - 8bits
-        // 2) Timestamp length - 8bits
-        // 4) Node id          - 32byte binary
-        // 5) Signature        - 64byte binary
-        // 6) Timestamp        - Binary of timestamp length
+        // 2) Nonce            - 64bits
+        // 3) Node id          - 32byte binary
+        // 4) Signature        - 64byte binary
         buffer.write_u8(Self::PACKET_TYPE).unwrap();
-        buffer.write_u8(timestamp_length).unwrap();
+        buffer.write_u64::<BigEndian>(self.nonce).unwrap();
         buffer.extend_from_slice(&node_id.0);
         buffer.extend_from_slice(&signature);
-        buffer.extend_from_slice(timestamp.as_bytes());
         buffer
     }
 
@@ -125,7 +116,7 @@ impl Packet for Pong {
 
         rdr.set_position(1);
 
-        let timestamp_len = if let Ok(result) = rdr.read_u8() {
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
         } else {
             return Err(NetworkErr::BadFormat);
@@ -133,7 +124,7 @@ impl Packet for Pong {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..2).collect();
+        let _: Vec<u8> = buf.drain(..9).collect();
 
         let node_id = if buf.len() > 32 as usize {
             let node_id_vec: Vec<u8> = buf.drain(..32).collect();
@@ -146,30 +137,15 @@ impl Packet for Pong {
             return Err(NetworkErr::BadFormat);
         };
 
-        let signature = if buf.len() > 64 as usize {
-            let sig_vec: Vec<u8> = buf.drain(..64).collect();
-            Signature::new(&sig_vec)
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
-        let timestamp = if buf.len() == timestamp_len as usize {
-            let result: Vec<u8> = buf.drain(..timestamp_len as usize).collect();
-
-            match str::from_utf8(&result) {
-                Ok(result) => match DateTime::parse_from_rfc3339(result) {
-                    Ok(result) => Utc.from_utc_datetime(&result.naive_utc()),
-                    _ => return Err(NetworkErr::BadFormat),
-                },
-                Err(_) => return Err(NetworkErr::BadFormat),
-            }
+        let signature = if buf.len() == 64 as usize {
+            Signature::new(&buf)
         } else {
             return Err(NetworkErr::BadFormat);
         };
 
         let packet = Pong {
             node_id,
-            timestamp,
+            nonce,
             signature: Some(signature),
         };
 
@@ -179,12 +155,11 @@ impl Packet for Pong {
 
 fn assemble_message(obj: &Pong) -> Vec<u8> {
     let node_id = (obj.node_id.0).0;
-    let timestamp = obj.timestamp.to_rfc3339();
-    let mut buf: Vec<u8> = Vec::with_capacity(1 + 32 + timestamp.len());
+    let mut buf: Vec<u8> = Vec::with_capacity(1 + 32 + 8);
 
     buf.extend_from_slice(&[Pong::PACKET_TYPE]);
+    buf.extend_from_slice(&encode_be_u64!(obj.nonce));
     buf.extend_from_slice(&node_id);
-    buf.extend_from_slice(timestamp.as_bytes());
     buf
 }
 
@@ -198,11 +173,10 @@ use crypto::Identity;
 impl Arbitrary for Pong {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Pong {
         let id = Identity::new();
-        let timestamp = Utc::now();
 
         Pong {
             node_id: NodeId(*id.pkey()),
-            timestamp,
+            nonce: Arbitrary::arbitrary(g),
             signature: Some(Arbitrary::arbitrary(g)),
         }
     }
