@@ -7008,27 +7008,16 @@ mod tests {
             0x00,                             // 0 Arity
             Instruction::Nop.repr(),
             Instruction::PushOperand.repr(),
-            0x03,
+            0x01,
             0x00,
             Instruction::i32Const.repr(),
-            Instruction::i32Const.repr(),
-            Instruction::i32Const.repr(),
-            0x00,                             // 0
-            0x00,
-            0x00,
-            0x00,
             0x00,                             // 1
             0x00,
             0x00,
             0x01,
-            0x00,                             // 0
-            0x00,
-            0x00,
-            0x00,
             Instruction::If.repr(),
             0x00,
             Instruction::Eqz.repr(),
-            Instruction::Add.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -7041,16 +7030,15 @@ mod tests {
             Instruction::End.repr(),
             Instruction::Else.repr(),
             0x00,
-            Instruction::Mul.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
             Instruction::i32Const.repr(),
-            0x00,                             // 0
+            0x00,                             // 1
             0x00,
             0x00,
-            0x00,
-            Instruction::Eq.repr(),           // Assert 0 - pass test
+            0x01,
+            Instruction::Eq.repr(),           // Assert 1 - pass test
             Instruction::End.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
@@ -7067,19 +7055,9 @@ mod tests {
             0x00,                             // 0 Arity
             Instruction::Nop.repr(),
             Instruction::PushOperand.repr(),
-            0x03,
-            0x00,
-            Instruction::i32Const.repr(),
-            Instruction::i32Const.repr(),
-            Instruction::i32Const.repr(),
-            0x00,                             // 0
-            0x00,
-            0x00,
-            0x00,
-            0x00,                             // 0
-            0x00,
-            0x00,
             0x01,
+            0x00,
+            Instruction::i32Const.repr(),
             0x00,                             // 0
             0x00,
             0x00,
@@ -7087,9 +7065,8 @@ mod tests {
             Instruction::If.repr(),
             0x00,
             Instruction::Eqz.repr(),
-            Instruction::Add.repr(),
             Instruction::PushOperand.repr(),
-            0x02,
+            0x01,
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
@@ -7101,7 +7078,6 @@ mod tests {
             Instruction::End.repr(),
             Instruction::Else.repr(),
             0x00,
-            Instruction::Mul.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -7239,14 +7215,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0xff,                             // -5
-            0xff,
-            0xff,
-            0xfb,
             0xff,                             // -10
             0xff,
             0xff,
             0xf6,
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
             Instruction::If.repr(),
             0x00,
             Instruction::LtSigned.repr(),
@@ -7255,11 +7231,11 @@ mod tests {
             0x01,
             0x00,
             Instruction::i32Const.repr(),
-            0xff,                             // -50
-            0xff,
-            0xff,
-            0xce,
-            Instruction::Eq.repr(),           // Assert -50 - fail test
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - fail test
             Instruction::End.repr(),
             Instruction::Else.repr(),
             0x00,
@@ -7268,11 +7244,11 @@ mod tests {
             0x01,
             0x00,
             Instruction::i32Const.repr(),
-            0xff,                             // -50
-            0xff,
-            0xff,
-            0xce,
-            Instruction::Eq.repr(),           // Assert -50 - pass test
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - pass test
             Instruction::End.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
@@ -7347,14 +7323,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 10
-            0x00,
-            0x00,
-            0x0a,
             0x00,                             // 5
             0x00,
             0x00,
             0x05,
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
             Instruction::If.repr(),
             0x00,
             Instruction::LtUnsigned.repr(),
@@ -7401,14 +7377,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 5
-            0x00,
-            0x00,
-            0x05,
             0x00,                             // 10
             0x00,
             0x00,
             0x0a,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
             Instruction::If.repr(),
             0x00,
             Instruction::LtUnsigned.repr(),
@@ -7487,14 +7463,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0xff,                             // -10
-            0xff,
-            0xff,
-            0xf6,
             0xff,                             // -5
             0xff,
             0xff,
             0xfb,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
             Instruction::If.repr(),
             0x00,
             Instruction::GtSigned.repr(),
@@ -7541,14 +7517,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0xff,                             // -5
-            0xff,
-            0xff,
-            0xfb,
             0xff,                             // -10
             0xff,
             0xff,
             0xf6,
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
             Instruction::If.repr(),
             0x00,
             Instruction::GtSigned.repr(),
@@ -7595,14 +7571,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 5
-            0x00,
-            0x00,
-            0x05,
             0x00,                             // 10
             0x00,
             0x00,
             0x0a,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
             Instruction::If.repr(),
             0x00,
             Instruction::GtUnsigned.repr(),
@@ -7649,14 +7625,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 10
-            0x00,
-            0x00,
-            0x0a,
             0x00,                             // 5
             0x00,
             0x00,
             0x05,
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
             Instruction::If.repr(),
             0x00,
             Instruction::GtUnsigned.repr(),
@@ -7713,7 +7689,7 @@ mod tests {
             0xf6,
             Instruction::If.repr(),
             0x00,
-            Instruction::GtSigned.repr(),
+            Instruction::GtUnsigned.repr(),
             Instruction::Add.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
@@ -7735,14 +7711,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 5
-            0x00,
-            0x00,
-            0x05,
             0xff,                             // -10
             0xff,
             0xff,
             0xf6,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
             Instruction::If.repr(),
             0x00,
             Instruction::LeSigned.repr(),
@@ -7843,14 +7819,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 10
-            0x00,
-            0x00,
-            0x0a,
             0x00,                             // 5
             0x00,
             0x00,
             0x05,
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
             Instruction::If.repr(),
             0x00,
             Instruction::LeUnsigned.repr(),
@@ -7951,17 +7927,17 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0xff,                             // -5
-            0xff,
-            0xff,
-            0xfb,
             0xff,                             // -10
             0xff,
             0xff,
             0xf6,
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
             Instruction::If.repr(),
             0x00,
-            Instruction::LeSigned.repr(),
+            Instruction::LeUnsigned.repr(),
             Instruction::Add.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
@@ -7983,14 +7959,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0xff,                             // -10
-            0xff,
-            0xff,
-            0xf6,
             0x00,                             // 5
             0x00,
             0x00,
             0x05,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
             Instruction::If.repr(),
             0x00,
             Instruction::GeSigned.repr(),
@@ -8091,14 +8067,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 5
-            0x00,
-            0x00,
-            0x05,
             0x00,                             // 10
             0x00,
             0x00,
             0x0a,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
             Instruction::If.repr(),
             0x00,
             Instruction::GeUnsigned.repr(),
@@ -8209,7 +8185,7 @@ mod tests {
             0xf6,
             Instruction::If.repr(),
             0x00,
-            Instruction::GeSigned.repr(),
+            Instruction::GeUnsigned.repr(),
             Instruction::Add.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
