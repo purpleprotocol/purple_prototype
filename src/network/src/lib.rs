@@ -59,6 +59,7 @@ mod packet;
 pub mod packets;
 mod peer;
 mod header;
+mod validation;
 
 pub use bootstrap::*;
 pub use connection::*;
