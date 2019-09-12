@@ -416,11 +416,17 @@ mod tests {
         let network4 = network4_cc.lock();
         let network5 = network5_cc.lock();
 
-        assert_eq!(network1.peers().read().len(), 4);
-        assert_eq!(network2.peers().read().len(), 4);
-        assert_eq!(network3.peers().read().len(), 2);
-        assert_eq!(network4.peers().read().len(), 2);
-        assert_eq!(network5.peers().read().len(), 2);
+        let peers1 = network1.peers();
+        let peers2 = network2.peers();
+        let peers3 = network3.peers();
+        let peers4 = network4.peers();
+        let peers5 = network5.peers();
+
+        assert_eq!(peers1.read().len(), 4);
+        assert_eq!(peers2.read().len(), 4);
+        assert_eq!(peers3.read().len(), 2);
+        assert_eq!(peers4.read().len(), 2);
+        assert_eq!(peers5.read().len(), 2);
     }
 
     quickcheck! {

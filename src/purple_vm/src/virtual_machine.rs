@@ -121,7 +121,7 @@ impl Vm {
                 }
 
                 println!("DEBUG IP: {}, FUN IDX: {}", ip.ip, ip.fun_idx);
-
+                println!("Operand stack: {:?}", self.operand_stack);
                 match Instruction::from_repr(op) {
                     Some(Instruction::Halt) => {
                         break;
@@ -233,7 +233,7 @@ impl Vm {
                             &mut self.operand_stack,
                             &fun,
                             &argv,
-                        );
+                        )?;
                     }
                     Some(Instruction::Loop) => {
                         handle_begin_block(
@@ -243,7 +243,7 @@ impl Vm {
                             &mut self.operand_stack,
                             &fun,
                             &argv,
-                        );
+                        )?;
                     }
                     Some(Instruction::If) => {
                         handle_begin_block(
@@ -253,7 +253,17 @@ impl Vm {
                             &mut self.operand_stack,
                             &fun,
                             &argv,
-                        );
+                        )?;
+                    }
+                    Some(Instruction::Else) => {
+                        handle_begin_block(
+                            CfOperator::Else,
+                            ip,
+                            &mut self.call_stack,
+                            &mut self.operand_stack,
+                            &fun,
+                            &argv,
+                        )?;
                     }
                     Some(Instruction::PushOperand) => {
                         ip.increment();
@@ -454,7 +464,7 @@ impl Vm {
                                     operands.push(value);
                                 }
 
-                                let result = perform_comparison(instruction, operands);
+                                let result = perform_comparison(instruction, operands)?;
 
                                 // Return to stored caller address if comparison is successful
                                 if result {
@@ -499,7 +509,7 @@ impl Vm {
                         let os = self.operand_stack.to_vec();
                         
                         // Perform assertion
-                        if perform_comparison(Instruction::Eq, os) { 
+                        if perform_comparison(Instruction::Eq, os)? { 
                             ip.increment();
                         } else {
                             return Err(VmError::AssertionFailed);
@@ -967,7 +977,7 @@ fn handle_begin_block(
     operand_stack: &mut Stack<VmValue>,
     fun: &Function,
     init_argv: &[VmValue],
-) {
+) -> Result<(), VmError> {
     let initial_ip = ip.clone();
 
     ip.increment();
@@ -1020,8 +1030,8 @@ fn handle_begin_block(
                         let value = os.pop();
                         operands.push(value);
                     }
-
-                    if perform_comparison(instruction, operands) {
+                    println!("Before perform comparison if 0 arity {:?}", perform_comparison(instruction, operands.clone()));
+                    if perform_comparison(instruction, operands)? {
                         // Push frame
                         call_stack.push(Frame::new(Some(CfOperator::If), Some(initial_ip), None));
                     } else {
@@ -1040,7 +1050,7 @@ fn handle_begin_block(
                                 operand_stack,
                                 fun,
                                 init_argv,
-                            );
+                            )?;
                         }
                     }
                 } else {
@@ -1070,8 +1080,8 @@ fn handle_begin_block(
                         let value = os.pop();
                         operands.push(value);
                     }
-
-                    if perform_comparison(instruction, operands) {
+                    println!("Before perform comparison if x arity {:?}", perform_comparison(instruction, operands.clone()));
+                    if perform_comparison(instruction, operands)? {
                         let mut buf: Vec<VmValue> = Vec::with_capacity(arity as usize);
 
                         {
@@ -1109,7 +1119,7 @@ fn handle_begin_block(
                                 operand_stack,
                                 fun,
                                 init_argv,
-                            );
+                            )?;
                         }
                     }
                 } else {
@@ -1160,6 +1170,8 @@ fn handle_begin_block(
     } else {
         ip.increment();
     }
+
+    Ok(())
 }
 
 fn fetch_bytes(amount: usize, ip: &mut Address, fun: &Function) -> Vec<u8> {
@@ -2975,23 +2987,25 @@ fn fetch_argv(
     Ok((argv_types, argv))
 }
 
-fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> bool {
+fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> Result<bool, VmError> {
+    let op_len = operands.len();
+    println!("perform_comparison with instruction {:?} on operands {:?}", op, operands.clone());
     match op {
         Instruction::Eqz => {
-            if operands.len() != 1 {
+            if op_len != 1 {
                 panic!(format!(
-                    "Can only perform equality on 1 operand! Got: {}",
-                    operands.len()
+                    "Can only perform equality to zero on 1 operand! Got: {}",
+                    op_len
                 ));
             }
 
-            unimplemented!();
+            Ok(compare_to_zero(operands[0]))
         }
         Instruction::Eq => {
-            if operands.len() < 2 {
+            if op_len < 2 {
                 panic!(format!(
                     "Cannot perform equality on less than 2 operands! Got: {}",
-                    operands.len()
+                    op_len
                 ));
             }
 
@@ -3007,9 +3021,137 @@ fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> bool {
                 }
             });
 
-            result
+            Ok(result)
+        }
+        Instruction::Ne => {
+            if op_len != 2 {
+                panic!(format!(
+                    "Cannot perform not equal on more or less than 2 operands! Got: {}",
+                    op_len
+                ));
+            }
+
+            Ok(operands[0] != operands[1])
+        }
+        Instruction::LtSigned => {
+            if op_len != 2 {
+                panic!(format!(
+                    "Cannot perform less than signed on more or less than 2 operands! Got: {}",
+                    op_len
+                ));
+            }
+
+            Ok(operands[0].lt(&operands[1]))
+        }
+        Instruction::LtUnsigned => {
+            if op_len != 2 {
+                panic!(format!(
+                    "Cannot perform less than unsigned on more or less than 2 operands! Got: {}",
+                    op_len
+                ));
+            }
+
+            if !operands[0].is_positive() || !operands[1].is_positive(){
+                return Err(VmError::UnsignedOperationSignedOperand)
+            }
+
+            Ok(operands[0].lt(&operands[1]))
+        }
+        Instruction::GtSigned => {
+            if op_len != 2 {
+                panic!(format!(
+                    "Cannot perform greather than signed on more or less than 2 operands! Got: {}",
+                    op_len
+                ));
+            }
+
+            Ok(operands[0].gt(&operands[1]))
+        }
+        Instruction::GtUnsigned => {
+            if op_len != 2 {
+                panic!(format!(
+                    "Cannot perform greather than unsigned on more or less than 2 operands! Got: {}",
+                    op_len
+                ));
+            }
+
+            if !operands[0].is_positive() || !operands[1].is_positive(){
+                return Err(VmError::UnsignedOperationSignedOperand)
+            }
+
+            Ok(operands[0].gt(&operands[1]))
+        }
+        Instruction::LeSigned => {
+            if op_len != 2 {
+                panic!(format!(
+                    "Cannot perform less or equal signed on more or less than 2 operands! Got: {}",
+                    op_len
+                ));
+            }
+
+            Ok(operands[0].le(&operands[1]))
+        }
+        Instruction::LeUnsigned => {
+            if op_len != 2 {
+                panic!(format!(
+                    "Cannot perform less or equal unsigned on more or less than 2 operands! Got: {}",
+                    op_len
+                ));
+            }
+
+            if !operands[0].is_positive() || !operands[1].is_positive(){
+                return Err(VmError::UnsignedOperationSignedOperand)
+            }
+
+            Ok(operands[0].le(&operands[1]))
+        }
+        Instruction::GeSigned => {
+            if op_len != 2 {
+                panic!(format!(
+                    "Cannot perform greather or equal signed on more or less than 2 operands! Got: {}",
+                    op_len
+                ));
+            }
+
+            Ok(operands[0].ge(&operands[1]))
+        }
+        Instruction::GeUnsigned => {
+            if op_len != 2 {
+                panic!(format!(
+                    "Cannot perform greather or equal unsigned on more or less than 2 operands! Got: {}",
+                    op_len
+                ));
+            }
+
+            if !operands[0].is_positive() || !operands[1].is_positive(){
+                return Err(VmError::UnsignedOperationSignedOperand)
+            }
+
+            Ok(operands[0].ge(&operands[1]))
         }
         _ => unimplemented!(),
+    }
+}
+
+fn compare_to_zero(operand: VmValue) -> bool {
+    match operand{
+        VmValue::I32(val) => val == 0,
+        VmValue::I64(val) => val == 0,
+        VmValue::F32(val) => val == 0.0,
+        VmValue::F64(val) => val == 0.0,
+        VmValue::i32Array2(val) => val.iter().all(|v| *v == 0),
+        VmValue::i32Array4(val) => val.iter().all(|v| *v == 0),
+        VmValue::i32Array8(val) => val.iter().all(|v| *v == 0),
+        VmValue::i64Array2(val) => val.iter().all(|v| *v == 0),
+        VmValue::i64Array4(val) => val.iter().all(|v| *v == 0),
+        VmValue::i64Array8(val)=> val.iter().all(|v| *v == 0),
+        VmValue::f32Array2(val)=> val.iter().all(|v| *v == 0.0),
+        VmValue::f32Array4(val)=> val.iter().all(|v| *v == 0.0),
+        VmValue::f32Array8(val)=> val.iter().all(|v| *v == 0.0),
+        VmValue::f64Array2(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f64Array4(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f64Array8(val) => val.iter().all(|v| *v == 0.0),
+        _ => panic!("Operand type not supported for comparison")
     }
 }
 
@@ -6856,5 +6998,1200 @@ mod tests {
         ];
 
         assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_eqz_performs_else_on_false() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 1
+            0x00,
+            0x00,
+            0x01,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::Eqz.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            Instruction::Eq.repr(),           // Assert 10 - fail test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 1
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Eq.repr(),           // Assert 1 - pass test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_eqz_perform_if_on_true() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 0
+            0x00,
+            0x00,
+            0x00,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::Eqz.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 0
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),           // Assert 0 - pass test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            Instruction::Eq.repr(),           // Assert 10 - fail test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_ne_performs_else_on_false() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 3
+            0x00,
+            0x00,
+            0x03,
+            0x00,                             // 3
+            0x00,
+            0x00,
+            0x03,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::Ne.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 9
+            0x00,
+            0x00,
+            0x09,
+            Instruction::Eq.repr(),           // Assert 9 - fail test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 9
+            0x00,
+            0x00,
+            0x09,
+            Instruction::Eq.repr(),           // Assert 9 - pass test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_ne_performs_if_on_true() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 2
+            0x00,
+            0x00,
+            0x02,
+            0x00,                             // 3
+            0x00,
+            0x00,
+            0x03,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::Ne.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
+            Instruction::Eq.repr(),           // Assert 5 - pass test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
+            Instruction::Eq.repr(),           // Assert 5 - fail test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_lt_signed_performs_else_on_false() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::LtSigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - fail test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - pass test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_lt_signed_performs_if_on_true() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::LtSigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -15
+            0xff,
+            0xff,
+            0xf1,
+            Instruction::Eq.repr(),           // Assert -15 - pass test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -15
+            0xff,
+            0xff,
+            0xf1,
+            Instruction::Eq.repr(),           // Assert -15 - fail test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_lt_unsigned_performs_else_on_false() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::LtUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - fail test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - pass test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_lt_unsigned_performs_if_on_true() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::LtUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 15
+            0x00,
+            0x00,
+            0x0f,
+            Instruction::Eq.repr(),           // Assert 15 - pass test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 15
+            0x00,
+            0x00,
+            0x0f,
+            Instruction::Eq.repr(),           // Assert 15 - fail test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_lt_unsigned_breaks_with_signed_operands() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::LtUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_eq!(execute_vm_code_common(block), Err(VmError::UnsignedOperationSignedOperand));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_gt_signed_performs_else_on_false() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::GtSigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - fail test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - pass test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_gt_signed_performs_if_on_true() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::GtSigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -15
+            0xff,
+            0xff,
+            0xf1,
+            Instruction::Eq.repr(),           // Assert -15 - pass test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -15
+            0xff,
+            0xff,
+            0xf1,
+            Instruction::Eq.repr(),           // Assert -15 - fail test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_gt_unsigned_performs_else_on_false() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::GtUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - fail test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - pass test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_gt_unsigned_performs_if_on_true() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::GtUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 15
+            0x00,
+            0x00,
+            0x0f,
+            Instruction::Eq.repr(),           // Assert 15 - pass test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 15
+            0x00,
+            0x00,
+            0x0f,
+            Instruction::Eq.repr(),           // Assert 15 - fail test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_gt_unsigned_breaks_with_signed_operands() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::GtUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_eq!(execute_vm_code_common(block), Err(VmError::UnsignedOperationSignedOperand));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_le_signed_performs_else_on_false() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::LeSigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -50
+            0xff,
+            0xff,
+            0xce,
+            Instruction::Eq.repr(),           // Assert -50 - fail test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -50
+            0xff,
+            0xff,
+            0xce,
+            Instruction::Eq.repr(),           // Assert -50 - pass test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_le_signed_performs_if_on_true() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::LeSigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -20
+            0xff,
+            0xff,
+            0xec,
+            Instruction::Eq.repr(),           // Assert -20 - pass test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -20
+            0xff,
+            0xff,
+            0xec,
+            Instruction::Eq.repr(),           // Assert -20 - fail test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_le_unsigned_performs_else_on_false() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::LeUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - fail test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - pass test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_le_unsigned_performs_if_on_true() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::LeUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 20
+            0x00,
+            0x00,
+            0x14,
+            Instruction::Eq.repr(),           // Assert 20 - pass test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 20
+            0x00,
+            0x00,
+            0x14,
+            Instruction::Eq.repr(),           // Assert 20 - fail test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_le_unsigned_breaks_with_signed_operands() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::LeUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_eq!(execute_vm_code_common(block), Err(VmError::UnsignedOperationSignedOperand));
+    }
+    
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_ge_signed_performs_else_on_false() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::GeSigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -50
+            0xff,
+            0xff,
+            0xce,
+            Instruction::Eq.repr(),           // Assert -50 - fail test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -50
+            0xff,
+            0xff,
+            0xce,
+            Instruction::Eq.repr(),           // Assert -20 - pass test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_ge_signed_performs_if_on_true() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::GeSigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -20
+            0xff,
+            0xff,
+            0xec,
+            Instruction::Eq.repr(),           // Assert -20 - pass test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xff,                             // -20
+            0xff,
+            0xff,
+            0xec,
+            Instruction::Eq.repr(),           // Assert -20 - fail test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_ge_unsigned_performs_else_on_false() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::GeUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 50 - fail test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 50
+            0x00,
+            0x00,
+            0x32,
+            Instruction::Eq.repr(),           // Assert 32 - pass test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_ge_unsigned_performs_if_on_true() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::GeUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 20
+            0x00,
+            0x00,
+            0x14,
+            Instruction::Eq.repr(),           // Assert 20 - pass test
+            Instruction::End.repr(),
+            Instruction::Else.repr(),
+            0x00,
+            Instruction::Mul.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,                             // 20
+            0x00,
+            0x00,
+            0x14,
+            Instruction::Eq.repr(),           // Assert 20 - fail test
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn comparison_ge_unsigned_breaks_with_signed_operands() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::GeUnsigned.repr(),
+            Instruction::Add.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_eq!(execute_vm_code_common(block), Err(VmError::UnsignedOperationSignedOperand));
     }
 }

@@ -26,7 +26,7 @@ use primitives::r#type::VmType;
 use stack::Stack;
 
 /// Maximum allowed operands.
-const OPERAND_STACK_SIZE: usize = 1024; 
+const OPERAND_STACK_SIZE: usize = 1024;
 
 #[derive(Debug)]
 enum Validity {
@@ -180,7 +180,7 @@ impl Validator {
 
                                 ARITY_TRANSITIONS.to_vec()
                             }
-                            Instruction::Add | Instruction::Mul => {
+                            Instruction::Add | Instruction::Mul | Instruction::Eq => {
                                 let len = self.operand_stack.len();
                                 if len > OPERAND_STACK_SIZE || len < 2 {
                                     self.state = Validity::IrrefutablyInvalid;
@@ -192,7 +192,16 @@ impl Validator {
                             | Instruction::DivSigned
                             | Instruction::DivUnsigned
                             | Instruction::RemSigned
-                            | Instruction::RemUnsigned => {
+                            | Instruction::RemUnsigned
+                            | Instruction::Ne
+                            | Instruction::LtSigned
+                            | Instruction::LtUnsigned
+                            | Instruction::GtSigned
+                            | Instruction::GtUnsigned
+                            | Instruction::LeSigned
+                            | Instruction::LeUnsigned
+                            | Instruction::GeSigned
+                            | Instruction::GeUnsigned => {
                                 if self.operand_stack.len() != 2 {
                                     self.state = Validity::IrrefutablyInvalid;
                                     return;
@@ -203,6 +212,14 @@ impl Validator {
                             Instruction::Min | Instruction::Max => {
                                 let len = self.operand_stack.len();
                                 if len > OPERAND_STACK_SIZE || len < 1 {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
+
+                                DEFAULT_TRANSITIONS.to_vec()
+                            }
+                            Instruction::Eqz => {
+                                if self.operand_stack.len() != 1 {
                                     self.state = Validity::IrrefutablyInvalid;
                                     return;
                                 }
@@ -1858,5 +1875,246 @@ mod tests {
         }
 
         assert!(!validator.valid());
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_1_for_eqz() {
+        let mut validator = Validator::new();
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::If.repr(),
+            0x00,
+            Instruction::Eqz.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        for byte in block {
+            validator.push_op(byte);
+
+            if validator.done() {
+                break;
+            }
+        }
+
+        assert!(!validator.valid());
+    }
+
+    fn get_common_block_1_operand(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::If.repr(),
+            0x00,
+            instruction.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
+    fn get_common_block_3_operands(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x03,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            0x00,
+            0x00,
+            0x00,
+            0x03,
+            Instruction::If.repr(),
+            0x00,
+            instruction.repr(),
+            Instruction::End.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
+    fn is_valid(block: Vec<u8>) -> bool {
+        let mut validator = Validator::new();
+        for byte in block {
+            validator.push_op(byte);
+
+            if validator.done() {
+                break;
+            }
+        }
+
+        validator.valid()
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_or_more_for_eq() {
+        let block: Vec<u8> = get_common_block_1_operand(Instruction::Eq);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_lower_for_ne() {
+        let block: Vec<u8> = get_common_block_1_operand(Instruction::Ne);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_ne() {
+        let block: Vec<u8> = get_common_block_3_operands(Instruction::Ne);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_lower_for_lt_signed() {
+        let block: Vec<u8> = get_common_block_1_operand(Instruction::LtSigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_lt_signed() {
+        let block: Vec<u8> = get_common_block_3_operands(Instruction::LtSigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_lower_for_lt_unsigned() {
+        let block: Vec<u8> = get_common_block_1_operand(Instruction::LtUnsigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_lt_unsigned() {
+        let block: Vec<u8> = get_common_block_3_operands(Instruction::LtUnsigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_lower_for_gt_signed() {
+        let block: Vec<u8> = get_common_block_1_operand(Instruction::GtSigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_gt_signed() {
+        let block: Vec<u8> = get_common_block_3_operands(Instruction::GtSigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_lower_for_gt_unsigned() {
+        let block: Vec<u8> = get_common_block_1_operand(Instruction::GtUnsigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_gt_unsigned() {
+        let block: Vec<u8> = get_common_block_3_operands(Instruction::GtUnsigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_lower_for_le_signed() {
+        let block: Vec<u8> = get_common_block_1_operand(Instruction::LeSigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_le_signed() {
+        let block: Vec<u8> = get_common_block_3_operands(Instruction::LeSigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_lower_for_le_unsigned() {
+        let block: Vec<u8> = get_common_block_1_operand(Instruction::LeUnsigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_le_unsigned() {
+        let block: Vec<u8> = get_common_block_3_operands(Instruction::LeUnsigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_lower_for_ge_signed() {
+        let block: Vec<u8> = get_common_block_1_operand(Instruction::GeSigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_ge_signed() {
+        let block: Vec<u8> = get_common_block_3_operands(Instruction::GeSigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_lower_for_ge_unsigned() {
+        let block: Vec<u8> = get_common_block_1_operand(Instruction::GeUnsigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_ge_unsigned() {
+        let block: Vec<u8> = get_common_block_3_operands(Instruction::GeUnsigned);
+        assert!(!is_valid(block));
     }
 }
