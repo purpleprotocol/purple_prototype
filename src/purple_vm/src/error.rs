@@ -51,4 +51,7 @@ pub enum VmError {
 
     /// An assertion has failed
     AssertionFailed,
+
+    /// An invalid operator has been called for a wrong data type
+    InvalidOperator
 }

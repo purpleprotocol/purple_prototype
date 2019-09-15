@@ -18,7 +18,7 @@
 
 use std::cmp::{Ordering, PartialOrd};
 use std::fmt;
-use std::ops::{Add, Div, Mul, Rem, Sub};
+use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use std::{f32, f64};
 use VmError;
 
@@ -189,6 +189,566 @@ impl VmValue {
         match VmValue::check_f64_infinite(val1 % val2) {
             Some(res) => Ok(res),
             None => Err(VmError::Infinity),
+        }
+    }
+
+    pub fn abs(&self) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::I32(_) => Err(VmError::InvalidOperator),
+            VmValue::I64(_) => Err(VmError::InvalidOperator),
+            VmValue::F32(val) => Ok(VmValue::F32(val.abs())),
+            VmValue::F64(val) => Ok(VmValue::F64(val.abs())),
+            VmValue::i32Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::f32Array2(val) => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let abs = val.iter().map(|a| a.abs());
+                for (r, v) in result.iter_mut().zip(abs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let abs = val.iter().map(|a| a.abs());
+                for (r, v) in result.iter_mut().zip(abs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let abs = val.iter().map(|a| a.abs());
+                for (r, v) in result.iter_mut().zip(abs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            VmValue::f64Array2(val) => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let abs = val.iter().map(|a| a.abs());
+                for (r, v) in result.iter_mut().zip(abs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            VmValue::f64Array4(val) => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let abs = val.iter().map(|a| a.abs());
+                for (r, v) in result.iter_mut().zip(abs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            VmValue::f64Array8(val) => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let abs = val.iter().map(|a| a.abs());
+                for (r, v) in result.iter_mut().zip(abs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            _ => panic!(),
+        }
+    }
+
+    pub fn ceil(&self) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::I32(_) => Err(VmError::InvalidOperator),
+            VmValue::I64(_) => Err(VmError::InvalidOperator),
+            VmValue::F32(val) => Ok(VmValue::F32(val.ceil())),
+            VmValue::F64(val) => Ok(VmValue::F64(val.ceil())),
+            VmValue::i32Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::f32Array2(val) => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let ceils = val.iter().map(|a| a.ceil());
+                for (r, v) in result.iter_mut().zip(ceils) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let ceils = val.iter().map(|a| a.ceil());
+                for (r, v) in result.iter_mut().zip(ceils) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let ceils = val.iter().map(|a| a.ceil());
+                for (r, v) in result.iter_mut().zip(ceils) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            VmValue::f64Array2(val) => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let ceils = val.iter().map(|a| a.ceil());
+                for (r, v) in result.iter_mut().zip(ceils) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            VmValue::f64Array4(val) => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let ceils = val.iter().map(|a| a.ceil());
+                for (r, v) in result.iter_mut().zip(ceils) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            VmValue::f64Array8(val) => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let ceils = val.iter().map(|a| a.ceil());
+                for (r, v) in result.iter_mut().zip(ceils) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            _ => panic!(),
+        }
+    }
+
+    pub fn floor(&self) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::I32(_) => Err(VmError::InvalidOperator),
+            VmValue::I64(_) => Err(VmError::InvalidOperator),
+            VmValue::F32(val) => Ok(VmValue::F32(val.floor())),
+            VmValue::F64(val) => Ok(VmValue::F64(val.floor())),
+            VmValue::i32Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::f32Array2(val) => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let floors = val.iter().map(|a| a.floor());
+                for (r, v) in result.iter_mut().zip(floors) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let floors = val.iter().map(|a| a.floor());
+                for (r, v) in result.iter_mut().zip(floors) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let floors = val.iter().map(|a| a.floor());
+                for (r, v) in result.iter_mut().zip(floors) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            VmValue::f64Array2(val) => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let floors = val.iter().map(|a| a.floor());
+                for (r, v) in result.iter_mut().zip(floors) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            VmValue::f64Array4(val) => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let floors = val.iter().map(|a| a.floor());
+                for (r, v) in result.iter_mut().zip(floors) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            VmValue::f64Array8(val) => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let floors = val.iter().map(|a| a.floor());
+                for (r, v) in result.iter_mut().zip(floors) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            _ => panic!(),
+        }
+    }
+
+    pub fn trunc(&self) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::I32(_) => Err(VmError::InvalidOperator),
+            VmValue::I64(_) => Err(VmError::InvalidOperator),
+            VmValue::F32(val) => Ok(VmValue::F32(val.trunc())),
+            VmValue::F64(val) => Ok(VmValue::F64(val.trunc())),
+            VmValue::i32Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::f32Array2(val) => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let truncs = val.iter().map(|a| a.trunc());
+                for (r, v) in result.iter_mut().zip(truncs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let truncs = val.iter().map(|a| a.trunc());
+                for (r, v) in result.iter_mut().zip(truncs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let truncs = val.iter().map(|a| a.trunc());
+                for (r, v) in result.iter_mut().zip(truncs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            VmValue::f64Array2(val) => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let truncs = val.iter().map(|a| a.trunc());
+                for (r, v) in result.iter_mut().zip(truncs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            VmValue::f64Array4(val) => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let truncs = val.iter().map(|a| a.trunc());
+                for (r, v) in result.iter_mut().zip(truncs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            VmValue::f64Array8(val) => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let truncs = val.iter().map(|a| a.trunc());
+                for (r, v) in result.iter_mut().zip(truncs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            _ => panic!(),
+        }
+    }
+
+    pub fn round(&self) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::I32(_) => Err(VmError::InvalidOperator),
+            VmValue::I64(_) => Err(VmError::InvalidOperator),
+            VmValue::F32(val) => Ok(VmValue::F32(val.round())),
+            VmValue::F64(val) => Ok(VmValue::F64(val.round())),
+            VmValue::i32Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::f32Array2(val) => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let rounded = val.iter().map(|a| a.round());
+                for (r, v) in result.iter_mut().zip(rounded) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let rounded = val.iter().map(|a| a.round());
+                for (r, v) in result.iter_mut().zip(rounded) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let rounded = val.iter().map(|a| a.round());
+                for (r, v) in result.iter_mut().zip(rounded) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            VmValue::f64Array2(val) => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let rounded = val.iter().map(|a| a.round());
+                for (r, v) in result.iter_mut().zip(rounded) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            VmValue::f64Array4(val) => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let rounded = val.iter().map(|a| a.round());
+                for (r, v) in result.iter_mut().zip(rounded) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            VmValue::f64Array8(val) => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let rounded = val.iter().map(|a| a.round());
+                for (r, v) in result.iter_mut().zip(rounded) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            _ => panic!(),
+        }
+    }
+
+    pub fn copysign(&self, to_copy: &VmValue) -> Result<VmValue, VmError> {
+        match (*self, *to_copy) {
+            (VmValue::I32(val1), VmValue::I32(val2)) => Err(VmError::InvalidOperator),
+            (VmValue::I64(val1), VmValue::I64(val2)) => Err(VmError::InvalidOperator),
+            (VmValue::F32(val1), VmValue::F32(val2)) => Ok(VmValue::F32(val1.copysign(val2))),
+            (VmValue::F64(val1), VmValue::F64(val2)) => Ok(VmValue::F64(val1.copysign(val2))),
+            (VmValue::i32Array2(val1), VmValue::i32Array2(val2)) => Err(VmError::InvalidOperator),
+            (VmValue::i32Array4(val1), VmValue::i32Array4(val2)) => Err(VmError::InvalidOperator),
+            (VmValue::i32Array8(val1), VmValue::i32Array8(val2)) => Err(VmError::InvalidOperator),
+            (VmValue::i64Array2(val1), VmValue::i64Array2(val2)) => Err(VmError::InvalidOperator),
+            (VmValue::i64Array4(val1), VmValue::i64Array4(val2)) => Err(VmError::InvalidOperator),
+            (VmValue::i64Array8(val1), VmValue::i64Array8(val2)) => Err(VmError::InvalidOperator),
+            (VmValue::f32Array2(val1), VmValue::f32Array2(val2)) => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let src = val1.iter().zip(&val2).map(|(a, b)| a.copysign(*b));
+                for (r, v) in result.iter_mut().zip(src) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            (VmValue::f32Array4(val1), VmValue::f32Array4(val2)) => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let src = val1.iter().zip(&val2).map(|(a, b)| a.copysign(*b));
+                for (r, v) in result.iter_mut().zip(src) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            (VmValue::f32Array8(val1), VmValue::f32Array8(val2)) => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let src = val1.iter().zip(&val2).map(|(a, b)| a.copysign(*b));
+                for (r, v) in result.iter_mut().zip(src) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            (VmValue::f64Array2(val1), VmValue::f64Array2(val2)) => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let src = val1.iter().zip(&val2).map(|(a, b)| a.copysign(*b));
+                for (r, v) in result.iter_mut().zip(src) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            (VmValue::f64Array4(val1), VmValue::f64Array4(val2)) => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let src = val1.iter().zip(&val2).map(|(a, b)| a.copysign(*b));
+                for (r, v) in result.iter_mut().zip(src) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            (VmValue::f64Array8(val1), VmValue::f64Array8(val2)) => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let src = val1.iter().zip(&val2).map(|(a, b)| a.copysign(*b));
+                for (r, v) in result.iter_mut().zip(src) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            (_, _) => panic!("Cannot perform copysign between different variants!"),
+        }
+    }
+
+    pub fn sqrt(&self) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::I32(_) => Err(VmError::InvalidOperator),
+            VmValue::I64(_) => Err(VmError::InvalidOperator),
+            VmValue::F32(val) => {
+                if !self.is_positive() {
+                    return Err(VmError::DivideByZero);
+                }
+                Ok(VmValue::F32(val.sqrt()))
+            }
+            VmValue::F64(val) => {
+                if !self.is_positive() {
+                    return Err(VmError::DivideByZero);
+                }
+                Ok(VmValue::F64(val.sqrt()))
+            }
+            VmValue::i32Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::f32Array2(val) => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let src = val.iter().map(|a| {
+                    if *a < 0.0 {
+                        Err(VmError::DivideByZero)
+                    } else {
+                        Ok(a.sqrt())
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let src = val.iter().map(|a| {
+                    if *a < 0.0 {
+                        Err(VmError::DivideByZero)
+                    } else {
+                        Ok(a.sqrt())
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let src = val.iter().map(|a| {
+                    if *a < 0.0 {
+                        Err(VmError::DivideByZero)
+                    } else {
+                        Ok(a.sqrt())
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            VmValue::f64Array2(val) => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let src = val.iter().map(|a| {
+                    if *a < 0.0 {
+                        Err(VmError::DivideByZero)
+                    } else {
+                        Ok(a.sqrt())
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            VmValue::f64Array4(val) => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let src = val.iter().map(|a| {
+                    if *a < 0.0 {
+                        Err(VmError::DivideByZero)
+                    } else {
+                        Ok(a.sqrt())
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            VmValue::f64Array8(val) => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let src = val.iter().map(|a| {
+                    if *a < 0.0 {
+                        Err(VmError::DivideByZero)
+                    } else {
+                        Ok(a.sqrt())
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            _ => panic!(),
         }
     }
 }
@@ -1552,6 +2112,80 @@ impl Rem for VmValue {
                 Ok(VmValue::f64Array8(result))
             }
             (_, _) => panic!("Cannot perform division between different variants!"),
+        }
+    }
+}
+
+impl Neg for VmValue {
+    type Output = Result<VmValue, VmError>;
+
+    fn neg(self) -> Result<VmValue, VmError> {
+        match self {
+            VmValue::I32(_) => Err(VmError::InvalidOperator),
+            VmValue::I64(_) => Err(VmError::InvalidOperator),
+            VmValue::F32(val) => Ok(VmValue::F32(-val)),
+            VmValue::F64(val) => Ok(VmValue::F64(-val)),
+            VmValue::i32Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i32Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array2(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array4(_) => Err(VmError::InvalidOperator),
+            VmValue::i64Array8(_) => Err(VmError::InvalidOperator),
+            VmValue::f32Array2(val) => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let negs = val.iter().map(|a| -a);
+                for (r, v) in result.iter_mut().zip(negs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let negs = val.iter().map(|a| -a);
+                for (r, v) in result.iter_mut().zip(negs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let negs = val.iter().map(|a| -a);
+                for (r, v) in result.iter_mut().zip(negs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            VmValue::f64Array2(val) => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let negs = val.iter().map(|a| -a);
+                for (r, v) in result.iter_mut().zip(negs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            VmValue::f64Array4(val) => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let negs = val.iter().map(|a| -a);
+                for (r, v) in result.iter_mut().zip(negs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            VmValue::f64Array8(val) => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let negs = val.iter().map(|a| -a);
+                for (r, v) in result.iter_mut().zip(negs) {
+                    *r = v;
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            _ => panic!(),
         }
     }
 }
