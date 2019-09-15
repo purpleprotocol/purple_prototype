@@ -33,4 +33,3 @@
 pub mod sender;
 pub mod receiver;
 pub mod validator;
-pub mod fsm;

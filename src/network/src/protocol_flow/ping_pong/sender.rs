@@ -17,17 +17,26 @@
 */
 
 use crate::error::NetworkErr;
+use crate::validation::sender::Sender;
+use crate::protocol_flow::ping_pong::sender_state::PingPongSenderState;
+use crate::packets::{Ping, Pong};
 
-/// The `Receiver` portion of a protocol flow between two
-/// or more packet types. This is modeled as a finite-state 
-/// machine which receives as input sent messages by a `Sender`
-/// and outputs messages that are to be sent back to the `Sender`.
-pub trait Receiver<I, O> {
-    /// Attempts to receive a packet and outputs a new packet
-    /// to be sent back if the receiver is able to receive a
-    /// packet. 
-    fn receive(&mut self, packet: &I) -> Result<O, NetworkErr>;
-    
-    /// Returns true if the receiver is able to receive packets.
-    fn can_receive(&self) -> bool;
+#[derive(Debug, Default)]
+pub struct PingPongSender {
+    state: PingPongSenderState,
 }
+
+impl Sender<Ping, Pong> for PingPongSender {
+    fn send(&mut self) -> Result<Ping, NetworkErr> {
+        unimplemented!();
+    }
+
+    fn acknowledge(&mut self, packet: &Pong) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
+
+    fn can_send(&self) -> bool {
+        self.state == PingPongSenderState::Ready
+    }
+}
+

@@ -16,18 +16,20 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::error::NetworkErr;
+use std::default::Default;
 
-/// The `Receiver` portion of a protocol flow between two
-/// or more packet types. This is modeled as a finite-state 
-/// machine which receives as input sent messages by a `Sender`
-/// and outputs messages that are to be sent back to the `Sender`.
-pub trait Receiver<I, O> {
-    /// Attempts to receive a packet and outputs a new packet
-    /// to be sent back if the receiver is able to receive a
-    /// packet. 
-    fn receive(&mut self, packet: &I) -> Result<O, NetworkErr>;
-    
-    /// Returns true if the receiver is able to receive packets.
-    fn can_receive(&self) -> bool;
+#[derive(Debug, Clone, PartialEq)]
+pub enum PingPongSenderState {
+    /// The `Sender` is in stand-by, ready to send a `Ping`
+    Ready,
+
+    /// The `Sender` has sent a `Ping` and is awaiting a `Pong` with
+    /// the specified nonce.
+    Waiting(u64),
+}
+
+impl Default for PingPongSenderState {
+    fn default() -> Self {
+        PingPongSenderState::Ready
+    }
 }

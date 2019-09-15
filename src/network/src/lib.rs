@@ -60,6 +60,7 @@ pub mod packets;
 mod peer;
 mod header;
 mod validation;
+mod protocol_flow;
 
 pub use bootstrap::*;
 pub use connection::*;

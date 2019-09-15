@@ -17,15 +17,14 @@
 */
 
 use crate::error::NetworkErr;
-use crate::validation::fsm::Fsm;
 
 /// The `Sender` portion of a protocol flow between two
 /// or more packet types. This is modeled as a finite-state 
 /// machine which outputs messages that are to be sent and
 /// receives as input acknowledgements for those messages.
-pub trait Sender<O, I>: Fsm<O, I> {
+pub trait Sender<O, I> {
     /// Acknowledges the receival of an output message.
-    fn acknowledge(&mut self, message: I) -> Result<(), NetworkErr>;
+    fn acknowledge(&mut self, message: &I) -> Result<(), NetworkErr>;
 
     /// Attempts to account a new sent packet from the `Sender` and
     /// returns the packet if successful.
