@@ -42,12 +42,8 @@ impl Connect {
             signature: None,
         }
     }
-}
 
-impl Packet for Connect {
-    const PACKET_TYPE: u8 = 1;
-
-    fn sign(&mut self, skey: &Sk) {
+    pub fn sign(&mut self, skey: &Sk) {
         // Assemble data
         let message = assemble_message(&self);
 
@@ -58,7 +54,7 @@ impl Packet for Connect {
         self.signature = Some(signature);
     }
 
-    fn verify_sig(&self) -> bool {
+    pub fn verify_sig(&self) -> bool {
         let message = assemble_message(&self);
 
         match self.signature {
@@ -66,10 +62,10 @@ impl Packet for Connect {
             None => false,
         }
     }
+}
 
-    fn signature(&self) -> Option<&Signature> {
-        self.signature.as_ref()
-    }
+impl Packet for Connect {
+    const PACKET_TYPE: u8 = 1;
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
@@ -169,17 +165,17 @@ impl Packet for Connect {
                 let peers = network.peers();
                 let mut peers = peers.write();
                 let node_id = node_id.clone();
+                let kx_key = &packet.kx_key;
                 let mut peer = if let Some(peer) = peers.get_mut(addr) {
                     peer
                 } else {
                     return Err(NetworkErr::PeerNotFound);
                 };
-                let kx_key = packet.kx_key.clone();
 
                 // Compute session keys
                 let result = match conn_type {
-                    ConnectionType::Client => crypto::client_sk(&peer.pk, &peer.sk, &kx_key),
-                    ConnectionType::Server => crypto::server_sk(&peer.pk, &peer.sk, &kx_key),
+                    ConnectionType::Client => crypto::client_sk(&peer.pk, &peer.sk, kx_key),
+                    ConnectionType::Server => crypto::server_sk(&peer.pk, &peer.sk, kx_key),
                 };
 
                 let (rx, tx) = if let Ok(result) = result {
@@ -197,7 +193,8 @@ impl Packet for Connect {
 
                 // Set node id
                 peer.id = Some(node_id);
-
+                
+                // Fetch credentials
                 our_pk = Some(peer.pk.clone());
             }
 
@@ -205,7 +202,8 @@ impl Packet for Connect {
             if let ConnectionType::Server = conn_type {
                 debug!("Sending connect packet to {}", addr);
                 let mut packet = Connect::new(our_node_id, our_pk.unwrap());
-                network.send_raw_unsigned::<Connect>(addr, &mut packet)?;
+                packet.sign(network.secret_key());
+                network.send_raw(addr, &packet.to_bytes())?;
             }
 
             Ok(())

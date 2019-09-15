@@ -33,26 +33,18 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendPeers {
-    /// The node id of the sender
-    node_id: NodeId,
-
     /// Randomly generated nonce
     nonce: u64,
 
     /// The list of peers to be sent
     peers: Vec<SocketAddr>,
-
-    /// Packet signature
-    signature: Option<Signature>,
 }
 
 impl SendPeers {
-    pub fn new(node_id: NodeId, peers: Vec<SocketAddr>, nonce: u64) -> SendPeers {
+    pub fn new(peers: Vec<SocketAddr>, nonce: u64) -> SendPeers {
         SendPeers {
-            node_id: node_id,
             peers,
             nonce,
-            signature: None,
         }
     }
 
@@ -72,40 +64,9 @@ impl SendPeers {
 impl Packet for SendPeers {
     const PACKET_TYPE: u8 = 5;
 
-    fn sign(&mut self, skey: &Sk) {
-        // Assemble data
-        let message = assemble_sign_message(&self);
-
-        // Sign data
-        let signature = crypto::sign(&message, skey);
-
-        // Attach signature to struct
-        self.signature = Some(signature);
-    }
-
-    fn verify_sig(&self) -> bool {
-        let message = assemble_sign_message(&self);
-
-        match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.node_id.0),
-            None => false,
-        }
-    }
-
-    fn signature(&self) -> Option<&Signature> {
-        self.signature.as_ref()
-    }
-
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
         let packet_type: u8 = Self::PACKET_TYPE;
-        let signature = if let Some(signature) = &self.signature {
-            signature.inner_bytes()
-        } else {
-            panic!("Signature field is missing");
-        };
-
-        let node_id = &self.node_id.0;
         let peers = self.encode_peers();
         let peers_len = peers.len();
 
@@ -113,14 +74,10 @@ impl Packet for SendPeers {
         // 1) Packet type(5)   - 8bits
         // 2) Peers length     - 16bits
         // 3) Nonce            - 64bits
-        // 4) Node id          - 32byte binary
-        // 5) Signature        - 64byte binary
-        // 6) Peers            - Binary of peers length
+        // 4) Peers            - Binary of peers length
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u16::<BigEndian>(peers_len as u16).unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
-        buffer.extend_from_slice(&node_id.0);
-        buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(&peers);
         buffer
     }
@@ -157,24 +114,6 @@ impl Packet for SendPeers {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..11).collect();
 
-        let node_id = if buf.len() > 32 as usize {
-            let node_id_vec: Vec<u8> = buf.drain(..32).collect();
-            let mut b = [0; 32];
-
-            b.copy_from_slice(&node_id_vec);
-
-            NodeId(Pk(b))
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
-        let signature = if buf.len() > 64 as usize {
-            let sig_vec: Vec<u8> = buf.drain(..64).collect();
-            Signature::new(&sig_vec)
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
         let peers = if buf.len() == peers_len as usize {
             let mut rlp = Rlp::new(&buf);
             let mut peers = Vec::new();
@@ -206,10 +145,8 @@ impl Packet for SendPeers {
         };
 
         let packet = SendPeers {
-            node_id,
             nonce,
             peers,
-            signature: Some(signature),
         };
 
         Ok(Arc::new(packet))
@@ -221,10 +158,6 @@ impl Packet for SendPeers {
         packet: &SendPeers,
         conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        if !packet.verify_sig() {
-            return Err(NetworkErr::BadSignature);
-        }
-
         debug!("Received SendPeers packet from: {:?}", addr);
 
         {
@@ -267,36 +200,15 @@ impl Packet for SendPeers {
     }
 }
 
-fn assemble_sign_message(obj: &SendPeers) -> Vec<u8> {
-    let mut buf: Vec<u8> = Vec::new();
-    let node_id = (obj.node_id.0).0;
-    let peers = obj.encode_peers();
-
-    buf.extend_from_slice(&[SendPeers::PACKET_TYPE]);
-    buf.extend_from_slice(&encode_be_u64!(obj.nonce));
-    buf.extend_from_slice(&node_id);
-    buf.extend_from_slice(&peers);
-
-    buf
-}
-
 #[cfg(test)]
 use quickcheck::Arbitrary;
 
 #[cfg(test)]
-use crypto::Identity;
-
-#[cfg(test)]
 impl Arbitrary for SendPeers {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> SendPeers {
-        let id = Identity::new();
-        let timestamp = Utc::now();
-
         SendPeers {
-            node_id: NodeId(*id.pkey()),
             nonce: Arbitrary::arbitrary(g),
             peers: Arbitrary::arbitrary(g),
-            signature: Some(Arbitrary::arbitrary(g)),
         }
     }
 }
@@ -377,9 +289,9 @@ mod tests {
                 peer.id.as_ref().cloned().unwrap()
             };
 
-            let mut packet = RequestPeers::new(node_id, 3);
+            let mut packet = RequestPeers::new(3);
             network
-                .send_unsigned::<RequestPeers>(&addr1, &mut packet)
+                .send_to_peer(&addr1, packet.to_bytes())
                 .unwrap();
         }
 
@@ -410,20 +322,5 @@ mod tests {
         fn serialize_deserialize(tx: Arc<SendPeers>) -> bool {
             tx == SendPeers::from_bytes(&SendPeers::to_bytes(&tx)).unwrap()
         }
-
-        fn verify_signature(id1: Identity, id2: Identity, peers: Vec<SocketAddr>) -> bool {
-            let id = Identity::new();
-            let timestamp = Utc::now();
-            let mut packet = SendPeers {
-                node_id: NodeId(*id.pkey()),
-                peers,
-                signature: None,
-                nonce: 42,
-            };
-
-            packet.sign(&id.skey());
-            packet.verify_sig()
-        }
-
     }
 }

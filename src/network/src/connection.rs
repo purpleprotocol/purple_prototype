@@ -23,7 +23,7 @@ use crate::network::Network;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
 use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
-use crypto::Nonce;
+use crypto::{Signature, Nonce};
 use std::io::BufReader;
 use std::iter;
 use std::net::SocketAddr;
@@ -38,9 +38,9 @@ use tokio::prelude::*;
 use tokio::sync::mpsc;
 use tokio_io_timeout::TimeoutStream;
 
-/// Purple network port
+/// Purple default network port
 pub const PORT: u16 = 44034;
-const PEER_TIMEOUT: u64 = 3000;
+const PEER_TIMEOUT: u64 = 15000;
 
 /// Initializes the listener for the given network
 pub fn start_listener(network: Network, accept_connections: Arc<AtomicBool>) -> Spawn {
@@ -230,7 +230,7 @@ fn process_connection(
                     Ok((reader, network, header, buffer))
                 })
                 // Decrypt packet
-                .and_then(move |(reader, network, header, buffer)|{
+                .and_then(move |(reader, network, header, buffer)| {
                     let packet: Vec<u8> = {
                         let mut peers = network.peers.write();
 
@@ -245,6 +245,21 @@ fn process_connection(
                                 let mut nonce: [u8; 12] = [0; 12];
                                 nonce.copy_from_slice(&nonce_buf);
                                 let nonce = Nonce(nonce);
+
+                                // The next 64 bytes in the packet are
+                                // the signature of the packet.
+                                let (sig_buf, buffer) = buffer.split_at(64);
+                                let sig = Signature::new(&sig_buf);
+
+                                // Verify packet signature
+                                if !crypto::verify(&buffer, &sig, &peer.id.as_ref().unwrap().0) {
+                                    return Err(
+                                        io::Error::new(
+                                            io::ErrorKind::Other,
+                                            format!("Packet signature error for {}", addr)
+                                        )
+                                    );
+                                }
 
                                 buf = common::decrypt(&buffer, &nonce, peer.tx.as_ref().unwrap()).map_err(|_|
                                     io::Error::new(

@@ -18,6 +18,7 @@
 
 use crate::packets::ForwardBlock;
 use crate::{Network, NetworkInterface};
+use crate::packet::Packet;
 use chain::*;
 use futures::future::ok;
 use futures::prelude::*;
@@ -104,11 +105,10 @@ pub fn start_block_listeners(
                     Ok(()) => {
                         // Forward block
                         let mut packet = ForwardBlock::new(
-                            network.our_node_id().clone(),
                             Arc::new(BlockWrapper::HardBlock(block)),
                         );
                         network
-                            .send_to_all_unsigned_except(&addr, &mut packet)
+                            .send_to_all_except(&addr, &packet.to_bytes())
                             .unwrap();
                     }
                     Err(err) => info!(
@@ -137,11 +137,10 @@ pub fn start_block_listeners(
                     Ok(()) => {
                         // Forward block
                         let mut packet = ForwardBlock::new(
-                            network.our_node_id().clone(),
                             Arc::new(BlockWrapper::StateBlock(block)),
                         );
                         network
-                            .send_to_all_unsigned_except(&addr, &mut packet)
+                            .send_to_all_except(&addr, &packet.to_bytes())
                             .unwrap();
                     }
                     Err(err) => info!(

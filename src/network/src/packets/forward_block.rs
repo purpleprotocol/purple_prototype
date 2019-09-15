@@ -30,17 +30,13 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ForwardBlock {
-    node_id: NodeId,
     block: Arc<BlockWrapper>,
-    signature: Option<Signature>,
 }
 
 impl ForwardBlock {
-    pub fn new(node_id: NodeId, block: Arc<BlockWrapper>) -> ForwardBlock {
+    pub fn new(block: Arc<BlockWrapper>) -> ForwardBlock {
         ForwardBlock {
-            node_id,
             block,
-            signature: None,
         }
     }
 }
@@ -48,49 +44,18 @@ impl ForwardBlock {
 impl Packet for ForwardBlock {
     const PACKET_TYPE: u8 = 6;
 
-    fn sign(&mut self, skey: &Sk) {
-        // Assemble data
-        let message = assemble_message(&self);
-
-        // Sign data
-        let signature = crypto::sign(&message, skey);
-
-        // Attach signature to struct
-        self.signature = Some(signature);
-    }
-
-    fn verify_sig(&self) -> bool {
-        let message = assemble_message(&self);
-
-        match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.node_id.0),
-            None => false,
-        }
-    }
-
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
         let packet_type: u8 = Self::PACKET_TYPE;
 
-        let mut signature = if let Some(signature) = &self.signature {
-            signature.inner_bytes()
-        } else {
-            panic!("Signature field is missing");
-        };
-
-        let node_id = &self.node_id.0;
         let block = self.block.to_bytes();
 
         // Packet structure:
         // 1) Packet type(6)   - 8bits
         // 2) Block length     - 32bits
-        // 3) Node id          - 32byte binary
-        // 4) Signature        - 64byte binary
-        // 5) Block            - Binary of block length
+        // 3) Block            - Binary of block length
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u32::<BigEndian>(block.len() as u32).unwrap();
-        buffer.extend_from_slice(&node_id.0);
-        buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(&block);
         buffer
     }
@@ -119,24 +84,6 @@ impl Packet for ForwardBlock {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..5).collect();
 
-        let node_id = if buf.len() > 32 as usize {
-            let node_id_vec: Vec<u8> = buf.drain(..32).collect();
-            let mut b = [0; 32];
-
-            b.copy_from_slice(&node_id_vec);
-
-            NodeId(Pk(b))
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
-        let signature = if buf.len() > 64 as usize {
-            let sig_vec: Vec<u8> = buf.drain(..64).collect();
-            Signature::new(&sig_vec)
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
         let block = if buf.len() == block_len as usize {
             match BlockWrapper::from_bytes(&buf) {
                 Ok(result) => result,
@@ -147,16 +94,10 @@ impl Packet for ForwardBlock {
         };
 
         let packet = ForwardBlock {
-            node_id,
             block,
-            signature: Some(signature),
         };
 
         Ok(Arc::new(packet))
-    }
-
-    fn signature(&self) -> Option<&Signature> {
-        self.signature.as_ref()
     }
 
     fn handle<N: NetworkInterface>(
@@ -209,35 +150,14 @@ impl Packet for ForwardBlock {
     }
 }
 
-fn assemble_message(obj: &ForwardBlock) -> Vec<u8> {
-    let mut buf: Vec<u8> = Vec::with_capacity(64);
-
-    let block_hash = obj.block.block_hash().unwrap();
-    let node_id = (obj.node_id.0).0;
-
-    buf.extend_from_slice(&[ForwardBlock::PACKET_TYPE]);
-    buf.extend_from_slice(&block_hash.0);
-    buf.extend_from_slice(&node_id);
-
-    buf
-}
-
 #[cfg(test)]
 use quickcheck::Arbitrary;
 
 #[cfg(test)]
-use crypto::Identity;
-
-#[cfg(test)]
 impl Arbitrary for ForwardBlock {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> ForwardBlock {
-        let (pk, _) = crypto::gen_kx_keypair();
-        let id = Identity::new();
-
         ForwardBlock {
-            node_id: NodeId(*id.pkey()),
             block: Arbitrary::arbitrary(g),
-            signature: Some(Arbitrary::arbitrary(g)),
         }
     }
 }
@@ -251,18 +171,5 @@ mod tests {
         fn serialize_deserialize(tx: Arc<ForwardBlock>) -> bool {
             tx == ForwardBlock::from_bytes(&ForwardBlock::to_bytes(&tx)).unwrap()
         }
-
-        fn verify_signature(block: Arc<HardBlock>) -> bool {
-            let id = Identity::new();
-            let mut packet = ForwardBlock {
-                node_id: NodeId(*id.pkey()),
-                block: Arc::new(BlockWrapper::HardBlock(block)),
-                signature: None,
-            };
-
-            packet.sign(&id.skey());
-            packet.verify_sig()
-        }
-
     }
 }

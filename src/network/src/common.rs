@@ -24,17 +24,20 @@ use crate::packet::Packet;
 use crate::peer::ConnectionType;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::crc32fast::Hasher;
-use crypto::{Nonce, SessionKey};
+use crypto::{Nonce, SessionKey, SecretKey as Sk, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 
 pub const NETWORK_VERSION: u8 = 0;
 pub const HEADER_SIZE: usize = 7; // Total of 7 bytes. 1 + 2 + 4;
 
-/// Encrypts and wraps a packet with the default network header
-pub fn wrap_encrypt_packet(packet: &[u8], key: &SessionKey, network_name: &str) -> Vec<u8> {
+/// Encrypts and wraps a packet with the default network header. Also signs
+/// the encrypted packet and attaches the signature to the packet.
+pub fn wrap_encrypt_packet(packet: &[u8], node_sk: &Sk, key: &SessionKey, network_name: &str) -> Vec<u8> {
     let (encrypted, nonce) = crypto::seal(packet, key);
-    wrap_packet(&[&nonce.0, encrypted.as_slice()].concat(), network_name)
+    let sig = crypto::sign(encrypted.as_slice(), node_sk);
+    let sig_bytes = sig.inner_bytes();
+    wrap_packet(&[&nonce.0, sig_bytes.as_slice(), encrypted.as_slice()].concat(), network_name)
 }
 
 /// Wraps a packet without encrypting it.
@@ -84,6 +87,10 @@ pub fn decode_header(header: &[u8]) -> Result<PacketHeader, NetworkErr> {
     } else {
         return Err(NetworkErr::BadHeader);
     };
+
+    if packet_len < 12 + 64 {
+        return Err(NetworkErr::BadFormat);
+    }
 
     rdr.set_position(3);
 
@@ -180,7 +187,7 @@ pub fn unwrap_decrypt_packet(packet: &[u8], key: &SessionKey, network_name: &str
         return Err(NetworkErr::BadFormat);
     };
 
-    if packet_len < 12 {
+    if packet_len < 12 + 64 {
         return Err(NetworkErr::BadFormat);
     }
 
@@ -206,7 +213,14 @@ pub fn unwrap_decrypt_packet(packet: &[u8], key: &SessionKey, network_name: &str
         return Err(NetworkErr::BadFormat);
     };
 
-    let packet = if buf.len() == (packet_len - 12) as usize {
+    let sig = if buf.len() > 64 as usize {
+        let sig_vec: Vec<u8> = buf.drain(..64).collect();
+        Signature::new(&sig_vec)
+    } else {
+        return Err(NetworkErr::BadFormat);
+    };
+
+    let packet = if buf.len() == (packet_len - 12 - 64) as usize {
         buf
     } else {
         return Err(NetworkErr::BadFormat);
@@ -215,6 +229,7 @@ pub fn unwrap_decrypt_packet(packet: &[u8], key: &SessionKey, network_name: &str
     let mut crc32 = Hasher::new();
 
     crc32.update(&nonce.0);
+    crc32.update(&sig.inner_bytes());
     crc32.update(&packet);
     crc32.update(network_name.as_bytes());
 
@@ -231,18 +246,26 @@ pub fn unwrap_decrypt_packet(packet: &[u8], key: &SessionKey, network_name: &str
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crypto::Identity;
+    use rand::prelude::*;
 
     quickcheck! {
         fn wrap_encrypt_unwrap(packet: Vec<u8>) -> bool {
+            let id = Identity::new();
             let key = SessionKey([0; 32]);
 
-            assert_eq!(packet, unwrap_decrypt_packet(&wrap_encrypt_packet(&packet, &key, "test"), &key, "test").unwrap());
+            assert_eq!(packet, unwrap_decrypt_packet(&wrap_encrypt_packet(&packet, id.skey(), &key, "test"), &key, "test").unwrap());
             true
         }
 
-        fn decode_header(packet: Vec<u8>) -> bool {
+        fn decode_header() -> bool {
+            let mut rng = rand::thread_rng();
+            let packet: Vec<u8> = (0..128)
+                .into_iter()
+                .map(|_| rng.gen())
+                .collect();
             let wrapped = wrap_packet(&packet, "test");
-            let (header, tail) = wrapped.split_at(7);
+            let (header, _tail) = wrapped.split_at(7);
             super::decode_header(&header).unwrap();
             true
         }

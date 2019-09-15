@@ -123,7 +123,7 @@ impl NetworkInterface for MockNetwork {
             let peers = self.peers.read();
             let peer = peers.get(peer).unwrap();
             let key = peer.rx.as_ref().unwrap();
-            let packet = crate::common::wrap_encrypt_packet(&packet, key, self.network_name.as_str());
+            let packet = crate::common::wrap_encrypt_packet(&packet, &self.secret_key, key, self.network_name.as_str());
             mailbox.send((self.ip.clone(), packet)).unwrap();
             Ok(())
         } else {
@@ -173,58 +173,6 @@ impl NetworkInterface for MockNetwork {
             let mailbox = self.mailboxes.get(id).unwrap();
             mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
         }
-
-        Ok(())
-    }
-
-    fn send_to_all_unsigned_except<P: Packet>(
-        &self,
-        exception: &SocketAddr,
-        packet: &mut P,
-    ) -> Result<(), NetworkErr> {
-        if packet.signature().is_none() {
-            packet.sign(&self.secret_key);
-        }
-
-        let packet = packet.to_bytes();
-        self.send_to_all_except(exception, &packet)
-    }
-
-    fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr> {
-        if packet.signature().is_none() {
-            packet.sign(&self.secret_key);
-        }
-
-        let packet = packet.to_bytes();
-        self.send_to_all(&packet)
-    }
-
-    fn send_unsigned<P: Packet>(
-        &self,
-        peer: &SocketAddr,
-        packet: &mut P,
-    ) -> Result<(), NetworkErr> {
-        if packet.signature().is_none() {
-            packet.sign(&self.secret_key);
-        }
-
-        let packet = packet.to_bytes();
-        self.send_to_peer(peer, packet)?;
-
-        Ok(())
-    }
-
-    fn send_raw_unsigned<P: Packet>(
-        &self,
-        peer: &SocketAddr,
-        packet: &mut P,
-    ) -> Result<(), NetworkErr> {
-        if packet.signature().is_none() {
-            packet.sign(&self.secret_key);
-        }
-
-        let packet = packet.to_bytes();
-        self.send_raw(peer, &packet)?;
 
         Ok(())
     }
@@ -309,6 +257,10 @@ impl NetworkInterface for MockNetwork {
     fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>> {
         self.peers.clone()
     }
+
+    fn secret_key(&self) -> &Sk {
+        &self.secret_key
+    }
 }
 
 impl MockNetwork {
@@ -387,11 +339,10 @@ impl MockNetwork {
                             Ok(()) => {
                                 // Forward block
                                 let mut packet = ForwardBlock::new(
-                                    network.our_node_id().clone(),
                                     Arc::new(BlockWrapper::HardBlock(block)),
                                 );
                                 network
-                                    .send_to_all_unsigned_except(&addr, &mut packet)
+                                    .send_to_all_except(&addr, &packet.to_bytes())
                                     .unwrap();
                             }
                             Err(err) => info!(
@@ -410,11 +361,10 @@ impl MockNetwork {
                             Ok(()) => {
                                 // Forward block
                                 let mut packet = ForwardBlock::new(
-                                    network.our_node_id().clone(),
                                     Arc::new(BlockWrapper::StateBlock(block)),
                                 );
                                 network
-                                    .send_to_all_unsigned_except(&addr, &mut packet)
+                                    .send_to_all_except(&addr, &packet.to_bytes())
                                     .unwrap();
                             }
                             Err(err) => info!(
