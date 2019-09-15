@@ -23,7 +23,6 @@ use chain::*;
 use futures::future::ok;
 use futures::prelude::*;
 use futures::sync::mpsc::Receiver;
-use parking_lot::Mutex;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::timer::Interval;

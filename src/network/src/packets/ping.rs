@@ -29,7 +29,7 @@ use rand::prelude::*;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ping {
     /// Randomly generated nonce
-    nonce: u64,
+    pub(crate) nonce: u64,
 }
 
 impl Ping {

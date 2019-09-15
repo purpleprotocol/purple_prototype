@@ -22,9 +22,6 @@ use std::default::Default;
 pub enum PingPongReceiverState {
     /// The `Receiver` is ready to receiver a `Ping`
     Ready,
-
-    /// The `Receiver` is in the sending state for the given nonce.
-    Sending(u64),
 }
 
 impl Default for PingPongReceiverState {

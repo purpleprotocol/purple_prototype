@@ -28,11 +28,31 @@ pub struct PingPongSender {
 
 impl Sender<Ping, Pong> for PingPongSender {
     fn send(&mut self) -> Result<Ping, NetworkErr> {
-        unimplemented!();
+        if let PingPongSenderState::Ready = self.state {
+            let ping = Ping::new();
+
+            // Await a pong with the generated nonce
+            self.state = PingPongSenderState::Waiting(ping.nonce);
+
+            Ok(ping)
+        } else {
+            Err(NetworkErr::CouldNotSend)
+        }
     }
 
     fn acknowledge(&mut self, packet: &Pong) -> Result<(), NetworkErr> {
-        unimplemented!();
+        if let PingPongSenderState::Waiting(nonce) = self.state {
+            if nonce == packet.nonce {
+                // Reset state
+                self.state = PingPongSenderState::Ready;
+
+                Ok(())
+            } else {
+                Err(NetworkErr::AckErr)
+            }
+        } else {
+            Err(NetworkErr::AckErr)
+        }
     }
 
     fn can_send(&self) -> bool {

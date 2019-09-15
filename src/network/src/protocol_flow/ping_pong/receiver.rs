@@ -21,7 +21,7 @@ use crate::validation::receiver::Receiver;
 use crate::protocol_flow::ping_pong::receiver_state::PingPongReceiverState;
 use crate::packets::{Ping, Pong};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PingPongReceiver {
     state: PingPongReceiverState,
 }
@@ -31,11 +31,15 @@ impl Receiver<Ping, Pong> for PingPongReceiver {
     /// to be sent back if the receiver is able to receive a
     /// packet. 
     fn receive(&mut self, packet: &Ping) -> Result<Pong, NetworkErr> {
-      unimplemented!();
+        if let PingPongReceiverState::Ready = self.state {
+            Ok(Pong::new(packet.nonce))
+        } else {
+            unreachable!();
+        }
     }
     
     /// Returns true if the receiver is able to receive packets.
     fn can_receive(&self) -> bool {
-      true
+        true
     }
 }

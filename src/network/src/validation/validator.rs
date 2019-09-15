@@ -18,7 +18,7 @@
 
 use crate::protocol_flow::ping_pong::PingPong;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ProtocolValidator {
     /// Ping/Pong protocol flow
     ping_pong: PingPong,

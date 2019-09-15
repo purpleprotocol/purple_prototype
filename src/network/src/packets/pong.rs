@@ -27,7 +27,7 @@ use std::io::Cursor;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pong {
-    nonce: u64,
+    pub(crate) nonce: u64,
 }
 
 impl Pong {

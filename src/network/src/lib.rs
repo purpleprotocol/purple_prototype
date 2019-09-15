@@ -16,6 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#![allow(irrefutable_let_patterns)]
+
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]

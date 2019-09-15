@@ -18,7 +18,7 @@
 
 use crate::protocol_flow::ping_pong::*;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PingPong {
     sender: PingPongSender,
     receiver: PingPongReceiver,
