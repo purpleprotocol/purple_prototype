@@ -188,6 +188,34 @@ impl Validator {
                                 }
                                 DEFAULT_TRANSITIONS.to_vec()
                             }
+                            Instruction::Abs
+                            | Instruction::Neg
+                            | Instruction::Ceil
+                            | Instruction::Floor
+                            | Instruction::Trunc
+                            | Instruction::Nearest
+                            | Instruction::Sqrt => {
+                                let len = self.operand_stack.len();
+                                if len > OPERAND_STACK_SIZE
+                                    || len < 1
+                                    || !are_float_type(&self.operand_stack)
+                                {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
+
+                                DEFAULT_TRANSITIONS.to_vec()
+                            }
+                            Instruction::Div | Instruction::CopySign => {
+                                if self.operand_stack.len() != 2
+                                    || !are_float_type(&self.operand_stack)
+                                {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
+
+                                DEFAULT_TRANSITIONS.to_vec()
+                            }
                             Instruction::Sub
                             | Instruction::DivSigned
                             | Instruction::DivUnsigned
@@ -828,6 +856,15 @@ impl Validator {
             }
         }
     }
+}
+
+fn are_float_type(operand_stack: &Stack<VmType>) -> bool {
+    for v in operand_stack.to_vec().iter() {
+        if v.is_int() {
+            return false;
+        }
+    }
+    return true;
 }
 
 fn get_next_elem(val_stack: &Stack<(u8, bool)>) -> (VmType, usize) {
@@ -1972,6 +2009,54 @@ mod tests {
         ]
     }
 
+    fn get_common_block_1_operand_float(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            instruction.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
+    fn get_common_block_3_operands_float(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x03,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            0x00,
+            0x00,
+            0x00,
+            0x03,
+            instruction.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
     fn is_valid(block: Vec<u8>) -> bool {
         let mut validator = Validator::new();
         for byte in block {
@@ -2115,6 +2200,181 @@ mod tests {
     #[rustfmt::skip]
     fn it_fails_if_operands_number_differs_from_2_higher_for_ge_unsigned() {
         let block: Vec<u8> = get_common_block_3_operands(Instruction::GeUnsigned);
+        assert!(!is_valid(block));
+    }
+
+    fn get_common_block_2_operands_as_int(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::i32Const.repr(), // integer operand
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            instruction.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_abs() {
+        let block: Vec<u8> = get_common_block_2_operands_as_int(Instruction::Abs);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_neg() {
+        let block: Vec<u8> = get_common_block_2_operands_as_int(Instruction::Neg);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_div() {
+        let block: Vec<u8> = get_common_block_2_operands_as_int(Instruction::Div);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_ceil() {
+        let block: Vec<u8> = get_common_block_2_operands_as_int(Instruction::Ceil);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_floor() {
+        let block: Vec<u8> = get_common_block_2_operands_as_int(Instruction::Floor);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_trunc() {
+        let block: Vec<u8> = get_common_block_2_operands_as_int(Instruction::Trunc);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_nearest() {
+        let block: Vec<u8> = get_common_block_2_operands_as_int(Instruction::Nearest);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_copysign() {
+        let block: Vec<u8> = get_common_block_2_operands_as_int(Instruction::CopySign);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_sqrt() {
+        let block: Vec<u8> = get_common_block_2_operands_as_int(Instruction::Sqrt);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_lower_for_div() {
+        let block: Vec<u8> = get_common_block_1_operand_float(Instruction::Div);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_div() {
+        let block: Vec<u8> = get_common_block_3_operands_float(Instruction::Div);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_lower_for_copysign() {
+        let block: Vec<u8> = get_common_block_1_operand_float(Instruction::CopySign);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_copysign() {
+        let block: Vec<u8> = get_common_block_3_operands_float(Instruction::CopySign);
+        assert!(!is_valid(block));
+    }
+
+    fn get_no_operands_block_float(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            instruction.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_abs() {
+        let block: Vec<u8> = get_no_operands_block_float(Instruction::Abs);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_neg() {
+        let block: Vec<u8> = get_no_operands_block_float(Instruction::Neg);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_ceil() {
+        let block: Vec<u8> = get_no_operands_block_float(Instruction::Ceil);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_floor() {
+        let block: Vec<u8> = get_no_operands_block_float(Instruction::Floor);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_trunc() {
+        let block: Vec<u8> = get_no_operands_block_float(Instruction::Trunc);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_nearest() {
+        let block: Vec<u8> = get_no_operands_block_float(Instruction::Nearest);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_sqrt() {
+        let block: Vec<u8> = get_no_operands_block_float(Instruction::Sqrt);
         assert!(!is_valid(block));
     }
 }

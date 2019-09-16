@@ -3556,7 +3556,7 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
         }
         Instruction::Div => {
             if len != 2 {
-                panic!(format!("Can perform Div only on 2 operands. GOt {:?}", len))
+                panic!(format!("Can perform Div only on 2 operands. Got {:?}", len))
             }
 
             let to_divide = operand_stack.pop();
