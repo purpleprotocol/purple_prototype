@@ -25,6 +25,7 @@ crypto = { path = "../crypto" }
 persistence = { path = "../persistence" }
 quickcheck = "0.7.2"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["rayon", "serde"] }
+bin-tools = { path = "../util/bin-tools/" }
 
 [dev-dependencies.chain]
 path = "../chain"
@@ -32,4 +33,6 @@ features = ["test"]
 
 [dev-dependencies]
 tempdir = "0.3.7"
+rayon = "1.0.3"
+timer = "0.2.0"
 test-helpers = { path = "../util/test-helpers" }

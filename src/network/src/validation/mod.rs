@@ -16,15 +16,20 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod connect;
-pub mod forward_block;
-pub mod request_peers;
-pub mod send_peers;
-pub mod ping;
-pub mod pong;
-pub use self::connect::*;
-pub use self::forward_block::*;
-pub use self::request_peers::*;
-pub use self::send_peers::*;
-pub use self::ping::*;
-pub use self::pong::*;
+//! The protocol validation is modeled as a finite state machine
+//! which receives as input the type of the packet received by
+//! a peer and allows or disallows certain packet types from 
+//! being sent.
+//! 
+//! For example, a peer cannot send a `Pong` or `SendPeers` packet 
+//! without first receiving a `Ping` or `RequestPeers` packet. 
+//! 
+//! Two finite-state machines are initialized for each peer and for
+//! each protocol interaction, a `Sender` and a `Receiver` machines.
+//! 
+//! The outputs of the `Sender` are the inputs of the `Receiver` and
+//! vice-versa.
+
+pub mod sender;
+pub mod receiver;
+pub mod validator;

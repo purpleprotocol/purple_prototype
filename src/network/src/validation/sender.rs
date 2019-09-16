@@ -16,15 +16,20 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod connect;
-pub mod forward_block;
-pub mod request_peers;
-pub mod send_peers;
-pub mod ping;
-pub mod pong;
-pub use self::connect::*;
-pub use self::forward_block::*;
-pub use self::request_peers::*;
-pub use self::send_peers::*;
-pub use self::ping::*;
-pub use self::pong::*;
+use crate::error::NetworkErr;
+
+/// The `Sender` portion of a protocol flow between two
+/// or more packet types. This is modeled as a finite-state 
+/// machine which outputs messages that are to be sent and
+/// receives as input acknowledgements for those messages.
+pub trait Sender<O, I> {
+    /// Acknowledges the receival of an output message.
+    fn acknowledge(&mut self, message: &I) -> Result<(), NetworkErr>;
+
+    /// Attempts to account a new sent packet from the `Sender` and
+    /// returns the packet if successful.
+    fn send(&mut self) -> Result<O, NetworkErr>;
+
+    /// Returns true if the `Sender` is able to send a packet.
+    fn can_send(&self) -> bool;
+}

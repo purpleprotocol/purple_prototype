@@ -33,28 +33,18 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendPeers {
-    /// The node id of the sender
-    node_id: NodeId,
-
-    /// The packet's timestamp
-    timestamp: DateTime<Utc>,
+    /// Randomly generated nonce
+    nonce: u64,
 
     /// The list of peers to be sent
     peers: Vec<SocketAddr>,
-
-    /// Packet signature
-    signature: Option<Signature>,
 }
 
 impl SendPeers {
-    pub const PACKET_TYPE: u8 = 3;
-
-    pub fn new(node_id: NodeId, peers: Vec<SocketAddr>) -> SendPeers {
+    pub fn new(peers: Vec<SocketAddr>, nonce: u64) -> SendPeers {
         SendPeers {
-            node_id: node_id,
             peers,
-            timestamp: Utc::now(),
-            signature: None,
+            nonce,
         }
     }
 
@@ -72,63 +62,22 @@ impl SendPeers {
 }
 
 impl Packet for SendPeers {
-    fn sign(&mut self, skey: &Sk) {
-        // Assemble data
-        let message = assemble_sign_message(&self);
-
-        // Sign data
-        let signature = crypto::sign(&message, skey);
-
-        // Attach signature to struct
-        self.signature = Some(signature);
-    }
-
-    fn verify_sig(&self) -> bool {
-        let message = assemble_sign_message(&self);
-
-        match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.node_id.0),
-            None => false,
-        }
-    }
-
-    fn signature(&self) -> Option<&Signature> {
-        self.signature.as_ref()
-    }
-
-    fn timestamp(&self) -> DateTime<Utc> {
-        self.timestamp.clone()
-    }
+    const PACKET_TYPE: u8 = 5;
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
         let packet_type: u8 = Self::PACKET_TYPE;
-        let signature = if let Some(signature) = &self.signature {
-            signature.inner_bytes()
-        } else {
-            panic!("Signature field is missing");
-        };
-
-        let timestamp = self.timestamp().to_rfc3339();
-        let timestamp_len = timestamp.len() as u8;
-        let node_id = &self.node_id.0;
         let peers = self.encode_peers();
         let peers_len = peers.len();
 
         // Packet structure:
-        // 1) Packet type(3)   - 8bits
-        // 2) Timestamp length - 8bits
-        // 3) Peers length     - 16bits
-        // 4) Node id          - 32byte binary
-        // 5) Signature        - 64byte binary
-        // 6) Timestamp        - Binary of timestamp length
-        // 7) Peers            - Binary of peers length
+        // 1) Packet type(5)   - 8bits
+        // 2) Peers length     - 16bits
+        // 3) Nonce            - 64bits
+        // 4) Peers            - Binary of peers length
         buffer.write_u8(packet_type).unwrap();
-        buffer.write_u8(timestamp_len).unwrap();
         buffer.write_u16::<BigEndian>(peers_len as u16).unwrap();
-        buffer.extend_from_slice(&node_id.0);
-        buffer.extend_from_slice(&signature);
-        buffer.extend_from_slice(timestamp.as_bytes());
+        buffer.write_u64::<BigEndian>(self.nonce).unwrap();
         buffer.extend_from_slice(&peers);
         buffer
     }
@@ -147,15 +96,15 @@ impl Packet for SendPeers {
 
         rdr.set_position(1);
 
-        let timestamp_len = if let Ok(result) = rdr.read_u8() {
+        let peers_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
         } else {
             return Err(NetworkErr::BadFormat);
         };
 
-        rdr.set_position(2);
+        rdr.set_position(3);
 
-        let peers_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
         } else {
             return Err(NetworkErr::BadFormat);
@@ -163,39 +112,7 @@ impl Packet for SendPeers {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..4).collect();
-
-        let node_id = if buf.len() > 32 as usize {
-            let node_id_vec: Vec<u8> = buf.drain(..32).collect();
-            let mut b = [0; 32];
-
-            b.copy_from_slice(&node_id_vec);
-
-            NodeId(Pk(b))
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
-        let signature = if buf.len() > 64 as usize {
-            let sig_vec: Vec<u8> = buf.drain(..64).collect();
-            Signature::new(&sig_vec)
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
-        let timestamp = if buf.len() > timestamp_len as usize {
-            let result: Vec<u8> = buf.drain(..timestamp_len as usize).collect();
-
-            match str::from_utf8(&result) {
-                Ok(result) => match DateTime::parse_from_rfc3339(result) {
-                    Ok(result) => Utc.from_utc_datetime(&result.naive_utc()),
-                    _ => return Err(NetworkErr::BadFormat),
-                },
-                Err(_) => return Err(NetworkErr::BadFormat),
-            }
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
+        let _: Vec<u8> = buf.drain(..11).collect();
 
         let peers = if buf.len() == peers_len as usize {
             let mut rlp = Rlp::new(&buf);
@@ -228,10 +145,8 @@ impl Packet for SendPeers {
         };
 
         let packet = SendPeers {
-            node_id,
-            timestamp,
+            nonce,
             peers,
-            signature: Some(signature),
         };
 
         Ok(Arc::new(packet))
@@ -243,10 +158,6 @@ impl Packet for SendPeers {
         packet: &SendPeers,
         conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        if !packet.verify_sig() {
-            return Err(NetworkErr::BadSignature);
-        }
-
         debug!("Received SendPeers packet from: {:?}", addr);
 
         {
@@ -289,42 +200,20 @@ impl Packet for SendPeers {
     }
 }
 
-fn assemble_sign_message(obj: &SendPeers) -> Vec<u8> {
-    let mut buf: Vec<u8> = Vec::new();
-    let node_id = (obj.node_id.0).0;
-    let timestamp = obj.timestamp.to_rfc3339();
-    let peers = obj.encode_peers();
-
-    buf.extend_from_slice(&[SendPeers::PACKET_TYPE]);
-    buf.extend_from_slice(&node_id);
-    buf.extend_from_slice(timestamp.as_bytes());
-    buf.extend_from_slice(&peers);
-
-    buf
-}
-
 #[cfg(test)]
 use quickcheck::Arbitrary;
 
 #[cfg(test)]
-use crypto::Identity;
-
-#[cfg(test)]
 impl Arbitrary for SendPeers {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> SendPeers {
-        let id = Identity::new();
-        let timestamp = Utc::now();
-
         SendPeers {
-            node_id: NodeId(*id.pkey()),
-            timestamp,
+            nonce: Arbitrary::arbitrary(g),
             peers: Arbitrary::arbitrary(g),
-            signature: Some(Arbitrary::arbitrary(g)),
         }
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(windows)))]
 mod tests {
     use super::*;
     use crate::interface::NetworkInterface;
@@ -400,9 +289,9 @@ mod tests {
                 peer.id.as_ref().cloned().unwrap()
             };
 
-            let mut packet = RequestPeers::new(node_id, 3);
+            let mut packet = RequestPeers::new(3);
             network
-                .send_unsigned::<RequestPeers>(&addr1, &mut packet)
+                .send_to_peer(&addr1, packet.to_bytes())
                 .unwrap();
         }
 
@@ -433,20 +322,5 @@ mod tests {
         fn serialize_deserialize(tx: Arc<SendPeers>) -> bool {
             tx == SendPeers::from_bytes(&SendPeers::to_bytes(&tx)).unwrap()
         }
-
-        fn verify_signature(id1: Identity, id2: Identity, peers: Vec<SocketAddr>) -> bool {
-            let id = Identity::new();
-            let timestamp = Utc::now();
-            let mut packet = SendPeers {
-                node_id: NodeId(*id.pkey()),
-                peers,
-                signature: None,
-                timestamp
-            };
-
-            packet.sign(&id.skey());
-            packet.verify_sig()
-        }
-
     }
 }

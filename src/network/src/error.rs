@@ -67,4 +67,13 @@ pub enum NetworkErr {
     /// Could not send a packet. Maybe the outbound buffer is full? 
     /// Or maybe the peer does not have an encryption key ready?
     CouldNotSend,
+
+    /// Could not acknowledge the packet. 
+    AckErr,
+
+    /// The sender is in an invalid state for this operation
+    SenderStateErr,
+
+    /// The peer's session has expired
+    SessionExpired,
 }

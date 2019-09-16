@@ -17,11 +17,22 @@
 */
 
 use crate::error::NetworkErr;
+use crate::validation::validator::ProtocolValidator;
 use crypto::NodeId;
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use tokio::sync::mpsc::Sender;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
+use std::default::Default;
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
+
+#[cfg(test)]
+use parking_lot::Mutex;
+
+#[cfg(test)]
+use timer::{Timer, Guard};
 
 #[derive(Clone, Debug, Copy)]
 pub enum ConnectionType {
@@ -32,7 +43,7 @@ pub enum ConnectionType {
 /// Size of the outbound buffer.
 pub const OUTBOUND_BUF_SIZE: usize = 8000;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Peer {
     /// The id of the peer
     ///
@@ -53,6 +64,12 @@ pub struct Peer {
 
     /// The ip address of the peer
     pub ip: SocketAddr,
+
+    /// Time in milliseconds since the peer has last sent a message.
+    pub last_seen: Arc<AtomicU64>,
+
+    /// Time in milliseconds since we have sent a ping to the peer.
+    pub last_ping: Arc<AtomicU64>,
 
     /// Wether the peer has sent a `Connect` packet or not.
     pub sent_connect: bool,
@@ -76,6 +93,24 @@ pub struct Peer {
 
     /// The peer's encryption key
     pub(crate) tx: Option<SessionKey>,
+
+    /// Associated protocol validator
+    pub(crate) validator: ProtocolValidator,
+
+    #[cfg(test)]
+    pub(crate) timeout_guard: Option<Guard>,
+
+    #[cfg(test)]
+    pub(crate) timer: Option<Arc<Mutex<Timer>>>,
+
+    #[cfg(test)]
+    pub(crate) send_ping: bool,
+}
+
+impl fmt::Debug for Peer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Peer(id: {:?}, ip: {:?})", self.id, self.ip)
+    }
 }
 
 impl Peer {
@@ -98,6 +133,18 @@ impl Peer {
             sent_connect: false,
             connection_type,
             outbound_buffer,
+            last_seen: Arc::new(AtomicU64::new(0)),
+            last_ping: Arc::new(AtomicU64::new(0)),
+            validator: ProtocolValidator::default(),
+
+            #[cfg(test)]
+            timeout_guard: None,
+
+            #[cfg(test)]
+            timer: None,
+
+            #[cfg(test)]
+            send_ping: true,
         }
     }
 

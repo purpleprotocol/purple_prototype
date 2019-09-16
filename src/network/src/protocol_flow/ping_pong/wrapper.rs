@@ -16,15 +16,12 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod connect;
-pub mod forward_block;
-pub mod request_peers;
-pub mod send_peers;
-pub mod ping;
-pub mod pong;
-pub use self::connect::*;
-pub use self::forward_block::*;
-pub use self::request_peers::*;
-pub use self::send_peers::*;
-pub use self::ping::*;
-pub use self::pong::*;
+use crate::protocol_flow::ping_pong::*;
+use parking_lot::Mutex;
+use std::sync::Arc;
+
+#[derive(Clone, Debug, Default)]
+pub struct PingPong {
+    pub(crate) sender: Arc<Mutex<PingPongSender>>,
+    pub(crate) receiver: Arc<Mutex<PingPongReceiver>>,
+}

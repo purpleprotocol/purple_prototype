@@ -27,6 +27,7 @@ use hashbrown::{HashMap, HashSet};
 use parking_lot::RwLock;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use Peer;
 
 #[cfg(test)]
@@ -160,12 +161,20 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
+    fn has_peer(&self, addr: &SocketAddr) -> bool {
+        self.peers.read().get(addr).is_some()
+    }
+
+    fn has_peer_with_id(&self, id: &NodeId) -> bool {
+        unimplemented!()
+    }
+
     fn send_to_peer(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
 
         if let Some(peer) = peers.get(peer) {
             if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(&packet, rx, self.network_name.as_str());
+                let packet = crate::common::wrap_encrypt_packet(&packet, &self.secret_key, rx, self.network_name.as_str());
                 peer.send_packet(packet)
             } else {
                 Err(NetworkErr::CouldNotSend)
@@ -184,7 +193,7 @@ impl NetworkInterface for Network {
 
         for (addr, peer) in peers.iter() {
             if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(&packet, rx, self.network_name.as_str());
+                let packet = crate::common::wrap_encrypt_packet(&packet, &self.secret_key, rx, self.network_name.as_str());
                 peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
             }
         }
@@ -205,34 +214,12 @@ impl NetworkInterface for Network {
 
         for (addr, peer) in iter {
             if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(&packet, rx, self.network_name.as_str());
+                let packet = crate::common::wrap_encrypt_packet(&packet, &self.secret_key, rx, self.network_name.as_str());
                 peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
             }
         }
 
         Ok(())
-    }
-
-    fn send_to_all_unsigned_except<P: Packet>(
-        &self,
-        exception: &SocketAddr,
-        packet: &mut P,
-    ) -> Result<(), NetworkErr> {
-        if packet.signature().is_none() {
-            packet.sign(&self.secret_key);
-        }
-
-        let packet = packet.to_bytes();
-        self.send_to_all_except(exception, &packet)
-    }
-
-    fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr> {
-        if packet.signature().is_none() {
-            packet.sign(&self.secret_key);
-        }
-
-        let packet = packet.to_bytes();
-        self.send_to_all(&packet)
     }
 
     fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
@@ -244,36 +231,6 @@ impl NetworkInterface for Network {
         } else {
             Err(NetworkErr::PeerNotFound)
         }
-    }
-
-    fn send_unsigned<P: Packet>(
-        &self,
-        peer: &SocketAddr,
-        packet: &mut P,
-    ) -> Result<(), NetworkErr> {
-        if packet.signature().is_none() {
-            packet.sign(&self.secret_key);
-        }
-
-        let packet = packet.to_bytes();
-        self.send_to_peer(peer, packet)?;
-
-        Ok(())
-    }
-
-    fn send_raw_unsigned<P: Packet>(
-        &self,
-        peer: &SocketAddr,
-        packet: &mut P,
-    ) -> Result<(), NetworkErr> {
-        if packet.signature().is_none() {
-            packet.sign(&self.secret_key);
-        }
-
-        let packet = packet.to_bytes();
-        self.send_raw(peer, &packet)?;
-
-        Ok(())
     }
 
     fn hard_chain_ref(&self) -> HardChainRef {
@@ -322,6 +279,15 @@ impl NetworkInterface for Network {
             }
         } else {
             info!("{}: {}", peer, hex::encode(packet));
+            crate::common::handle_packet(self, conn_type, peer, &packet)?;
+
+            // Refresh peer timeout timer
+            {
+                let peers = self.peers.read();
+                let peer = peers.get(peer).unwrap();
+                peer.last_seen.store(0, Ordering::SeqCst);
+            }
+
             Ok(())
         }
     }
@@ -340,5 +306,9 @@ impl NetworkInterface for Network {
 
     fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>> {
         self.peers.clone()
+    }
+
+    fn secret_key(&self) -> &Sk {
+        &self.secret_key
     }
 }

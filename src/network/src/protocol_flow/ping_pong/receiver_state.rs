@@ -16,15 +16,16 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod connect;
-pub mod forward_block;
-pub mod request_peers;
-pub mod send_peers;
-pub mod ping;
-pub mod pong;
-pub use self::connect::*;
-pub use self::forward_block::*;
-pub use self::request_peers::*;
-pub use self::send_peers::*;
-pub use self::ping::*;
-pub use self::pong::*;
+use std::default::Default;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PingPongReceiverState {
+    /// The `Receiver` is ready to receiver a `Ping`
+    Ready,
+}
+
+impl Default for PingPongReceiverState {
+    fn default() -> Self {
+        PingPongReceiverState::Ready
+    }
+}

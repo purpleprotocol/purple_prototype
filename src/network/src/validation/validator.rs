@@ -16,15 +16,12 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod connect;
-pub mod forward_block;
-pub mod request_peers;
-pub mod send_peers;
-pub mod ping;
-pub mod pong;
-pub use self::connect::*;
-pub use self::forward_block::*;
-pub use self::request_peers::*;
-pub use self::send_peers::*;
-pub use self::ping::*;
-pub use self::pong::*;
+use crate::protocol_flow::ping_pong::PingPong;
+
+#[derive(Clone, Debug, Default)]
+/// Struct wrapping all protocol flows. This
+/// is instantiated once per each connected peer.
+pub struct ProtocolValidator {
+    /// Ping/Pong protocol flow
+    pub(crate) ping_pong: PingPong,
+}

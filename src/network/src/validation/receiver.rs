@@ -16,15 +16,18 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod connect;
-pub mod forward_block;
-pub mod request_peers;
-pub mod send_peers;
-pub mod ping;
-pub mod pong;
-pub use self::connect::*;
-pub use self::forward_block::*;
-pub use self::request_peers::*;
-pub use self::send_peers::*;
-pub use self::ping::*;
-pub use self::pong::*;
+use crate::error::NetworkErr;
+
+/// The `Receiver` portion of a protocol flow between two
+/// or more packet types. This is modeled as a finite-state 
+/// machine which receives as input sent messages by a `Sender`
+/// and outputs messages that are to be sent back to the `Sender`.
+pub trait Receiver<I, O> {
+    /// Attempts to receive a packet and outputs a new packet
+    /// to be sent back if the receiver is able to receive a
+    /// packet. 
+    fn receive(&mut self, packet: &I) -> Result<O, NetworkErr>;
+    
+    /// Returns true if the receiver is able to receive packets.
+    fn can_receive(&self) -> bool;
+}

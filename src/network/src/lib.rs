@@ -16,15 +16,25 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#![allow(irrefutable_let_patterns)]
+
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
 extern crate quickcheck;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate bin_tools;
 
 #[cfg(test)]
 extern crate tempdir;
+
+#[cfg(test)]
+extern crate timer;
+
+#[cfg(test)]
+extern crate rayon;
 
 extern crate byteorder;
 extern crate chain;
@@ -57,6 +67,8 @@ mod packet;
 pub mod packets;
 mod peer;
 mod header;
+mod validation;
+mod protocol_flow;
 
 pub use bootstrap::*;
 pub use connection::*;

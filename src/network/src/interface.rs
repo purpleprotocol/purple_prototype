@@ -20,7 +20,7 @@ use crate::chain::*;
 use crate::error::NetworkErr;
 use crate::packet::Packet;
 use crate::peer::Peer;
-use crypto::NodeId;
+use crypto::{NodeId, SecretKey as Sk};
 use std::net::SocketAddr;
 use parking_lot::RwLock;
 use hashbrown::HashMap;
@@ -58,36 +58,20 @@ pub trait NetworkInterface {
     /// Sends a packet to all peers except the given address.
     fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
 
-    /// Signs a packet and sends it to all peers.
-    fn send_to_all_unsigned<P: Packet>(&self, packet: &mut P) -> Result<(), NetworkErr>;
-
-    /// Signs a packet and sends it to all peers
-    /// except the peer with the given address.
-    fn send_to_all_unsigned_except<P: Packet>(
-        &self,
-        exception: &SocketAddr,
-        packet: &mut P,
-    ) -> Result<(), NetworkErr>;
-
-    /// Attempts to send a packet to the specific peer. This
-    /// function will also sign the packet if it does not yet
-    /// have a signature and it will also serialize it to binary.
-    fn send_unsigned<P: Packet>(&self, peer: &SocketAddr, packet: &mut P)
-        -> Result<(), NetworkErr>;
-
     /// Sends a raw packet to a specific peer. This
     /// means that the packet will be un-encrypted.
     fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
 
-    /// This behaves similarly to `send_unsigned()` but it sends a raw packet.
-    fn send_raw_unsigned<P: Packet>(
-        &self,
-        peer: &SocketAddr,
-        packet: &mut P,
-    ) -> Result<(), NetworkErr>;
-
     /// Callback that processes each packet that is received from any peer.
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
+
+    /// Returns true if the peer with the given `SocketAddr` exists
+    /// in the peer table.
+    fn has_peer(&self, addr: &SocketAddr) -> bool;
+
+    /// Returns true if the peer with the given `NodeId` exists
+    /// in the peer table.
+    fn has_peer_with_id(&self, id: &NodeId) -> bool;
 
     /// Bans the peer with the node id
     fn ban_peer(&self, peer: &NodeId) -> Result<(), NetworkErr>;
@@ -98,7 +82,7 @@ pub trait NetworkInterface {
     /// Returns a reference to our node id.
     fn our_node_id(&self) -> &NodeId;
 
-    /// Returns a reference to the peer table RwLock.
+    /// Returns a reference to the peer table `RwLock`.
     fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>>;
 
     /// Returns a reference to the `HardChain`.
@@ -116,4 +100,7 @@ pub trait NetworkInterface {
     /// Use this to buffer blocks that are to be appended
     /// to the chain.
     fn state_chain_sender(&self) -> &Sender<(SocketAddr, Arc<StateBlock>)>;
+
+    /// Returns a reference to the signing secret key
+    fn secret_key(&self) -> &Sk;
 }
