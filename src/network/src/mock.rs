@@ -18,6 +18,7 @@
 
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
+use crate::validation::sender::Sender as SenderTrait;
 use crate::packet::Packet;
 use crate::packets::*;
 use crate::peer::{ConnectionType, Peer};
@@ -33,8 +34,8 @@ use std::sync::Arc;
 use rayon::prelude::*;
 
 /// Peer timeout in milliseconds
-const PEER_TIMEOUT: u64 = 3000;
-const PING_INTERVAL: u64 = 500;
+const PEER_TIMEOUT: u64 = 1000;
+const PING_INTERVAL: u64 = 50;
 
 /// Mock network layer used for testing.
 pub struct MockNetwork {
@@ -461,13 +462,18 @@ impl MockNetwork {
 
                     // Send pings
                     for (addr, p) in peers.iter_mut() {
-                        if p.last_ping > PING_INTERVAL {
-                            p.last_ping = 0;
+                        if p.last_ping > PING_INTERVAL && p.send_ping {
+                            {
+                                let mut sender = p.validator.ping_pong.sender.lock();
 
-                            info!("Sending Ping packet to {}", addr);
+                                if let Ok(ping) = sender.send() {
+                                    p.last_ping = 0;
 
-                            let ping = Ping::new();
-                            pings.push((addr.clone(), ping.to_bytes()));
+                                    info!("Sending Ping packet to {}", addr);
+
+                                    pings.push((addr.clone(), ping.to_bytes()));
+                                };
+                            }
                         }
                     }
                 }

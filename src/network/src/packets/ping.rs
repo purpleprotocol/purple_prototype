@@ -207,8 +207,6 @@ mod tests {
             let peers = peers.read();
             assert!(!peers.is_empty());
         };
-
-        println!("DEBUG FINISHED");
     }
 
     quickcheck! {

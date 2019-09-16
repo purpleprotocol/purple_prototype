@@ -51,7 +51,7 @@ impl Sender<Ping, Pong> for PingPongSender {
                 Err(NetworkErr::AckErr)
             }
         } else {
-            Err(NetworkErr::AckErr)
+            Err(NetworkErr::SenderStateErr)
         }
     }
 
