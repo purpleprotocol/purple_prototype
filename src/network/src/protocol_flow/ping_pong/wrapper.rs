@@ -17,9 +17,11 @@
 */
 
 use crate::protocol_flow::ping_pong::*;
+use parking_lot::Mutex;
+use std::sync::Arc;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PingPong {
-    sender: PingPongSender,
-    receiver: PingPongReceiver,
+    pub(crate) sender: Arc<Mutex<PingPongSender>>,
+    pub(crate) receiver: Arc<Mutex<PingPongReceiver>>,
 }

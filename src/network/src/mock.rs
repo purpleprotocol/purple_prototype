@@ -21,6 +21,7 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::*;
 use crate::peer::{ConnectionType, Peer};
+use chrono::Duration;
 use chain::*;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
@@ -29,6 +30,11 @@ use parking_lot::{RwLock, Mutex};
 use std::net::SocketAddr;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
+use rayon::prelude::*;
+
+/// Peer timeout in milliseconds
+const PEER_TIMEOUT: u64 = 3000;
+const PING_INTERVAL: u64 = 500;
 
 /// Mock network layer used for testing.
 pub struct MockNetwork {
@@ -151,8 +157,17 @@ impl NetworkInterface for MockNetwork {
             return Err(NetworkErr::NoPeers);
         }
 
-        for (_, mailbox) in self.mailboxes.iter() {
-            mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
+        let peers = self.peers();
+        let peers = peers.read();
+        let ids_to_send_to = peers
+            .iter()
+            .map(|(_, peer)| peer.id.as_ref());
+
+        for id in ids_to_send_to {
+            if let Some(id) = id {
+                let mailbox = self.mailboxes.get(id).unwrap();
+                mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
+            }
         }
 
         Ok(())
@@ -163,15 +178,18 @@ impl NetworkInterface for MockNetwork {
             return Err(NetworkErr::NoPeers);
         }
 
-        let ids_to_send_to = self
-            .address_mappings
+        let peers = self.peers();
+        let peers = peers.read();
+        let ids_to_send_to = peers
             .iter()
             .filter(|(addr, _)| *addr != exception)
-            .map(|(_, id)| id);
+            .map(|(_, peer)| peer.id.as_ref());
 
         for id in ids_to_send_to {
-            let mailbox = self.mailboxes.get(id).unwrap();
-            mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
+            if let Some(id) = id {
+                let mailbox = self.mailboxes.get(id).unwrap();
+                mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
+            }
         }
 
         Ok(())
@@ -226,6 +244,28 @@ impl NetworkInterface for MockNetwork {
                     // Handle connect packet
                     Connect::handle(self, addr, &connect_packet, conn_type)?;
 
+                    // Schedule timeout task
+                    {
+                        let peers_clone = self.peers.clone();
+                        let addr_clone = addr.clone();
+                        let mut peers = self.peers.write();
+                        let mut peer = peers.get_mut(addr).unwrap();
+
+                        let timer = timer::Timer::new();
+                        let guard = timer.schedule_repeating(Duration::milliseconds(10), move || {
+                            let peers = peers_clone.clone();
+                            let addr = addr_clone.clone();
+                            let mut peers = peers.write();
+
+                            let mut peer = peers.get_mut(&addr).unwrap();
+                            peer.last_seen += 10;
+                            peer.last_ping += 10;
+                        });
+
+                        peer.timeout_guard = Some(guard);
+                        peer.timer = Some(Arc::new(Mutex::new(timer)));
+                    }
+
                     Ok(())
                 }
                 _ => {
@@ -238,7 +278,16 @@ impl NetworkInterface for MockNetwork {
             debug!("Received packet from {}: {}", addr, hex::encode(packet));
 
             let packet = crate::common::unwrap_decrypt_packet(packet, tx.as_ref().unwrap(), self.network_name.as_str())?;
-            crate::common::handle_packet(self, conn_type, addr, &packet)
+            crate::common::handle_packet(self, conn_type, addr, &packet)?;
+
+            // Refresh peer timeout timer
+            {
+                let mut peers = self.peers.write();
+                let mut peer = peers.get_mut(addr).unwrap();
+                peer.last_seen = 0;
+            }
+
+            Ok(())
         }
     }
 
@@ -293,89 +342,143 @@ impl MockNetwork {
         }
     }
 
+
+    /// Connects to the peer but neither will send a ping 
+    /// and pong packets, causing a timeout.
+    pub fn connect_no_ping(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
+        info!("Connecting to {:?}", address);
+
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None);
+        let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
+        connect_packet.sign(&self.secret_key);
+        let connect = connect_packet.to_bytes();
+
+        peer.sent_connect = true;
+        peer.send_ping = false;
+        
+        {
+            let mut peers = self.peers.write(); 
+            peers.insert(address.clone(), peer);
+        }
+
+        self.send_raw(address, &connect).unwrap();
+        Ok(())
+    }
+
     pub fn start_receive_loop(
         network: Arc<Mutex<Self>>,
         hard_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>,
         state_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<StateBlock>)>>>,
     ) {
         loop {
-            let mut network = network.lock();
+            let mut pings: Vec<(SocketAddr, Vec<u8>)> = Vec::new();
 
-            if let Ok((addr, packet)) = network.rx.try_recv() {
-                if let Err(err) = network.process_packet(&addr, &packet) {
-                    match err {
-                        NetworkErr::InvalidConnectPacket => {
-                            network.disconnect_from_ip(&addr).unwrap();
-                            network.ban_ip(&addr).unwrap();
+            {
+                let mut network = network.lock();
+
+                if let Ok((addr, packet)) = network.rx.try_recv() {
+                    if let Err(err) = network.process_packet(&addr, &packet) {
+                        match err {
+                            NetworkErr::InvalidConnectPacket => {
+                                network.disconnect_from_ip(&addr).unwrap();
+                                network.ban_ip(&addr).unwrap();
+                            }
+                            err => {
+                                debug!("Packet error: {:?}", err);
+                                network.disconnect_from_ip(&addr).unwrap();
+                                network.ban_ip(&addr).unwrap();
+                            }
                         }
-                        err => {
-                            debug!("Packet error: {:?}", err);
-                            network.disconnect_from_ip(&addr).unwrap();
-                            network.ban_ip(&addr).unwrap();
+                    }
+                }
+
+                let hard_receiver = hard_block_receiver.lock();
+                let hard_iter = hard_receiver
+                    .try_iter()
+                    .map(|(a, b)| (a, BlockWrapper::HardBlock(b)));
+
+                let state_receiver = state_block_receiver.lock();
+                let state_iter = state_receiver
+                    .try_iter()
+                    .map(|(a, b)| (a, BlockWrapper::StateBlock(b)));
+                let mut iter = hard_iter.chain(state_iter);
+
+                while let Some((addr, block)) = iter.next() {
+                    match block {
+
+                        BlockWrapper::HardBlock(block) => {
+                            let hard_chain = network.hard_chain_ref().chain;
+                            let mut chain = hard_chain.write();
+
+                            match chain.append_block(block.clone()) {
+                                Ok(()) => {
+                                    // Forward block
+                                    let mut packet = ForwardBlock::new(
+                                        Arc::new(BlockWrapper::HardBlock(block)),
+                                    );
+                                    network
+                                        .send_to_all_except(&addr, &packet.to_bytes())
+                                        .unwrap();
+                                }
+                                Err(err) => info!(
+                                    "Chain Error for block {:?}: {:?}",
+                                    block.block_hash().unwrap(),
+                                    err
+                                ),
+                            }
+                        }
+
+                        BlockWrapper::StateBlock(block) => {
+                            let state_chain = network.state_chain_ref().chain;
+                            let mut chain = state_chain.write();
+
+                            match chain.append_block(block.clone()) {
+                                Ok(()) => {
+                                    // Forward block
+                                    let mut packet = ForwardBlock::new(
+                                        Arc::new(BlockWrapper::StateBlock(block)),
+                                    );
+                                    network
+                                        .send_to_all_except(&addr, &packet.to_bytes())
+                                        .unwrap();
+                                }
+                                Err(err) => info!(
+                                    "Chain Error for block {:?}: {:?}",
+                                    block.block_hash().unwrap(),
+                                    err
+                                ),
+                            }
+                        }
+                    }
+                }
+
+                // Remove peers that have timed out
+                {
+                    let peers = network.peers();
+                    let mut peers = peers.write();
+                    peers.retain(|_, p| p.last_seen < PEER_TIMEOUT);
+                    //network.address_mappings.retain(|addr, _| peers.get(addr).is_some());
+
+                    // Send pings
+                    for (addr, p) in peers.iter_mut() {
+                        if p.last_ping > PING_INTERVAL {
+                            p.last_ping = 0;
+
+                            info!("Sending Ping packet to {}", addr);
+
+                            let ping = Ping::new();
+                            pings.push((addr.clone(), ping.to_bytes()));
                         }
                     }
                 }
             }
 
-            let hard_receiver = hard_block_receiver.lock();
-            let hard_iter = hard_receiver
-                .try_iter()
-                .map(|(a, b)| (a, BlockWrapper::HardBlock(b)));
+            let network = network.clone();
 
-            let state_receiver = state_block_receiver.lock();
-            let state_iter = state_receiver
-                .try_iter()
-                .map(|(a, b)| (a, BlockWrapper::StateBlock(b)));
-            let mut iter = hard_iter.chain(state_iter);
-
-            while let Some((addr, block)) = iter.next() {
-                match block {
-
-                    BlockWrapper::HardBlock(block) => {
-                        let hard_chain = network.hard_chain_ref().chain;
-                        let mut chain = hard_chain.write();
-
-                        match chain.append_block(block.clone()) {
-                            Ok(()) => {
-                                // Forward block
-                                let mut packet = ForwardBlock::new(
-                                    Arc::new(BlockWrapper::HardBlock(block)),
-                                );
-                                network
-                                    .send_to_all_except(&addr, &packet.to_bytes())
-                                    .unwrap();
-                            }
-                            Err(err) => info!(
-                                "Chain Error for block {:?}: {:?}",
-                                block.block_hash().unwrap(),
-                                err
-                            ),
-                        }
-                    }
-
-                    BlockWrapper::StateBlock(block) => {
-                        let state_chain = network.state_chain_ref().chain;
-                        let mut chain = state_chain.write();
-
-                        match chain.append_block(block.clone()) {
-                            Ok(()) => {
-                                // Forward block
-                                let mut packet = ForwardBlock::new(
-                                    Arc::new(BlockWrapper::StateBlock(block)),
-                                );
-                                network
-                                    .send_to_all_except(&addr, &packet.to_bytes())
-                                    .unwrap();
-                            }
-                            Err(err) => info!(
-                                "Chain Error for block {:?}: {:?}",
-                                block.block_hash().unwrap(),
-                                err
-                            ),
-                        }
-                    }
-                }
-            }
+            // Dispatch pings
+            pings
+                .par_iter()
+                .for_each(move |(addr, p)| network.clone().lock().send_to_peer(&addr, p.to_vec()).unwrap());
         }
     }
 }

@@ -19,6 +19,7 @@
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
+use crate::validation::receiver::Receiver;
 use crate::peer::ConnectionType;
 use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
 use std::net::SocketAddr;
@@ -51,7 +52,33 @@ impl Packet for Ping {
         packet: &Ping,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        unimplemented!();
+        debug!("Received Ping packet from {} with nonce {}", addr, packet.nonce);
+
+        // Retrieve receiver mutex
+        let receiver = {
+            let peers = network.peers();
+            let peers = peers.read();
+            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
+
+            #[cfg(test)]
+            {
+                // We don't send a pong back if this is disabled
+                if !peer.send_ping {
+                    return Ok(())
+                }
+            }
+
+            peer.validator.ping_pong.receiver.clone()
+        };
+
+        // Attempt to receive packet
+        let pong = {
+            let mut receiver = receiver.lock();
+            receiver.receive(packet)?
+        };
+
+        // Send `Pong` packet back to peer
+        network.send_to_peer(addr, pong.to_bytes())
     }
 
     fn to_bytes(&self) -> Vec<u8> {
@@ -112,6 +139,77 @@ impl Arbitrary for Ping {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::thread;
+    use std::time::Duration;
+
+    #[test]
+    fn peers_time_out() {
+        let networks = crate::init_test_networks(2);
+        let addr2 = networks[1].1;
+        let network1 = networks[0].0.clone();
+        let network1_c = network1.clone();
+        let network2 = networks[1].0.clone();
+        let network2_c = network2.clone();
+
+        {
+            // Attempt to connect the first peer to the second
+            network1_c.lock().connect_no_ping(&addr2).unwrap();
+        }
+
+        // Peers should timeout in 1 second in test mode
+        thread::sleep(Duration::from_millis(2000));
+
+        {
+            let network = network2_c.lock();
+            let peers = network.peers();
+            let peers = peers.read();
+            assert!(peers.is_empty());
+        };
+
+        {
+            let network = network1_c.lock();
+            let peers = network.peers();
+            let peers = peers.read();
+            assert!(peers.is_empty());
+        };
+    }
+
+    #[test]
+    fn ping_pong_integration() {
+        let networks = crate::init_test_networks(2);
+        let addr1 = networks[0].1;
+        let addr2 = networks[1].1;
+        let n1 = networks[0].2.clone();
+        let n2 = networks[1].2.clone();
+        let network1 = networks[0].0.clone();
+        let network1_c = network1.clone();
+        let network2 = networks[1].0.clone();
+        let network2_c = network2.clone();
+
+        {
+            // Attempt to connect the first peer to the second
+            network1_c.lock().connect(&addr2).unwrap();
+        }
+
+        // Peers should timeout in 1 second in test mode
+        thread::sleep(Duration::from_millis(7000));
+
+        {
+            let network = network2_c.lock();
+            let peers = network.peers();
+            let peers = peers.read();
+            assert!(!peers.is_empty());
+        };
+
+        {
+            let network = network1_c.lock();
+            let peers = network.peers();
+            let peers = peers.read();
+            assert!(!peers.is_empty());
+        };
+
+        println!("DEBUG FINISHED");
+    }
 
     quickcheck! {
         fn serialize_deserialize(packet: Arc<Ping>) -> bool {

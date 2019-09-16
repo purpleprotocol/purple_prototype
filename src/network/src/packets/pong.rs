@@ -20,6 +20,7 @@ use crate::error::NetworkErr;
 use crate::packet::Packet;
 use crate::interface::NetworkInterface;
 use crate::peer::ConnectionType;
+use crate::validation::sender::Sender;
 use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -47,7 +48,20 @@ impl Packet for Pong {
         packet: &Pong,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        unimplemented!();
+        debug!("Received Pong packet from {} with nonce {}", addr, packet.nonce);
+
+        // Retrieve sender mutex
+        let sender = {
+            let peers = network.peers();
+            let peers = peers.read();
+            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
+
+            peer.validator.ping_pong.sender.clone()
+        };
+
+        // Ack packet
+        let mut sender = sender.lock();
+        sender.acknowledge(packet)
     }
 
     fn to_bytes(&self) -> Vec<u8> {

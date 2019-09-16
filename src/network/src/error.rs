@@ -70,4 +70,7 @@ pub enum NetworkErr {
 
     /// Could not acknowledge the packet. 
     AckErr,
+
+    /// The peer's session has expired
+    SessionExpired,
 }

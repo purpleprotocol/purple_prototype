@@ -74,7 +74,7 @@ pub trait NetworkInterface {
     /// Returns a reference to our node id.
     fn our_node_id(&self) -> &NodeId;
 
-    /// Returns a reference to the peer table RwLock.
+    /// Returns a reference to the peer table `RwLock`.
     fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>>;
 
     /// Returns a reference to the `HardChain`.

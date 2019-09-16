@@ -30,6 +30,12 @@ extern crate bin_tools;
 #[cfg(test)]
 extern crate tempdir;
 
+#[cfg(test)]
+extern crate timer;
+
+#[cfg(test)]
+extern crate rayon;
+
 extern crate byteorder;
 extern crate chain;
 extern crate chrono;

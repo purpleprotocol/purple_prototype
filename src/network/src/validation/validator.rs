@@ -18,8 +18,10 @@
 
 use crate::protocol_flow::ping_pong::PingPong;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
+/// Struct wrapping all protocol flows. This
+/// is instantiated once per each connected peer.
 pub struct ProtocolValidator {
     /// Ping/Pong protocol flow
-    ping_pong: PingPong,
+    pub(crate) ping_pong: PingPong,
 }

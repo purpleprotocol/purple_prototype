@@ -33,4 +33,6 @@ features = ["test"]
 
 [dev-dependencies]
 tempdir = "0.3.7"
+rayon = "1.0.3"
+timer = "0.2.0"
 test-helpers = { path = "../util/test-helpers" }
