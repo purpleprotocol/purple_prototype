@@ -31,6 +31,7 @@ use parking_lot::{RwLock, Mutex};
 use std::net::SocketAddr;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use rayon::prelude::*;
 
 /// Peer timeout in milliseconds
@@ -204,6 +205,14 @@ impl NetworkInterface for MockNetwork {
         self.state_chain_ref.clone()
     }
 
+    fn has_peer(&self, addr: &SocketAddr) -> bool {
+        self.peers.read().get(addr).is_some()
+    }
+
+    fn has_peer_with_id(&self, id: &NodeId) -> bool {
+        unimplemented!()
+    }
+
     fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)> {
         &self.hard_chain_sender
     }
@@ -259,8 +268,8 @@ impl NetworkInterface for MockNetwork {
                             let mut peers = peers.write();
 
                             let mut peer = peers.get_mut(&addr).unwrap();
-                            peer.last_seen += 10;
-                            peer.last_ping += 10;
+                            peer.last_seen.fetch_add(10, Ordering::SeqCst);
+                            peer.last_ping.fetch_add(10, Ordering::SeqCst);
                         });
 
                         peer.timeout_guard = Some(guard);
@@ -285,7 +294,7 @@ impl NetworkInterface for MockNetwork {
             {
                 let mut peers = self.peers.write();
                 let mut peer = peers.get_mut(addr).unwrap();
-                peer.last_seen = 0;
+                peer.last_seen = Arc::new(AtomicU64::new(0));
             }
 
             Ok(())
@@ -457,17 +466,17 @@ impl MockNetwork {
                 {
                     let peers = network.peers();
                     let mut peers = peers.write();
-                    peers.retain(|_, p| p.last_seen < PEER_TIMEOUT);
+                    peers.retain(|_, p| p.last_seen.load(Ordering::SeqCst) < PEER_TIMEOUT);
                     //network.address_mappings.retain(|addr, _| peers.get(addr).is_some());
 
                     // Send pings
                     for (addr, p) in peers.iter_mut() {
-                        if p.last_ping > PING_INTERVAL && p.send_ping {
+                        if p.last_ping.load(Ordering::SeqCst) > PING_INTERVAL && p.send_ping {
                             {
                                 let mut sender = p.validator.ping_pong.sender.lock();
 
                                 if let Ok(ping) = sender.send() {
-                                    p.last_ping = 0;
+                                    p.last_ping = Arc::new(AtomicU64::new(0));
 
                                     info!("Sending Ping packet to {}", addr);
 

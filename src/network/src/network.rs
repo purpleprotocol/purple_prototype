@@ -160,6 +160,14 @@ impl NetworkInterface for Network {
         unimplemented!();
     }
 
+    fn has_peer(&self, addr: &SocketAddr) -> bool {
+        self.peers.read().get(addr).is_some()
+    }
+
+    fn has_peer_with_id(&self, id: &NodeId) -> bool {
+        unimplemented!()
+    }
+
     fn send_to_peer(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
 

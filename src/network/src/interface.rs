@@ -65,6 +65,14 @@ pub trait NetworkInterface {
     /// Callback that processes each packet that is received from any peer.
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
 
+    /// Returns true if the peer with the given `SocketAddr` exists
+    /// in the peer table.
+    fn has_peer(&self, addr: &SocketAddr) -> bool;
+
+    /// Returns true if the peer with the given `NodeId` exists
+    /// in the peer table.
+    fn has_peer_with_id(&self, id: &NodeId) -> bool;
+
     /// Bans the peer with the node id
     fn ban_peer(&self, peer: &NodeId) -> Result<(), NetworkErr>;
 

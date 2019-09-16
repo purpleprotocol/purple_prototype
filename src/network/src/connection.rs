@@ -22,6 +22,7 @@ use crate::interface::NetworkInterface;
 use crate::network::Network;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
+use crate::validation::sender::Sender;
 use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
 use crypto::{Signature, Nonce};
 use std::io::BufReader;
@@ -36,11 +37,18 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::future::{ok, err};
 use tokio::prelude::*;
 use tokio::sync::mpsc;
+use tokio_timer::Interval;
 use tokio_io_timeout::TimeoutStream;
 
 /// Purple default network port
 pub const PORT: u16 = 44034;
 const PEER_TIMEOUT: u64 = 15000;
+
+/// Time in milliseconds to poll a peer
+const TIMER_INTERVAL: u64 = 10;
+
+/// A ping will be send at this interval in milliseconds
+const PING_INTERVAL: u64 = 500;
 
 /// Initializes the listener for the given network
 pub fn start_listener(network: Network, accept_connections: Arc<AtomicBool>) -> Spawn {
@@ -121,6 +129,8 @@ fn process_connection(
     // socket.
     let (reader, writer) = sock.split();
     let reader = BufReader::new(reader);
+    let network_clone = network.clone();
+    let network_clone2 = network.clone();
 
     // Model the read portion of this socket by mapping an infinite
     // iterator to each line off the socket. This "loop" is then
@@ -328,6 +338,42 @@ fn process_connection(
                 })
         });
 
+    let peers_clone = network.peers.clone();
+    let addr_clone = addr.clone();
+
+    // Spawn a repeating task at a given interval for this peer
+    let peer_interval = Interval::new_interval(Duration::from_millis(TIMER_INTERVAL))
+        .take_while(move |_| ok(network_clone.has_peer(&addr)))
+        .fold((), move |_, _| {
+            let peers = peers_clone.clone();
+            let addr = addr_clone.clone();
+            let peers = peers.read();
+            let peer = peers.get(&addr).unwrap();
+
+            let _ = peer.last_seen.fetch_add(TIMER_INTERVAL, Ordering::SeqCst);
+            let last_ping = peer.last_ping.fetch_add(TIMER_INTERVAL, Ordering::SeqCst);
+
+            if last_ping > PING_INTERVAL  {
+                {
+                    let mut sender = peer.validator.ping_pong.sender.lock();
+
+                    if let Ok(ping) = sender.send() {
+                        peer.last_ping.store(0, Ordering::SeqCst);
+
+                        info!("Sending Ping packet to {}", addr);
+
+                        network_clone2
+                            .send_to_peer(&addr, ping.to_bytes())
+                            .map_err(|err| warn!("Could not send ping to {}: {:?}", addr, err));
+                    };
+                }
+            }
+
+            ok(())
+        })
+        .map_err(move |e| { warn!("Peer interval error for {}: {}", addr, e); () })
+        .and_then(|_| Ok(()));
+
     // Now that we've got futures representing each half of the socket, we
     // use the `select` combinator to wait for either half to be done to
     // tear down the other. Then we spawn off the result.
@@ -349,7 +395,8 @@ fn process_connection(
         ok(())
     }));
 
-    tokio::spawn(socket_writer)
+    tokio::spawn(socket_writer);
+    tokio::spawn(peer_interval)
 }
 
 // #[cfg(test)]

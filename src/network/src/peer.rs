@@ -25,8 +25,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
 use std::default::Default;
-
-#[cfg(test)]
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -67,7 +66,10 @@ pub struct Peer {
     pub ip: SocketAddr,
 
     /// Time in milliseconds since the peer has last sent a message.
-    pub last_seen: u64,
+    pub last_seen: Arc<AtomicU64>,
+
+    /// Time in milliseconds since we have sent a ping to the peer.
+    pub last_ping: Arc<AtomicU64>,
 
     /// Wether the peer has sent a `Connect` packet or not.
     pub sent_connect: bool,
@@ -103,9 +105,6 @@ pub struct Peer {
 
     #[cfg(test)]
     pub(crate) send_ping: bool,
-
-    #[cfg(test)]
-    pub(crate) last_ping: u64,
 }
 
 impl fmt::Debug for Peer {
@@ -134,7 +133,8 @@ impl Peer {
             sent_connect: false,
             connection_type,
             outbound_buffer,
-            last_seen: 0,
+            last_seen: Arc::new(AtomicU64::new(0)),
+            last_ping: Arc::new(AtomicU64::new(0)),
             validator: ProtocolValidator::default(),
 
             #[cfg(test)]
@@ -145,9 +145,6 @@ impl Peer {
 
             #[cfg(test)]
             send_ping: true,
-
-            #[cfg(test)]
-            last_ping: 0,
         }
     }
 
