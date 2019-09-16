@@ -292,9 +292,9 @@ impl NetworkInterface for MockNetwork {
 
             // Refresh peer timeout timer
             {
-                let mut peers = self.peers.write();
-                let mut peer = peers.get_mut(addr).unwrap();
-                peer.last_seen = Arc::new(AtomicU64::new(0));
+                let peers = self.peers.read();
+                let peer = peers.get(addr).unwrap();
+                peer.last_seen.store(0, Ordering::SeqCst);
             }
 
             Ok(())

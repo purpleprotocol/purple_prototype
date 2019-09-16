@@ -27,6 +27,7 @@ use hashbrown::{HashMap, HashSet};
 use parking_lot::RwLock;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use Peer;
 
 #[cfg(test)]
@@ -278,7 +279,16 @@ impl NetworkInterface for Network {
             }
         } else {
             info!("{}: {}", peer, hex::encode(packet));
-            crate::common::handle_packet(self, conn_type, peer, &packet)
+            crate::common::handle_packet(self, conn_type, peer, &packet)?;
+
+            // Refresh peer timeout timer
+            {
+                let peers = self.peers.read();
+                let peer = peers.get(peer).unwrap();
+                peer.last_seen.store(0, Ordering::SeqCst);
+            }
+
+            Ok(())
         }
     }
 

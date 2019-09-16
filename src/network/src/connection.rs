@@ -340,6 +340,7 @@ fn process_connection(
 
     let peers_clone = network.peers.clone();
     let addr_clone = addr.clone();
+    let addr_clone2 = addr.clone();
 
     // Spawn a repeating task at a given interval for this peer
     let peer_interval = Interval::new_interval(Duration::from_millis(TIMER_INTERVAL))
@@ -372,7 +373,7 @@ fn process_connection(
             ok(())
         })
         .map_err(move |e| { warn!("Peer interval error for {}: {}", addr, e); () })
-        .and_then(|_| Ok(()));
+        .and_then(move |_| { debug!("Peer interval timer for {} has finished!", addr_clone2); Ok(()) });
 
     // Now that we've got futures representing each half of the socket, we
     // use the `select` combinator to wait for either half to be done to
