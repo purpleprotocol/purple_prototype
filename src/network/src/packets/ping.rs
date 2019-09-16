@@ -77,8 +77,14 @@ impl Packet for Ping {
             receiver.receive(packet)?
         };
 
+        debug!("Sending Pong packet to {}", addr);
+
         // Send `Pong` packet back to peer
-        network.send_to_peer(addr, pong.to_bytes())
+        network.send_to_peer(addr, pong.to_bytes())?;
+
+        debug!("Pong packet sent to {}", addr);
+
+        Ok(())
     }
 
     fn to_bytes(&self) -> Vec<u8> {

@@ -478,7 +478,7 @@ impl MockNetwork {
                                 if let Ok(ping) = sender.send() {
                                     p.last_ping = Arc::new(AtomicU64::new(0));
 
-                                    info!("Sending Ping packet to {}", addr);
+                                    debug!("Sending Ping packet to {}", addr);
 
                                     pings.push((addr.clone(), ping.to_bytes()));
                                 };

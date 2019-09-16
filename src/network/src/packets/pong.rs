@@ -59,9 +59,15 @@ impl Packet for Pong {
             peer.validator.ping_pong.sender.clone()
         };
 
+        debug!("Acking pong {}", packet.nonce);
+
         // Ack packet
         let mut sender = sender.lock();
-        sender.acknowledge(packet)
+        sender.acknowledge(packet)?;
+
+        debug!("Pong {} acked!", packet.nonce);
+
+        Ok(())
     }
 
     fn to_bytes(&self) -> Vec<u8> {

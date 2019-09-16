@@ -345,7 +345,7 @@ fn process_connection(
     // Spawn a repeating task at a given interval for this peer
     let peer_interval = Interval::new_interval(Duration::from_millis(TIMER_INTERVAL))
         .take_while(move |_| ok(network_clone.has_peer(&addr)))
-        .fold((), move |_, _| {
+        .fold(0, move |mut times_denied, _| {
             let peers = peers_clone.clone();
             let addr = addr_clone.clone();
             let peers = peers.read();
@@ -361,16 +361,27 @@ fn process_connection(
                     if let Ok(ping) = sender.send() {
                         peer.last_ping.store(0, Ordering::SeqCst);
 
-                        info!("Sending Ping packet to {}", addr);
+                        debug!("Sending Ping packet to {}", addr);
 
                         network_clone2
                             .send_to_peer(&addr, ping.to_bytes())
-                            .map_err(|err| warn!("Could not send ping to {}: {:?}", addr, err));
-                    };
+                            .map_err(|err| warn!("Could not send ping to {}: {:?}", addr, err))
+                            .unwrap_or(());
+
+                        debug!("Sent Ping packet to {}", addr);
+                    } else {
+                        times_denied += 1;
+
+                        // Reset sender if it's stuck
+                        if times_denied > 10 {
+                            times_denied = 0;
+                            sender.reset();
+                        }
+                    }
                 }
             }
 
-            ok(())
+            ok(times_denied)
         })
         .map_err(move |e| { warn!("Peer interval error for {}: {}", addr, e); () })
         .and_then(move |_| { debug!("Peer interval timer for {} has finished!", addr_clone2); Ok(()) });
