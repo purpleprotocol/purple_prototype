@@ -19,13 +19,13 @@
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
-use crate::validation::receiver::Receiver;
 use crate::peer::ConnectionType;
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
+use crate::validation::receiver::Receiver;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use rand::prelude::*;
+use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::io::Cursor;
-use rand::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ping {
@@ -37,9 +37,7 @@ impl Ping {
     pub fn new() -> Ping {
         let mut rng = rand::thread_rng();
 
-        Ping {
-            nonce: rng.gen(),
-        }
+        Ping { nonce: rng.gen() }
     }
 }
 
@@ -52,7 +50,10 @@ impl Packet for Ping {
         packet: &Ping,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        debug!("Received Ping packet from {} with nonce {}", addr, packet.nonce);
+        debug!(
+            "Received Ping packet from {} with nonce {}",
+            addr, packet.nonce
+        );
 
         // Retrieve receiver mutex
         let receiver = {
@@ -64,7 +65,7 @@ impl Packet for Ping {
             {
                 // We don't send a pong back if this is disabled
                 if !peer.send_ping {
-                    return Ok(())
+                    return Ok(());
                 }
             }
 
@@ -122,9 +123,7 @@ impl Packet for Ping {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = Ping {
-            nonce,
-        };
+        let packet = Ping { nonce };
 
         Ok(Arc::new(packet))
     }

@@ -507,9 +507,9 @@ impl Vm {
                     }
                     Some(Instruction::Eq) => {
                         let os = self.operand_stack.to_vec();
-                        
+
                         // Perform assertion
-                        if perform_comparison(Instruction::Eq, os)? { 
+                        if perform_comparison(Instruction::Eq, os)? {
                             ip.increment();
                         } else {
                             return Err(VmError::AssertionFailed);
@@ -1030,7 +1030,10 @@ fn handle_begin_block(
                         let value = os.pop();
                         operands.push(value);
                     }
-                    println!("Before perform comparison if 0 arity {:?}", perform_comparison(instruction, operands.clone()));
+                    println!(
+                        "Before perform comparison if 0 arity {:?}",
+                        perform_comparison(instruction, operands.clone())
+                    );
                     if perform_comparison(instruction, operands)? {
                         // Push frame
                         call_stack.push(Frame::new(Some(CfOperator::If), Some(initial_ip), None));
@@ -1080,7 +1083,10 @@ fn handle_begin_block(
                         let value = os.pop();
                         operands.push(value);
                     }
-                    println!("Before perform comparison if x arity {:?}", perform_comparison(instruction, operands.clone()));
+                    println!(
+                        "Before perform comparison if x arity {:?}",
+                        perform_comparison(instruction, operands.clone())
+                    );
                     if perform_comparison(instruction, operands)? {
                         let mut buf: Vec<VmValue> = Vec::with_capacity(arity as usize);
 
@@ -2989,7 +2995,11 @@ fn fetch_argv(
 
 fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> Result<bool, VmError> {
     let op_len = operands.len();
-    println!("perform_comparison with instruction {:?} on operands {:?}", op, operands.clone());
+    println!(
+        "perform_comparison with instruction {:?} on operands {:?}",
+        op,
+        operands.clone()
+    );
     match op {
         Instruction::Eqz => {
             if op_len != 1 {
@@ -3051,8 +3061,8 @@ fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> Result<bool, V
                 ));
             }
 
-            if !operands[0].is_positive() || !operands[1].is_positive(){
-                return Err(VmError::UnsignedOperationSignedOperand)
+            if !operands[0].is_positive() || !operands[1].is_positive() {
+                return Err(VmError::UnsignedOperationSignedOperand);
             }
 
             Ok(operands[0].lt(&operands[1]))
@@ -3075,8 +3085,8 @@ fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> Result<bool, V
                 ));
             }
 
-            if !operands[0].is_positive() || !operands[1].is_positive(){
-                return Err(VmError::UnsignedOperationSignedOperand)
+            if !operands[0].is_positive() || !operands[1].is_positive() {
+                return Err(VmError::UnsignedOperationSignedOperand);
             }
 
             Ok(operands[0].gt(&operands[1]))
@@ -3099,8 +3109,8 @@ fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> Result<bool, V
                 ));
             }
 
-            if !operands[0].is_positive() || !operands[1].is_positive(){
-                return Err(VmError::UnsignedOperationSignedOperand)
+            if !operands[0].is_positive() || !operands[1].is_positive() {
+                return Err(VmError::UnsignedOperationSignedOperand);
             }
 
             Ok(operands[0].le(&operands[1]))
@@ -3123,8 +3133,8 @@ fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> Result<bool, V
                 ));
             }
 
-            if !operands[0].is_positive() || !operands[1].is_positive(){
-                return Err(VmError::UnsignedOperationSignedOperand)
+            if !operands[0].is_positive() || !operands[1].is_positive() {
+                return Err(VmError::UnsignedOperationSignedOperand);
             }
 
             Ok(operands[0].ge(&operands[1]))
@@ -3134,7 +3144,7 @@ fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> Result<bool, V
 }
 
 fn compare_to_zero(operand: VmValue) -> bool {
-    match operand{
+    match operand {
         VmValue::I32(val) => val == 0,
         VmValue::I64(val) => val == 0,
         VmValue::F32(val) => val == 0.0,
@@ -3144,14 +3154,14 @@ fn compare_to_zero(operand: VmValue) -> bool {
         VmValue::i32Array8(val) => val.iter().all(|v| *v == 0),
         VmValue::i64Array2(val) => val.iter().all(|v| *v == 0),
         VmValue::i64Array4(val) => val.iter().all(|v| *v == 0),
-        VmValue::i64Array8(val)=> val.iter().all(|v| *v == 0),
-        VmValue::f32Array2(val)=> val.iter().all(|v| *v == 0.0),
-        VmValue::f32Array4(val)=> val.iter().all(|v| *v == 0.0),
-        VmValue::f32Array8(val)=> val.iter().all(|v| *v == 0.0),
+        VmValue::i64Array8(val) => val.iter().all(|v| *v == 0),
+        VmValue::f32Array2(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f32Array4(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f32Array8(val) => val.iter().all(|v| *v == 0.0),
         VmValue::f64Array2(val) => val.iter().all(|v| *v == 0.0),
         VmValue::f64Array4(val) => val.iter().all(|v| *v == 0.0),
         VmValue::f64Array8(val) => val.iter().all(|v| *v == 0.0),
-        _ => panic!("Operand type not supported for comparison")
+        _ => panic!("Operand type not supported for comparison"),
     }
 }
 
@@ -3176,10 +3186,10 @@ fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Resu
 
             // Perform addition
             let mut acc: VmValue = buf[0];
-            for i in 1..buf.len(){
+            for i in 1..buf.len() {
                 acc = match acc + buf[i] {
                     Ok(res) => res,
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
 
@@ -3195,14 +3205,14 @@ fn perform_addition(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Resu
     Ok(())
 }
 
-fn perform_substraction(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError>  {
+fn perform_substraction(
+    op: Instruction,
+    operand_stack: &mut Stack<VmValue>,
+) -> Result<(), VmError> {
     let len = operand_stack.len();
 
     if len != 2 {
-        panic!(format!(
-            "Cannot perform substraction on {} operands!",
-            len
-        ));
+        panic!(format!("Cannot perform substraction on {} operands!", len));
     }
 
     match op {
@@ -3211,9 +3221,9 @@ fn perform_substraction(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
             let to_substract = operand_stack.pop(); // last inserted
             let mut result = operand_stack.pop(); // first inserted
 
-            result = match result - to_substract{
+            result = match result - to_substract {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
 
             // Push result back to operand stack
@@ -3228,7 +3238,10 @@ fn perform_substraction(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
     Ok(())
 }
 
-fn perform_multiplication(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError>  {
+fn perform_multiplication(
+    op: Instruction,
+    operand_stack: &mut Stack<VmValue>,
+) -> Result<(), VmError> {
     let len = operand_stack.len();
 
     if len < 2 {
@@ -3249,13 +3262,13 @@ fn perform_multiplication(op: Instruction, operand_stack: &mut Stack<VmValue>) -
 
             // Perform multiplication
             let mut result: VmValue = buf[0];
-            for i in 1..buf.len(){
+            for i in 1..buf.len() {
                 result = match result * buf[i] {
                     Ok(res) => res,
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
-            
+
             // Push result back to operand stack
             operand_stack.push(result);
         }
@@ -3284,9 +3297,9 @@ fn perform_div_signed(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Re
             let divider = operand_stack.pop();
             let mut result = operand_stack.pop();
 
-            result = match result / divider{
+            result = match result / divider {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
 
             // Push result back to operand stack
@@ -3301,7 +3314,10 @@ fn perform_div_signed(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Re
     Ok(())
 }
 
-fn perform_div_unsigned(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+fn perform_div_unsigned(
+    op: Instruction,
+    operand_stack: &mut Stack<VmValue>,
+) -> Result<(), VmError> {
     let len = operand_stack.len();
 
     if len != 2 {
@@ -3317,13 +3333,13 @@ fn perform_div_unsigned(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
             let divider = operand_stack.pop();
             let mut result = operand_stack.pop();
 
-            if !divider.is_positive() || !result.is_positive(){
-                return Err(VmError::UnsignedOperationSignedOperand)
+            if !divider.is_positive() || !result.is_positive() {
+                return Err(VmError::UnsignedOperationSignedOperand);
             }
 
-            result = match result / divider{
+            result = match result / divider {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
 
             // Push result back to operand stack
@@ -3352,10 +3368,10 @@ fn perform_rem_signed(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Re
             // Perform signed remainder
             let to_divide = operand_stack.pop();
             let mut result = operand_stack.pop();
-            
-            result = match result % to_divide{
+
+            result = match result % to_divide {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
 
             // Push result back to operand stack
@@ -3369,7 +3385,10 @@ fn perform_rem_signed(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Re
 
     Ok(())
 }
-fn perform_rem_unsigned(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+fn perform_rem_unsigned(
+    op: Instruction,
+    operand_stack: &mut Stack<VmValue>,
+) -> Result<(), VmError> {
     let len = operand_stack.len();
 
     if len != 2 {
@@ -3384,14 +3403,14 @@ fn perform_rem_unsigned(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
             // Perform unsigned remainder
             let to_divide = operand_stack.pop();
             let mut result = operand_stack.pop();
-            
-            if !to_divide.is_positive() || !result.is_positive(){
-                return Err(VmError::UnsignedOperationSignedOperand)            
+
+            if !to_divide.is_positive() || !result.is_positive() {
+                return Err(VmError::UnsignedOperationSignedOperand);
             }
 
-            result = match result % to_divide{
+            result = match result % to_divide {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
 
             // Push result back to operand stack
@@ -3421,21 +3440,18 @@ fn perform_min(op: Instruction, operand_stack: &mut Stack<VmValue>) {
             for _ in 0..len {
                 buf.push(operand_stack.pop());
             }
-            
+
             // Perform min
             let mut result = buf[0];
             for x in buf.iter() {
                 if x.lt(&result) {
-                    result = *x; 
+                    result = *x;
                 }
             }
 
             operand_stack.push(result);
         }
-        _ => panic!(format!(
-            "Must receive a min instruction! Got: {:?}",
-            op
-        )),
+        _ => panic!(format!("Must receive a min instruction! Got: {:?}", op)),
     };
 }
 
@@ -3454,21 +3470,18 @@ fn perform_max(op: Instruction, operand_stack: &mut Stack<VmValue>) {
             for _ in 0..len {
                 buf.push(operand_stack.pop());
             }
-            
+
             // Perform max
             let mut result = buf[0];
             for x in buf.iter() {
                 if x.gt(&result) {
-                    result = *x; 
+                    result = *x;
                 }
             }
 
             operand_stack.push(result);
         }
-        _ => panic!(format!(
-            "Must receive a max instruction! Got: {:?}",
-            op
-        )),
+        _ => panic!(format!("Must receive a max instruction! Got: {:?}", op)),
     };
 }
 
@@ -4781,7 +4794,7 @@ mod tests {
     }
 
     // Helper function to run code blocks
-    fn execute_vm_code_common(block: Vec<u8>) -> Result<Gas, VmError>{
+    fn execute_vm_code_common(block: Vec<u8>) -> Result<Gas, VmError> {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -4792,13 +4805,13 @@ mod tests {
             name: "debug_test".to_owned(),
             block: block,
             return_type: None,
-            arguments: vec![]
+            arguments: vec![],
         };
 
         let module = Module {
             module_hash: Hash::NULL_RLP,
             functions: vec![function],
-            imports: vec![]
+            imports: vec![],
         };
 
         vm.load(module).unwrap();
@@ -7946,7 +7959,7 @@ mod tests {
 
         assert_eq!(execute_vm_code_common(block), Err(VmError::UnsignedOperationSignedOperand));
     }
-    
+
     #[test]
     #[rustfmt::skip]
     fn comparison_ge_signed_performs_else_on_false() {

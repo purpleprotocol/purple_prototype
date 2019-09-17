@@ -42,7 +42,7 @@ impl NormalAddress {
         let (pk, _) = crypto::gen_keypair();
         NormalAddress::from_pkey(pk)
     }
- 
+
     pub fn from_pkey(pkey: PublicKey) -> NormalAddress {
         NormalAddress(pkey)
     }

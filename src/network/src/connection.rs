@@ -22,9 +22,9 @@ use crate::interface::NetworkInterface;
 use crate::network::Network;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
-use crate::validation::sender::Sender;
 use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
-use crypto::{Signature, Nonce};
+use crate::validation::sender::Sender;
+use crypto::{Nonce, Signature};
 use std::io::BufReader;
 use std::iter;
 use std::net::SocketAddr;
@@ -34,11 +34,11 @@ use std::time::Duration;
 use tokio::executor::Spawn;
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::prelude::future::{ok, err};
+use tokio::prelude::future::{err, ok};
 use tokio::prelude::*;
 use tokio::sync::mpsc;
-use tokio_timer::Interval;
 use tokio_io_timeout::TimeoutStream;
+use tokio_timer::Interval;
 
 /// Purple default network port
 pub const PORT: u16 = 44034;
@@ -152,7 +152,8 @@ fn process_connection(
                         connect.sign(&skey);
 
                         let packet = connect.to_bytes();
-                        let packet = crate::common::wrap_packet(&packet, network.network_name.as_str());
+                        let packet =
+                            crate::common::wrap_packet(&packet, network.network_name.as_str());
                         debug!("Sending connect packet to {}", addr);
 
                         writer
@@ -169,9 +170,9 @@ fn process_connection(
             ok((writer, network))
         })
         .and_then(move |(writer, network)| {
-            let fut = outbound_receiver
-                .map_err(|err| format!("{}", err))
-                .fold(writer, move |mut writer, packet| {
+            let fut = outbound_receiver.map_err(|err| format!("{}", err)).fold(
+                writer,
+                move |mut writer, packet| {
                     let peers = network.peers.read();
 
                     if peers.get(&addr).is_some() {
@@ -185,8 +186,9 @@ fn process_connection(
                     } else {
                         err("no peer found")
                     }
-                });
-            
+                },
+            );
+
             tokio::spawn(fut.then(move |_| {
                 debug!("Write half of {} closed", addr);
                 Ok(())
@@ -194,7 +196,7 @@ fn process_connection(
 
             ok(())
         });
-        
+
     let socket_reader = iter
         .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
         .fold((reader, network.clone()), move |(reader, network), _| {
@@ -202,39 +204,41 @@ fn process_connection(
             let line = io::read_exact(reader, vec![0; common::HEADER_SIZE])
                 // Decode header
                 .and_then(move |(reader, buffer)| {
-                    let header = common::decode_header(&buffer).map_err(|err| 
+                    let header = common::decode_header(&buffer).map_err(|err| {
                         io::Error::new(
                             io::ErrorKind::Other,
-                            format!("Header read error for {}: {:?}", addr, err)
+                            format!("Header read error for {}: {:?}", addr, err),
                         )
-                    )?;
+                    })?;
 
                     // Only accept our current network version
                     if header.network_version != common::NETWORK_VERSION {
-                        return Err(
-                            io::Error::new(
-                                io::ErrorKind::Other,
-                                format!("Header read error for {}: {:?}", addr, NetworkErr::BadVersion)
-                            )
-                        );
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            format!(
+                                "Header read error for {}: {:?}",
+                                addr,
+                                NetworkErr::BadVersion
+                            ),
+                        ));
                     }
 
                     Ok((reader, network, header))
                 })
                 // Read packet from stream
                 .and_then(move |(reader, network, header)| {
-                    io::read_exact(
-                        reader, 
-                        vec![0; header.packet_len as usize]
-                    ).map(|(reader, buffer)| (reader, network, header, buffer))
+                    io::read_exact(reader, vec![0; header.packet_len as usize])
+                        .map(|(reader, buffer)| (reader, network, header, buffer))
                 })
                 // Verify crc32 checksum
                 .and_then(move |(reader, network, header, buffer)| {
-                    common::verify_crc32(&header, &buffer, network.network_name.as_str()).map_err(|err| 
-                        io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Header read error for {}: {:?}", addr, err)
-                        )
+                    common::verify_crc32(&header, &buffer, network.network_name.as_str()).map_err(
+                        |err| {
+                            io::Error::new(
+                                io::ErrorKind::Other,
+                                format!("Header read error for {}: {:?}", addr, err),
+                            )
+                        },
                     )?;
 
                     Ok((reader, network, header, buffer))
@@ -263,20 +267,19 @@ fn process_connection(
 
                                 // Verify packet signature
                                 if !crypto::verify(&buffer, &sig, &peer.id.as_ref().unwrap().0) {
-                                    return Err(
-                                        io::Error::new(
-                                            io::ErrorKind::Other,
-                                            format!("Packet signature error for {}", addr)
-                                        )
-                                    );
+                                    return Err(io::Error::new(
+                                        io::ErrorKind::Other,
+                                        format!("Packet signature error for {}", addr),
+                                    ));
                                 }
 
-                                buf = common::decrypt(&buffer, &nonce, peer.tx.as_ref().unwrap()).map_err(|_|
+                                buf = common::decrypt(&buffer, &nonce, peer.tx.as_ref().unwrap())
+                                    .map_err(|_| {
                                     io::Error::new(
                                         io::ErrorKind::Other,
-                                        format!("Encryption error for {}", addr)
+                                        format!("Encryption error for {}", addr),
                                     )
-                                )?;
+                                })?;
                             } else {
                                 // We are expecting an un-encrypted `Connect` packet
                                 // so we make it just pass through.
@@ -285,12 +288,10 @@ fn process_connection(
 
                             buf
                         } else {
-                            return Err(
-                                io::Error::new(
-                                    io::ErrorKind::Other,
-                                    format!("Lost connection to {}", addr)
-                                )
-                            );
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                format!("Lost connection to {}", addr),
+                            ));
                         }
                     };
 
@@ -306,36 +307,35 @@ fn process_connection(
 
             let refuse_connection = refuse_connection.clone();
 
-            line
-                .map(move |(reader, mut network, message)| {
-                    let result = network.process_packet(&addr, &message);
-                    (reader, network, result)
-                })
-                .map(move |(reader, network, result)| {
-                    // TODO: Handle other errors as well
-                    match result {
-                        Ok(_) => { }, // Do nothing
-                        Err(NetworkErr::InvalidConnectPacket) => {
-                            // Flag socket for connection refusal if we
-                            // have received an invalid connect packet.
-                            refuse_connection.store(true, Ordering::Relaxed);
+            line.map(move |(reader, mut network, message)| {
+                let result = network.process_packet(&addr, &message);
+                (reader, network, result)
+            })
+            .map(move |(reader, network, result)| {
+                // TODO: Handle other errors as well
+                match result {
+                    Ok(_) => {} // Do nothing
+                    Err(NetworkErr::InvalidConnectPacket) => {
+                        // Flag socket for connection refusal if we
+                        // have received an invalid connect packet.
+                        refuse_connection.store(true, Ordering::Relaxed);
 
-                            // Also, ban the peer
-                            info!("Banning peer {}", addr);
-                            network.ban_ip(&addr).unwrap();
-                        }
-
-                        Err(NetworkErr::SelfConnect) => {
-                            refuse_connection.store(true, Ordering::Relaxed);
-                        }
-
-                        err => {
-                            warn!("Packet process error for {}: {:?}", addr.clone(), err);
-                        }
+                        // Also, ban the peer
+                        info!("Banning peer {}", addr);
+                        network.ban_ip(&addr).unwrap();
                     }
 
-                    (reader, network)
-                })
+                    Err(NetworkErr::SelfConnect) => {
+                        refuse_connection.store(true, Ordering::Relaxed);
+                    }
+
+                    err => {
+                        warn!("Packet process error for {}: {:?}", addr.clone(), err);
+                    }
+                }
+
+                (reader, network)
+            })
         });
 
     let peers_clone = network.peers.clone();
@@ -354,7 +354,7 @@ fn process_connection(
             let _ = peer.last_seen.fetch_add(TIMER_INTERVAL, Ordering::SeqCst);
             let last_ping = peer.last_ping.fetch_add(TIMER_INTERVAL, Ordering::SeqCst);
 
-            if last_ping > PING_INTERVAL  {
+            if last_ping > PING_INTERVAL {
                 {
                     let mut sender = peer.validator.ping_pong.sender.lock();
 
@@ -383,14 +383,26 @@ fn process_connection(
 
             ok(times_denied)
         })
-        .map_err(move |e| { warn!("Peer interval error for {}: {}", addr, e); () })
-        .and_then(move |_| { debug!("Peer interval timer for {} has finished!", addr_clone2); Ok(()) });
+        .map_err(move |e| {
+            warn!("Peer interval error for {}: {}", addr, e);
+            ()
+        })
+        .and_then(move |_| {
+            debug!("Peer interval timer for {} has finished!", addr_clone2);
+            Ok(())
+        });
 
     // Now that we've got futures representing each half of the socket, we
     // use the `select` combinator to wait for either half to be done to
     // tear down the other. Then we spawn off the result.
-    let socket_reader = socket_reader.map_err(|e| { warn!("{}", e); () });
-    let socket_writer = socket_writer.map_err(|e| { warn!("Socket write error: {}", e); () });
+    let socket_reader = socket_reader.map_err(|e| {
+        warn!("{}", e);
+        ()
+    });
+    let socket_writer = socket_writer.map_err(|e| {
+        warn!("Socket write error: {}", e);
+        ()
+    });
 
     let accept_connections = accept_connections.clone();
 

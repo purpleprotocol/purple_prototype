@@ -42,10 +42,7 @@ pub struct SendPeers {
 
 impl SendPeers {
     pub fn new(peers: Vec<SocketAddr>, nonce: u64) -> SendPeers {
-        SendPeers {
-            peers,
-            nonce,
-        }
+        SendPeers { peers, nonce }
     }
 
     fn encode_peers(&self) -> Vec<u8> {
@@ -144,10 +141,7 @@ impl Packet for SendPeers {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = SendPeers {
-            nonce,
-            peers,
-        };
+        let packet = SendPeers { nonce, peers };
 
         Ok(Arc::new(packet))
     }
@@ -290,9 +284,7 @@ mod tests {
             };
 
             let mut packet = RequestPeers::new(3);
-            network
-                .send_to_peer(&addr1, packet.to_bytes())
-                .unwrap();
+            network.send_to_peer(&addr1, packet.to_bytes()).unwrap();
         }
 
         // Pause main thread for a bit before

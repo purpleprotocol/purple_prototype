@@ -17,14 +17,14 @@
 */
 
 use crate::error::NetworkErr;
-use crate::interface::NetworkInterface;
 use crate::header::PacketHeader;
-use crate::packets::*;
+use crate::interface::NetworkInterface;
 use crate::packet::Packet;
+use crate::packets::*;
 use crate::peer::ConnectionType;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::crc32fast::Hasher;
-use crypto::{Nonce, SessionKey, SecretKey as Sk, Signature};
+use crypto::{Nonce, SecretKey as Sk, SessionKey, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 
@@ -33,15 +33,23 @@ pub const HEADER_SIZE: usize = 7; // Total of 7 bytes. 1 + 2 + 4;
 
 /// Encrypts and wraps a packet with the default network header. Also signs
 /// the encrypted packet and attaches the signature to the packet.
-pub fn wrap_encrypt_packet(packet: &[u8], node_sk: &Sk, key: &SessionKey, network_name: &str) -> Vec<u8> {
+pub fn wrap_encrypt_packet(
+    packet: &[u8],
+    node_sk: &Sk,
+    key: &SessionKey,
+    network_name: &str,
+) -> Vec<u8> {
     let (encrypted, nonce) = crypto::seal(packet, key);
     let sig = crypto::sign(encrypted.as_slice(), node_sk);
     let sig_bytes = sig.inner_bytes();
-    wrap_packet(&[&nonce.0, sig_bytes.as_slice(), encrypted.as_slice()].concat(), network_name)
+    wrap_packet(
+        &[&nonce.0, sig_bytes.as_slice(), encrypted.as_slice()].concat(),
+        network_name,
+    )
 }
 
 /// Wraps a packet without encrypting it.
-/// 
+///
 /// ### Header fields
 /// 1) Network layer version          - 8bits
 /// 2) Packet length                  - 16bits
@@ -107,8 +115,12 @@ pub fn decode_header(header: &[u8]) -> Result<PacketHeader, NetworkErr> {
     })
 }
 
-/// Verifies the CRC32 checksum of the packet returning `Err(NetworkErr::BadCRC32)` if invalid. 
-pub fn verify_crc32(header: &PacketHeader, packet: &[u8], network_name: &str) -> Result<(), NetworkErr> {
+/// Verifies the CRC32 checksum of the packet returning `Err(NetworkErr::BadCRC32)` if invalid.
+pub fn verify_crc32(
+    header: &PacketHeader,
+    packet: &[u8],
+    network_name: &str,
+) -> Result<(), NetworkErr> {
     let mut crc32 = Hasher::new();
 
     crc32.update(packet);
@@ -132,29 +144,34 @@ pub fn decrypt(packet: &[u8], nonce: &Nonce, key: &SessionKey) -> Result<Vec<u8>
 }
 
 /// Parses and handles a packet.
-pub fn handle_packet<N: NetworkInterface>(network: &mut N, conn_type: ConnectionType, peer_addr: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+pub fn handle_packet<N: NetworkInterface>(
+    network: &mut N,
+    conn_type: ConnectionType,
+    peer_addr: &SocketAddr,
+    packet: &[u8],
+) -> Result<(), NetworkErr> {
     let packet_type = packet[0];
 
     match packet_type {
         Ping::PACKET_TYPE => match Ping::from_bytes(packet) {
             Ok(packet) => Ping::handle(network, peer_addr, &packet, conn_type)?,
             _ => return Err(NetworkErr::PacketParseErr),
-        }
+        },
 
         Pong::PACKET_TYPE => match Pong::from_bytes(packet) {
             Ok(packet) => Pong::handle(network, peer_addr, &packet, conn_type)?,
             _ => return Err(NetworkErr::PacketParseErr),
-        }
+        },
 
         RequestPeers::PACKET_TYPE => match RequestPeers::from_bytes(packet) {
             Ok(packet) => RequestPeers::handle(network, peer_addr, &packet, conn_type)?,
             _ => return Err(NetworkErr::PacketParseErr),
-        }
+        },
 
         SendPeers::PACKET_TYPE => match SendPeers::from_bytes(packet) {
             Ok(packet) => SendPeers::handle(network, peer_addr, &packet, conn_type)?,
             _ => return Err(NetworkErr::PacketParseErr),
-        }
+        },
 
         _ => {
             debug!("Could not parse packet from {}", peer_addr);
@@ -167,7 +184,11 @@ pub fn handle_packet<N: NetworkInterface>(network: &mut N, conn_type: Connection
 
 #[cfg(test)]
 /// Attempts to decrypt a packet. Only used for testing
-pub fn unwrap_decrypt_packet(packet: &[u8], key: &SessionKey, network_name: &str) -> Result<Vec<u8>, NetworkErr> {
+pub fn unwrap_decrypt_packet(
+    packet: &[u8],
+    key: &SessionKey,
+    network_name: &str,
+) -> Result<Vec<u8>, NetworkErr> {
     let mut rdr = Cursor::new(packet.to_vec());
     let version = if let Ok(result) = rdr.read_u8() {
         result

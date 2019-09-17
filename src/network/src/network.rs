@@ -26,8 +26,8 @@ use crypto::SecretKey as Sk;
 use hashbrown::{HashMap, HashSet};
 use parking_lot::RwLock;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use Peer;
 
 #[cfg(test)]
@@ -114,7 +114,7 @@ impl Network {
     /// This function will panic if there is no entry for the given address.
     pub fn set_node_id(&self, addr: &SocketAddr, node_id: NodeId) {
         let mut peers = self.peers.write();
-        
+
         match peers.get_mut(addr) {
             Some(peer) => peer.set_id(node_id),
             None => panic!("There is no listed peer with the given address!"),
@@ -131,7 +131,7 @@ impl Network {
     /// This function will panic if there is no entry for the given address.
     pub fn is_none_id(&self, addr: &SocketAddr) -> bool {
         let peers = self.peers.read();
-        
+
         match peers.get(addr) {
             Some(peer) => peer.id.is_none(),
             None => panic!("There is no listed peer with the given address!"),
@@ -174,7 +174,12 @@ impl NetworkInterface for Network {
 
         if let Some(peer) = peers.get(peer) {
             if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(&packet, &self.secret_key, rx, self.network_name.as_str());
+                let packet = crate::common::wrap_encrypt_packet(
+                    &packet,
+                    &self.secret_key,
+                    rx,
+                    self.network_name.as_str(),
+                );
                 peer.send_packet(packet)
             } else {
                 Err(NetworkErr::CouldNotSend)
@@ -186,15 +191,21 @@ impl NetworkInterface for Network {
 
     fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
-        
+
         if peers.is_empty() {
             return Err(NetworkErr::NoPeers);
         }
 
         for (addr, peer) in peers.iter() {
             if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(&packet, &self.secret_key, rx, self.network_name.as_str());
-                peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
+                let packet = crate::common::wrap_encrypt_packet(
+                    &packet,
+                    &self.secret_key,
+                    rx,
+                    self.network_name.as_str(),
+                );
+                peer.send_packet(packet.to_vec())
+                    .unwrap_or(warn!("Failed to send packet to {}", addr));
             }
         }
 
@@ -203,19 +214,23 @@ impl NetworkInterface for Network {
 
     fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
-        
+
         if peers.is_empty() {
             return Err(NetworkErr::NoPeers);
         }
 
-        let iter = peers
-            .iter()
-            .filter(|(addr, _)| *addr != exception);
+        let iter = peers.iter().filter(|(addr, _)| *addr != exception);
 
         for (addr, peer) in iter {
             if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(&packet, &self.secret_key, rx, self.network_name.as_str());
-                peer.send_packet(packet.to_vec()).unwrap_or(warn!("Failed to send packet to {}", addr));
+                let packet = crate::common::wrap_encrypt_packet(
+                    &packet,
+                    &self.secret_key,
+                    rx,
+                    self.network_name.as_str(),
+                );
+                peer.send_packet(packet.to_vec())
+                    .unwrap_or(warn!("Failed to send packet to {}", addr));
             }
         }
 

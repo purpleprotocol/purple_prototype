@@ -21,9 +21,9 @@ use crate::error::NetworkErr;
 use crate::packet::Packet;
 use crate::peer::Peer;
 use crypto::{NodeId, SecretKey as Sk};
-use std::net::SocketAddr;
-use parking_lot::RwLock;
 use hashbrown::HashMap;
+use parking_lot::RwLock;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 #[cfg(not(test))]

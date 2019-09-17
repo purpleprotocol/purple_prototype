@@ -61,14 +61,14 @@ mod common;
 mod connection;
 mod error;
 mod handlers;
+mod header;
 mod interface;
 mod network;
 mod packet;
 pub mod packets;
 mod peer;
-mod header;
-mod validation;
 mod protocol_flow;
+mod validation;
 
 pub use bootstrap::*;
 pub use connection::*;

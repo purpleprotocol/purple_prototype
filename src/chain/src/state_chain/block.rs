@@ -16,11 +16,11 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::types::*;
 use crate::block::Block;
 use crate::chain::*;
 use crate::hard_chain::block::HardBlock;
 use crate::state_chain::state::ChainState;
+use crate::types::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
 use crypto::Hash;

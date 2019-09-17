@@ -17,14 +17,14 @@
 */
 
 use crate::error::NetworkErr;
-use crate::packet::Packet;
 use crate::interface::NetworkInterface;
+use crate::packet::Packet;
 use crate::peer::ConnectionType;
 use crate::validation::sender::Sender;
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::io::Cursor;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pong {
@@ -33,9 +33,7 @@ pub struct Pong {
 
 impl Pong {
     pub fn new(nonce: u64) -> Pong {
-        Pong {
-            nonce,
-        }
+        Pong { nonce }
     }
 }
 
@@ -48,7 +46,10 @@ impl Packet for Pong {
         packet: &Pong,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        debug!("Received Pong packet from {} with nonce {}", addr, packet.nonce);
+        debug!(
+            "Received Pong packet from {} with nonce {}",
+            addr, packet.nonce
+        );
 
         // Retrieve sender mutex
         let sender = {
@@ -105,9 +106,7 @@ impl Packet for Pong {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = Pong {
-            nonce,
-        };
+        let packet = Pong { nonce };
 
         Ok(Arc::new(packet))
     }

@@ -80,7 +80,7 @@ pub fn open(ciphertext: &[u8], key: &SessionKey, nonce: &Nonce) -> Result<Vec<u8
 
 /// Generates a random array of bytes of the given length.
 pub fn gen_bytes(len: usize) -> Vec<u8> {
-    (0..len).map(|_| { rand::random::<u8>() }).collect()
+    (0..len).map(|_| rand::random::<u8>()).collect()
 }
 
 #[derive(Clone, Debug)]

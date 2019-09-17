@@ -18,21 +18,21 @@
 
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
-use crate::validation::sender::Sender as SenderTrait;
 use crate::packet::Packet;
 use crate::packets::*;
 use crate::peer::{ConnectionType, Peer};
-use chrono::Duration;
+use crate::validation::sender::Sender as SenderTrait;
 use chain::*;
+use chrono::Duration;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
 use hashbrown::HashMap;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::{Mutex, RwLock};
+use rayon::prelude::*;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use rayon::prelude::*;
 
 /// Peer timeout in milliseconds
 const PEER_TIMEOUT: u64 = 1000;
@@ -89,9 +89,9 @@ impl NetworkInterface for MockNetwork {
         let connect = connect_packet.to_bytes();
 
         peer.sent_connect = true;
-        
+
         {
-            let mut peers = self.peers.write(); 
+            let mut peers = self.peers.write();
             peers.insert(address.clone(), peer);
         }
 
@@ -131,7 +131,12 @@ impl NetworkInterface for MockNetwork {
             let peers = self.peers.read();
             let peer = peers.get(peer).unwrap();
             let key = peer.rx.as_ref().unwrap();
-            let packet = crate::common::wrap_encrypt_packet(&packet, &self.secret_key, key, self.network_name.as_str());
+            let packet = crate::common::wrap_encrypt_packet(
+                &packet,
+                &self.secret_key,
+                key,
+                self.network_name.as_str(),
+            );
             mailbox.send((self.ip.clone(), packet)).unwrap();
             Ok(())
         } else {
@@ -161,9 +166,7 @@ impl NetworkInterface for MockNetwork {
 
         let peers = self.peers();
         let peers = peers.read();
-        let ids_to_send_to = peers
-            .iter()
-            .map(|(_, peer)| peer.id.as_ref());
+        let ids_to_send_to = peers.iter().map(|(_, peer)| peer.id.as_ref());
 
         for id in ids_to_send_to {
             if let Some(id) = id {
@@ -262,15 +265,16 @@ impl NetworkInterface for MockNetwork {
                         let mut peer = peers.get_mut(addr).unwrap();
 
                         let timer = timer::Timer::new();
-                        let guard = timer.schedule_repeating(Duration::milliseconds(10), move || {
-                            let peers = peers_clone.clone();
-                            let addr = addr_clone.clone();
-                            let mut peers = peers.write();
+                        let guard =
+                            timer.schedule_repeating(Duration::milliseconds(10), move || {
+                                let peers = peers_clone.clone();
+                                let addr = addr_clone.clone();
+                                let mut peers = peers.write();
 
-                            let mut peer = peers.get_mut(&addr).unwrap();
-                            peer.last_seen.fetch_add(10, Ordering::SeqCst);
-                            peer.last_ping.fetch_add(10, Ordering::SeqCst);
-                        });
+                                let mut peer = peers.get_mut(&addr).unwrap();
+                                peer.last_seen.fetch_add(10, Ordering::SeqCst);
+                                peer.last_ping.fetch_add(10, Ordering::SeqCst);
+                            });
 
                         peer.timeout_guard = Some(guard);
                         peer.timer = Some(Arc::new(Mutex::new(timer)));
@@ -287,7 +291,11 @@ impl NetworkInterface for MockNetwork {
         } else {
             debug!("Received packet from {}: {}", addr, hex::encode(packet));
 
-            let packet = crate::common::unwrap_decrypt_packet(packet, tx.as_ref().unwrap(), self.network_name.as_str())?;
+            let packet = crate::common::unwrap_decrypt_packet(
+                packet,
+                tx.as_ref().unwrap(),
+                self.network_name.as_str(),
+            )?;
             crate::common::handle_packet(self, conn_type, addr, &packet)?;
 
             // Refresh peer timeout timer
@@ -352,8 +360,7 @@ impl MockNetwork {
         }
     }
 
-
-    /// Connects to the peer but neither will send a ping 
+    /// Connects to the peer but neither will send a ping
     /// and pong packets, causing a timeout.
     pub fn connect_no_ping(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
@@ -365,9 +372,9 @@ impl MockNetwork {
 
         peer.sent_connect = true;
         peer.send_ping = false;
-        
+
         {
-            let mut peers = self.peers.write(); 
+            let mut peers = self.peers.write();
             peers.insert(address.clone(), peer);
         }
 
@@ -415,7 +422,6 @@ impl MockNetwork {
 
                 while let Some((addr, block)) = iter.next() {
                     match block {
-
                         BlockWrapper::HardBlock(block) => {
                             let hard_chain = network.hard_chain_ref().chain;
                             let mut chain = hard_chain.write();
@@ -423,9 +429,8 @@ impl MockNetwork {
                             match chain.append_block(block.clone()) {
                                 Ok(()) => {
                                     // Forward block
-                                    let mut packet = ForwardBlock::new(
-                                        Arc::new(BlockWrapper::HardBlock(block)),
-                                    );
+                                    let mut packet =
+                                        ForwardBlock::new(Arc::new(BlockWrapper::HardBlock(block)));
                                     network
                                         .send_to_all_except(&addr, &packet.to_bytes())
                                         .unwrap();
@@ -445,9 +450,9 @@ impl MockNetwork {
                             match chain.append_block(block.clone()) {
                                 Ok(()) => {
                                     // Forward block
-                                    let mut packet = ForwardBlock::new(
-                                        Arc::new(BlockWrapper::StateBlock(block)),
-                                    );
+                                    let mut packet = ForwardBlock::new(Arc::new(
+                                        BlockWrapper::StateBlock(block),
+                                    ));
                                     network
                                         .send_to_all_except(&addr, &packet.to_bytes())
                                         .unwrap();
@@ -491,9 +496,13 @@ impl MockNetwork {
             let network = network.clone();
 
             // Dispatch pings
-            pings
-                .par_iter()
-                .for_each(move |(addr, p)| network.clone().lock().send_to_peer(&addr, p.to_vec()).unwrap());
+            pings.par_iter().for_each(move |(addr, p)| {
+                network
+                    .clone()
+                    .lock()
+                    .send_to_peer(&addr, p.to_vec())
+                    .unwrap()
+            });
         }
     }
 }

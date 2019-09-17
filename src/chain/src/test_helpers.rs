@@ -19,29 +19,37 @@
 //! Utilities for testing chain modules
 
 use crate::block::Block;
-use crate::hard_chain::chain::*;
 use crate::hard_chain::block::*;
+use crate::hard_chain::chain::*;
+use crate::pow_chain_state::PowChainState;
+use crate::state_chain::block::*;
 use crate::state_chain::chain::*;
 use crate::state_chain::state::*;
-use crate::state_chain::block::*;
-use crate::pow_chain_state::PowChainState;
 use account::NormalAddress;
+use crypto::Hash;
+use graphlib::{Graph, VertexId};
+use hashbrown::{HashMap, HashSet};
 use miner::Proof;
 use parking_lot::RwLock;
-use std::sync::Arc;
-use graphlib::{VertexId, Graph};
-use hashbrown::{HashMap, HashSet};
-use crypto::Hash;
 use rand::prelude::*;
+use std::sync::Arc;
 
 pub fn init_test_chains() -> (HardChainRef, StateChainRef) {
     let easy_db = test_helpers::init_tempdb();
     let hard_db = test_helpers::init_tempdb();
     let state_db = test_helpers::init_tempdb();
     let state_storage_db = test_helpers::init_tempdb();
-    let hard_chain = Arc::new(RwLock::new(HardChain::new(hard_db, PowChainState::genesis(), true)));
+    let hard_chain = Arc::new(RwLock::new(HardChain::new(
+        hard_db,
+        PowChainState::genesis(),
+        true,
+    )));
     let hard_chain_ref = HardChainRef::new(hard_chain);
-    let state_chain = Arc::new(RwLock::new(StateChain::new(state_db, ChainState::new(state_storage_db), true))); // TODO: Replace this with genesis state
+    let state_chain = Arc::new(RwLock::new(StateChain::new(
+        state_db,
+        ChainState::new(state_storage_db),
+        true,
+    ))); // TODO: Replace this with genesis state
     let state_chain_ref = StateChainRef::new(state_chain);
 
     (hard_chain_ref, state_chain_ref)
@@ -71,16 +79,16 @@ impl BlockTestSet {
     }
 }
 
-/// Generates a test set of blocks with the given depth and fork rate. If the 
+/// Generates a test set of blocks with the given depth and fork rate. If the
 /// generate byzantine flag is given, byzantine blocks will also be generated.
-/// 
+///
 /// A fork rate of 10 means that the probability of a fork is 50%. 0 means that
 /// the probability is 0%.
 pub fn chain_test_set(
-    depth: usize, 
-    fork_rate: u64, 
+    depth: usize,
+    fork_rate: u64,
     generate_byzantine: bool,
-    generate_state: bool
+    generate_state: bool,
 ) -> BlockTestSet {
     if depth < 5 {
         panic!("Invalid depth parameter! Minimum is 5.");
@@ -96,7 +104,7 @@ pub fn chain_test_set(
     let mut state_canonical_tip: Option<VertexId> = None;
     let mut cur_hard_height: u64 = 0;
     let mut rng = rand::thread_rng();
-        
+
     // For each iteration, generate one hard block and several easy
     // blocks along with the associated state blocks.
     loop {
@@ -116,11 +124,11 @@ pub fn chain_test_set(
         // // Generate random amount of easy blocks for this step
         // for _ in 0..easy_blocks_to_generate {
         //     let mut easy_block = EasyBlock::new(
-        //         last_easy.block_hash(), 
-        //         last_hard.block_hash().unwrap(), 
-        //         NormalAddress::random(), 
-        //         crate::random_socket_addr(), 
-        //         last_easy_height, 
+        //         last_easy.block_hash(),
+        //         last_hard.block_hash().unwrap(),
+        //         NormalAddress::random(),
+        //         crate::random_socket_addr(),
+        //         last_easy_height,
         //         0,
         //         Proof::test_proof(42),
         //     );
@@ -141,7 +149,7 @@ pub fn chain_test_set(
         //     if let Some(ref tip_id) = easy_canonical_tip {
         //         easy_chain_buf.add_edge(tip_id, &id).unwrap();
         //     }
-            
+
         //     easy_canonical_tip = Some(id);
 
         //     let random_num = rng.gen_range(0, 100);
@@ -156,11 +164,11 @@ pub fn chain_test_set(
         //     // Generate a fork
         //     if will_fork {
         //         let mut easy_block = EasyBlock::new(
-        //             last_easy.block_hash(), 
-        //             last_hard.block_hash().unwrap(), 
-        //             NormalAddress::random(), 
-        //             crate::random_socket_addr(), 
-        //             last_easy_height, 
+        //             last_easy.block_hash(),
+        //             last_hard.block_hash().unwrap(),
+        //             NormalAddress::random(),
+        //             crate::random_socket_addr(),
+        //             last_easy_height,
         //             0,
         //             Proof::test_proof(42),
         //         );
@@ -170,7 +178,7 @@ pub fn chain_test_set(
 
         //         // Append the block to the graph
         //         let id = easy_chain_buf.add_vertex(easy_block);
-                
+
         //         // Gen label
         //         let _ = easy_chain_buf.label(&id).unwrap();
 
@@ -203,11 +211,11 @@ pub fn chain_test_set(
         //             if let Some(ref tip_id) = tip {
         //                 let tip = easy_chain_buf.fetch(tip_id).unwrap().clone();
         //                 let mut easy_block = EasyBlock::new(
-        //                     tip.block_hash(), 
-        //                     last_hard.block_hash().unwrap(), 
-        //                     NormalAddress::random(), 
-        //                     crate::random_socket_addr(), 
-        //                     tip.height() + 1, 
+        //                     tip.block_hash(),
+        //                     last_hard.block_hash().unwrap(),
+        //                     NormalAddress::random(),
+        //                     crate::random_socket_addr(),
+        //                     tip.height() + 1,
         //                     0,
         //                     Proof::test_proof(42),
         //                 );
@@ -253,10 +261,10 @@ pub fn chain_test_set(
 
         // Generate one new hard block
         let mut hard_block = HardBlock::new(
-            Some(last_hard_hash), 
+            Some(last_hard_hash),
             NormalAddress::random(),
             crate::random_socket_addr(),
-            last_hard.height() + 1, 
+            last_hard.height() + 1,
             0,
             Proof::test_proof(42),
         );
@@ -319,7 +327,10 @@ pub fn chain_test_set(
 
     // The hard test set must have at least one block
     // which follows the genesis block.
-    assert!(test_set.hard_blocks.iter().any(|b| b.parent_hash().unwrap() == HardBlock::genesis().block_hash().unwrap()));
+    assert!(test_set
+        .hard_blocks
+        .iter()
+        .any(|b| b.parent_hash().unwrap() == HardBlock::genesis().block_hash().unwrap()));
 
     test_set
 }

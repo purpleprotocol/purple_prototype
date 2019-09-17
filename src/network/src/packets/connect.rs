@@ -193,7 +193,7 @@ impl Packet for Connect {
 
                 // Set node id
                 peer.id = Some(node_id);
-                
+
                 // Fetch credentials
                 our_pk = Some(peer.pk.clone());
             }

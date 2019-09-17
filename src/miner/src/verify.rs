@@ -88,10 +88,10 @@ pub fn verify(
     if proof.edge_bits < MIN_EDGE_BITS || proof.edge_bits > MAX_EDGE_BITS {
         #[cfg(any(test, feature = "test"))]
         {
-            // Proofs with 0 edge bits are always valid 
+            // Proofs with 0 edge bits are always valid
             // when in we are in the test environment.
             if proof.edge_bits == 0 {
-                return Ok(())
+                return Ok(());
             }
 
             // Allow 19 bit edges in tests

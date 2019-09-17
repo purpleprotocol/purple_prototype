@@ -19,15 +19,15 @@
 use crate::error::NetworkErr;
 
 /// The `Receiver` portion of a protocol flow between two
-/// or more packet types. This is modeled as a finite-state 
+/// or more packet types. This is modeled as a finite-state
 /// machine which receives as input sent messages by a `Sender`
 /// and outputs messages that are to be sent back to the `Sender`.
 pub trait Receiver<I, O> {
     /// Attempts to receive a packet and outputs a new packet
     /// to be sent back if the receiver is able to receive a
-    /// packet. 
+    /// packet.
     fn receive(&mut self, packet: &I) -> Result<O, NetworkErr>;
-    
+
     /// Returns true if the receiver is able to receive packets.
     fn can_receive(&self) -> bool;
 }

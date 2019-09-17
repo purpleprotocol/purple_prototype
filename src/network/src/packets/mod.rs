@@ -18,13 +18,13 @@
 
 pub mod connect;
 pub mod forward_block;
-pub mod request_peers;
-pub mod send_peers;
 pub mod ping;
 pub mod pong;
+pub mod request_peers;
+pub mod send_peers;
 pub use self::connect::*;
 pub use self::forward_block::*;
-pub use self::request_peers::*;
-pub use self::send_peers::*;
 pub use self::ping::*;
 pub use self::pong::*;
+pub use self::request_peers::*;
+pub use self::send_peers::*;

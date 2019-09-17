@@ -41,7 +41,6 @@ extern crate persistence;
 extern crate rocksdb;
 extern crate tokio;
 
-use chain::*;
 use clap::{App, Arg};
 use crypto::{Identity, NodeId, SecretKey as Sk};
 use elastic_array::ElasticArray128;
@@ -51,15 +50,13 @@ use futures::Future;
 use hashdb::HashDB;
 use mimalloc::MiMalloc;
 use network::*;
-use parking_lot::{Mutex, RwLock};
 use persistence::PersistentDb;
-use rocksdb::{ColumnFamilyDescriptor, DB};
 use std::fs;
+use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::net::SocketAddr;
 
 // Use mimalloc allocator
 #[global_allocator]
@@ -111,12 +108,8 @@ fn main() {
     let state_chain_db = PersistentDb::new(state_chain_db.clone(), None);
     let hard_chain_db = PersistentDb::new(hard_chain_db.clone(), None);
 
-    let (hard_chain, state_chain) = chain::init(
-        hard_chain_db,
-        state_chain_db,
-        state_db,
-        argv.archival_mode,
-    );
+    let (hard_chain, state_chain) =
+        chain::init(hard_chain_db, state_chain_db, state_db, argv.archival_mode);
 
     info!("Database initialization was successful!");
 
@@ -143,13 +136,7 @@ fn main() {
         start_chains_switch_poll(hard_chain.clone(), state_chain.clone());
 
         // Start listening for blocks
-        start_block_listeners(
-            network.clone(),
-            hard_chain,
-            state_chain,
-            hard_rx,
-            state_rx,
-        );
+        start_block_listeners(network.clone(), hard_chain, state_chain, hard_rx, state_rx);
 
         // Start listening to connections
         start_listener(network.clone(), accept_connections.clone());
@@ -160,7 +147,7 @@ fn main() {
             accept_connections,
             node_storage.clone(),
             argv.max_peers,
-            argv.bootnodes.clone()
+            argv.bootnodes.clone(),
         );
 
         Ok(())
@@ -325,11 +312,7 @@ fn parse_cli_args() -> Argv {
     let interactive: bool = matches.is_present("interactive");
     let wipe: bool = matches.is_present("wipe");
     let no_bootnodes: bool = matches.is_present("no_bootnodes");
-    let bootnodes = if no_bootnodes {
-        Vec::new()
-    } else {
-        bootnodes
-    };
+    let bootnodes = if no_bootnodes { Vec::new() } else { bootnodes };
 
     Argv {
         bootnodes,

@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::types::{Flushable, BranchType};
+use crate::types::{BranchType, Flushable};
 use crate::{ChainErr, HardBlock, StateBlock};
 use chrono::prelude::*;
 use crypto::Hash;
@@ -106,7 +106,7 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
     fn append_condition(
         block: Arc<Self>,
         chain_state: Self::ChainState,
-        branch_type: BranchType
+        branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr>;
 
     /// A switch condition determines if a non-canonical chain can become

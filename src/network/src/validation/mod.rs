@@ -18,18 +18,18 @@
 
 //! The protocol validation is modeled as a finite state machine
 //! which receives as input the type of the packet received by
-//! a peer and allows or disallows certain packet types from 
+//! a peer and allows or disallows certain packet types from
 //! being sent.
-//! 
-//! For example, a peer cannot send a `Pong` or `SendPeers` packet 
-//! without first receiving a `Ping` or `RequestPeers` packet. 
-//! 
+//!
+//! For example, a peer cannot send a `Pong` or `SendPeers` packet
+//! without first receiving a `Ping` or `RequestPeers` packet.
+//!
 //! Two finite-state machines are initialized for each peer and for
 //! each protocol interaction, a `Sender` and a `Receiver` machines.
-//! 
+//!
 //! The outputs of the `Sender` are the inputs of the `Receiver` and
 //! vice-versa.
 
-pub mod sender;
 pub mod receiver;
+pub mod sender;
 pub mod validator;

@@ -16,10 +16,10 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::types::*;
 use crate::block::Block;
 use crate::chain::*;
 use crate::pow_chain_state::PowChainState;
+use crate::types::*;
 use account::NormalAddress;
 use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -160,9 +160,15 @@ impl Block for HardBlock {
 
         #[cfg(not(test))]
         let edge_bits = chain_state.edge_bits;
-        
+
         // Validate proof of work
-        if let Err(_) = miner::verify(&block_hash.0, block.nonce, difficulty, edge_bits, &block.proof) {
+        if let Err(_) = miner::verify(
+            &block_hash.0,
+            block.nonce,
+            difficulty,
+            edge_bits,
+            &block.proof,
+        ) {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadProof));
         }
 
@@ -372,7 +378,7 @@ impl HardBlock {
         if let Some(parent_hash) = self.parent_hash {
             buf.extend_from_slice(&parent_hash.0);
         }
-        
+
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(addr.as_bytes());
@@ -433,8 +439,8 @@ impl Arbitrary for HardBlock {
 //             let mut hard_to_append = Vec::new();
 
 //             // Un-comment this to add failed test cases to
-//             // `src/test/failed_cases`. These can then be 
-//             // visualized by using graphviz. 
+//             // `src/test/failed_cases`. These can then be
+//             // visualized by using graphviz.
 //             std::panic::set_hook(Box::new(move |_| {
 //                 use std::path::Path;
 //                 use std::fs::File;
@@ -448,7 +454,7 @@ impl Arbitrary for HardBlock {
 //                 let case_id = hex::encode(&case_id);
 
 //                 println!("Adding failed case with id {} to src/test/failed_cases...", &case_id);
-                
+
 //                 let timestamp = Utc::now();
 //                 let timestamp = timestamp.to_rfc3339();
 //                 let failed_path = Path::new("src/test/failed_cases");
@@ -524,11 +530,11 @@ impl Arbitrary for HardBlock {
 //                             }
 //                         }
 //                     }
-//                 } 
+//                 }
 
 //                 for b in hard_to_append.iter() {
 //                     let block_hash = b.block_hash().unwrap();
-                    
+
 //                     hard_blocks.remove(b);
 
 //                     if hard_chain.is_canonical(&block_hash) {
@@ -551,7 +557,7 @@ impl Arbitrary for HardBlock {
 
 //             {
 //                 let hard_chain = hard_chain.chain.read();
-            
+
 //                 assert_eq!(hard_chain.canonical_tip_height(), test_set.hard_canonical.height());
 //             }
 

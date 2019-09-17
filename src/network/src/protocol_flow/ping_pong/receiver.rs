@@ -17,9 +17,9 @@
 */
 
 use crate::error::NetworkErr;
-use crate::validation::receiver::Receiver;
-use crate::protocol_flow::ping_pong::receiver_state::PingPongReceiverState;
 use crate::packets::{Ping, Pong};
+use crate::protocol_flow::ping_pong::receiver_state::PingPongReceiverState;
+use crate::validation::receiver::Receiver;
 
 #[derive(Debug, Default)]
 pub struct PingPongReceiver {
@@ -29,7 +29,7 @@ pub struct PingPongReceiver {
 impl Receiver<Ping, Pong> for PingPongReceiver {
     /// Attempts to receive a packet and outputs a new packet
     /// to be sent back if the receiver is able to receive a
-    /// packet. 
+    /// packet.
     fn receive(&mut self, packet: &Ping) -> Result<Pong, NetworkErr> {
         if let PingPongReceiverState::Ready = self.state {
             Ok(Pong::new(packet.nonce))
@@ -37,7 +37,7 @@ impl Receiver<Ping, Pong> for PingPongReceiver {
             unreachable!();
         }
     }
-    
+
     /// Returns true if the receiver is able to receive packets.
     fn can_receive(&self) -> bool {
         true

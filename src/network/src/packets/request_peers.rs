@@ -21,11 +21,11 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::SendPeers;
 use crate::peer::ConnectionType;
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use rand::prelude::*;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use rand::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestPeers {
@@ -115,7 +115,7 @@ impl Packet for RequestPeers {
 
         let num_of_peers = packet.requested_peers as usize;
         let peers = network.peers();
-        let peers = peers.read(); 
+        let peers = peers.read();
         let node_id = peers.get(addr).unwrap().id.as_ref().unwrap().clone(); // This is ugly
         let addresses: Vec<SocketAddr> = peers
             .iter()

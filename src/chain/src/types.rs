@@ -41,7 +41,7 @@ pub enum OrphanType {
 pub enum BranchType {
     /// The canonical chain branch
     Canonical,
-    
+
     /// A non-canonical chain branch
     NonCanonical,
 }

@@ -19,7 +19,7 @@
 use crate::error::NetworkErr;
 
 /// The `Sender` portion of a protocol flow between two
-/// or more packet types. This is modeled as a finite-state 
+/// or more packet types. This is modeled as a finite-state
 /// machine which outputs messages that are to be sent and
 /// receives as input acknowledgements for those messages.
 pub trait Sender<O, I> {

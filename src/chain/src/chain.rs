@@ -65,14 +65,14 @@ pub enum ChainErr {
 /// Reasons for a bad append condition
 #[derive(Clone, Debug, PartialEq)]
 pub enum AppendCondErr {
-    /// The referenced easy block's height is lower 
+    /// The referenced easy block's height is lower
     /// than the height of the easy chain.
     BadEasyHeight,
 
     /// Default reason, mostly used for testing.
     Default,
 
-    /// There is no corresponding referenced block 
+    /// There is no corresponding referenced block
     /// in a chain that has been found.
     NoBlockFound,
 
@@ -82,7 +82,7 @@ pub enum AppendCondErr {
     /// Validation failed because of an invalid transaction.
     BadTransaction,
 
-    /// Validation failed because of an invalid and potentially 
+    /// Validation failed because of an invalid and potentially
     /// byzantine action performed by a validator node.
     BadValidator,
 
@@ -354,7 +354,8 @@ impl<B: Block> Chain<B> {
 
             // Apply each block to the state
             while let Some(block) = blocks.pop() {
-                let s = B::append_condition(block.clone(), state.inner(), BranchType::Canonical).unwrap();
+                let s = B::append_condition(block.clone(), state.inner(), BranchType::Canonical)
+                    .unwrap();
                 let s = UnflushedChainState::new(s);
 
                 // Perform checkpoint
@@ -711,7 +712,9 @@ impl<B: Block> Chain<B> {
             for i in 1..=states_to_flush {
                 let cur_height = root_height + i;
                 let block = self.query_by_height(cur_height).unwrap();
-                let new_state = B::append_condition(block.clone(), cur_state.inner(), BranchType::Canonical).unwrap();
+                let new_state =
+                    B::append_condition(block.clone(), cur_state.inner(), BranchType::Canonical)
+                        .unwrap();
                 let new_state = UnflushedChainState::new(new_state);
 
                 // Remove checkpointed state
@@ -1226,7 +1229,11 @@ impl<B: Block> Chain<B> {
         // branches, valid chains.
         for (head_hash, (largest_height, largest_tip)) in iterable {
             let head = self.orphan_pool.get(head_hash).unwrap();
-            let tip_state = B::append_condition(head.clone(), tip_state.clone().inner(), BranchType::NonCanonical);
+            let tip_state = B::append_condition(
+                head.clone(),
+                tip_state.clone().inner(),
+                BranchType::NonCanonical,
+            );
 
             if let Ok(tip_state) = tip_state {
                 let largest_tip = self.orphan_pool.get(&largest_tip).unwrap().clone();
@@ -1315,8 +1322,11 @@ impl<B: Block> Chain<B> {
 
                         if let Some(state) = previous.get(&parent_hash) {
                             // TODO: Reduce number of state clones
-                            if let Ok(state) = B::append_condition(e.clone(), state.clone().inner(), BranchType::NonCanonical)
-                            {
+                            if let Ok(state) = B::append_condition(
+                                e.clone(),
+                                state.clone().inner(),
+                                BranchType::NonCanonical,
+                            ) {
                                 let block_hash = e.block_hash().unwrap();
 
                                 // Change head status if we have a match
@@ -1449,13 +1459,13 @@ impl<B: Block> Chain<B> {
     }
 
     /// Queries the current orphans for the block with the given hash.
-    pub fn query_orphan(&self, hash: &Hash) -> Option<Arc<B>> { 
-        self.orphan_pool.get(hash).cloned() 
+    pub fn query_orphan(&self, hash: &Hash) -> Option<Arc<B>> {
+        self.orphan_pool.get(hash).cloned()
     }
 
     /// Returns the type of the orphan with the given hash if any is found.
-    pub fn orphan_type(&self, hash: &Hash) -> Option<OrphanType> { 
-        self.validations_mapping.get(hash).cloned() 
+    pub fn orphan_type(&self, hash: &Hash) -> Option<OrphanType> {
+        self.validations_mapping.get(hash).cloned()
     }
 
     /// Returns the height of the canonical tip
@@ -1582,7 +1592,11 @@ impl<B: Block> Chain<B> {
                             self.search_fetch_next_state(parent_height)
                         };
 
-                        let tip_state = B::append_condition(block.clone(), parent_state.inner(), BranchType::NonCanonical)?;
+                        let tip_state = B::append_condition(
+                            block.clone(),
+                            parent_state.inner(),
+                            BranchType::NonCanonical,
+                        )?;
                         let tip_state = UnflushedChainState::new(tip_state);
 
                         // Insert new state to valid tips mapping
@@ -1676,7 +1690,8 @@ impl<B: Block> Chain<B> {
                                     }
                                 }
                                 OrphanType::ValidChainTip => {
-                                    let tip_state = self.valid_tips_states.get_mut(&parent_hash).unwrap();
+                                    let tip_state =
+                                        self.valid_tips_states.get_mut(&parent_hash).unwrap();
                                     let new_tip_state = B::append_condition(
                                         block.clone(),
                                         tip_state.clone().inner(),
@@ -1810,15 +1825,26 @@ impl<B: Block> Chain<B> {
 
                                         // Retrieve state associated with the head's parent
                                         let state = self.search_fetch_next_state(head.height() - 1);
-                                        let mut state =
-                                            B::append_condition(head.clone(), state.inner(), BranchType::NonCanonical)?;
+                                        let mut state = B::append_condition(
+                                            head.clone(),
+                                            state.inner(),
+                                            BranchType::NonCanonical,
+                                        )?;
 
                                         // Compute tip state
                                         while let Some(b) = visited_stack.pop() {
-                                            state = B::append_condition(b, state, BranchType::NonCanonical)?;
+                                            state = B::append_condition(
+                                                b,
+                                                state,
+                                                BranchType::NonCanonical,
+                                            )?;
                                         }
 
-                                        let state = B::append_condition(block.clone(), state, BranchType::NonCanonical)?;
+                                        let state = B::append_condition(
+                                            block.clone(),
+                                            state,
+                                            BranchType::NonCanonical,
+                                        )?;
                                         UnflushedChainState::new(state)
                                     };
 
@@ -2022,7 +2048,7 @@ impl<B: Block> Chain<B> {
     }
 
     /// Cleans up any blocks that descend from the start block.
-    /// 
+    ///
     /// TODO: Soft delete and then finally delete asynchronously.
     fn cleanup_paths(&mut self, start: &Hash) {
         // Remove start block and initialize height and previous set
@@ -2045,13 +2071,11 @@ impl<B: Block> Chain<B> {
 
             // Mark for deletion each matching block that we find
             if let Some(blocks) = self.heights_mapping.get(&height) {
-                let iter = blocks
-                    .keys()
-                    .filter(|k| {
-                        let block = self.orphan_pool.get(k).unwrap();
-                        let parent_hash = block.parent_hash().unwrap();
-                        previous_set.contains(&parent_hash) 
-                    });
+                let iter = blocks.keys().filter(|k| {
+                    let block = self.orphan_pool.get(k).unwrap();
+                    let parent_hash = block.parent_hash().unwrap();
+                    previous_set.contains(&parent_hash)
+                });
 
                 for block_hash in iter {
                     new_previous_set.insert(block_hash.clone());

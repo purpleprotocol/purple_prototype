@@ -20,19 +20,19 @@ use crate::error::NetworkErr;
 use crate::validation::validator::ProtocolValidator;
 use crypto::NodeId;
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
-use tokio::sync::mpsc::Sender;
+use std::default::Default;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
-use std::default::Default;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+use tokio::sync::mpsc::Sender;
 
 #[cfg(test)]
 use parking_lot::Mutex;
 
 #[cfg(test)]
-use timer::{Timer, Guard};
+use timer::{Guard, Timer};
 
 #[derive(Clone, Debug, Copy)]
 pub enum ConnectionType {
@@ -115,9 +115,9 @@ impl fmt::Debug for Peer {
 
 impl Peer {
     pub fn new(
-        id: Option<NodeId>, 
-        ip: SocketAddr, 
-        connection_type: ConnectionType, 
+        id: Option<NodeId>,
+        ip: SocketAddr,
+        connection_type: ConnectionType,
         outbound_buffer: Option<Sender<Vec<u8>>>,
     ) -> Peer {
         let (pk, sk) = gen_kx_keypair();
@@ -162,7 +162,9 @@ impl Peer {
     /// Attempts to place a packet in the outbound buffer of a `Peer`.
     pub fn send_packet(&self, packet: Vec<u8>) -> Result<(), NetworkErr> {
         let mut sender = self.outbound_buffer.as_ref().unwrap().clone();
-        sender.try_send(packet).map_err(|_| NetworkErr::CouldNotSend)
+        sender
+            .try_send(packet)
+            .map_err(|_| NetworkErr::CouldNotSend)
     }
 }
 

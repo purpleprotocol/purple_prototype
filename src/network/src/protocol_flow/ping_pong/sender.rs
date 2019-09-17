@@ -17,9 +17,9 @@
 */
 
 use crate::error::NetworkErr;
-use crate::validation::sender::Sender;
-use crate::protocol_flow::ping_pong::sender_state::PingPongSenderState;
 use crate::packets::{Ping, Pong};
+use crate::protocol_flow::ping_pong::sender_state::PingPongSenderState;
+use crate::validation::sender::Sender;
 
 #[derive(Debug, Default)]
 pub struct PingPongSender {
@@ -66,4 +66,3 @@ impl Sender<Ping, Pong> for PingPongSender {
         self.state == PingPongSenderState::Ready
     }
 }
-

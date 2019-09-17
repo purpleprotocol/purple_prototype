@@ -35,9 +35,7 @@ pub struct ForwardBlock {
 
 impl ForwardBlock {
     pub fn new(block: Arc<BlockWrapper>) -> ForwardBlock {
-        ForwardBlock {
-            block,
-        }
+        ForwardBlock { block }
     }
 }
 
@@ -93,9 +91,7 @@ impl Packet for ForwardBlock {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = ForwardBlock {
-            block,
-        };
+        let packet = ForwardBlock { block };
 
         Ok(Arc::new(packet))
     }
