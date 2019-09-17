@@ -26,13 +26,6 @@ pub struct PingPongSender {
     state: PingPongSenderState,
 }
 
-impl PingPongSender {
-    /// Resets the state of the sender
-    pub fn reset(&mut self) {
-        self.state = PingPongSenderState::Ready;
-    }
-}
-
 impl Sender<Ping, Pong> for PingPongSender {
     fn send(&mut self) -> Result<Ping, NetworkErr> {
         if let PingPongSenderState::Ready = self.state {
@@ -64,5 +57,9 @@ impl Sender<Ping, Pong> for PingPongSender {
 
     fn can_send(&self) -> bool {
         self.state == PingPongSenderState::Ready
+    }
+
+    fn reset(&mut self) {
+        self.state = PingPongSenderState::Ready;
     }
 }

@@ -17,20 +17,34 @@
 */
 
 use crate::error::NetworkErr;
+use crate::packets::{RequestPeers, SendPeers};
+use crate::protocol_flow::request_peers::receiver_state::RequestPeersReceiverState;
+use crate::validation::receiver::Receiver;
 
-/// The `Receiver` portion of a protocol flow between two
-/// or more packet types. This is modeled as a finite-state
-/// machine which receives as input sent messages by a `Sender`
-/// and outputs messages that are to be sent back to the `Sender`.
-pub trait Receiver<I, O> {
+#[derive(Debug, Default)]
+pub struct RequestPeersReceiver {
+    state: RequestPeersReceiverState,
+}
+
+impl Receiver<RequestPeers, SendPeers> for RequestPeersReceiver {
     /// Attempts to receive a packet and outputs a new packet
     /// to be sent back if the receiver is able to receive a
     /// packet.
-    fn receive(&mut self, packet: &I) -> Result<O, NetworkErr>;
+    fn receive(&mut self, packet: &RequestPeers) -> Result<SendPeers, NetworkErr> {
+        if let RequestPeersReceiverState::Ready = self.state {
+            unimplemented!();
+            //Ok(SendPeers::new(packet.nonce))
+        } else {
+            unreachable!();
+        }
+    }
 
     /// Returns true if the receiver is able to receive packets.
-    fn can_receive(&self) -> bool;
+    fn can_receive(&self) -> bool {
+        true
+    }
 
-    /// Resets the `Receiver` to its default state.
-    fn reset(&mut self);
+    fn reset(&mut self) {
+        unimplemented!();
+    }
 }

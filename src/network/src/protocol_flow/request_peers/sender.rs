@@ -17,22 +17,29 @@
 */
 
 use crate::error::NetworkErr;
+use crate::packets::{RequestPeers, SendPeers};
+use crate::protocol_flow::request_peers::sender_state::RequestPeersSenderState;
+use crate::validation::sender::Sender;
 
-/// The `Sender` portion of a protocol flow between two
-/// or more packet types. This is modeled as a finite-state
-/// machine which outputs messages that are to be sent and
-/// receives as input acknowledgements for those messages.
-pub trait Sender<O, I> {
-    /// Acknowledges the receival of an output message.
-    fn acknowledge(&mut self, message: &I) -> Result<(), NetworkErr>;
+#[derive(Debug, Default)]
+pub struct RequestPeersSender {
+    state: RequestPeersSenderState,
+}
 
-    /// Attempts to account a new sent packet from the `Sender` and
-    /// returns the packet if successful.
-    fn send(&mut self) -> Result<O, NetworkErr>;
+impl Sender<RequestPeers, SendPeers> for RequestPeersSender {
+    fn send(&mut self) -> Result<RequestPeers, NetworkErr> {
+        unimplemented!();
+    }
 
-    /// Returns true if the `Sender` is able to send a packet.
-    fn can_send(&self) -> bool;
+    fn acknowledge(&mut self, packet: &SendPeers) -> Result<(), NetworkErr> {
+        unimplemented!();
+    }
 
-    /// Resets the `Sender` to its default state.
-    fn reset(&mut self);
+    fn can_send(&self) -> bool {
+        self.state == RequestPeersSenderState::Ready
+    }
+
+    fn reset(&mut self) {
+        self.state = RequestPeersSenderState::Ready;
+    }
 }

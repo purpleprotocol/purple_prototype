@@ -17,6 +17,7 @@
 */
 
 use crate::protocol_flow::ping_pong::PingPong;
+use crate::protocol_flow::request_peers::RequestPeers;
 
 #[derive(Clone, Debug, Default)]
 /// Struct wrapping all protocol flows. This
@@ -24,4 +25,7 @@ use crate::protocol_flow::ping_pong::PingPong;
 pub struct ProtocolValidator {
     /// Ping/Pong protocol flow
     pub(crate) ping_pong: PingPong,
+
+    /// Request peers protocol flow
+    pub(crate) request_peers: RequestPeers,
 }

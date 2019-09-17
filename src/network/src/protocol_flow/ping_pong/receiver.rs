@@ -42,4 +42,8 @@ impl Receiver<Ping, Pong> for PingPongReceiver {
     fn can_receive(&self) -> bool {
         true
     }
+
+    fn reset(&mut self) {
+        unimplemented!();
+    }
 }
