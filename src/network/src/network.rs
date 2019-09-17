@@ -20,6 +20,7 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
+use crate::bootstrap::cache::BootstrapCache;
 use chain::*;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
@@ -64,6 +65,9 @@ pub struct Network {
 
     /// Maximum number of allowed peers, default is 8
     pub(crate) max_peers: usize,
+
+    /// Bootstrap cache
+    pub(crate) bootstrap_cache: BootstrapCache,
 }
 
 impl Network {
@@ -76,6 +80,7 @@ impl Network {
         state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
         hard_chain_ref: HardChainRef,
         state_chain_ref: StateChainRef,
+        bootstrap_cache: BootstrapCache,
     ) -> Network {
         Network {
             peers: Arc::new(RwLock::new(HashMap::with_capacity(max_peers))),
@@ -87,6 +92,7 @@ impl Network {
             state_chain_sender,
             hard_chain_ref,
             state_chain_ref,
+            bootstrap_cache,
         }
     }
 

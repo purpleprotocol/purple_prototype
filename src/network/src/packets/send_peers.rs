@@ -21,9 +21,6 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use chrono::prelude::*;
-use crypto::NodeId;
-use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
 use rlp::{Rlp, RlpStream};
 use std::io::Cursor;
 use std::net::SocketAddr;
@@ -112,7 +109,7 @@ impl Packet for SendPeers {
         let _: Vec<u8> = buf.drain(..11).collect();
 
         let peers = if buf.len() == peers_len as usize {
-            let mut rlp = Rlp::new(&buf);
+            let rlp = Rlp::new(&buf);
             let mut peers = Vec::new();
 
             if rlp.is_list() {
@@ -211,14 +208,7 @@ impl Arbitrary for SendPeers {
 mod tests {
     use super::*;
     use crate::interface::NetworkInterface;
-    use crate::mock::MockNetwork;
     use crate::packets::RequestPeers;
-    use chain::*;
-    use crypto::NodeId;
-    use hashbrown::HashMap;
-    use parking_lot::{Mutex, RwLock};
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
 

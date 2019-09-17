@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::bootstrap::cache::BootstrapCache;
 use connection::connect_to_peer;
 use futures::stream;
 use futures::Future;
@@ -28,7 +29,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::executor::Spawn;
 
-pub fn bootstrap<'a>(
+pub fn bootstrap(
     network: Network,
     accept_connections: Arc<AtomicBool>,
     db: PersistentDb,
@@ -37,18 +38,14 @@ pub fn bootstrap<'a>(
 ) -> Spawn {
     info!("Bootstrapping...");
 
-    let bootstrap_cache_key = crypto::hash_slice(b"bootstrap_cache");
-
     // Try to first connect to the nodes in the bootstrap cache.
-    if let Some(cache) = db.get(&bootstrap_cache_key) {
-        let cache: Vec<String> = rlp::decode_list(&cache);
-        let cache: Vec<SocketAddr> = cache.iter().map(|addr| addr.parse().unwrap()).collect();
-
-        let peers_to_connect = if cache.len() > max_peers {
-            cache[..max_peers].to_vec()
-        } else {
-            cache
-        };
+    if !network.bootstrap_cache.is_empty() {
+        // TODO: Select random peers
+        let peers_to_connect: Vec<SocketAddr> = network.bootstrap_cache
+            .entries()
+            .map(|e| e.to_socket_addr())
+            .take(max_peers)
+            .collect();
 
         let network = network.clone();
         let network_clone = network.clone();
@@ -97,3 +94,7 @@ pub fn bootstrap<'a>(
         tokio::spawn(fut)
     }
 }
+
+pub mod cache;
+pub mod entry;
+pub use self::cache::*;

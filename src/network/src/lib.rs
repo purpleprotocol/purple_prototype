@@ -56,7 +56,7 @@ extern crate tokio_timer;
 #[cfg(test)]
 pub mod mock;
 
-mod bootstrap;
+pub mod bootstrap;
 mod common;
 mod connection;
 mod error;
