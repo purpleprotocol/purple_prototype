@@ -16,12 +16,10 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::bootstrap::cache::BootstrapCache;
 use connection::connect_to_peer;
 use futures::stream;
 use futures::Future;
 use futures::Stream;
-use hashdb::HashDB;
 use network::Network;
 use persistence::PersistentDb;
 use std::net::SocketAddr;

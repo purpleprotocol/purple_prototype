@@ -76,4 +76,7 @@ pub enum NetworkErr {
 
     /// The peer's session has expired
     SessionExpired,
+
+    /// The entry is already stored in the bootstrap cache
+    AlreadyStored,
 }

@@ -198,6 +198,11 @@ impl PersistentDb {
         self.memory_db.insert(key.to_vec(), Operation::Remove);
     }
 
+    /// Returns an iterator over entries with keys that have the provided prefix.
+    pub fn prefix_iterator<P: AsRef<[u8]>>(&self, prefix: P) -> Box<dyn Iterator<Item = (&[u8], &[u8])>> {
+        unimplemented!();
+    }
+
     fn get_db(&self, key: &[u8]) -> Option<Vec<u8>> {
         let db_ref = self.db_ref.as_ref().unwrap();
 

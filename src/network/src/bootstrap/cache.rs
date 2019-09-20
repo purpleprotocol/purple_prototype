@@ -19,11 +19,18 @@
 use crate::error::NetworkErr;
 use crate::bootstrap::entry::BootstrapCacheEntry;
 use persistence::PersistentDb;
-use crypto::Hash;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
+use std::str;
+use std::str::FromStr;
 
 /// The key to the main bootstrap cache entry
-const BOOTSTRAP_CACHE_PREFIX: &'static [u8] = b"bootstrap_cache";
+const BOOTSTRAP_CACHE_PREFIX: &'static str = "bootstrap_cache";
+
+/// The key of the current index
+const CURRENT_IDX_KEY: &'static [u8] = b"current_index";
+
+/// The key to the number of entries field
+const ENTRIES_COUNT_KEY: &'static [u8] = b"entries_count";
 
 #[derive(Clone, Debug)]
 /// Interface to the bootstrap cache of the node. This stores
@@ -45,23 +52,171 @@ impl BootstrapCache {
         }
     }
 
+    /// Returns true if the given address's ip is stored in the bootstrap cache.
+    pub fn has_address(&self, addr: &SocketAddr) -> bool {
+        let ip = addr.ip();
+        let ip_str = format!("{}", ip);
+        let ip_hash = crypto::hash_slice(ip_str.as_bytes());
+        let ip_hash = hex::encode(ip_hash.0);
+
+        self.db.retrieve(ip_hash.as_bytes()).is_some()
+    }
+
     /// Stores the given address in the bootstrap cache.
-    pub fn store_address(&self, addr: &SocketAddr) -> Result<(), NetworkErr> {
-        unimplemented!();
+    pub fn store_address(&mut self, addr: &SocketAddr) -> Result<(), NetworkErr> {
+        let ip = addr.ip();
+        let ip_str = format!("{}", ip);
+        let ip_hash = crypto::hash_slice(ip_str.as_bytes());
+        let ip_hash = hex::encode(ip_hash.0);
+
+        if self.db.retrieve(ip_hash.as_bytes()).is_some() {
+            Err(NetworkErr::AlreadyStored)
+        } else {
+            if let Some(idx) = self.db.retrieve(CURRENT_IDX_KEY) {
+                let entries_count = self.db.retrieve(ENTRIES_COUNT_KEY).unwrap();
+                let mut entries_count = decode_be_u64!(entries_count).unwrap();
+                entries_count += 1;
+                let mut idx = decode_be_u64!(idx).unwrap();
+                idx += 1;
+                let entry_key = format!("{}.{}", BOOTSTRAP_CACHE_PREFIX, idx);
+                let encoded_idx = encode_be_u64!(idx);
+
+                // Store entries count
+                self.db.put(ENTRIES_COUNT_KEY, &encode_be_u64!(entries_count));
+
+                // Store index
+                self.db.put(CURRENT_IDX_KEY, &encoded_idx);
+
+                // Store index mapping 
+                self.db.put(ip_hash.as_bytes(), &encoded_idx);
+
+                // Store address
+                self.db.put(entry_key.as_bytes(), ip_str.as_bytes());
+            } else {
+                let entry_key = format!("{}.{}", BOOTSTRAP_CACHE_PREFIX, 0);
+
+                // Store entries length
+                self.db.put(ENTRIES_COUNT_KEY, &[0, 0, 0, 0, 0, 0, 0, 1]);
+
+                // Store first index
+                self.db.put(CURRENT_IDX_KEY, &[0, 0, 0, 0, 0, 0, 0, 0]);
+
+                // Store index mapping 
+                self.db.put(ip_hash.as_bytes(), &[0, 0, 0, 0, 0, 0, 0, 0]);
+
+                // Store address
+                self.db.put(entry_key.as_bytes(), ip_str.as_bytes());
+            }
+
+            // Flush changes
+            self.db.flush();
+
+            Ok(())
+        }
     }
 
     /// Deletes the entry with the ip of the given address from the bootstrap cache, if found.
-    pub fn delete_address(&self, addr: &SocketAddr) -> Result<(), NetworkErr> {
-        unimplemented!();
+    pub fn delete_address(&mut self, addr: &SocketAddr) -> Result<(), NetworkErr> {
+        let ip = addr.ip();
+        let ip_str = format!("{}", ip);
+        let ip_hash = crypto::hash_slice(ip_str.as_bytes());
+        let ip_hash = hex::encode(ip_hash.0);
+
+        if let Some(idx) = self.db.retrieve(ip_hash.as_bytes()) {
+            let entries_count = self.db.retrieve(ENTRIES_COUNT_KEY).unwrap();
+            let mut entries_count = decode_be_u64!(entries_count).unwrap();
+            entries_count -= 1;
+            let idx = decode_be_u64!(idx).unwrap();
+            let entry_key = format!("{}.{}", BOOTSTRAP_CACHE_PREFIX, idx);
+
+            // Remove index mapping
+            self.db.delete(ip_hash.as_bytes());
+
+            // Remove entry
+            self.db.delete(entry_key.as_bytes());
+
+            // Update entries count
+            self.db.put(ENTRIES_COUNT_KEY, &encode_be_u64!(entries_count));
+
+            // Flush changes
+            self.db.flush();
+
+            Ok(())
+        } else {
+            Ok(())
+        }
     }
 
-    /// Returns an iterator over the entries in the bootstrap cache.
-    pub fn entries(&self) -> Box<dyn Iterator<Item = &BootstrapCacheEntry>> {
-        unimplemented!();
+    /// Returns an iterator over the entries that are stored in the bootstrap cache.
+    pub fn entries<'a>(&'a self) -> Box<dyn Iterator<Item = BootstrapCacheEntry> + 'a> {
+        Box::new(
+            self.db
+                .prefix_iterator(BOOTSTRAP_CACHE_PREFIX)
+                .map(|(_k, v)| {
+                    let ip_str = str::from_utf8(v).unwrap();
+                    let ip = IpAddr::from_str(&ip_str).unwrap();
+
+                    BootstrapCacheEntry {
+                        addr: ip
+                    }
+                })
+        )
     }
 
     /// Return true if there are no entries stored in the bootstrap cache
     pub fn is_empty(&self) -> bool {
-        unimplemented!();
+        if let Some(count) = self.db.retrieve(ENTRIES_COUNT_KEY) {
+            let entries_count = decode_be_u64!(count).unwrap();
+            entries_count == 0
+        } else {
+            true
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hashbrown::HashSet;
+    
+    #[test]
+    fn store_address() {
+        let db = test_helpers::init_tempdb();
+        let mut cache = BootstrapCache::new(db, 1000);
+        let addr = crate::random_socket_addr();
+
+        assert!(cache.is_empty());
+        assert!(!cache.has_address(&addr));
+        cache.store_address(&addr).unwrap();
+        assert!(!cache.is_empty());
+        assert!(cache.has_address(&addr));
+    }
+
+    #[test]
+    fn delete_address() {
+        let db = test_helpers::init_tempdb();
+        let mut cache = BootstrapCache::new(db, 1000);
+        let addr = crate::random_socket_addr();
+
+        assert!(cache.is_empty());
+        assert!(!cache.has_address(&addr));
+        cache.store_address(&addr).unwrap();
+        assert!(!cache.is_empty());
+        assert!(cache.has_address(&addr));
+        cache.delete_address(&addr).unwrap();
+        assert!(cache.is_empty());
+        assert!(!cache.has_address(&addr));
+    }
+
+    #[test]
+    fn entries() {
+        let db = test_helpers::init_tempdb();
+        let mut cache = BootstrapCache::new(db, 1000);
+        let addr1 = crate::random_socket_addr();
+        let addr2 = crate::random_socket_addr();
+        cache.store_address(&addr1).unwrap();
+        cache.store_address(&addr2).unwrap();
+
+        assert!(set![addr1.ip(), addr2.ip()] == cache.entries().map(|e| e.addr.clone()).collect());
     }
 }
