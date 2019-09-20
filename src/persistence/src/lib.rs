@@ -34,6 +34,8 @@ pub fn open_database(path: &PathBuf, wal_path: &Path) -> DB {
 
 #[cfg(test)]
 extern crate tempdir;
+#[cfg(test)]
+extern crate hex;
 #[macro_use]
 extern crate log;
 

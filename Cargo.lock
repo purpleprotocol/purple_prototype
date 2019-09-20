@@ -1439,6 +1439,7 @@ dependencies = [
  "elastic-array 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)",
  "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "mimalloc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",

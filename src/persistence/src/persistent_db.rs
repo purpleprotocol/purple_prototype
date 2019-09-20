@@ -23,6 +23,8 @@ use rlp::NULL_RLP;
 use rocksdb::{ColumnFamily, DBCompactionStyle, Options, WriteBatch, DB};
 use std::path::Path;
 use std::sync::Arc;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 use BlakeDbHasher;
 
 pub fn cf_options() -> Options {
@@ -33,6 +35,8 @@ pub fn cf_options() -> Options {
 
 pub fn db_options(wal_dir: &Path) -> Options {
     let mut opts = Options::default();
+    let transform = rocksdb::SliceTransform::create_fixed_prefix(64); // Use a 64 byte prefix
+    opts.set_prefix_extractor(transform);
     opts.set_wal_dir(wal_dir);
     opts.increase_parallelism(num_cpus::get() as i32);
     opts.create_if_missing(true);
@@ -52,6 +56,7 @@ pub fn db_options(wal_dir: &Path) -> Options {
     opts.set_max_background_compactions(4);
     opts.set_max_background_flushes(4);
     opts.set_disable_auto_compactions(true);
+    opts.set_memtable_prefix_bloom_ratio(0.2);
     opts
 }
 
@@ -193,14 +198,39 @@ impl PersistentDb {
 
     /// Removes a value from the specified key
     /// # Remarks
-    /// Transactions will be commited when flush is called
+    /// Transactions will be committed when flush is called
     pub fn delete(&mut self, key: &[u8]) {
         self.memory_db.insert(key.to_vec(), Operation::Remove);
     }
 
-    /// Returns an iterator over entries with keys that have the provided prefix.
-    pub fn prefix_iterator<P: AsRef<[u8]>>(&self, prefix: P) -> Box<dyn Iterator<Item = (&[u8], &[u8])>> {
-        unimplemented!();
+    /// Returns an iterator over entries with keys that have the provided prefix. Note that prefixes must be 64 bytes in length for maximum efficiency.
+    pub fn prefix_iterator<'a, P: 'a + AsRef<[u8]> + Clone>(&'a self, prefix: P) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
+        let prefix_clone = prefix.clone();
+        let prefix_clone2 = prefix.clone();
+        let mem_db_iter = self.memory_db
+            .iter()
+            .filter(move |(k, _v)| matches_prefix(k.as_ref(), prefix.clone()))
+            .filter_map(|(k, op)| {
+                if let Operation::Put(value) = op {
+                    Some((k.clone().into_boxed_slice(), value.clone().into_boxed_slice()))
+                } else {
+                    None
+                }
+            });
+        
+        if let Some(db_ref) = &self.db_ref {
+            let memory_db = &self.memory_db;
+            
+            Box::new(
+                db_ref
+                    .prefix_iterator(prefix_clone)
+                    .filter(move |(k, _v)| matches_prefix(k.as_ref(), prefix_clone2.clone()))
+                    .filter(move |(k, _v)| !memory_db.get(&k.to_vec()).is_some())
+                    .chain(mem_db_iter)
+            )
+        } else {
+            Box::new(mem_db_iter)
+        }
     }
 
     fn get_db(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -225,6 +255,25 @@ impl PersistentDb {
                 Err(err) => panic!(err),
             }
         }
+    }
+}
+
+fn matches_prefix<P: AsRef<[u8]>>(key: &[u8], prefix: P) -> bool {
+    let prefix = prefix.as_ref();
+
+    if key.len() < prefix.len() {
+        false
+    } else {
+        let mut key_hasher = DefaultHasher::new();
+        let mut prefix_hasher = DefaultHasher::new();
+
+        key_hasher.write(&key[..prefix.len()]);
+        prefix_hasher.write(prefix);
+
+        let key_digest = key_hasher.finish();
+        let prefix_digest = prefix_hasher.finish();
+
+        key_digest == prefix_digest 
     }
 }
 
@@ -300,6 +349,74 @@ impl AsHashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
 mod tests {
     use super::*;
     use tempdir::TempDir;
+    use hashbrown::HashSet;
+
+    #[test]
+    fn prefix_iterator_flushed() {
+        let dir = TempDir::new("purple_test").unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
+        let db = DB::open_default(path).unwrap();
+        let db_ref = Arc::new(db);
+        let mut persistent_db = PersistentDb::new(db_ref, None);
+        let prefix = hex::encode(crypto::hash_slice(b"prefix").0);
+        let prefix1 = format!("{}.1", prefix);
+        let prefix2 = format!("{}.2", prefix);
+        let prefix3 = format!("{}.3", prefix);
+
+        persistent_db.put(b"test", b"non_prefixed_data");
+        persistent_db.put(b"test2", b"non_prefixed_data");
+        persistent_db.put(b"test3", b"non_prefixed_data");
+        persistent_db.put(b"test4", b"non_prefixed_data");
+        persistent_db.put(b"test5", b"non_prefixed_data");
+        persistent_db.put(b"test6", b"non_prefixed_data");
+        persistent_db.put(b"test7", b"non_prefixed_data");
+        persistent_db.put(b"test8", b"non_prefixed_data");
+        persistent_db.put(prefix1.as_bytes(), b"test_data1");
+        persistent_db.put(prefix2.as_bytes(), b"test_data2");
+        persistent_db.put(prefix3.as_bytes(), b"test_data3");
+
+        persistent_db.flush();
+
+        let oracle_set = set![(prefix1.as_bytes().to_vec().into_boxed_slice(), b"test_data1".to_vec().into_boxed_slice()), (prefix2.as_bytes().to_vec().into_boxed_slice(), b"test_data2".to_vec().into_boxed_slice()), (prefix3.as_bytes().to_vec().into_boxed_slice(), b"test_data3".to_vec().into_boxed_slice())];
+        assert!(oracle_set == persistent_db.prefix_iterator(prefix.as_bytes()).collect());
+    }
+
+    #[test]
+    fn prefix_iterator_not_flushed() {
+        let dir = TempDir::new("purple_test").unwrap();
+        let path = dir.path().join("database");
+        let path = path.to_str().unwrap();
+        let db = DB::open_default(path).unwrap();
+        let db_ref = Arc::new(db);
+        let mut persistent_db = PersistentDb::new(db_ref, None);
+
+        persistent_db.put(b"test", b"non_prefixed_data");
+        persistent_db.put(b"prefix.1", b"test_data1");
+        persistent_db.put(b"prefix.2", b"test_data2");
+        persistent_db.put(b"prefix.3", b"test_data3");
+
+        persistent_db.flush();
+
+        persistent_db.put(b"prefix.4", b"test_data4");
+        persistent_db.put(b"prefix.2", b"test_data5");
+
+        let oracle_set = set![(b"prefix.1".to_vec().into_boxed_slice(), b"test_data1".to_vec().into_boxed_slice()), (b"prefix.2".to_vec().into_boxed_slice(), b"test_data5".to_vec().into_boxed_slice()), (b"prefix.3".to_vec().into_boxed_slice(), b"test_data3".to_vec().into_boxed_slice()), (b"prefix.4".to_vec().into_boxed_slice(), b"test_data4".to_vec().into_boxed_slice())];
+        assert!(oracle_set == persistent_db.prefix_iterator(b"prefix").collect());
+    }
+
+    #[test]
+    fn prefix_iterator_mem_db() {
+        let mut persistent_db = PersistentDb::new_in_memory();
+
+        persistent_db.put(b"test", b"non_prefixed_data");
+        persistent_db.put(b"prefix.1", b"test_data1");
+        persistent_db.put(b"prefix.2", b"test_data2");
+        persistent_db.put(b"prefix.3", b"test_data3");
+
+        let oracle_set = set![(b"prefix.1".to_vec().into_boxed_slice(), b"test_data1".to_vec().into_boxed_slice()), (b"prefix.2".to_vec().into_boxed_slice(), b"test_data2".to_vec().into_boxed_slice()), (b"prefix.3".to_vec().into_boxed_slice(), b"test_data3".to_vec().into_boxed_slice())];
+        assert!(oracle_set == persistent_db.prefix_iterator(b"prefix").collect());
+    }
 
     #[test]
     fn it_inserts_data() {
