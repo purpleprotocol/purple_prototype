@@ -17,23 +17,41 @@
 */
 
 use crate::error::NetworkErr;
+use crate::interface::NetworkInterface;
 use crate::packets::{RequestPeers, SendPeers};
 use crate::protocol_flow::request_peers::receiver_state::RequestPeersReceiverState;
 use crate::validation::receiver::Receiver;
+use crate::bootstrap::cache::BootstrapCache;
+use rand::prelude::IteratorRandom;
+use std::net::SocketAddr;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RequestPeersReceiver {
     state: RequestPeersReceiverState,
+    bootstrap_cache: BootstrapCache,
+}
+
+impl RequestPeersReceiver {
+    pub fn new(bootstrap_cache: BootstrapCache) -> RequestPeersReceiver {
+        RequestPeersReceiver {
+            state: RequestPeersReceiverState::default(),
+            bootstrap_cache,
+        }
+    }
 }
 
 impl Receiver<RequestPeers, SendPeers> for RequestPeersReceiver {
     /// Attempts to receive a packet and outputs a new packet
     /// to be sent back if the receiver is able to receive a
     /// packet.
-    fn receive(&mut self, packet: &RequestPeers) -> Result<SendPeers, NetworkErr> {
+    fn receive<N: NetworkInterface>(&mut self, network: &N, sender: &SocketAddr, packet: &RequestPeers) -> Result<SendPeers, NetworkErr> {
         if let RequestPeersReceiverState::Ready = self.state {
-            unimplemented!();
-            //Ok(SendPeers::new(packet.nonce))
+            let peers = self.bootstrap_cache
+                .entries()
+                .map(|e| e.to_socket_addr())
+                .choose_multiple(&mut rand::thread_rng(), packet.requested_peers as usize);
+
+            Ok(SendPeers::new(peers, packet.nonce))
         } else {
             unreachable!();
         }

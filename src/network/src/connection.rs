@@ -114,7 +114,7 @@ fn process_connection(
     let (outbound_sender, outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
 
     // Create new peer and add it to the peer table
-    let peer = Peer::new(None, addr, client_or_server, Some(outbound_sender));
+    let peer = Peer::new(None, addr, client_or_server, Some(outbound_sender), network.bootstrap_cache.clone());
 
     let (node_id, skey) = {
         if let Err(NetworkErr::MaximumPeersReached) = network.add_peer(addr, peer.clone()) {

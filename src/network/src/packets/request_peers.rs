@@ -30,10 +30,10 @@ use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestPeers {
     /// Randomly generated nonce
-    nonce: u64,
+    pub(crate) nonce: u64,
 
     /// The number of requested peers
-    requested_peers: u8,
+    pub(crate)requested_peers: u8,
 }
 
 impl RequestPeers {

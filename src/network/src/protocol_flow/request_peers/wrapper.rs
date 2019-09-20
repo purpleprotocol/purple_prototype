@@ -17,11 +17,21 @@
 */
 
 use crate::protocol_flow::request_peers::*;
+use crate::bootstrap::cache::BootstrapCache;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct RequestPeers {
     pub(crate) sender: Arc<Mutex<RequestPeersSender>>,
     pub(crate) receiver: Arc<Mutex<RequestPeersReceiver>>,
+}
+
+impl RequestPeers {
+    pub fn new(bootstrap_cache: BootstrapCache) -> RequestPeers {
+        RequestPeers {
+            sender: Default::default(),
+            receiver: Arc::new(Mutex::new(RequestPeersReceiver::new(bootstrap_cache))),
+        }
+    }
 }

@@ -75,7 +75,7 @@ impl Packet for Ping {
         // Attempt to receive packet
         let pong = {
             let mut receiver = receiver.lock();
-            receiver.receive(packet)?
+            receiver.receive(network as &N, addr, packet)?
         };
 
         debug!("Sending Pong packet to {}", addr);

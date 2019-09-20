@@ -26,6 +26,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::executor::Spawn;
+use rand::prelude::IteratorRandom;
 
 pub fn bootstrap(
     network: Network,
@@ -38,12 +39,10 @@ pub fn bootstrap(
 
     // Try to first connect to the nodes in the bootstrap cache.
     if !network.bootstrap_cache.is_empty() {
-        // TODO: Select random peers
         let peers_to_connect: Vec<SocketAddr> = network.bootstrap_cache
             .entries()
             .map(|e| e.to_socket_addr())
-            .take(max_peers)
-            .collect();
+            .choose_multiple(&mut rand::thread_rng(), max_peers as usize);
 
         let network = network.clone();
         let network_clone = network.clone();

@@ -332,4 +332,8 @@ impl NetworkInterface for Network {
     fn secret_key(&self) -> &Sk {
         &self.secret_key
     }
+
+    fn bootstrap_cache(&self) -> BootstrapCache {
+        self.bootstrap_cache.clone()
+    }
 }
