@@ -490,7 +490,7 @@ impl MockNetwork {
                             {
                                 let mut sender = p.validator.ping_pong.sender.lock();
 
-                                if let Ok(ping) = sender.send() {
+                                if let Ok(ping) = sender.send(()) {
                                     p.last_ping = Arc::new(AtomicU64::new(0));
 
                                     debug!("Sending Ping packet to {}", addr);

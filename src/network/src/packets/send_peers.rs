@@ -31,10 +31,10 @@ use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendPeers {
     /// Randomly generated nonce
-    nonce: u64,
+    pub(crate) nonce: u64,
 
     /// The list of peers to be sent
-    peers: Vec<SocketAddr>,
+    pub(crate) peers: Vec<SocketAddr>,
 }
 
 impl SendPeers {

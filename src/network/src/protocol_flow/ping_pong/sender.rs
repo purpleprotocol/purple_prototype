@@ -26,8 +26,8 @@ pub struct PingPongSender {
     state: PingPongSenderState,
 }
 
-impl Sender<Ping, Pong> for PingPongSender {
-    fn send(&mut self) -> Result<Ping, NetworkErr> {
+impl Sender<Ping, Pong, ()> for PingPongSender {
+    fn send(&mut self, _data: ()) -> Result<Ping, NetworkErr> {
         if let PingPongSenderState::Ready = self.state {
             let ping = Ping::new();
 

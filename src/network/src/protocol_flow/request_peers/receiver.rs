@@ -24,6 +24,7 @@ use crate::validation::receiver::Receiver;
 use crate::bootstrap::cache::BootstrapCache;
 use rand::prelude::IteratorRandom;
 use std::net::SocketAddr;
+use hashbrown::HashSet;
 
 #[derive(Debug)]
 pub struct RequestPeersReceiver {
@@ -46,12 +47,33 @@ impl Receiver<RequestPeers, SendPeers> for RequestPeersReceiver {
     /// packet.
     fn receive<N: NetworkInterface>(&mut self, network: &N, sender: &SocketAddr, packet: &RequestPeers) -> Result<SendPeers, NetworkErr> {
         if let RequestPeersReceiverState::Ready = self.state {
-            let peers = self.bootstrap_cache
-                .entries()
-                .map(|e| e.to_socket_addr())
-                .choose_multiple(&mut rand::thread_rng(), packet.requested_peers as usize);
+            // First attempt to send the peers we are connected to
+            let connected_peers: Vec<SocketAddr> = {
+                let peers = network.peers();
+                let peers = peers.read();
+                
+                peers
+                    .iter()
+                    // Filter out the requester
+                    .filter(|(k, _v)| *k != sender)
+                    .map(|(_, v)| &v.ip)
+                    .cloned()
+                    .choose_multiple(&mut rand::thread_rng(), packet.requested_peers as usize)
+            };
 
-            Ok(SendPeers::new(peers, packet.nonce))
+            if connected_peers.len() == packet.requested_peers as usize {
+                Ok(SendPeers::new(connected_peers, packet.nonce))
+            } else {
+                let connected_set: HashSet<&SocketAddr> = connected_peers.iter().collect();
+                let mut peers = self.bootstrap_cache
+                    .entries()
+                    .map(|e| e.to_socket_addr())
+                    .filter(|addr| !connected_set.contains(addr) && addr != sender)
+                    .choose_multiple(&mut rand::thread_rng(), (packet.requested_peers as usize) - connected_peers.len());
+
+                peers.extend_from_slice(&connected_peers);
+                Ok(SendPeers::new(peers, packet.nonce))
+            }
         } else {
             unreachable!();
         }

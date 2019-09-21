@@ -358,7 +358,7 @@ fn process_connection(
                 {
                     let mut sender = peer.validator.ping_pong.sender.lock();
 
-                    if let Ok(ping) = sender.send() {
+                    if let Ok(ping) = sender.send(()) {
                         peer.last_ping.store(0, Ordering::SeqCst);
 
                         debug!("Sending Ping packet to {}", addr);

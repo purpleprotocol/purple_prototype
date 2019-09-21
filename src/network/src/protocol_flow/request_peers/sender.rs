@@ -26,13 +26,33 @@ pub struct RequestPeersSender {
     state: RequestPeersSenderState,
 }
 
-impl Sender<RequestPeers, SendPeers> for RequestPeersSender {
-    fn send(&mut self) -> Result<RequestPeers, NetworkErr> {
-        unimplemented!();
+impl Sender<RequestPeers, SendPeers, u8> for RequestPeersSender {
+    fn send(&mut self, requested_peers: u8) -> Result<RequestPeers, NetworkErr> {
+        if let RequestPeersSenderState::Ready = self.state {
+            let request_peers = RequestPeers::new(requested_peers);
+
+            // Await a `SendPeers` with the generated nonce
+            self.state = RequestPeersSenderState::Waiting(request_peers.nonce, requested_peers);
+
+            Ok(request_peers)
+        } else {
+            Err(NetworkErr::CouldNotSend)
+        }
     }
 
     fn acknowledge(&mut self, packet: &SendPeers) -> Result<(), NetworkErr> {
-        unimplemented!();
+        if let RequestPeersSenderState::Waiting(nonce, requested_peers) = self.state {
+            if nonce == packet.nonce && packet.peers.len() <= requested_peers as usize {
+                // Reset state
+                self.state = RequestPeersSenderState::Ready;
+
+                Ok(())
+            } else {
+                Err(NetworkErr::AckErr)
+            }
+        } else {
+            Err(NetworkErr::SenderStateErr)
+        }
     }
 
     fn can_send(&self) -> bool {

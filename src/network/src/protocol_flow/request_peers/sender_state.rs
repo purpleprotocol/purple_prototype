@@ -24,8 +24,8 @@ pub enum RequestPeersSenderState {
     Ready,
 
     /// The `Sender` has sent a `RequestPeers` and is awaiting a `SendPeers` with
-    /// the specified nonce.
-    Waiting(u64),
+    /// the specified nonce and number of requested peers.
+    Waiting(u64, u8),
 }
 
 impl Default for RequestPeersSenderState {

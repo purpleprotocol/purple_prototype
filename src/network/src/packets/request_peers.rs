@@ -33,7 +33,7 @@ pub struct RequestPeers {
     pub(crate) nonce: u64,
 
     /// The number of requested peers
-    pub(crate)requested_peers: u8,
+    pub(crate) requested_peers: u8,
 }
 
 impl RequestPeers {
