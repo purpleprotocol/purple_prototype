@@ -72,7 +72,10 @@ use std::sync::Arc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 const DEFAULT_NETWORK_NAME: &'static str = "purple-testnet";
-const BOOTNODES: &'static [&'static str] = &["95.179.130.222:44034"];
+const BOOTNODES: &'static [&'static str] = &[
+    "95.179.130.222:44034",
+    "45.32.111.18:44034",
+];
 
 fn main() {
      let drain =

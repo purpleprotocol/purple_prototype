@@ -457,8 +457,16 @@ pub fn start_peer_list_refresh_interval(network: Network) -> Spawn {
                     let peer = peers.get(&peer_addr).unwrap();
                     let sender = peer.validator.request_peers.sender.clone();
                     let mut sender = sender.lock();
-                    let packet = sender.send(missing_peers as u8).unwrap();
-                    network.send_to_peer(&peer_addr, packet.to_bytes()).unwrap();
+                    let result = sender
+                        .send(missing_peers as u8)
+                        .map_err(|err| warn!("Could not send packet to {}, reason: {:?}", peer_addr, err));
+
+                    if let Ok(packet) = result {
+                        network
+                            .send_to_peer(&peer_addr, packet.to_bytes())
+                            .map_err(|err| warn!("Could not send packet to {}, reason: {:?}", peer_addr, err))
+                            .unwrap_or(());
+                    }
                 } else {
                     debug!("No connections available!");
                 }
