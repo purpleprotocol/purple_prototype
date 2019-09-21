@@ -22,6 +22,8 @@ use crate::packet::Packet;
 use crate::packets::*;
 use crate::peer::{ConnectionType, Peer};
 use crate::validation::sender::Sender as SenderTrait;
+use crate::bootstrap::cache::BootstrapCache;
+use persistence::PersistentDb;
 use chain::*;
 use chrono::Duration;
 use crypto::NodeId;
@@ -77,13 +79,16 @@ pub struct MockNetwork {
 
     /// The name of the network we are on
     network_name: String,
+
+    /// Associated bootstrap cache
+    bootstrap_cache: BootstrapCache,
 }
 
 impl NetworkInterface for MockNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None);
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
@@ -236,7 +241,7 @@ impl NetworkInterface for MockNetwork {
             if peers.get(addr).is_none() {
                 peers.insert(
                     addr.clone(),
-                    Peer::new(None, addr.clone(), ConnectionType::Server, None),
+                    Peer::new(None, addr.clone(), ConnectionType::Server, None, self.bootstrap_cache.clone()),
                 );
             }
 
@@ -328,6 +333,10 @@ impl NetworkInterface for MockNetwork {
     fn secret_key(&self) -> &Sk {
         &self.secret_key
     }
+
+    fn bootstrap_cache(&self) -> BootstrapCache {
+        self.bootstrap_cache.clone()
+    }
 }
 
 impl MockNetwork {
@@ -353,6 +362,7 @@ impl MockNetwork {
             hard_chain_ref,
             state_chain_ref,
             peers: Arc::new(RwLock::new(HashMap::new())),
+            bootstrap_cache: BootstrapCache::new(PersistentDb::new_in_memory(), 100000),
             node_id,
             secret_key,
             ip,
@@ -365,7 +375,7 @@ impl MockNetwork {
     pub fn connect_no_ping(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None);
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
@@ -480,7 +490,7 @@ impl MockNetwork {
                             {
                                 let mut sender = p.validator.ping_pong.sender.lock();
 
-                                if let Ok(ping) = sender.send() {
+                                if let Ok(ping) = sender.send(()) {
                                     p.last_ping = Arc::new(AtomicU64::new(0));
 
                                     debug!("Sending Ping packet to {}", addr);

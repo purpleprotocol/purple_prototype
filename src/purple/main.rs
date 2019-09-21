@@ -23,12 +23,19 @@ extern crate unwrap;
 #[macro_use]
 extern crate jsonrpc_macros;
 
+#[macro_use(slog_error, slog_info, slog_trace, slog_log, slog_o)] 
+extern crate slog;
+
 extern crate chain;
 extern crate clap;
 extern crate crypto;
 extern crate dirs;
 extern crate elastic_array;
-extern crate env_logger;
+extern crate slog_stdlog;
+extern crate slog_envlogger;
+extern crate slog_term;
+extern crate slog_scope;
+extern crate slog_async;
 extern crate futures;
 extern crate hashdb;
 extern crate itc;
@@ -41,6 +48,7 @@ extern crate persistence;
 extern crate rocksdb;
 extern crate tokio;
 
+use slog::Drain;
 use clap::{App, Arg};
 use crypto::{Identity, NodeId, SecretKey as Sk};
 use elastic_array::ElasticArray128;
@@ -49,6 +57,7 @@ use futures::sync::mpsc::channel;
 use futures::Future;
 use hashdb::HashDB;
 use mimalloc::MiMalloc;
+use network::bootstrap::cache::BootstrapCache;
 use network::*;
 use persistence::PersistentDb;
 use std::fs;
@@ -62,33 +71,57 @@ use std::sync::Arc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-const DEFAULT_NETWORK_NAME: &'static str = "purple";
-const BOOTNODES: &'static [&'static str] = &["95.179.130.222:44034"];
+const DEFAULT_NETWORK_NAME: &'static str = "purple-testnet";
+const BOOTNODES: &'static [&'static str] = &[
+    "95.179.130.222:44034",
+    "45.32.111.18:44034",
+];
 
 fn main() {
-    env_logger::init();
+     let drain =
+        slog_async::Async::default(
+        slog_envlogger::new(
+        slog_term::CompactFormat::new(
+            slog_term::TermDecorator::new()
+            .stderr().build()
+            ).build().fuse()
+        ));
+
+    let root_logger = slog::Logger::root(drain.fuse(),
+                                         slog_o!("build" => "8jdkj2df", "version" => "0.1.5"));
+
+    let _guard = slog_envlogger::init().unwrap();
+
+    slog_scope::scope(
+        &root_logger,
+        || {}
+    );
 
     let argv = parse_cli_args();
     let storage_path = get_storage_path(&argv.network_name);
+    let db_path = storage_path.join("database");
+    let bootstrap_cache_path = storage_path.join("bootstrap_cache");
 
     // Wipe database
     if argv.wipe {
         info!("Deleting database...");
-        fs::remove_dir_all(&storage_path).unwrap();
+        fs::remove_dir_all(&db_path).unwrap();
         info!("Database deleted!");
     }
 
     info!("Initializing database...");
 
-    let storage_db_path = storage_path.join("node_storage");
-    let state_db_path = storage_path.join("state_db");
-    let state_chain_db_path = storage_path.join("state_chain_db");
-    let hard_chain_db_path = storage_path.join("hard_chain_db");
+    let storage_db_path = db_path.join("node_storage");
+    let state_db_path = db_path.join("state_db");
+    let state_chain_db_path = db_path.join("state_chain_db");
+    let hard_chain_db_path = db_path.join("hard_chain_db");
+    let bootstrap_cache_db_path = bootstrap_cache_path.join("bootstrap_cache_db"); 
 
-    let storage_wal_path = storage_path.join("node_storage_wal");
-    let state_wal_path = storage_path.join("state_db_wal");
-    let state_chain_wal_path = storage_path.join("state_chain_db_wal");
-    let hard_chain_wal_path = storage_path.join("hard_chain_db_wal");
+    let storage_wal_path = db_path.join("node_storage_wal");
+    let state_wal_path = db_path.join("state_db_wal");
+    let state_chain_wal_path = db_path.join("state_chain_db_wal");
+    let hard_chain_wal_path = db_path.join("hard_chain_db_wal");
+    let bootstrap_cache_wal_path = bootstrap_cache_path.join("bootstrap_cache_db_wal");
 
     let storage_db = Arc::new(persistence::open_database(
         &storage_db_path,
@@ -103,10 +136,16 @@ fn main() {
         &hard_chain_db_path,
         &hard_chain_wal_path,
     ));
-    let mut node_storage = PersistentDb::new(storage_db.clone(), None);
-    let state_db = PersistentDb::new(state_db.clone(), None);
-    let state_chain_db = PersistentDb::new(state_chain_db.clone(), None);
-    let hard_chain_db = PersistentDb::new(hard_chain_db.clone(), None);
+    let bootstrap_cache_db = Arc::new(persistence::open_database(
+        &bootstrap_cache_db_path,
+        &bootstrap_cache_wal_path,
+    ));
+    let mut node_storage = PersistentDb::new(storage_db, None);
+    let state_db = PersistentDb::new(state_db, None);
+    let state_chain_db = PersistentDb::new(state_chain_db, None);
+    let hard_chain_db = PersistentDb::new(hard_chain_db, None);
+    let bootstrap_cache_db = PersistentDb::new(bootstrap_cache_db, None);
+    let bootstrap_cache = BootstrapCache::new(bootstrap_cache_db, argv.bootstrap_cache_size);
 
     let (hard_chain, state_chain) =
         chain::init(hard_chain_db, state_chain_db, state_db, argv.archival_mode);
@@ -119,6 +158,7 @@ fn main() {
     info!("Setting up the network...");
 
     let (node_id, skey) = fetch_credentials(&mut node_storage);
+    let accept_connections = Arc::new(AtomicBool::new(true));
     let network = Network::new(
         node_id,
         argv.network_name.to_owned(),
@@ -128,8 +168,9 @@ fn main() {
         state_tx,
         hard_chain.clone(),
         state_chain.clone(),
+        bootstrap_cache,
+        accept_connections.clone()
     );
-    let accept_connections = Arc::new(AtomicBool::new(true));
 
     // Start the tokio runtime
     tokio::run(ok(()).and_then(move |_| {
@@ -194,6 +235,7 @@ struct Argv {
     network_name: String,
     bootnodes: Vec<SocketAddr>,
     mempool_size: u16,
+    bootstrap_cache_size: u64,
     max_peers: usize,
     no_mempool: bool,
     interactive: bool,
@@ -218,6 +260,13 @@ fn parse_cli_args() -> Argv {
                 .value_name("MEMPOOL_SIZE")
                 .help("The size in megabytes of the mempool")
                 .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("bootstrap_cache_size")
+                .long("bootstrap-cache-size")
+                .value_name("SIZE")
+                .help("The maximum allowed size of the bootstrap cache for this node. The bootstrap cache stores ip addresses of previously encountered peers making us connect faster to the network.")
+                .takes_value(true)
         )
         .arg(
             Arg::with_name("no_mempool")
@@ -291,6 +340,12 @@ fn parse_cli_args() -> Argv {
         150
     };
 
+    let bootstrap_cache_size: u64 = if let Some(arg) = matches.value_of("bootstrap_cache_size") {
+        unwrap!(arg.parse(), "Bad value for <SIZE>")
+    } else {
+        1000000
+    };
+
     let max_peers: usize = if let Some(arg) = matches.value_of("max_peers") {
         unwrap!(arg.parse(), "Bad value for <MAX_PEERS>")
     } else {
@@ -317,6 +372,7 @@ fn parse_cli_args() -> Argv {
     Argv {
         bootnodes,
         network_name,
+        bootstrap_cache_size,
         mine_easy,
         mine_hard,
         max_peers,

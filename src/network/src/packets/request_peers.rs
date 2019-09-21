@@ -21,6 +21,7 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::SendPeers;
 use crate::peer::ConnectionType;
+use crate::validation::receiver::Receiver;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use rand::prelude::*;
 use std::io::Cursor;
@@ -30,10 +31,10 @@ use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestPeers {
     /// Randomly generated nonce
-    nonce: u64,
+    pub(crate) nonce: u64,
 
     /// The number of requested peers
-    requested_peers: u8,
+    pub(crate) requested_peers: u8,
 }
 
 impl RequestPeers {
@@ -111,26 +112,33 @@ impl Packet for RequestPeers {
         packet: &RequestPeers,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        debug!("Received RequestPeers packet from: {:?}", addr);
+        debug!(
+            "Received RequestPeers packet from {} with nonce {}",
+            addr, packet.nonce
+        );
 
-        let num_of_peers = packet.requested_peers as usize;
-        let peers = network.peers();
-        let peers = peers.read();
-        let node_id = peers.get(addr).unwrap().id.as_ref().unwrap().clone(); // This is ugly
-        let addresses: Vec<SocketAddr> = peers
-            .iter()
-            // Don't send the address of the requester
-            .filter(|(peer_addr, peer)| {
-                peer.id.is_some() && peer.id != Some(node_id.clone()) && *peer_addr != addr
-            })
-            .take(num_of_peers)
-            .map(|(addr, _)| addr)
-            .cloned()
-            .collect();
+        // Retrieve receiver mutex
+        let receiver = {
+            let peers = network.peers();
+            let peers = peers.read();
+            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
 
-        let mut send_peers = SendPeers::new(addresses, packet.nonce);
-        network.send_to_peer(addr, send_peers.to_bytes())?;
+            peer.validator.request_peers.receiver.clone()
+        };
 
+        // Attempt to receive packet
+        let packet = {
+            let mut receiver = receiver.lock();
+            receiver.receive(network as &N, addr, packet)?
+        };
+
+        debug!("Sending SendPeers packet to {}", addr);
+
+        // Send `SendPeers` packet back to peer
+        network.send_to_peer(addr, packet.to_bytes())?;
+
+        debug!("SendPeers packet sent to {}", addr);
+        
         Ok(())
     }
 }

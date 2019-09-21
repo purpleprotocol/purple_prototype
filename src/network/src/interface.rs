@@ -20,6 +20,7 @@ use crate::chain::*;
 use crate::error::NetworkErr;
 use crate::packet::Packet;
 use crate::peer::Peer;
+use crate::bootstrap::cache::BootstrapCache;
 use crypto::{NodeId, SecretKey as Sk};
 use hashbrown::HashMap;
 use parking_lot::RwLock;
@@ -103,4 +104,7 @@ pub trait NetworkInterface {
 
     /// Returns a reference to the signing secret key
     fn secret_key(&self) -> &Sk;
+
+    /// Returns a handle to the bootstrap cache.
+    fn bootstrap_cache(&self) -> BootstrapCache;
 }

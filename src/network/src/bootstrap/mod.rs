@@ -16,19 +16,20 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use connection::connect_to_peer;
+use crate::connection::*;
+use crate::interface::NetworkInterface;
 use futures::stream;
 use futures::Future;
 use futures::Stream;
-use hashdb::HashDB;
 use network::Network;
 use persistence::PersistentDb;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::executor::Spawn;
+use rand::prelude::IteratorRandom;
 
-pub fn bootstrap<'a>(
+pub fn bootstrap(
     network: Network,
     accept_connections: Arc<AtomicBool>,
     db: PersistentDb,
@@ -37,37 +38,31 @@ pub fn bootstrap<'a>(
 ) -> Spawn {
     info!("Bootstrapping...");
 
-    let bootstrap_cache_key = crypto::hash_slice(b"bootstrap_cache");
-
     // Try to first connect to the nodes in the bootstrap cache.
-    if let Some(cache) = db.get(&bootstrap_cache_key) {
-        let cache: Vec<String> = rlp::decode_list(&cache);
-        let cache: Vec<SocketAddr> = cache.iter().map(|addr| addr.parse().unwrap()).collect();
+    if !network.bootstrap_cache.is_empty() {
+        let peers_to_connect: Vec<SocketAddr> = network.bootstrap_cache
+            .entries()
+            .map(|e| e.to_socket_addr())
+            .choose_multiple(&mut rand::thread_rng(), max_peers as usize);
 
-        let peers_to_connect = if cache.len() > max_peers {
-            cache[..max_peers].to_vec()
-        } else {
-            cache
-        };
-
-        let network = network.clone();
+        let mut network = network.clone();
         let network_clone = network.clone();
+        let network_clone2 = network.clone();
         let accept_connections = accept_connections.clone();
         let accept_connections_clone = accept_connections.clone();
 
         let fut = stream::iter_ok(peers_to_connect)
             .for_each(move |addr| {
-                connect_to_peer(network.clone(), accept_connections.clone(), &addr)
+                Ok(network.connect(&addr).unwrap_or(()))
             })
             .and_then(move |_| {
                 // Connect to bootstrap nodes if we haven't
                 // yet reached the maximum amount of peers.
                 if network_clone.peer_count() < max_peers {
-                    let accept_connections = accept_connections_clone.clone();
-                    let network = network_clone.clone();
+                    let mut network = network_clone.clone();
 
                     let fut = stream::iter_ok(bootnodes).for_each(move |addr| {
-                        connect_to_peer(network.clone(), accept_connections.clone(), &addr)
+                        Ok(network.connect(&addr).unwrap_or(()))
                     });
 
                     tokio::spawn(fut);
@@ -79,8 +74,10 @@ pub fn bootstrap<'a>(
                 }
             });
 
-        tokio::spawn(fut)
+        tokio::spawn(fut.and_then(move |_| start_peer_list_refresh_interval(network_clone2)))
     } else {
+        debug!("Bootstrap cache is empty! Connecting to bootnodes...");
+
         let mut peers_to_connect: Vec<SocketAddr> = Vec::with_capacity(bootnodes.len());
 
         for addr in bootnodes.iter().take(max_peers) {
@@ -89,11 +86,16 @@ pub fn bootstrap<'a>(
 
         let accept_connections = accept_connections.clone();
         let network = network.clone();
+        let network_clone = network.clone();
 
         let fut = stream::iter_ok(peers_to_connect).for_each(move |addr| {
             connect_to_peer(network.clone(), accept_connections.clone(), &addr)
         });
 
-        tokio::spawn(fut)
+        tokio::spawn(fut.and_then(move |_| start_peer_list_refresh_interval(network_clone)))
     }
 }
+
+pub mod cache;
+pub mod entry;
+pub use self::cache::*;

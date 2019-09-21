@@ -40,7 +40,6 @@ extern crate byteorder;
 extern crate chain;
 extern crate chrono;
 extern crate crypto;
-extern crate env_logger;
 extern crate futures;
 extern crate hashbrown;
 extern crate hashdb;
@@ -56,7 +55,7 @@ extern crate tokio_timer;
 #[cfg(test)]
 pub mod mock;
 
-mod bootstrap;
+pub mod bootstrap;
 mod common;
 mod connection;
 mod error;

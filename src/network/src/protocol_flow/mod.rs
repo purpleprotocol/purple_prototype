@@ -17,3 +17,4 @@
 */
 
 pub mod ping_pong;
+pub mod request_peers;

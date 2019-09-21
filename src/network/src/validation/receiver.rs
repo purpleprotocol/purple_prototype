@@ -17,6 +17,8 @@
 */
 
 use crate::error::NetworkErr;
+use crate::interface::NetworkInterface;
+use std::net::SocketAddr;
 
 /// The `Receiver` portion of a protocol flow between two
 /// or more packet types. This is modeled as a finite-state
@@ -26,8 +28,11 @@ pub trait Receiver<I, O> {
     /// Attempts to receive a packet and outputs a new packet
     /// to be sent back if the receiver is able to receive a
     /// packet.
-    fn receive(&mut self, packet: &I) -> Result<O, NetworkErr>;
+    fn receive<N: NetworkInterface>(&mut self, network: &N, sender: &SocketAddr, packet: &I) -> Result<O, NetworkErr>;
 
     /// Returns true if the receiver is able to receive packets.
     fn can_receive(&self) -> bool;
+
+    /// Resets the `Receiver` to its default state.
+    fn reset(&mut self);
 }

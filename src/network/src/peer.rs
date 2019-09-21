@@ -18,6 +18,7 @@
 
 use crate::error::NetworkErr;
 use crate::validation::validator::ProtocolValidator;
+use crate::bootstrap::cache::BootstrapCache;
 use crypto::NodeId;
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use std::default::Default;
@@ -41,7 +42,7 @@ pub enum ConnectionType {
 }
 
 /// Size of the outbound buffer.
-pub const OUTBOUND_BUF_SIZE: usize = 8000;
+pub const OUTBOUND_BUF_SIZE: usize = 10000;
 
 #[derive(Clone)]
 pub struct Peer {
@@ -73,10 +74,6 @@ pub struct Peer {
 
     /// Wether the peer has sent a `Connect` packet or not.
     pub sent_connect: bool,
-
-    /// Wether we have asked the peer to send us a peer list
-    /// and the number of peers that we have requested.
-    pub requested_peers: Option<u8>,
 
     /// Buffer storing packets that are to be
     /// sent to the peer.
@@ -119,6 +116,7 @@ impl Peer {
         ip: SocketAddr,
         connection_type: ConnectionType,
         outbound_buffer: Option<Sender<Vec<u8>>>,
+        bootstrap_cache: BootstrapCache,
     ) -> Peer {
         let (pk, sk) = gen_kx_keypair();
 
@@ -129,13 +127,12 @@ impl Peer {
             sk: sk,
             rx: None,
             tx: None,
-            requested_peers: None,
             sent_connect: false,
             connection_type,
             outbound_buffer,
             last_seen: Arc::new(AtomicU64::new(0)),
             last_ping: Arc::new(AtomicU64::new(0)),
-            validator: ProtocolValidator::default(),
+            validator: ProtocolValidator::new(bootstrap_cache),
 
             #[cfg(test)]
             timeout_guard: None,

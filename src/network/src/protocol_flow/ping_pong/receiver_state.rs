@@ -20,7 +20,7 @@ use std::default::Default;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PingPongReceiverState {
-    /// The `Receiver` is ready to receiver a `Ping`
+    /// The `Receiver` is ready to receive a `Ping`
     Ready,
 }
 

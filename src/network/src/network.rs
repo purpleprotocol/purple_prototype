@@ -20,6 +20,8 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
+use crate::bootstrap::cache::BootstrapCache;
+use crate::connection::*;
 use chain::*;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
@@ -28,6 +30,7 @@ use parking_lot::RwLock;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use Peer;
 
 #[cfg(test)]
@@ -64,6 +67,12 @@ pub struct Network {
 
     /// Maximum number of allowed peers, default is 8
     pub(crate) max_peers: usize,
+
+    /// Bootstrap cache
+    pub(crate) bootstrap_cache: BootstrapCache,
+
+    /// Accept connections boolean reference
+    pub(crate) accept_connections: Arc<AtomicBool>,
 }
 
 impl Network {
@@ -76,6 +85,8 @@ impl Network {
         state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
         hard_chain_ref: HardChainRef,
         state_chain_ref: StateChainRef,
+        bootstrap_cache: BootstrapCache,
+        accept_connections: Arc<AtomicBool>,
     ) -> Network {
         Network {
             peers: Arc::new(RwLock::new(HashMap::with_capacity(max_peers))),
@@ -87,6 +98,8 @@ impl Network {
             state_chain_sender,
             hard_chain_ref,
             state_chain_ref,
+            bootstrap_cache,
+            accept_connections,
         }
     }
 
@@ -141,7 +154,15 @@ impl Network {
 
 impl NetworkInterface for Network {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
-        unimplemented!();
+        info!("Connecting to {}", address);
+
+        connect_to_peer(
+            self.clone(),
+            self.accept_connections.clone(),
+            address,
+        );
+
+        Ok(())
     }
 
     fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr> {
@@ -293,7 +314,6 @@ impl NetworkInterface for Network {
                 }
             }
         } else {
-            info!("{}: {}", peer, hex::encode(packet));
             crate::common::handle_packet(self, conn_type, peer, &packet)?;
 
             // Refresh peer timeout timer
@@ -325,5 +345,9 @@ impl NetworkInterface for Network {
 
     fn secret_key(&self) -> &Sk {
         &self.secret_key
+    }
+
+    fn bootstrap_cache(&self) -> BootstrapCache {
+        self.bootstrap_cache.clone()
     }
 }

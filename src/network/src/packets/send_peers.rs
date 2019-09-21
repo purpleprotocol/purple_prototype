@@ -20,10 +20,8 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
+use crate::validation::sender::Sender;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use chrono::prelude::*;
-use crypto::NodeId;
-use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
 use rlp::{Rlp, RlpStream};
 use std::io::Cursor;
 use std::net::SocketAddr;
@@ -34,10 +32,10 @@ use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendPeers {
     /// Randomly generated nonce
-    nonce: u64,
+    pub(crate) nonce: u64,
 
     /// The list of peers to be sent
-    peers: Vec<SocketAddr>,
+    pub(crate) peers: Vec<SocketAddr>,
 }
 
 impl SendPeers {
@@ -112,7 +110,7 @@ impl Packet for SendPeers {
         let _: Vec<u8> = buf.drain(..11).collect();
 
         let peers = if buf.len() == peers_len as usize {
-            let mut rlp = Rlp::new(&buf);
+            let rlp = Rlp::new(&buf);
             let mut peers = Vec::new();
 
             if rlp.is_list() {
@@ -152,42 +150,40 @@ impl Packet for SendPeers {
         packet: &SendPeers,
         conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        debug!("Received SendPeers packet from: {:?}", addr);
+        debug!(
+            "Received SendPeers packet from {} with nonce {}",
+            addr, packet.nonce
+        );
 
-        {
+        // Retrieve sender mutex
+        let sender = {
             let peers = network.peers();
-            let mut peers = peers.write();
-            let mut peer = if let Some(peer) = peers.get_mut(addr) {
-                peer
-            } else {
-                return Err(NetworkErr::PeerNotFound);
-            };
+            let peers = peers.read();
+            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
 
-            // Check if we have received more peers than we have asked
-            if let Some(num_of_peers) = peer.requested_peers {
-                if (num_of_peers as usize) <= packet.peers.len() {
-                    peer.requested_peers = None;
-                } else {
-                    return Err(NetworkErr::TooManyPeers);
-                }
-            } else {
-                return Err(NetworkErr::DidntAskForPeers);
-            }
-        }
-
-        let peers: Vec<SocketAddr> = {
-            packet
-                .peers
-                .iter()
-                // Don't connect to peers that we are already connected to
-                .filter(|addr| !network.is_connected_to(addr))
-                .cloned()
-                .collect()
+            peer.validator.request_peers.sender.clone()
         };
 
+        debug!("Acking SendPeers {}", packet.nonce);
+
+        // Ack packet
+        {
+            let mut sender = sender.lock();
+            sender.acknowledge(packet)?;
+        }
+
+        debug!("SendPeers {} acked!", packet.nonce);
+
         // Attempt to connect to the received peers
-        for addr in peers.iter() {
-            network.connect(addr).unwrap();
+        for addr in packet.peers.iter() {
+            if network.is_connected_to(addr) {
+                continue;
+            }
+
+            network
+                .connect(addr)
+                .map_err(|err| warn!("Could not connect to {}: {:?}", addr, err))
+                .unwrap_or(());
         }
 
         Ok(())
@@ -211,14 +207,7 @@ impl Arbitrary for SendPeers {
 mod tests {
     use super::*;
     use crate::interface::NetworkInterface;
-    use crate::mock::MockNetwork;
     use crate::packets::RequestPeers;
-    use chain::*;
-    use crypto::NodeId;
-    use hashbrown::HashMap;
-    use parking_lot::{Mutex, RwLock};
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
 
@@ -274,16 +263,16 @@ mod tests {
         {
             let mut network = network2_c.lock();
             let node_id = network.our_node_id().clone();
-
-            let peer_id = {
+            let sender = {
                 let peers = network.peers();
-                let mut peers = peers.write();
-                let mut peer = peers.get_mut(&addr1).unwrap();
-                peer.requested_peers = Some(3);
-                peer.id.as_ref().cloned().unwrap()
+                let peers = peers.read();
+                let peer = peers.get(&addr1).unwrap();
+
+                peer.validator.request_peers.sender.clone()
             };
 
-            let mut packet = RequestPeers::new(3);
+            let mut sender = sender.lock();
+            let packet = sender.send(3).unwrap();
             network.send_to_peer(&addr1, packet.to_bytes()).unwrap();
         }
 

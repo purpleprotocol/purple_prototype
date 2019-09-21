@@ -17,9 +17,11 @@
 */
 
 use crate::error::NetworkErr;
+use crate::interface::NetworkInterface;
 use crate::packets::{Ping, Pong};
 use crate::protocol_flow::ping_pong::receiver_state::PingPongReceiverState;
 use crate::validation::receiver::Receiver;
+use std::net::SocketAddr;
 
 #[derive(Debug, Default)]
 pub struct PingPongReceiver {
@@ -30,7 +32,7 @@ impl Receiver<Ping, Pong> for PingPongReceiver {
     /// Attempts to receive a packet and outputs a new packet
     /// to be sent back if the receiver is able to receive a
     /// packet.
-    fn receive(&mut self, packet: &Ping) -> Result<Pong, NetworkErr> {
+    fn receive<N: NetworkInterface>(&mut self, _network: &N, _sender: &SocketAddr, packet: &Ping) -> Result<Pong, NetworkErr> {
         if let PingPongReceiverState::Ready = self.state {
             Ok(Pong::new(packet.nonce))
         } else {
@@ -41,5 +43,9 @@ impl Receiver<Ping, Pong> for PingPongReceiver {
     /// Returns true if the receiver is able to receive packets.
     fn can_receive(&self) -> bool {
         true
+    }
+
+    fn reset(&mut self) {
+        unimplemented!();
     }
 }

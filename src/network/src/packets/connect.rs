@@ -196,6 +196,13 @@ impl Packet for Connect {
 
                 // Fetch credentials
                 our_pk = Some(peer.pk.clone());
+
+                // Add peer address to bootstrap cache
+                network
+                    .bootstrap_cache()
+                    .store_address(&peer.ip)
+                    .map_err(|err| warn!("Could not store address {} in the bootstrap cache, reason: {:?}", peer.ip, err))
+                    .unwrap_or(());
             }
 
             // If we are the server, also send a connect packet back

@@ -17,34 +17,34 @@
 */
 
 use crate::error::NetworkErr;
-use crate::packets::{Ping, Pong};
-use crate::protocol_flow::ping_pong::sender_state::PingPongSenderState;
+use crate::packets::{RequestPeers, SendPeers};
+use crate::protocol_flow::request_peers::sender_state::RequestPeersSenderState;
 use crate::validation::sender::Sender;
 
 #[derive(Debug, Default)]
-pub struct PingPongSender {
-    state: PingPongSenderState,
+pub struct RequestPeersSender {
+    state: RequestPeersSenderState,
 }
 
-impl Sender<Ping, Pong, ()> for PingPongSender {
-    fn send(&mut self, _data: ()) -> Result<Ping, NetworkErr> {
-        if let PingPongSenderState::Ready = self.state {
-            let ping = Ping::new();
+impl Sender<RequestPeers, SendPeers, u8> for RequestPeersSender {
+    fn send(&mut self, requested_peers: u8) -> Result<RequestPeers, NetworkErr> {
+        if let RequestPeersSenderState::Ready = self.state {
+            let request_peers = RequestPeers::new(requested_peers);
 
-            // Await a pong with the generated nonce
-            self.state = PingPongSenderState::Waiting(ping.nonce);
+            // Await a `SendPeers` with the generated nonce
+            self.state = RequestPeersSenderState::Waiting(request_peers.nonce, requested_peers);
 
-            Ok(ping)
+            Ok(request_peers)
         } else {
             Err(NetworkErr::CouldNotSend)
         }
     }
 
-    fn acknowledge(&mut self, packet: &Pong) -> Result<(), NetworkErr> {
-        if let PingPongSenderState::Waiting(nonce) = self.state {
-            if nonce == packet.nonce {
+    fn acknowledge(&mut self, packet: &SendPeers) -> Result<(), NetworkErr> {
+        if let RequestPeersSenderState::Waiting(nonce, requested_peers) = self.state {
+            if nonce == packet.nonce && packet.peers.len() <= requested_peers as usize {
                 // Reset state
-                self.state = PingPongSenderState::Ready;
+                self.state = RequestPeersSenderState::Ready;
 
                 Ok(())
             } else {
@@ -56,10 +56,10 @@ impl Sender<Ping, Pong, ()> for PingPongSender {
     }
 
     fn can_send(&self) -> bool {
-        self.state == PingPongSenderState::Ready
+        self.state == RequestPeersSenderState::Ready
     }
 
     fn reset(&mut self) {
-        self.state = PingPongSenderState::Ready;
+        self.state = RequestPeersSenderState::Ready;
     }
 }

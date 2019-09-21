@@ -17,11 +17,26 @@
 */
 
 use crate::protocol_flow::ping_pong::PingPong;
+use crate::protocol_flow::request_peers::RequestPeers;
+use crate::bootstrap::cache::BootstrapCache;
+use std::default::Default;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 /// Struct wrapping all protocol flows. This
 /// is instantiated once per each connected peer.
 pub struct ProtocolValidator {
     /// Ping/Pong protocol flow
     pub(crate) ping_pong: PingPong,
+
+    /// Request peers protocol flow
+    pub(crate) request_peers: RequestPeers,
+}
+
+impl ProtocolValidator {
+    pub fn new(bootstrap_cache: BootstrapCache) -> ProtocolValidator {
+        ProtocolValidator {
+            ping_pong: Default::default(),
+            request_peers: RequestPeers::new(bootstrap_cache),
+        }
+    }
 }
