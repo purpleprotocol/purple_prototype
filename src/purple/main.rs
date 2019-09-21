@@ -23,12 +23,19 @@ extern crate unwrap;
 #[macro_use]
 extern crate jsonrpc_macros;
 
+#[macro_use(slog_error, slog_info, slog_trace, slog_log, slog_o)] 
+extern crate slog;
+
 extern crate chain;
 extern crate clap;
 extern crate crypto;
 extern crate dirs;
 extern crate elastic_array;
-extern crate env_logger;
+extern crate slog_stdlog;
+extern crate slog_envlogger;
+extern crate slog_term;
+extern crate slog_scope;
+extern crate slog_async;
 extern crate futures;
 extern crate hashdb;
 extern crate itc;
@@ -41,6 +48,7 @@ extern crate persistence;
 extern crate rocksdb;
 extern crate tokio;
 
+use slog::Drain;
 use clap::{App, Arg};
 use crypto::{Identity, NodeId, SecretKey as Sk};
 use elastic_array::ElasticArray128;
@@ -63,11 +71,28 @@ use std::sync::Arc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-const DEFAULT_NETWORK_NAME: &'static str = "purple";
+const DEFAULT_NETWORK_NAME: &'static str = "purple-testnet";
 const BOOTNODES: &'static [&'static str] = &["95.179.130.222:44034"];
 
 fn main() {
-    env_logger::init();
+     let drain =
+        slog_async::Async::default(
+        slog_envlogger::new(
+        slog_term::CompactFormat::new(
+            slog_term::TermDecorator::new()
+            .stderr().build()
+            ).build().fuse()
+        ));
+
+    let root_logger = slog::Logger::root(drain.fuse(),
+                                         slog_o!("build" => "8jdkj2df", "version" => "0.1.5"));
+
+    let _guard = slog_envlogger::init().unwrap();
+
+    slog_scope::scope(
+        &root_logger,
+        || {}
+    );
 
     let argv = parse_cli_args();
     let storage_path = get_storage_path(&argv.network_name);
@@ -77,7 +102,7 @@ fn main() {
     // Wipe database
     if argv.wipe {
         info!("Deleting database...");
-        fs::remove_dir_all(&storage_path).unwrap();
+        fs::remove_dir_all(&db_path).unwrap();
         info!("Database deleted!");
     }
 

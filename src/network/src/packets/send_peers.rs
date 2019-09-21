@@ -167,8 +167,10 @@ impl Packet for SendPeers {
         debug!("Acking SendPeers {}", packet.nonce);
 
         // Ack packet
-        let mut sender = sender.lock();
-        sender.acknowledge(packet)?;
+        {
+            let mut sender = sender.lock();
+            sender.acknowledge(packet)?;
+        }
 
         debug!("SendPeers {} acked!", packet.nonce);
 
@@ -178,7 +180,10 @@ impl Packet for SendPeers {
                 continue;
             }
 
-            network.connect(addr).map_err(|err| warn!("Could not connect to {}: {:?}", addr, err));
+            network
+                .connect(addr)
+                .map_err(|err| warn!("Could not connect to {}: {:?}", addr, err))
+                .unwrap_or(());
         }
 
         Ok(())

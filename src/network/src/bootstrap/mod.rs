@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use connection::connect_to_peer;
+use crate::connection::*;
 use futures::stream;
 use futures::Future;
 use futures::Stream;
@@ -46,6 +46,7 @@ pub fn bootstrap(
 
         let network = network.clone();
         let network_clone = network.clone();
+        let network_clone2 = network.clone();
         let accept_connections = accept_connections.clone();
         let accept_connections_clone = accept_connections.clone();
 
@@ -73,7 +74,7 @@ pub fn bootstrap(
                 }
             });
 
-        tokio::spawn(fut)
+        tokio::spawn(fut.and_then(move |_| start_peer_list_refresh_interval(network_clone2)))
     } else {
         let mut peers_to_connect: Vec<SocketAddr> = Vec::with_capacity(bootnodes.len());
 
@@ -83,12 +84,13 @@ pub fn bootstrap(
 
         let accept_connections = accept_connections.clone();
         let network = network.clone();
+        let network_clone = network.clone();
 
         let fut = stream::iter_ok(peers_to_connect).for_each(move |addr| {
             connect_to_peer(network.clone(), accept_connections.clone(), &addr)
         });
 
-        tokio::spawn(fut)
+        tokio::spawn(fut.and_then(move |_| start_peer_list_refresh_interval(network_clone)))
     }
 }
 

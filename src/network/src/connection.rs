@@ -30,7 +30,7 @@ use std::iter;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Instant, Duration};
 use tokio::executor::Spawn;
 use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
@@ -39,16 +39,20 @@ use tokio::prelude::*;
 use tokio::sync::mpsc;
 use tokio_io_timeout::TimeoutStream;
 use tokio_timer::Interval;
+use rand::prelude::IteratorRandom;
 
 /// Purple default network port
 pub const PORT: u16 = 44034;
 const PEER_TIMEOUT: u64 = 15000;
 
-/// Time in milliseconds to poll a peer
+/// Time in milliseconds to poll a peer.
 const TIMER_INTERVAL: u64 = 10;
 
-/// A ping will be send at this interval in milliseconds
+/// A ping will be send at this interval in milliseconds.
 const PING_INTERVAL: u64 = 500;
+
+/// Interval in milliseconds for triggering a peer list refresh.
+const PEER_REFRESH_INTERVAL: u64 = 10000;
 
 /// Initializes the listener for the given network
 pub fn start_listener(network: Network, accept_connections: Arc<AtomicBool>) -> Spawn {
@@ -275,11 +279,11 @@ fn process_connection(
 
                                 buf = common::decrypt(&buffer, &nonce, peer.tx.as_ref().unwrap())
                                     .map_err(|_| {
-                                    io::Error::new(
-                                        io::ErrorKind::Other,
-                                        format!("Encryption error for {}", addr),
-                                    )
-                                })?;
+                                        io::Error::new(
+                                            io::ErrorKind::Other,
+                                            format!("Encryption error for {}", addr),
+                                        )
+                                    })?;
                             } else {
                                 // We are expecting an un-encrypted `Connect` packet
                                 // so we make it just pass through.
@@ -421,6 +425,68 @@ fn process_connection(
 
     tokio::spawn(socket_writer);
     tokio::spawn(peer_interval)
+}
+
+/// Starts a background job responsible for requesting and
+/// connecting to peers when we aren't connected to the maximum
+/// number of peers.
+pub fn start_peer_list_refresh_interval(network: Network) -> Spawn {
+    debug!("Starting peer list refresh interval...");
+
+    let refresh_interval = Interval::new(Instant::now(), Duration::from_millis(PEER_REFRESH_INTERVAL))
+        .fold(network, move |mut network, _| {
+            debug!("Triggering peer refresh...");
+
+            let peers = network.peers();
+            let peers = peers.read();
+
+            if peers.len() < network.max_peers {
+                debug!("We are missing {} peers, requesting more peers...", network.max_peers - peers.len());
+
+                // Choose a random node to request peers from. 
+                // TODO: Ask multiple peers
+                let peer = peers
+                    .iter()
+                    .map(|(addr, _)| addr.clone())
+                    .choose(&mut rand::thread_rng());
+
+                if let Some(peer_addr) = peer {
+                    debug!("Requesting peers from {}", peer_addr);
+
+                    let missing_peers = network.max_peers - peers.len();
+                    let peer = peers.get(&peer_addr).unwrap();
+                    let sender = peer.validator.request_peers.sender.clone();
+                    let mut sender = sender.lock();
+                    let packet = sender.send(missing_peers as u8).unwrap();
+                    network.send_to_peer(&peer_addr, packet.to_bytes()).unwrap();
+                } else {
+                    debug!("No connections available!");
+                }
+            } else if peers.len() == network.max_peers {
+                debug!("We have enough peers. No need to refresh the peer list");
+            } else {
+                debug!("More peers than needed found! Disconnecting from {} peers.", peers.len() - network.max_peers);
+                
+                // TODO: Disconnect from the peers with the highest latency
+                let iter = peers
+                    .iter()
+                    .filter_map(|(_, p)| p.id.as_ref())
+                    .take(peers.len() - network.max_peers);
+
+                for id in iter {
+                    network
+                        .disconnect(id)
+                        .map_err(|err| warn!("Could not disconnect from peer with id {:?}! Reason: {:?}", id, err))
+                        .unwrap_or(());
+                }
+            }
+
+            ok(network)
+        })
+        .map_err(|err| warn!("Peer refresher error: {}", err))
+        .and_then(|_| Ok(()));
+
+    tokio::spawn(refresh_interval)
 }
 
 // #[cfg(test)]
