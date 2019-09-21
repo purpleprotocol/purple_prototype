@@ -468,7 +468,19 @@ pub fn start_peer_list_refresh_interval(network: Network) -> Spawn {
                             .unwrap_or(());
                     }
                 } else {
-                    debug!("No connections available!");
+                    debug!("No connections available! Fallback to bootstrap cache...");
+                    
+                    let peers_to_connect: Vec<SocketAddr> = network.bootstrap_cache
+                        .entries()
+                        .map(|e| e.to_socket_addr())
+                        .choose_multiple(&mut rand::thread_rng(), network.max_peers - peers.len());
+
+                    for addr in peers_to_connect.iter() {
+                        network
+                            .connect(addr)
+                            .map_err(|err| warn!("Could not connect to {}, reason: {:?}", addr, err))
+                            .unwrap_or(());
+                    }
                 }
             } else if peers.len() == network.max_peers {
                 debug!("We have enough peers. No need to refresh the peer list");

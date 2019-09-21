@@ -17,6 +17,7 @@
 */
 
 use crate::connection::*;
+use crate::interface::NetworkInterface;
 use futures::stream;
 use futures::Future;
 use futures::Stream;
@@ -44,7 +45,7 @@ pub fn bootstrap(
             .map(|e| e.to_socket_addr())
             .choose_multiple(&mut rand::thread_rng(), max_peers as usize);
 
-        let network = network.clone();
+        let mut network = network.clone();
         let network_clone = network.clone();
         let network_clone2 = network.clone();
         let accept_connections = accept_connections.clone();
@@ -52,17 +53,16 @@ pub fn bootstrap(
 
         let fut = stream::iter_ok(peers_to_connect)
             .for_each(move |addr| {
-                connect_to_peer(network.clone(), accept_connections.clone(), &addr)
+                Ok(network.connect(&addr).unwrap_or(()))
             })
             .and_then(move |_| {
                 // Connect to bootstrap nodes if we haven't
                 // yet reached the maximum amount of peers.
                 if network_clone.peer_count() < max_peers {
-                    let accept_connections = accept_connections_clone.clone();
-                    let network = network_clone.clone();
+                    let mut network = network_clone.clone();
 
                     let fut = stream::iter_ok(bootnodes).for_each(move |addr| {
-                        connect_to_peer(network.clone(), accept_connections.clone(), &addr)
+                        Ok(network.connect(&addr).unwrap_or(()))
                     });
 
                     tokio::spawn(fut);
@@ -76,6 +76,8 @@ pub fn bootstrap(
 
         tokio::spawn(fut.and_then(move |_| start_peer_list_refresh_interval(network_clone2)))
     } else {
+        debug!("Bootstrap cache is empty! Connecting to bootnodes...");
+
         let mut peers_to_connect: Vec<SocketAddr> = Vec::with_capacity(bootnodes.len());
 
         for addr in bootnodes.iter().take(max_peers) {

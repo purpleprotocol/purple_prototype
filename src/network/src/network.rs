@@ -154,6 +154,8 @@ impl Network {
 
 impl NetworkInterface for Network {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
+        info!("Connecting to {}", address);
+
         connect_to_peer(
             self.clone(),
             self.accept_connections.clone(),
@@ -312,7 +314,6 @@ impl NetworkInterface for Network {
                 }
             }
         } else {
-            info!("{}: {}", peer, hex::encode(packet));
             crate::common::handle_packet(self, conn_type, peer, &packet)?;
 
             // Refresh peer timeout timer
