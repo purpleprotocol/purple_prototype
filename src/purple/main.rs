@@ -158,6 +158,7 @@ fn main() {
     info!("Setting up the network...");
 
     let (node_id, skey) = fetch_credentials(&mut node_storage);
+    let accept_connections = Arc::new(AtomicBool::new(true));
     let network = Network::new(
         node_id,
         argv.network_name.to_owned(),
@@ -168,8 +169,8 @@ fn main() {
         hard_chain.clone(),
         state_chain.clone(),
         bootstrap_cache,
+        accept_connections.clone()
     );
-    let accept_connections = Arc::new(AtomicBool::new(true));
 
     // Start the tokio runtime
     tokio::run(ok(()).and_then(move |_| {

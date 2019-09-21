@@ -42,7 +42,7 @@ pub enum ConnectionType {
 }
 
 /// Size of the outbound buffer.
-pub const OUTBOUND_BUF_SIZE: usize = 8000;
+pub const OUTBOUND_BUF_SIZE: usize = 10000;
 
 #[derive(Clone)]
 pub struct Peer {

@@ -184,7 +184,7 @@ fn process_connection(
                             .poll_write(&packet)
                             .map_err(|err| warn!("write failed = {:?}", err))
                             .and_then(|_| Ok(()))
-                            .unwrap();
+                            .unwrap_or(());
 
                         ok(writer)
                     } else {

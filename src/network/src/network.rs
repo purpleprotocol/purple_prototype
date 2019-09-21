@@ -21,6 +21,7 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
 use crate::bootstrap::cache::BootstrapCache;
+use crate::connection::*;
 use chain::*;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
@@ -29,6 +30,7 @@ use parking_lot::RwLock;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use Peer;
 
 #[cfg(test)]
@@ -68,6 +70,9 @@ pub struct Network {
 
     /// Bootstrap cache
     pub(crate) bootstrap_cache: BootstrapCache,
+
+    /// Accept connections boolean reference
+    pub(crate) accept_connections: Arc<AtomicBool>,
 }
 
 impl Network {
@@ -81,6 +86,7 @@ impl Network {
         hard_chain_ref: HardChainRef,
         state_chain_ref: StateChainRef,
         bootstrap_cache: BootstrapCache,
+        accept_connections: Arc<AtomicBool>,
     ) -> Network {
         Network {
             peers: Arc::new(RwLock::new(HashMap::with_capacity(max_peers))),
@@ -93,6 +99,7 @@ impl Network {
             hard_chain_ref,
             state_chain_ref,
             bootstrap_cache,
+            accept_connections,
         }
     }
 
@@ -147,7 +154,13 @@ impl Network {
 
 impl NetworkInterface for Network {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
-        unimplemented!();
+        connect_to_peer(
+            self.clone(),
+            self.accept_connections.clone(),
+            address,
+        );
+
+        Ok(())
     }
 
     fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr> {
