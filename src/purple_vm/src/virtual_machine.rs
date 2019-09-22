@@ -3512,13 +3512,12 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
     
     fn is_type_float(operand: VmValue) -> bool {
         match operand{
-            VmValue::I32(_) | VmValue::I64(_) | 
-            VmValue::i32Array2(_) | VmValue::i32Array4(_) | VmValue::i32Array8(_) | 
-            VmValue::i64Array2(_) | VmValue::i64Array4(_) | VmValue::i64Array8(_) => false,
             VmValue::F32(_) | VmValue::F64(_) | 
-            VmValue::f32Array2(_) | VmValue::f32Array4(_) | VmValue::f32Array8(_) | 
-            VmValue::f64Array2(_) | VmValue::f64Array4(_) | VmValue::f64Array8(_) => true,
-            _ => panic!()
+            VmValue::f32Array2(_) | VmValue::f32Array4(_) | VmValue::f32Array8(_) | VmValue::f32Array16(_) | 
+            VmValue::f32Array32(_) | VmValue::f32Array64(_) | VmValue::f32Array128(_) | VmValue::f32Array256(_) |
+            VmValue::f64Array2(_) | VmValue::f64Array4(_) | VmValue::f64Array8(_) | VmValue::f64Array16(_) |  
+            VmValue::f64Array32(_) | VmValue::f64Array64(_) | VmValue::f64Array128(_) | VmValue::f64Array256(_) => return true,
+            _ =>return false
         }
     }
 

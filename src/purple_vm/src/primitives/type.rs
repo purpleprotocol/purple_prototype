@@ -190,24 +190,6 @@ impl VmType {
 
     pub fn is_float(&self) -> bool {
         match *self {
-            VmType::I32
-            | VmType::I64
-            | VmType::i32Array2
-            | VmType::i32Array4
-            | VmType::i32Array8
-            | VmType::i32Array16
-            | VmType::i32Array32
-            | VmType::i32Array64
-            | VmType::i32Array128
-            | VmType::i32Array256
-            | VmType::i64Array2
-            | VmType::i64Array4
-            | VmType::i64Array8
-            | VmType::i64Array16
-            | VmType::i64Array32
-            | VmType::i64Array64
-            | VmType::i64Array128
-            | VmType::i64Array256 => return false,
             VmType::F32
             | VmType::F64
             | VmType::f32Array2
@@ -226,6 +208,7 @@ impl VmType {
             | VmType::f64Array64
             | VmType::f64Array128
             | VmType::f64Array256 => return true,
+            _ => return false,
         }
     }
 

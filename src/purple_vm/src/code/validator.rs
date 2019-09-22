@@ -859,7 +859,7 @@ impl Validator {
 }
 
 fn are_float_type(operand_stack: &Stack<VmType>) -> bool {
-    for v in operand_stack.to_vec().iter() {
+    for v in operand_stack.as_slice() {
         if v.is_int() {
             return false;
         }
