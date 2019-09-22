@@ -187,4 +187,32 @@ impl VmType {
             _ => panic!(),
         }
     }
+
+    pub fn is_float(&self) -> bool {
+        match *self {
+            VmType::F32
+            | VmType::F64
+            | VmType::f32Array2
+            | VmType::f32Array4
+            | VmType::f32Array8
+            | VmType::f32Array16
+            | VmType::f32Array32
+            | VmType::f32Array64
+            | VmType::f32Array128
+            | VmType::f32Array256
+            | VmType::f64Array2
+            | VmType::f64Array4
+            | VmType::f64Array8
+            | VmType::f64Array16
+            | VmType::f64Array32
+            | VmType::f64Array64
+            | VmType::f64Array128
+            | VmType::f64Array256 => return true,
+            _ => return false,
+        }
+    }
+
+    pub fn is_int(&self) -> bool {
+        return !self.is_float();
+    }
 }
