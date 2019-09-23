@@ -5,11 +5,16 @@ Welcome to the official Rust implementation of the Purple Protocol!
 
 ---
 
-Purple is an advanced, experimental open blockchain protocol that has been designed from day one with an emphasis on scalability and complete decentralization. Its aim is to provide a performance that is greater or at least equal to the payment processor VISA, which can in peak times achieve up to 50.000 transactions per second, but in a decentralized scenario.
+Purple is a highly scalable, general-purpose decentralized ledger protocol. It's state of the art algorithms and architectural design potentially allow it to handle thousands of transactions per second which would allow the mainstream use of decentralized ledger technology.
 
-In order to achieve this, a new consensus mechanism has been devised from scratch by starting from the latest distributed systems and cryptocurrency research.  The result is an extension of the Nakamoto Consensus Scheme present in Bitcoin and other cryptocurrencies.
+### General purpose
+The Purple Protocol is agnostic to the type of applications that can run on it which can be anything from a simple issued asset with no properties to full fledged decentralized insurance schemes and KYC. In fact, it is agnostic even to the programming language used to develop said applications.
 
-The name of this mechanism is Semi-Synchronous Proof of Work, or SSPoW for short, because of the asynchronous extension it provides over traditional Proof of Work based consensus which is inherently synchronous.
+### Language agnostic
+The Purple Assembly format, also known as `PASM` allows compilers for languages such as C#, Java or Rust to build code native to the Purple Protocol target platform. Any language that targets the [LLVM compiler infrastructure](https://en.wikipedia.org/wiki/LLVM) is potentially supported.
+
+### Consensus
+In order to achieve a high transaction throughput, a new consensus mechanism has been devised from scratch by starting from the latest distributed systems and cryptocurrency research. The result is an extension of the Nakamoto Consensus Scheme present in Bitcoin and other cryptocurrencies.
 
 #### Rationale
 In traditional Proof of Work systems, the ledger is updated by one randomly chosen "master node" which decides the next state of the ledger. The problem is that this is limited by the current block time which cannot be less than a few seconds.

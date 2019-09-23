@@ -67,7 +67,7 @@ path = "src/purple/main.rs"
 name = "purple"
 
 [profile.release]
-lto = true
+lto = "thin"
 
 [features]
 default = []
