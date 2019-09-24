@@ -52,7 +52,7 @@ network = { path = "src/network" }
 transactions = { path = "src/transactions" }
 chain = { path = "src/chain" }
 miner = { path = "src/miner" }
-mimalloc = "0.1.6"
+mimalloc = "0.1.7"
 
 [dev-dependencies.chain]
 path = "src/chain"
