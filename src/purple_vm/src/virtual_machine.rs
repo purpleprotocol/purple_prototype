@@ -586,6 +586,38 @@ impl Vm {
                         perform_float_common(Instruction::Sqrt, &mut self.operand_stack)?;
                         ip.increment();
                     }
+                    Some(Instruction::And) => {
+                        perform_integer_common(Instruction::And, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::Or) => {
+                        perform_integer_common(Instruction::Or, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::Xor) => {
+                        perform_integer_common(Instruction::Xor, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::Shl) => {
+                        perform_integer_common(Instruction::Shl, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::ShrSigned) => {
+                        perform_integer_common(Instruction::ShrSigned, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::ShrUnsigned) => {
+                        perform_integer_common(Instruction::ShrUnsigned, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::Rotl) => {
+                        perform_integer_common(Instruction::Rotl, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::Rotr) => {
+                        perform_integer_common(Instruction::Rotr, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
                     Some(Instruction::i32Store)
                     | Some(Instruction::i64Store)
                     | Some(Instruction::f32Store)
@@ -3509,17 +3541,6 @@ fn perform_max(op: Instruction, operand_stack: &mut Stack<VmValue>) {
 
 fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
     let len = operand_stack.len();
-    
-    fn is_type_float(operand: VmValue) -> bool {
-        match operand{
-            VmValue::F32(_) | VmValue::F64(_) | 
-            VmValue::f32Array2(_) | VmValue::f32Array4(_) | VmValue::f32Array8(_) | VmValue::f32Array16(_) | 
-            VmValue::f32Array32(_) | VmValue::f32Array64(_) | VmValue::f32Array128(_) | VmValue::f32Array256(_) |
-            VmValue::f64Array2(_) | VmValue::f64Array4(_) | VmValue::f64Array8(_) | VmValue::f64Array16(_) |  
-            VmValue::f64Array32(_) | VmValue::f64Array64(_) | VmValue::f64Array128(_) | VmValue::f64Array256(_) => return true,
-            _ =>return false
-        }
-    }
 
     let mut buf: Vec<VmValue> = Vec::with_capacity(len);
     match op{
@@ -3676,6 +3697,97 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
     while let Some(v) = buf.pop(){
         operand_stack.push(v);
     }
+
+    Ok(())
+}
+
+fn is_type_float(operand: VmValue) -> bool {
+    match operand{
+        VmValue::F32(_) | VmValue::F64(_) | 
+        VmValue::f32Array2(_) | VmValue::f32Array4(_) | VmValue::f32Array8(_) | VmValue::f32Array16(_) | 
+        VmValue::f32Array32(_) | VmValue::f32Array64(_) | VmValue::f32Array128(_) | VmValue::f32Array256(_) |
+        VmValue::f64Array2(_) | VmValue::f64Array4(_) | VmValue::f64Array8(_) | VmValue::f64Array16(_) |  
+        VmValue::f64Array32(_) | VmValue::f64Array64(_) | VmValue::f64Array128(_) | VmValue::f64Array256(_) => return true,
+        _ =>return false
+    }
+}
+
+fn is_type_integer(operand: VmValue) -> bool {
+    !is_type_float(operand)
+}  
+
+fn perform_integer_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+    let len = operand_stack.len();
+    
+    if len != 2 {
+        panic!(format!("Can perform {:?} only on 2 operands. Got {:?}", op, len))
+    }
+
+    let second = operand_stack.pop();
+    let first = operand_stack.pop();
+    let result;
+
+    if !is_type_integer(first) || !is_type_integer(second) {
+        return Err(VmError::InvalidOperator);
+    }
+
+    match op{
+        Instruction::And => {
+            result = match first & second{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+        }
+        Instruction::Or => {
+            result = match first | second{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+        }
+        Instruction::Xor => {
+            result = match first ^ second{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+        }
+        Instruction::Shl => {
+            result = match first << second{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+        }
+        Instruction::ShrSigned => {
+            result = match first >> second{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+        }
+        Instruction::ShrUnsigned => {
+            if !first.is_positive() || !second.is_positive(){
+                return Err(VmError::UnsignedOperationSignedOperand);
+            }
+
+            result = match first >> second{
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+        }
+        Instruction::Rotl => {
+            result = match first.rotate_left(&second){
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+        }
+        Instruction::Rotr => {
+            result = match first.rotate_right(&second){
+                Ok(res) => res,
+                Err(err) => return Err(err)
+            };
+        }
+        _ => panic!(format!("Must receive a integer only common operation. Got {:?}", op))
+    }
+
+    operand_stack.push(result);
 
     Ok(())
 }
