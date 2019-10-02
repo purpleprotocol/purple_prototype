@@ -254,6 +254,23 @@ impl Validator {
 
                                 DEFAULT_TRANSITIONS.to_vec()
                             }
+                            Instruction::And
+                            | Instruction::Or
+                            | Instruction::Xor
+                            | Instruction::Shl
+                            | Instruction::ShrSigned
+                            | Instruction::ShrUnsigned
+                            | Instruction::Rotl
+                            | Instruction::Rotr => {
+                                if self.operand_stack.len() != 2
+                                    || !are_integer_type(&self.operand_stack)
+                                {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
+
+                                DEFAULT_TRANSITIONS.to_vec()
+                            }
                             _ => op.transitions(),
                         };
 
@@ -865,6 +882,10 @@ fn are_float_type(operand_stack: &Stack<VmType>) -> bool {
         }
     }
     return true;
+}
+
+fn are_integer_type(operand_stack: &Stack<VmType>) -> bool {
+    !are_float_type(operand_stack)
 }
 
 fn get_next_elem(val_stack: &Stack<(u8, bool)>) -> (VmType, usize) {
