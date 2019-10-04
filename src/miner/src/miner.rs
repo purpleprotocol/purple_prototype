@@ -92,7 +92,7 @@ cfg_if! {
 }
 
 /// Miner control Messages
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum ControlMessage {
     /// Stop everything
     Stop,
@@ -255,10 +255,20 @@ impl PurpleMiner {
                 let mut s = shared_data.write();
                 s.stats[instance].set_plugin_name(&solver.config.name);
             }
-            let header = { shared_data.read().header.clone() };
-            let height = { shared_data.read().height.clone() };
-            let job_id = { shared_data.read().job_id.clone() };
-            let target_difficulty = { shared_data.read().difficulty.clone() };
+            let (
+                header, 
+                height,
+                job_id,
+                target_difficulty, 
+            ) = {
+                let data = shared_data.read();
+                let header = data.header.clone();
+                let height = data.height.clone();
+                let job_id = data.job_id.clone();
+                let target_difficulty = data.difficulty.clone();
+
+                (header, height, job_id, target_difficulty)
+            };
 
             // Gen random nonce
             let nonce: u64 = rand::OsRng::new().unwrap().gen();

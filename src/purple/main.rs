@@ -16,6 +16,10 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#![allow(unused)]
+
+#[macro_use]
+extern crate lazy_static;
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -47,6 +51,7 @@ extern crate parking_lot;
 extern crate persistence;
 extern crate rocksdb;
 extern crate tokio;
+extern crate miner;
 
 use slog::Drain;
 use clap::{App, Arg};
@@ -184,12 +189,24 @@ fn main() {
 
         // Start bootstrap process
         bootstrap(
-            network,
+            network.clone(),
             accept_connections,
             node_storage.clone(),
             argv.max_peers,
             argv.bootnodes.clone(),
         );
+
+        // Start miner related jobs
+        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
+        {
+            if argv.start_mining {
+                // Start mining
+                crate::jobs::start_miner().expect("Could not start miner");
+            
+                // Start checking for permission to bootstrap to the validator pool
+                network::jobs::start_validator_bootstrap_check(network);
+            }
+        }
 
         Ok(())
     }));
@@ -240,9 +257,10 @@ struct Argv {
     no_mempool: bool,
     interactive: bool,
     archival_mode: bool,
-    mine_easy: bool,
-    mine_hard: bool,
     wipe: bool,
+
+    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
+    start_mining: bool,
 }
 
 fn parse_cli_args() -> Argv {
@@ -299,15 +317,9 @@ fn parse_cli_args() -> Argv {
                 .help("Start the node in interactive mode")
         )
         .arg(
-            Arg::with_name("mine_easy")
-                .long("mine-easy")
-                .conflicts_with("mine_hard")
-                .help("Start mining on the Easy Chain")
-        )
-        .arg(
-            Arg::with_name("mine_hard")
-                .long("mine-hard")
-                .help("Start mining on the Hard Chain")
+            Arg::with_name("start_mining")
+                .long("start-mining")
+                .help("Start the node as a miner node")
         )
         .arg(
             Arg::with_name("max_peers")
@@ -361,25 +373,34 @@ fn parse_cli_args() -> Argv {
     };
 
     let archival_mode: bool = !matches.is_present("prune");
-    let mine_easy: bool = matches.is_present("mine_easy");
-    let mine_hard: bool = matches.is_present("mine_hard");
     let no_mempool: bool = matches.is_present("no_mempool");
     let interactive: bool = matches.is_present("interactive");
     let wipe: bool = matches.is_present("wipe");
     let no_bootnodes: bool = matches.is_present("no_bootnodes");
     let bootnodes = if no_bootnodes { Vec::new() } else { bootnodes };
+    let start_mining: bool = matches.is_present("start_mining");
+
+    #[cfg(not(any(feature = "miner-cpu", feature = "miner-gpu")))]
+    {
+        if start_mining {
+            panic!("Invalid argument: start_mining. This option can only be used with the miner bundle!")
+        }
+    }
 
     Argv {
         bootnodes,
         network_name,
         bootstrap_cache_size,
-        mine_easy,
-        mine_hard,
         max_peers,
         no_mempool,
         interactive,
         mempool_size,
         archival_mode,
         wipe,
+
+        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
+        start_mining,
     }
 }
+
+mod jobs;

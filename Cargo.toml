@@ -25,6 +25,7 @@ clap = "2.32.0"
 unwrap = "1.2.0"
 hex = "0.3.2"
 itc = "0.1.2"
+lazy_static = "1.2.0"
 log = "0.4.0"
 slog = "2.5.2"
 slog-stdlog = "4.0.0"
@@ -71,7 +72,7 @@ lto = "thin"
 
 [features]
 default = []
-miner-cpu-avx = ["miner/cpu", "miner/avx"]
-miner-cpu = ["miner/cpu"]
-miner-gpu = ["miner/gpu"]
+miner-cpu-avx = ["miner/cpu", "miner/avx", "network/miner"]
+miner-cpu = ["miner/cpu", "network/miner"]
+miner-gpu = ["miner/gpu", "network/miner"]
 

@@ -263,7 +263,7 @@ dependencies = [
  "crypto 0.1.0",
  "elastic-array 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "events 0.1.0",
- "graphlib 0.4.0 (git+https://github.com/purpleprotocol/graphlib)",
+ "graphlib 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)",
  "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -337,7 +337,7 @@ dependencies = [
  "causality 0.1.0",
  "crypto 0.1.0",
  "events 0.1.0",
- "graphlib 0.4.0 (git+https://github.com/purpleprotocol/graphlib)",
+ "graphlib 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)",
  "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -811,8 +811,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "graphlib"
-version = "0.4.0"
-source = "git+https://github.com/purpleprotocol/graphlib#7fa6c771e95a78cdcbb7da82bb0259ac2f04d8eb"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "dot 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1522,6 +1522,7 @@ dependencies = [
  "jsonrpc-core 9.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-macros 9.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jump 0.1.0",
+ "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "mimalloc 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "miner 0.1.0",
@@ -2684,7 +2685,7 @@ dependencies = [
 "checksum generic-array 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ef25c5683767570c2bbd7deba372926a55eaae9982d7726ee2a1050239d45b9d"
 "checksum glob 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)" = "8be18de09a56b60ed0edf84bc9df007e30040691af7acd1c41874faac5895bfb"
 "checksum glob 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
-"checksum graphlib 0.4.0 (git+https://github.com/purpleprotocol/graphlib)" = "<none>"
+"checksum graphlib 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)" = "c5d7e356019bd188835e922002d4dd72ed4204ad94bbec9f3378d7a563da02cb"
 "checksum hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)" = "<none>"
 "checksum hashbrown 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)" = "3bae29b6653b3412c2e71e9d486db9f9df5d701941d86683005efb9f2d28e3da"
 "checksum hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d91261ee336dd046ac7df28306cb297b7a7228bd1ae25e9a57f4ed5e0ab628c7"

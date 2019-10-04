@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(irrefutable_let_patterns)]
+#![allow(irrefutable_let_patterns, unused)]
 
 #[macro_use]
 extern crate serde_derive;
@@ -56,6 +56,8 @@ extern crate tokio_timer;
 pub mod mock;
 
 pub mod bootstrap;
+pub mod packets;
+pub mod jobs;
 mod common;
 mod connection;
 mod error;
@@ -64,7 +66,6 @@ mod header;
 mod interface;
 mod network;
 mod packet;
-pub mod packets;
 mod peer;
 mod protocol_flow;
 mod validation;
@@ -197,7 +198,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
                 );
 
                 let network = Arc::new(Mutex::new(network));
-                s.send(network.clone());
+                s.send(network.clone()).unwrap();
 
                 MockNetwork::start_receive_loop(
                     network,

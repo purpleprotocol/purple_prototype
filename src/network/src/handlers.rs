@@ -102,7 +102,7 @@ pub fn start_block_listeners(
                 match chain_result {
                     Ok(()) => {
                         // Forward block
-                        let mut packet =
+                        let packet =
                             ForwardBlock::new(Arc::new(BlockWrapper::HardBlock(block)));
                         network
                             .send_to_all_except(&addr, &packet.to_bytes())

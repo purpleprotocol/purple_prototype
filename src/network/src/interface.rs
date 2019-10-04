@@ -18,7 +18,6 @@
 
 use crate::chain::*;
 use crate::error::NetworkErr;
-use crate::packet::Packet;
 use crate::peer::Peer;
 use crate::bootstrap::cache::BootstrapCache;
 use crypto::{NodeId, SecretKey as Sk};
