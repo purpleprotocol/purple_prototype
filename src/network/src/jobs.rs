@@ -35,7 +35,7 @@ pub fn start_validator_bootstrap_check(network: Network) -> Spawn {
     let refresh_interval = Interval::new(Instant::now(), Duration::from_millis(VALIDATOR_BOOTSTRAP_INTERVAL))
         .fold(network, move |mut network, _| {
             debug!("Triggering validator pool bootstrap check...");
-            unimplemented!();
+            //unimplemented!();
 
             ok(network)
         })

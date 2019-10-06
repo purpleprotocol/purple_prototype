@@ -20,6 +20,9 @@
 */
 
 #[macro_use]
+extern crate log;
+
+#[macro_use]
 mod macros;
 mod pow;
 mod verify;
@@ -57,6 +60,9 @@ mod proof;
 
 #[cfg(any(feature = "cpu", feature = "gpu"))]
 pub use crate::miner::*;
+
+#[cfg(any(feature = "cpu", feature = "gpu"))]
+pub use crate::plugin_type::*;
 
 //
 pub use crate::verify::*;

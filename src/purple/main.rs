@@ -182,7 +182,7 @@ fn main() {
         start_chains_switch_poll(hard_chain.clone(), state_chain.clone());
 
         // Start listening for blocks
-        start_block_listeners(network.clone(), hard_chain, state_chain, hard_rx, state_rx);
+        start_block_listeners(network.clone(), hard_chain.clone(), state_chain, hard_rx, state_rx);
 
         // Start listening to connections
         start_listener(network.clone(), accept_connections.clone());
@@ -201,7 +201,7 @@ fn main() {
         {
             if argv.start_mining {
                 // Start mining
-                crate::jobs::start_miner().expect("Could not start miner");
+                crate::jobs::start_miner(hard_chain).expect("Could not start miner");
             
                 // Start checking for permission to bootstrap to the validator pool
                 network::jobs::start_validator_bootstrap_check(network);

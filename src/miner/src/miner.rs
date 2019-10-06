@@ -38,6 +38,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::time;
+use crypto::Hash;
 
 const SO_SUFFIX: &str = ".cuckooplugin";
 
@@ -160,6 +161,10 @@ impl PurpleMiner {
             miner_state: MinerState::Starting,
             solver_states: vec![],
         }
+    }
+
+    pub fn are_solvers_started(&self) -> bool {
+        self.miner_state == MinerState::Ready
     }
 
     fn is_starting(&self, plugin: PluginType) -> bool {
@@ -381,10 +386,9 @@ impl PurpleMiner {
     /// this function will continue to find solutions over the target difficulty
     /// for the given inputs and place them into its output queue until
     /// instructed to stop.
-
     pub fn notify(
         &mut self,
-        job_id: u32, // Job id
+        //job_id: u32, // Job id
         height: u64, // Job height
         header: &[u8],
         difficulty: u64, /* The target difficulty, only sols greater than this difficulty will
@@ -406,7 +410,10 @@ impl PurpleMiner {
             self.pause_solvers();
             paused = true;
         }
-        sd.job_id = job_id;
+
+        info!("Mining header {} with height {}", hex::encode(header), height);
+        
+        //sd.job_id = job_id;
         sd.height = height;
         sd.header = header.to_vec();
         sd.difficulty = difficulty;
@@ -416,24 +423,43 @@ impl PurpleMiner {
         Ok(())
     }
 
+    /// Returns the current height of the header being mined.
+    /// 
+    /// Returns `None` if the miner is in stand-by.
+    pub fn current_height(&self, plugin: PluginType) -> Option<u64> {
+        if *self.solver_states[plugin.repr()].read() == SolverState::Paused {
+            return None;
+        }
+        
+        let sd = self.shared_data.read();
+        Some(sd.height)
+    }
+
+    /// Returns the hash of the current header being mined.
+    /// 
+    /// Returns `None` if the miner is in stand-by.
+    pub fn current_header_hash(&self, plugin: PluginType) -> Option<Hash> {
+        if *self.solver_states[plugin.repr()].read() == SolverState::Paused {
+            return None;
+        }
+        
+        let sd = self.shared_data.read();
+        Some(crypto::hash_slice(&sd.header))
+    }
+
     /// Returns solutions if currently waiting.
     pub fn get_solutions(&self) -> Option<SolverSolutions> {
-        // just to prevent endless needless locking of this
-        // when using fast test miners, in real cuckoo30 terms
-        // this shouldn't be an issue
-        // TODO: Make this less blocky
-        // let time_pre_lock=Instant::now();
-        {
+        let has_solutions = {
+            let s = self.shared_data.read();
+            s.solutions.len() > 0
+        };  
+
+        if has_solutions {
             let mut s = self.shared_data.write();
-            // let time_elapsed=Instant::now()-time_pre_lock;
-            // println!("Get_solution Time spent waiting for lock: {}",
-            // time_elapsed.as_secs()*1000 +(time_elapsed.subsec_nanos()/1_000_000)as u64);
-            if s.solutions.len() > 0 {
-                let sol = s.solutions.pop().unwrap();
-                return Some(sol);
-            }
+            s.solutions.pop()
+        } else {
+            None
         }
-        None
     }
 
     /// get stats for all running solvers
@@ -508,7 +534,7 @@ impl PurpleMiner {
 fn get_plugins_path() -> PathBuf {
     let mut p_path = std::env::current_exe().unwrap();
     p_path.pop();
-    p_path.pop();
+    //p_path.pop();
     p_path.push("plugins");
     p_path
 }
