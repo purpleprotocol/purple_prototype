@@ -14,7 +14,11 @@ pub const MIN_EDGE_BITS: u8 = 24;
 pub struct Proof {
     /// Power of 2 used for the size of the cuckoo graph
     pub edge_bits: u8,
-    /// The nonces
+
+    /// The nonce used by the miner to find the proof
+    pub nonce: u64,
+
+    /// The proof nonces
     pub nonces: Vec<u64>,
 }
 
@@ -35,10 +39,11 @@ impl Eq for Proof {}
 
 impl Proof {
     /// Builds a proof with provided nonces and edge_bits
-    pub fn new(mut in_nonces: Vec<u64>, edge_bits: u8) -> Proof {
+    pub fn new(mut in_nonces: Vec<u64>, nonce: u64, edge_bits: u8) -> Proof {
         in_nonces.sort_unstable();
         Proof {
             edge_bits,
+            nonce,
             nonces: in_nonces,
         }
     }
@@ -48,6 +53,7 @@ impl Proof {
     pub fn test_proof(proof_size: usize) -> Proof {
         Proof {
             edge_bits: 0,
+            nonce: 0,
             nonces: vec![0; proof_size],
         }
     }
@@ -56,6 +62,7 @@ impl Proof {
     pub fn zero(proof_size: usize) -> Proof {
         Proof {
             edge_bits: MIN_EDGE_BITS,
+            nonce: 0,
             nonces: vec![0; proof_size],
         }
     }
@@ -75,6 +82,7 @@ impl Proof {
         v.sort_unstable();
         Proof {
             edge_bits: MIN_EDGE_BITS,
+            nonce: rng.gen(),
             nonces: v,
         }
     }
@@ -87,6 +95,7 @@ impl Proof {
     pub fn hash(&self) -> Hash {
         let mut buf = Vec::with_capacity(8 * PROOF_SIZE + 1);
         buf.write_u8(self.edge_bits).unwrap();
+        buf.write_u64::<LittleEndian>(self.nonce).unwrap();
 
         for n in self.nonces.iter() {
             buf.write_u64::<LittleEndian>(*n).unwrap();
@@ -131,11 +140,13 @@ impl Proof {
     ///
     /// Binary Structure:
     /// 1) Edge bits - 8bits
-    /// 2) Proof     - 64bits * PROOF_SIZE
+    /// 2) Nonce     - 64bits
+    /// 3) Proof     - 64bits * PROOF_SIZE
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(1 + 8 * PROOF_SIZE);
+        let mut buf = Vec::with_capacity(1 + 8 + 8 * PROOF_SIZE);
 
         buf.extend_from_slice(&[self.edge_bits]);
+        buf.write_u64::<BigEndian>(self.nonce).unwrap();
 
         for nonce in self.nonces.iter() {
             buf.extend_from_slice(&encode_be_u64!(*nonce));
@@ -145,13 +156,14 @@ impl Proof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Proof, &'static str> {
-        if bytes.len() != 1 + 8 * PROOF_SIZE {
+        if bytes.len() != 1 + 8 + 8 * PROOF_SIZE {
             return Err("Invalid slice length");
         }
 
         let mut cursor = Cursor::new(bytes);
         let mut nonces = Vec::with_capacity(PROOF_SIZE);
-        let edge_bits = cursor.read_u8().unwrap();
+        let edge_bits = cursor.read_u8().map_err(|_| "Invalid Proof")?;
+        let nonce = cursor.read_u64::<BigEndian>().map_err(|_| "Invalid Proof")?;
 
         for _ in 0..PROOF_SIZE {
             if let Ok(result) = cursor.read_u64::<BigEndian>() {
@@ -161,7 +173,7 @@ impl Proof {
             };
         }
 
-        Ok(Proof::new(nonces, edge_bits))
+        Ok(Proof::new(nonces, nonce, edge_bits))
     }
 }
 

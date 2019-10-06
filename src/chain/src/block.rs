@@ -97,7 +97,7 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
     fn address(&self) -> Option<&SocketAddr>;
 
     /// Callback that executes after a block is written to a chain.
-    fn after_write() -> Option<Box<FnMut(Arc<Self>)>>;
+    fn after_write() -> Option<Box<dyn FnMut(Arc<Self>)>>;
 
     /// Condition that must result if successful, returns the state
     /// that is to be associated with the new appended block.

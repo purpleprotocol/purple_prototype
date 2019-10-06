@@ -139,9 +139,8 @@ impl Block for HardBlock {
         Some(&self.ip)
     }
 
-    fn after_write() -> Option<Box<FnMut(Arc<HardBlock>)>> {
+    fn after_write() -> Option<Box<dyn FnMut(Arc<HardBlock>)>> {
         let fun = |block| {};
-
         Some(Box::new(fun))
     }
 
@@ -279,8 +278,8 @@ impl Block for HardBlock {
             return Err("Incorrect packet structure 5");
         };
 
-        let proof = if buf.len() > 1 + 8 * PROOF_SIZE {
-            let proof: Vec<u8> = buf.drain(..(1 + 8 * PROOF_SIZE)).collect();
+        let proof = if buf.len() > 1 + 8 + 8 * PROOF_SIZE {
+            let proof: Vec<u8> = buf.drain(..(1 + 8 + 8 * PROOF_SIZE)).collect();
 
             match Proof::from_bytes(&proof) {
                 Ok(proof) => proof,

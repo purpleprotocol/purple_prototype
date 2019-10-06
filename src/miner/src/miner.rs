@@ -304,6 +304,7 @@ impl PurpleMiner {
                         .filter(|s| {
                             let proof = Proof {
                                 edge_bits: solver.solutions.edge_bits as u8,
+                                nonce: s.nonce as u64,
                                 nonces: s.proof.to_vec(),
                             };
                             proof.to_difficulty() as u64 >= target_difficulty

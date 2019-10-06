@@ -23,7 +23,7 @@ use parking_lot::RwLock;
 use chain::{Block, HardChainRef};
 
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
-use miner::{PurpleMiner, PluginType};
+use miner::{PurpleMiner, PluginType, Proof};
 
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
 lazy_static! {
@@ -65,11 +65,18 @@ pub fn start_miner(pow_chain: HardChainRef) -> Result<(), &'static str> {
 
                     if miner_height == current_height {
                         // Check for solutions if the height is constant
-                        if let Some(solution) = miner.get_solutions() {
+                        if let Some(solutions) = miner.get_solutions() {
                             info!("Found solution for block height {}", miner_height);
+                            let solution = solutions.sols[0];
+                            let nonce = solution.nonce();
+                            let sol_u64s = solution.to_u64s();
+                            let proof = Proof::new(sol_u64s, nonce, solutions.edge_bits as u8);
 
                             // TODO: Handle found solution
                             unimplemented!();
+                        } else {
+                            //debug!("No solution found...");
+                            // TODO: Maybe hook this to a progress visualizer
                         }
                     } else if miner_height < current_height {
                         let header_hash = tip.block_hash().unwrap();
@@ -80,7 +87,10 @@ pub fn start_miner(pow_chain: HardChainRef) -> Result<(), &'static str> {
                     } else {
                         unreachable!();
                     }
-                } 
+                } else {
+                    // TODO: Maybe hook this to a visualizer
+                    //debug!("Miner is stand-by...");
+                }
             } else {
                 // Schedule miner to work on the current tip
                 let tip = pow_chain.canonical_tip();
@@ -94,8 +104,6 @@ pub fn start_miner(pow_chain: HardChainRef) -> Result<(), &'static str> {
                 miner.start_solvers();
 
                 debug!("Solvers started!");
-                
-                // Re-schedule miner to work on the current height
                 miner.notify(current_height, &header_hash.0, difficulty, plugin_type);
             }
 

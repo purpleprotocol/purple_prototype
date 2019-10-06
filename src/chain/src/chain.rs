@@ -2253,7 +2253,7 @@ mod tests {
             Some(&self.ip)
         }
 
-        fn after_write() -> Option<Box<FnMut(Arc<Self>)>> {
+        fn after_write() -> Option<Box<dyn FnMut(Arc<Self>)>> {
             None
         }
 
