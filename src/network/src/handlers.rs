@@ -103,7 +103,7 @@ pub fn start_block_listeners(
                     Ok(()) => {
                         // Forward block
                         let packet =
-                            ForwardBlock::new(Arc::new(BlockWrapper::HardBlock(block)));
+                            ForwardBlock::new(BlockWrapper::HardBlock(block));
                         network
                             .send_to_all_except(&addr, &packet.to_bytes())
                             .unwrap();
@@ -134,7 +134,7 @@ pub fn start_block_listeners(
                     Ok(()) => {
                         // Forward block
                         let packet =
-                            ForwardBlock::new(Arc::new(BlockWrapper::StateBlock(block)));
+                            ForwardBlock::new(BlockWrapper::StateBlock(block));
                         
                         network
                             .send_to_all_except(&addr, &packet.to_bytes())

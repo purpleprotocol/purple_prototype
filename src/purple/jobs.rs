@@ -20,7 +20,12 @@ use std::sync::Arc;
 use std::sync::atomic::{Ordering, AtomicBool};
 use std::thread;
 use parking_lot::RwLock;
-use chain::{Block, HardChainRef};
+use chain::{HardBlock, Block, HardChainRef, BlockWrapper};
+use network::{Network, NetworkInterface};
+use network::packets::ForwardBlock;
+use network::Packet;
+use account::NormalAddress;
+use std::net::SocketAddr;
 
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
 use miner::{PurpleMiner, PluginType, Proof};
@@ -28,11 +33,16 @@ use miner::{PurpleMiner, PluginType, Proof};
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
 lazy_static! {
     static ref MINER_IS_STARTED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+    
+    // TODO: Retrieve our ip address
+    static ref OUR_IP: SocketAddr = {
+        unimplemented!();
+    };
 }
 
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
 /// Starts the mining process.
-pub fn start_miner(pow_chain: HardChainRef) -> Result<(), &'static str> {
+pub fn start_miner(pow_chain: HardChainRef, network: Network) -> Result<(), &'static str> {
     if MINER_IS_STARTED.load(Ordering::Relaxed) {
         return Err("The miner is already started!");
     }
@@ -72,8 +82,29 @@ pub fn start_miner(pow_chain: HardChainRef) -> Result<(), &'static str> {
                             let sol_u64s = solution.to_u64s();
                             let proof = Proof::new(sol_u64s, nonce, solutions.edge_bits as u8);
 
-                            // TODO: Handle found solution
-                            unimplemented!();
+                            // TODO: Set and retrieve the node's collector address
+                            let collector_address = NormalAddress::random();
+
+                            // Create block
+                            let mut block = HardBlock::new(
+                                tip.block_hash(), 
+                                collector_address,
+                                *OUR_IP,
+                                miner_height + 1,
+                                proof,
+                            );
+                            block.compute_hash();
+                            let block = Arc::new(block);
+
+                            // Append block to our chain
+                            pow_chain.append_block(block.clone()).map_err(|err| warn!("Could not append block to pow chain! Reason: {:?}", err));
+
+                            let block_wrapper = BlockWrapper::from_pow_block(block);
+                            let packet = ForwardBlock::new(block_wrapper);
+                            let packet = packet.to_bytes();
+
+                            // Send block to all of our peers
+                            network.send_to_all(&packet).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
                         } else {
                             //debug!("No solution found...");
                             // TODO: Maybe hook this to a progress visualizer

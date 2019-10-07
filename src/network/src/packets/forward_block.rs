@@ -30,11 +30,11 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ForwardBlock {
-    block: Arc<BlockWrapper>,
+    block: BlockWrapper,
 }
 
 impl ForwardBlock {
-    pub fn new(block: Arc<BlockWrapper>) -> ForwardBlock {
+    pub fn new(block: BlockWrapper) -> ForwardBlock {
         ForwardBlock { block }
     }
 }
@@ -102,7 +102,7 @@ impl Packet for ForwardBlock {
         packet: &ForwardBlock,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        match *packet.block {
+        match packet.block {
             BlockWrapper::HardBlock(ref block) => {
                 let hard_chain = network.hard_chain_ref();
 

@@ -30,6 +30,7 @@ extern crate jsonrpc_macros;
 #[macro_use(slog_error, slog_info, slog_trace, slog_log, slog_o)] 
 extern crate slog;
 
+extern crate account;
 extern crate chain;
 extern crate clap;
 extern crate crypto;
@@ -201,7 +202,7 @@ fn main() {
         {
             if argv.start_mining {
                 // Start mining
-                crate::jobs::start_miner(hard_chain).expect("Could not start miner");
+                crate::jobs::start_miner(hard_chain, network.clone()).expect("Could not start miner");
             
                 // Start checking for permission to bootstrap to the validator pool
                 network::jobs::start_validator_bootstrap_check(network);

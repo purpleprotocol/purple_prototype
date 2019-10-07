@@ -440,7 +440,7 @@ impl MockNetwork {
                                 Ok(()) => {
                                     // Forward block
                                     let mut packet =
-                                        ForwardBlock::new(Arc::new(BlockWrapper::HardBlock(block)));
+                                        ForwardBlock::new(BlockWrapper::HardBlock(block));
                                     network
                                         .send_to_all_except(&addr, &packet.to_bytes())
                                         .unwrap();
@@ -460,9 +460,8 @@ impl MockNetwork {
                             match chain.append_block(block.clone()) {
                                 Ok(()) => {
                                     // Forward block
-                                    let mut packet = ForwardBlock::new(Arc::new(
-                                        BlockWrapper::StateBlock(block),
-                                    ));
+                                    let mut packet = ForwardBlock::new(BlockWrapper::StateBlock(block));
+                                    
                                     network
                                         .send_to_all_except(&addr, &packet.to_bytes())
                                         .unwrap();
