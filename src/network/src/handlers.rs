@@ -33,12 +33,12 @@ const SWITCH_POLL_INTERVAL: u64 = 1;
 
 /// Starts a loop for each chain that will attempt
 /// to perform buffered chain switches.
-pub fn start_chains_switch_poll(hard_chain: HardChainRef, state_chain: StateChainRef) {
-    let hard_interval_fut =
+pub fn start_chains_switch_poll(pow_chain: PowChainRef, state_chain: StateChainRef) {
+    let pow_interval_fut =
         Interval::new(Instant::now(), Duration::from_millis(SWITCH_POLL_INTERVAL))
-            .fold(hard_chain, |hard_chain, _| {
+            .fold(pow_chain, |pow_chain, _| {
                 let has_switch_requests = {
-                    let chain = hard_chain.chain.read();
+                    let chain = pow_chain.chain.read();
                     chain.has_switch_requests()
                 };
 
@@ -46,11 +46,11 @@ pub fn start_chains_switch_poll(hard_chain: HardChainRef, state_chain: StateChai
                 //
                 // TODO: Rate limit this
                 if has_switch_requests {
-                    let mut chain = hard_chain.chain.write();
+                    let mut chain = pow_chain.chain.write();
                     chain.flush_switch_buffer();
                 }
 
-                ok(hard_chain)
+                ok(pow_chain)
             })
             .map_err(|e| warn!("Hard switch poll err: {:?}", e))
             .and_then(|_| ok(()));
@@ -76,7 +76,7 @@ pub fn start_chains_switch_poll(hard_chain: HardChainRef, state_chain: StateChai
             .map_err(|e| warn!("State switch poll err: {:?}", e))
             .and_then(|_| ok(()));
 
-    tokio::spawn(hard_interval_fut);
+    tokio::spawn(pow_interval_fut);
     tokio::spawn(state_interval_fut);
 }
 
@@ -84,18 +84,18 @@ pub fn start_chains_switch_poll(hard_chain: HardChainRef, state_chain: StateChai
 /// forwards them to their respective chains.
 pub fn start_block_listeners(
     network: Network,
-    hard_chain: HardChainRef,
+    pow_chain: PowChainRef,
     state_chain: StateChainRef,
-    hard_receiver: Receiver<(SocketAddr, Arc<HardBlock>)>,
+    pow_receiver: Receiver<(SocketAddr, Arc<PowBlock>)>,
     state_receiver: Receiver<(SocketAddr, Arc<StateBlock>)>,
 ) {
-    let loop_fut_hard = hard_receiver
+    let loop_fut_pow = pow_receiver
         .fold(
-            (network.clone(), hard_chain),
-            |(network, hard_chain), (addr, block)| {
-                debug!("Received HardBlock {:?}", block.block_hash().unwrap());
+            (network.clone(), pow_chain),
+            |(network, pow_chain), (addr, block)| {
+                debug!("Received PowBlock {:?}", block.block_hash().unwrap());
                 let chain_result = {
-                    let mut chain = hard_chain.chain.write();
+                    let mut chain = pow_chain.chain.write();
                     chain.append_block(block.clone())
                 };
 
@@ -103,7 +103,7 @@ pub fn start_block_listeners(
                     Ok(()) => {
                         // Forward block
                         let packet =
-                            ForwardBlock::new(BlockWrapper::HardBlock(block));
+                            ForwardBlock::new(BlockWrapper::PowBlock(block));
                         network
                             .send_to_all_except(&addr, &packet.to_bytes())
                             .unwrap();
@@ -115,7 +115,7 @@ pub fn start_block_listeners(
                     ),
                 }
 
-                ok((network, hard_chain))
+                ok((network, pow_chain))
             },
         )
         .and_then(|_| ok(()));
@@ -152,6 +152,6 @@ pub fn start_block_listeners(
         )
         .and_then(|_| ok(()));
 
-    tokio::spawn(loop_fut_hard);
+    tokio::spawn(loop_fut_pow);
     tokio::spawn(loop_fut_state);
 }

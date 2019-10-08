@@ -50,8 +50,8 @@ pub struct Network {
     /// Our secret key
     pub(crate) secret_key: Sk,
 
-    /// Reference to the `HardChain`
-    hard_chain_ref: HardChainRef,
+    /// Reference to the `PowChain`
+    pow_chain_ref: PowChainRef,
 
     /// Reference to the `StateChain`
     state_chain_ref: StateChainRef,
@@ -59,8 +59,8 @@ pub struct Network {
     /// Sender to `StateChain` block buffer
     state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
 
-    /// Sender to `HardChain` block buffer
-    hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
+    /// Sender to `PowChain` block buffer
+    pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
 
     /// The port we are accepting external TCP connections on.
     port: u16,
@@ -85,9 +85,9 @@ impl Network {
         network_name: String,
         secret_key: Sk,
         max_peers: usize,
-        hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
+        pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
         state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
-        hard_chain_ref: HardChainRef,
+        pow_chain_ref: PowChainRef,
         state_chain_ref: StateChainRef,
         bootstrap_cache: BootstrapCache,
         accept_connections: Arc<AtomicBool>,
@@ -99,9 +99,9 @@ impl Network {
             network_name,
             secret_key,
             max_peers,
-            hard_chain_sender,
+            pow_chain_sender,
             state_chain_sender,
-            hard_chain_ref,
+            pow_chain_ref,
             state_chain_ref,
             bootstrap_cache,
             accept_connections,
@@ -278,16 +278,16 @@ impl NetworkInterface for Network {
         }
     }
 
-    fn hard_chain_ref(&self) -> HardChainRef {
-        self.hard_chain_ref.clone()
+    fn pow_chain_ref(&self) -> PowChainRef {
+        self.pow_chain_ref.clone()
     }
 
     fn state_chain_ref(&self) -> StateChainRef {
         self.state_chain_ref.clone()
     }
 
-    fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)> {
-        &self.hard_chain_sender
+    fn pow_chain_sender(&self) -> &Sender<(SocketAddr, Arc<PowBlock>)> {
+        &self.pow_chain_sender
     }
 
     fn state_chain_sender(&self) -> &Sender<(SocketAddr, Arc<StateBlock>)> {

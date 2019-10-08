@@ -17,7 +17,7 @@
 */
 
 use crate::types::{BranchType, Flushable};
-use crate::{ChainErr, HardBlock, StateBlock};
+use crate::{ChainErr, PowBlock, StateBlock};
 use chrono::prelude::*;
 use crypto::Hash;
 use std::boxed::Box;
@@ -138,13 +138,13 @@ pub enum SwitchResult {
 /// Wrapper enum used **only** for serialization/deserialization
 #[derive(Clone, Debug, PartialEq)]
 pub enum BlockWrapper {
-    HardBlock(Arc<HardBlock>),
+    PowBlock(Arc<PowBlock>),
     StateBlock(Arc<StateBlock>),
 }
 
 impl BlockWrapper {
-    pub fn from_pow_block(block: Arc<HardBlock>) -> Self {
-        BlockWrapper::HardBlock(block)
+    pub fn from_pow_block(block: Arc<PowBlock>) -> Self {
+        BlockWrapper::PowBlock(block)
     }
 
     pub fn from_state_block(block: Arc<StateBlock>) -> Self {
@@ -155,7 +155,7 @@ impl BlockWrapper {
         let first_byte = bytes[0];
 
         match first_byte {
-            HardBlock::BLOCK_TYPE => Ok(BlockWrapper::HardBlock(HardBlock::from_bytes(
+            PowBlock::BLOCK_TYPE => Ok(BlockWrapper::PowBlock(PowBlock::from_bytes(
                 bytes,
             )?)),
             StateBlock::BLOCK_TYPE => Ok(BlockWrapper::StateBlock(
@@ -167,14 +167,14 @@ impl BlockWrapper {
 
     pub fn to_bytes(&self) -> Vec<u8> {
         match self {
-            BlockWrapper::HardBlock(block) => block.to_bytes(),
+            BlockWrapper::PowBlock(block) => block.to_bytes(),
             BlockWrapper::StateBlock(block) => block.to_bytes(),
         }
     }
 
     pub fn block_hash(&self) -> Option<Hash> {
         match self {
-            BlockWrapper::HardBlock(block) => block.block_hash(),
+            BlockWrapper::PowBlock(block) => block.block_hash(),
             BlockWrapper::StateBlock(block) => block.block_hash(),
         }
     }
@@ -188,7 +188,7 @@ impl quickcheck::Arbitrary for BlockWrapper {
         let random = rng.gen_range(0, 2);
 
         match random {
-            0 => BlockWrapper::HardBlock(quickcheck::Arbitrary::arbitrary(g)),
+            0 => BlockWrapper::PowBlock(quickcheck::Arbitrary::arbitrary(g)),
             1 => BlockWrapper::StateBlock(quickcheck::Arbitrary::arbitrary(g)),
             _ => panic!(),
         }

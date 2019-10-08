@@ -19,8 +19,8 @@
 //! Utilities for testing chain modules
 
 use crate::block::Block;
-use crate::hard_chain::block::*;
-use crate::hard_chain::chain::*;
+use crate::pow_chain::block::*;
+use crate::pow_chain::chain::*;
 use crate::pow_chain_state::PowChainState;
 use crate::state_chain::block::*;
 use crate::state_chain::chain::*;
@@ -34,17 +34,17 @@ use parking_lot::RwLock;
 use rand::prelude::*;
 use std::sync::Arc;
 
-pub fn init_test_chains() -> (HardChainRef, StateChainRef) {
+pub fn init_test_chains() -> (PowChainRef, StateChainRef) {
     let easy_db = test_helpers::init_tempdb();
-    let hard_db = test_helpers::init_tempdb();
+    let pow_db = test_helpers::init_tempdb();
     let state_db = test_helpers::init_tempdb();
     let state_storage_db = test_helpers::init_tempdb();
-    let hard_chain = Arc::new(RwLock::new(HardChain::new(
-        hard_db,
+    let pow_chain = Arc::new(RwLock::new(PowChain::new(
+        pow_db,
         PowChainState::genesis(),
         true,
     )));
-    let hard_chain_ref = HardChainRef::new(hard_chain);
+    let pow_chain_ref = PowChainRef::new(pow_chain);
     let state_chain = Arc::new(RwLock::new(StateChain::new(
         state_db,
         ChainState::new(state_storage_db),
@@ -52,28 +52,28 @@ pub fn init_test_chains() -> (HardChainRef, StateChainRef) {
     ))); // TODO: Replace this with genesis state
     let state_chain_ref = StateChainRef::new(state_chain);
 
-    (hard_chain_ref, state_chain_ref)
+    (pow_chain_ref, state_chain_ref)
 }
 
 /// Wrapper struct around a block test set
 #[derive(Clone, Debug)]
 pub struct BlockTestSet {
-    pub hard_graph: Graph<Arc<HardBlock>>,
+    pub pow_graph: Graph<Arc<PowBlock>>,
     pub state_graph: Graph<Arc<StateBlock>>,
-    pub hard_blocks: Vec<Arc<HardBlock>>,
+    pub pow_blocks: Vec<Arc<PowBlock>>,
     pub state_blocks: Vec<Arc<StateBlock>>,
-    pub hard_canonical: Arc<HardBlock>,
+    pub pow_canonical: Arc<PowBlock>,
     pub state_canonical: Arc<StateBlock>,
 }
 
 impl BlockTestSet {
     pub fn new() -> BlockTestSet {
         BlockTestSet {
-            hard_graph: Graph::new(),
+            pow_graph: Graph::new(),
             state_graph: Graph::new(),
-            hard_blocks: Vec::new(),
+            pow_blocks: Vec::new(),
             state_blocks: Vec::new(),
-            hard_canonical: HardBlock::genesis(),
+            pow_canonical: PowBlock::genesis(),
             state_canonical: StateBlock::genesis(),
         }
     }
@@ -98,25 +98,25 @@ pub fn chain_test_set(
         panic!("Invalid fork rate parameter! Must be a number between 0 and 10.");
     }
 
-    let mut hard_chain_buf: Graph<Arc<HardBlock>> = Graph::new();
-    let mut hard_canonical_tip: Option<VertexId> = None;
+    let mut pow_chain_buf: Graph<Arc<PowBlock>> = Graph::new();
+    let mut pow_canonical_tip: Option<VertexId> = None;
     let mut state_chain_buf: Graph<Arc<StateBlock>> = Graph::new();
     let mut state_canonical_tip: Option<VertexId> = None;
-    let mut cur_hard_height: u64 = 0;
+    let mut cur_pow_height: u64 = 0;
     let mut rng = rand::thread_rng();
 
-    // For each iteration, generate one hard block and several easy
+    // For each iteration, generate one pow block and several easy
     // blocks along with the associated state blocks.
     loop {
         // Stop at desired depth
-        if cur_hard_height >= depth as u64 {
+        if cur_pow_height >= depth as u64 {
             break;
         }
 
-        let last_hard = if let Some(ref id) = hard_canonical_tip {
-            hard_chain_buf.fetch(id).unwrap().clone()
+        let last_pow = if let Some(ref id) = pow_canonical_tip {
+            pow_chain_buf.fetch(id).unwrap().clone()
         } else {
-            HardBlock::genesis()
+            PowBlock::genesis()
         };
 
         // let mut last_easy_height = last_easy.height() + 1;
@@ -125,7 +125,7 @@ pub fn chain_test_set(
         // for _ in 0..easy_blocks_to_generate {
         //     let mut easy_block = EasyBlock::new(
         //         last_easy.block_hash(),
-        //         last_hard.block_hash().unwrap(),
+        //         last_pow.block_hash().unwrap(),
         //         NormalAddress::random(),
         //         crate::random_socket_addr(),
         //         last_easy_height,
@@ -165,7 +165,7 @@ pub fn chain_test_set(
         //     if will_fork {
         //         let mut easy_block = EasyBlock::new(
         //             last_easy.block_hash(),
-        //             last_hard.block_hash().unwrap(),
+        //             last_pow.block_hash().unwrap(),
         //             NormalAddress::random(),
         //             crate::random_socket_addr(),
         //             last_easy_height,
@@ -202,7 +202,7 @@ pub fn chain_test_set(
         //                 .tips()
         //                 .filter(|t| {
         //                     let tip = easy_chain_buf.fetch(t).unwrap();
-        //                     Some(**t) != easy_canonical_tip && tip.height() < cur_hard_height
+        //                     Some(**t) != easy_canonical_tip && tip.height() < cur_pow_height
         //                 })
         //                 .cloned()
         //                 .choose(&mut rng);
@@ -212,7 +212,7 @@ pub fn chain_test_set(
         //                 let tip = easy_chain_buf.fetch(tip_id).unwrap().clone();
         //                 let mut easy_block = EasyBlock::new(
         //                     tip.block_hash(),
-        //                     last_hard.block_hash().unwrap(),
+        //                     last_pow.block_hash().unwrap(),
         //                     NormalAddress::random(),
         //                     crate::random_socket_addr(),
         //                     tip.height() + 1,
@@ -257,37 +257,37 @@ pub fn chain_test_set(
         //     }
         // }
 
-        let last_hard_hash = last_hard.block_hash().unwrap();
+        let last_pow_hash = last_pow.block_hash().unwrap();
 
-        // Generate one new hard block
-        let mut hard_block = HardBlock::new(
-            Some(last_hard_hash),
+        // Generate one new pow block
+        let mut pow_block = PowBlock::new(
+            Some(last_pow_hash),
             NormalAddress::random(),
             crate::random_socket_addr(),
-            last_hard.height() + 1,
+            last_pow.height() + 1,
             Proof::test_proof(42),
         );
-        hard_block.compute_hash();
-        let hard_block = Arc::new(hard_block);
+        pow_block.compute_hash();
+        let pow_block = Arc::new(pow_block);
 
         // Set current height
-        cur_hard_height = hard_block.height();
+        cur_pow_height = pow_block.height();
 
-        // Append hard block to the graph
-        let id = hard_chain_buf.add_vertex(hard_block);
+        // Append pow block to the graph
+        let id = pow_chain_buf.add_vertex(pow_block);
 
         // Gen label
-        let _ = hard_chain_buf.label(&id).unwrap();
+        let _ = pow_chain_buf.label(&id).unwrap();
 
         // Add edge between last canonical tip and new one
-        if let Some(ref tip_id) = hard_canonical_tip {
-            hard_chain_buf.add_edge(tip_id, &id).unwrap();
+        if let Some(ref tip_id) = pow_canonical_tip {
+            pow_chain_buf.add_edge(tip_id, &id).unwrap();
         }
 
         // Set new hard canonical tip
-        hard_canonical_tip = Some(id);
+        pow_canonical_tip = Some(id);
 
-        // Generate byzantine hard block
+        // Generate byzantine pow block
         if generate_byzantine {
             unimplemented!();
         }
@@ -300,12 +300,12 @@ pub fn chain_test_set(
 
     // Assemble test set
     let mut test_set = BlockTestSet::new();
-    let hard_ids: Vec<&VertexId> = hard_chain_buf.vertices().collect();
+    let pow_ids: Vec<&VertexId> = pow_chain_buf.vertices().collect();
     let state_ids: Vec<&VertexId> = state_chain_buf.vertices().collect();
 
-    test_set.hard_blocks = hard_ids
+    test_set.pow_blocks = pow_ids
         .iter()
-        .map(|id| hard_chain_buf.fetch(id).unwrap().clone())
+        .map(|id| pow_chain_buf.fetch(id).unwrap().clone())
         .collect();
 
     test_set.state_blocks = state_ids
@@ -313,23 +313,23 @@ pub fn chain_test_set(
         .map(|id| state_chain_buf.fetch(id).unwrap().clone())
         .collect();
 
-    if let Some(ref id) = hard_canonical_tip {
-        test_set.hard_canonical = hard_chain_buf.fetch(id).unwrap().clone();
+    if let Some(ref id) = pow_canonical_tip {
+        test_set.pow_canonical = pow_chain_buf.fetch(id).unwrap().clone();
     }
 
     if let Some(ref id) = state_canonical_tip {
         test_set.state_canonical = state_chain_buf.fetch(id).unwrap().clone();
     }
 
-    test_set.hard_graph = hard_chain_buf;
+    test_set.pow_graph = pow_chain_buf;
     test_set.state_graph = state_chain_buf;
 
     // The hard test set must have at least one block
     // which follows the genesis block.
     assert!(test_set
-        .hard_blocks
+        .pow_blocks
         .iter()
-        .any(|b| b.parent_hash().unwrap() == HardBlock::genesis().block_hash().unwrap()));
+        .any(|b| b.parent_hash().unwrap() == PowBlock::genesis().block_hash().unwrap()));
 
     test_set
 }

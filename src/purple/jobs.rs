@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::sync::atomic::{Ordering, AtomicBool};
 use std::thread;
 use parking_lot::RwLock;
-use chain::{HardBlock, Block, HardChainRef, BlockWrapper};
+use chain::{PowBlock, Block, PowChainRef, BlockWrapper};
 use network::{Network, NetworkInterface};
 use network::packets::ForwardBlock;
 use network::Packet;
@@ -37,7 +37,7 @@ lazy_static! {
 
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
 /// Starts the mining process.
-pub fn start_miner(pow_chain: HardChainRef, network: Network, ip: SocketAddr) -> Result<(), &'static str> {
+pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr) -> Result<(), &'static str> {
     if MINER_IS_STARTED.load(Ordering::Relaxed) {
         return Err("The miner is already started!");
     }
@@ -81,7 +81,7 @@ pub fn start_miner(pow_chain: HardChainRef, network: Network, ip: SocketAddr) ->
                             let collector_address = NormalAddress::random();
 
                             // Create block
-                            let mut block = HardBlock::new(
+                            let mut block = PowBlock::new(
                                 tip.block_hash(), 
                                 collector_address,
                                 ip,

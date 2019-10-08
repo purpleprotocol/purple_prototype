@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::hard_chain::chain::*;
+use crate::pow_chain::chain::*;
 use crate::pow_chain_state::PowChainState;
 use crate::state_chain::chain::*;
 use crate::state_chain::state::ChainState;
@@ -30,25 +30,25 @@ use std::cell::RefCell;
 
 #[cfg(not(feature = "test"))]
 lazy_static! {
-    static ref CHAIN_REFS: Arc<RwLock<Option<(HardChainRef, StateChainRef)>>> =
+    static ref CHAIN_REFS: Arc<RwLock<Option<(PowChainRef, StateChainRef)>>> =
         Arc::new(RwLock::new(None));
 }
 
 #[cfg(feature = "test")]
 thread_local! {
-    static CHAIN_REFS: RefCell<Option<(HardChainRef, StateChainRef)>> = RefCell::new(None);
+    static CHAIN_REFS: RefCell<Option<(PowChainRef, StateChainRef)>> = RefCell::new(None);
 }
 
 #[cfg(not(feature = "test"))]
 /// Init chain module. Call this before any other function.
 pub fn init(
-    hard_chain_db: PersistentDb,
+    pow_chain_db: PersistentDb,
     state_chain_db: PersistentDb,
     state_db: PersistentDb,
     archival_mode: bool,
-) -> (HardChainRef, StateChainRef) {
-    let hard_chain = Arc::new(RwLock::new(HardChain::new(
-        hard_chain_db,
+) -> (PowChainRef, StateChainRef) {
+    let pow_chain = Arc::new(RwLock::new(PowChain::new(
+        pow_chain_db,
         PowChainState::genesis(),
         archival_mode,
     )));
@@ -58,24 +58,24 @@ pub fn init(
         archival_mode,
     )));
 
-    let hard_chain = HardChainRef::new(hard_chain);
+    let pow_chain = PowChainRef::new(pow_chain);
     let state_chain = StateChainRef::new(state_chain);
 
     let mut refs = CHAIN_REFS.write();
-    *refs = Some((easy_chain.clone(), hard_chain.clone(), state_chain.clone()));
+    *refs = Some((easy_chain.clone(), pow_chain.clone(), state_chain.clone()));
 
-    (hard_chain, state_chain)
+    (pow_chain, state_chain)
 }
 
 #[cfg(feature = "test")]
 pub fn init(
-    hard_chain_db: PersistentDb,
+    pow_chain_db: PersistentDb,
     state_chain_db: PersistentDb,
     state_db: PersistentDb,
     archival_mode: bool,
-) -> (HardChainRef, StateChainRef) {
-    let hard_chain = Arc::new(RwLock::new(HardChain::new(
-        hard_chain_db,
+) -> (PowChainRef, StateChainRef) {
+    let pow_chain = Arc::new(RwLock::new(PowChain::new(
+        pow_chain_db,
         PowChainState::genesis(),
         archival_mode,
     )));
@@ -85,25 +85,25 @@ pub fn init(
         archival_mode,
     )));
 
-    let hard_chain = HardChainRef::new(hard_chain);
+    let pow_chain = PowChainRef::new(pow_chain);
     let state_chain = StateChainRef::new(state_chain);
 
     CHAIN_REFS.with(|refs| {
         let mut refs = refs.borrow_mut();
-        *refs = Some((hard_chain.clone(), state_chain.clone()));
+        *refs = Some((pow_chain.clone(), state_chain.clone()));
     });
 
-    (hard_chain, state_chain)
+    (pow_chain, state_chain)
 }
 
 #[cfg(not(feature = "test"))]
-pub fn chain_refs() -> (HardChainRef, StateChainRef) {
+pub fn chain_refs() -> (PowChainRef, StateChainRef) {
     let refs = CHAIN_REFS.read();
     refs.clone().unwrap()
 }
 
 #[cfg(feature = "test")]
-pub fn chain_refs() -> (HardChainRef, StateChainRef) {
+pub fn chain_refs() -> (PowChainRef, StateChainRef) {
     CHAIN_REFS.with(|refs| {
         let refs = refs.borrow();
         refs.clone().unwrap()
@@ -111,20 +111,20 @@ pub fn chain_refs() -> (HardChainRef, StateChainRef) {
 }
 
 #[cfg(not(feature = "test"))]
-pub fn hard_chain_ref() -> HardChainRef {
+pub fn pow_chain_ref() -> PowChainRef {
     let refs = CHAIN_REFS.read();
-    let (hard_ref, _) = refs.clone().unwrap();
+    let (pow_ref, _) = refs.clone().unwrap();
 
-    hard_ref
+    pow_ref
 }
 
 #[cfg(feature = "test")]
-pub fn hard_chain_ref() -> HardChainRef {
+pub fn pow_chain_ref() -> PowChainRef {
     CHAIN_REFS.with(|refs| {
         let refs = refs.borrow();
-        let (hard_ref, _) = refs.clone().unwrap();
+        let (pow_ref, _) = refs.clone().unwrap();
 
-        hard_ref
+        pow_ref
     })
 }
 

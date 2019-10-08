@@ -18,7 +18,7 @@
 
 use crate::block::Block;
 use crate::chain::*;
-use crate::hard_chain::block::HardBlock;
+use crate::pow_chain::block::PowBlock;
 use crate::state_chain::state::ChainState;
 use crate::types::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -40,10 +40,10 @@ use std::sync::Arc;
 lazy_static! {
     /// Atomic reference count to state chain genesis block
     static ref GENESIS_RC: Arc<StateBlock> = {
-        let hard_block_hash = HardBlock::genesis().block_hash().unwrap();
+        let pow_block_hash = PowBlock::genesis().block_hash().unwrap();
 
         let mut block = StateBlock {
-            hard_block_hash,
+            pow_block_hash,
             parent_hash: None,
             height: 0,
             epoch: 0,
@@ -63,8 +63,8 @@ lazy_static! {
 #[derive(Clone, Debug)]
 /// A block belonging to the `StateChain`.
 pub struct StateBlock {
-    /// A reference to a block in the `HardChain`.
-    hard_block_hash: Hash,
+    /// A reference to a block in the `PowChain`.
+    pow_block_hash: Hash,
 
     /// The height of the block.
     height: u64,
@@ -212,7 +212,7 @@ impl Block for StateBlock {
         buf.write_u64::<BigEndian>(self.height).unwrap();
         buf.write_u64::<BigEndian>(self.epoch).unwrap();
         buf.extend_from_slice(&self.hash.unwrap().0);
-        buf.extend_from_slice(&self.hard_block_hash.0);
+        buf.extend_from_slice(&self.pow_block_hash.0);
         buf.extend_from_slice(&self.parent_hash.unwrap().0);
         buf.extend_from_slice(&self.events_root.unwrap().0);
         buf.extend_from_slice(&self.state_root.0);
@@ -271,7 +271,7 @@ impl Block for StateBlock {
             return Err("Incorrect packet structure 1");
         };
 
-        let hard_block_hash = if buf.len() > 32 as usize {
+        let pow_block_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
             let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
@@ -349,7 +349,7 @@ impl Block for StateBlock {
             events,
             events_root: Some(events_root),
             state_root,
-            hard_block_hash,
+            pow_block_hash,
             hash: Some(hash),
             parent_hash: Some(parent_hash),
             height,
@@ -366,12 +366,12 @@ impl StateBlock {
         state_root: Hash,
         height: u64,
         epoch: u64,
-        hard_block_hash: Hash,
+        pow_block_hash: Hash,
         events: Vec<Arc<Event>>,
     ) -> StateBlock {
         StateBlock {
             parent_hash,
-            hard_block_hash,
+            pow_block_hash,
             height,
             epoch,
             state_root,
@@ -400,7 +400,7 @@ impl StateBlock {
         buf.write_u8(Self::BLOCK_TYPE).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
         buf.write_u64::<BigEndian>(self.epoch).unwrap();
-        buf.extend_from_slice(&self.hard_block_hash.0);
+        buf.extend_from_slice(&self.pow_block_hash.0);
 
         if let Some(ref parent_hash) = self.parent_hash {
             buf.extend_from_slice(&parent_hash.0);
@@ -423,7 +423,7 @@ impl Arbitrary for StateBlock {
         }
 
         StateBlock {
-            hard_block_hash: Arbitrary::arbitrary(g),
+            pow_block_hash: Arbitrary::arbitrary(g),
             height: Arbitrary::arbitrary(g),
             epoch: Arbitrary::arbitrary(g),
             parent_hash: Some(Arbitrary::arbitrary(g)),
