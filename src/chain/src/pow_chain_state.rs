@@ -24,7 +24,7 @@ use hashbrown::HashSet;
 #[derive(Clone, PartialEq, Debug)]
 /// Chain state associated with proof-of-work chains.
 /// This is used to calculate the difficulty on the
-/// `EasyChain` and on the `HardChain`.
+/// `EasyChain` and on the `PowChain`.
 pub struct PowChainState {
     /// The current chain height
     pub(crate) height: u64,
@@ -40,8 +40,8 @@ pub struct PowChainState {
     pub(crate) easy_validators: HashSet<NodeId>,
 
     /// Set containing validator ids that
-    /// have mined blocks on the hard chain.
-    pub(crate) hard_validators: HashSet<NodeId>,
+    /// have mined blocks on the pow chain.
+    pub(crate) pow_validators: HashSet<NodeId>,
 }
 
 impl PowChainState {
@@ -51,7 +51,7 @@ impl PowChainState {
             difficulty: 0,
             edge_bits: miner::MIN_EDGE_BITS,
             easy_validators: HashSet::new(),
-            hard_validators: HashSet::new(),
+            pow_validators: HashSet::new(),
         }
     }
 }

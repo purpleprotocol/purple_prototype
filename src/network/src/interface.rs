@@ -88,16 +88,16 @@ pub trait NetworkInterface {
     /// Returns a reference to the peer table `RwLock`.
     fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>>;
 
-    /// Returns a reference to the `HardChain`.
-    fn hard_chain_ref(&self) -> HardChainRef;
+    /// Returns a reference to the `PowChain`.
+    fn pow_chain_ref(&self) -> PowChainRef;
 
     /// Returns a reference to the `StateChain`.
     fn state_chain_ref(&self) -> StateChainRef;
 
-    /// Returns a reference to a `HardChain` mpsc sender.
+    /// Returns a reference to a `PowChain` mpsc sender.
     /// Use this to buffer blocks that are to be appended
     /// to the chain.
-    fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)>;
+    fn pow_chain_sender(&self) -> &Sender<(SocketAddr, Arc<PowBlock>)>;
 
     /// Returns a reference to a `StateChain` mpsc sender.
     /// Use this to buffer blocks that are to be appended

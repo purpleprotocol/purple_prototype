@@ -38,9 +38,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 lazy_static! {
-    /// Atomic reference count to hard chain genesis block
-    static ref GENESIS_RC: Arc<HardBlock> = {
-        let mut block = HardBlock {
+    /// Atomic reference count to pow chain genesis block
+    static ref GENESIS_RC: Arc<PowBlock> = {
+        let mut block = PowBlock {
             parent_hash: None,
             proof: Proof::zero(PROOF_SIZE),
             collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
@@ -57,8 +57,8 @@ lazy_static! {
 }
 
 #[derive(Clone, Debug)]
-/// A block belonging to the `HardChain`.
-pub struct HardBlock {
+/// A block belonging to the `PowChain`.
+pub struct PowBlock {
     /// The height of the block.
     height: u64,
 
@@ -82,8 +82,8 @@ pub struct HardBlock {
     ip: SocketAddr,
 }
 
-impl PartialEq for HardBlock {
-    fn eq(&self, other: &HardBlock) -> bool {
+impl PartialEq for PowBlock {
+    fn eq(&self, other: &PowBlock) -> bool {
         // This only makes sense when the block is received
         // when the node is a server i.e. when the block is
         // guaranteed to have a hash because it already passed
@@ -92,18 +92,18 @@ impl PartialEq for HardBlock {
     }
 }
 
-impl Eq for HardBlock {}
+impl Eq for PowBlock {}
 
-impl HashTrait for HardBlock {
+impl HashTrait for PowBlock {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.block_hash().unwrap().hash(state);
     }
 }
 
-impl Block for HardBlock {
+impl Block for PowBlock {
     type ChainState = PowChainState;
 
-    fn genesis() -> Arc<HardBlock> {
+    fn genesis() -> Arc<PowBlock> {
         GENESIS_RC.clone()
     }
 
@@ -135,13 +135,13 @@ impl Block for HardBlock {
         Some(&self.ip)
     }
 
-    fn after_write() -> Option<Box<dyn FnMut(Arc<HardBlock>)>> {
+    fn after_write() -> Option<Box<dyn FnMut(Arc<PowBlock>)>> {
         let fun = |block| {};
         Some(Box::new(fun))
     }
 
     fn append_condition(
-        block: Arc<HardBlock>,
+        block: Arc<PowBlock>,
         mut chain_state: Self::ChainState,
         branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr> {
@@ -192,7 +192,7 @@ impl Block for HardBlock {
         buf
     }
 
-    fn from_bytes(bytes: &[u8]) -> Result<Arc<HardBlock>, &'static str> {
+    fn from_bytes(bytes: &[u8]) -> Result<Arc<PowBlock>, &'static str> {
         let mut rdr = Cursor::new(bytes.to_vec());
         let block_type = if let Ok(result) = rdr.read_u8() {
             result
@@ -302,7 +302,7 @@ impl Block for HardBlock {
             return Err("Invalid block timestamp");
         };
 
-        Ok(Arc::new(HardBlock {
+        Ok(Arc::new(PowBlock {
             timestamp,
             collector_address,
             proof,
@@ -314,7 +314,7 @@ impl Block for HardBlock {
     }
 }
 
-impl HardBlock {
+impl PowBlock {
     pub const BLOCK_TYPE: u8 = 1;
 
     pub fn new(
@@ -323,8 +323,8 @@ impl HardBlock {
         ip: SocketAddr,
         height: u64,
         proof: Proof,
-    ) -> HardBlock {
-        HardBlock {
+    ) -> PowBlock {
+        PowBlock {
             parent_hash,
             collector_address,
             height,
@@ -370,9 +370,9 @@ impl HardBlock {
 
 use quickcheck::*;
 
-impl Arbitrary for HardBlock {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> HardBlock {
-        HardBlock {
+impl Arbitrary for PowBlock {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> PowBlock {
+        PowBlock {
             height: Arbitrary::arbitrary(g),
             collector_address: Arbitrary::arbitrary(g),
             parent_hash: Some(Arbitrary::arbitrary(g)),
@@ -401,22 +401,22 @@ impl Arbitrary for HardBlock {
 
 //     quickcheck! {
 //         fn append_condition_integration() -> bool {
-//             let (hard_chain, _) = init_test_chains();
+//             let (pow_chain, _) = init_test_chains();
 //             let test_set = chain_test_set(50, 10, false, false);
 //             let MAX_ITERATIONS = 8000;
 //             let mut cur_iterations = 0;
 
-//             let hard_graph = test_set.hard_graph.clone();
+//             let pow_graph = test_set.pow_graph.clone();
 //             let state_graph = test_set.state_graph.clone();
 
-//             let mut hard_blocks: HashSet<Arc<HardBlock>> = test_set.hard_blocks.iter().cloned().collect();
-//             let hard_appended: Arc<Mutex<HashSet<Arc<HardBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
-//             let hard_non_canonical: Arc<Mutex<HashSet<Arc<HardBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
-//             let hard_rejected: Arc<Mutex<HashMap<Arc<HardBlock>, ChainErr>>> = Arc::new(Mutex::new(HashMap::new()));
-//             let hard_appended_clone = hard_appended.clone();
-//             let hard_non_canonical_clone = hard_non_canonical.clone();
-//             let hard_rejected_clone = hard_rejected.clone();
-//             let mut hard_to_append = Vec::new();
+//             let mut pow_blocks: HashSet<Arc<PowBlock>> = test_set.pow_blocks.iter().cloned().collect();
+//             let pow_appended: Arc<Mutex<HashSet<Arc<PowBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
+//             let pow_non_canonical: Arc<Mutex<HashSet<Arc<PowBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
+//             let pow_rejected: Arc<Mutex<HashMap<Arc<PowBlock>, ChainErr>>> = Arc::new(Mutex::new(HashMap::new()));
+//             let pow_appended_clone = pow_appended.clone();
+//             let pow_non_canonical_clone = pow_non_canonical.clone();
+//             let pow_rejected_clone = pow_rejected.clone();
+//             let mut pow_to_append = Vec::new();
 
 //             // Un-comment this to add failed test cases to
 //             // `src/test/failed_cases`. These can then be
@@ -425,10 +425,10 @@ impl Arbitrary for HardBlock {
 //                 use std::path::Path;
 //                 use std::fs::File;
 
-//                 let mut hard_graph = hard_graph.clone();
-//                 let hard_appended = hard_appended_clone.lock();
-//                 let hard_non_canonical = hard_non_canonical_clone.lock();
-//                 let hard_rejected = hard_rejected_clone.lock();
+//                 let mut pow_graph = pow_graph.clone();
+//                 let pow_appended = pow_appended_clone.lock();
+//                 let pow_non_canonical = pow_non_canonical_clone.lock();
+//                 let pow_rejected = pow_rejected_clone.lock();
 
 //                 let case_id = crypto::gen_bytes(12);
 //                 let case_id = hex::encode(&case_id);
@@ -450,24 +450,24 @@ impl Arbitrary for HardBlock {
 //                 std::fs::create_dir(&dir_path).unwrap();
 
 //                 // Assemble graphs paths
-//                 let hard_path = dir_path.join("hard_graph.dot");
+//                 let pow_path = dir_path.join("pow_graph.dot");
 //                 let state_path = dir_path.join("state_graph.dot");
 
-//                 let hard_hm: HashMap<VertexId, Arc<HardBlock>> = hard_graph
+//                 let pow_hm: HashMap<VertexId, Arc<PowBlock>> = pow_graph
 //                     .vertices()
 //                     .cloned()
-//                     .map(|id| (id, hard_graph.fetch(&id).unwrap().clone()))
+//                     .map(|id| (id, pow_graph.fetch(&id).unwrap().clone()))
 //                     .collect();
 
 //                 // Map labels so we can see which blocks were appended
-//                 hard_graph.map_labels(|id, _| {
-//                     let block = hard_hm.get(id).unwrap();
+//                 pow_graph.map_labels(|id, _| {
+//                     let block = pow_hm.get(id).unwrap();
 //                     let block_hash = block.block_hash().unwrap();
-//                     let suffix = if hard_appended.contains(block) {
+//                     let suffix = if pow_appended.contains(block) {
 //                         "CANONICAL".to_owned()
-//                     } else if let Some(r) = hard_rejected.get(block) {
+//                     } else if let Some(r) = pow_rejected.get(block) {
 //                         map_reason(r)
-//                     } else if hard_non_canonical.contains(block) {
+//                     } else if pow_non_canonical.contains(block) {
 //                         "NON_CANONICAL".to_owned()
 //                     } else {
 //                         "NOT_APPENDED".to_owned()
@@ -480,11 +480,11 @@ impl Arbitrary for HardBlock {
 //                 });
 
 //                 // Create files
-//                 let mut hard_f = File::create(hard_path).unwrap();
+//                 let mut pow_f = File::create(pow_path).unwrap();
 //                 let mut state_f = File::create(state_path).unwrap();
 
 //                 // Write graphs data
-//                 hard_graph.to_dot("hard_chain", &mut hard_f).unwrap();
+//                 pow_graph.to_dot("pow_chain", &mut pow_f).unwrap();
 //                 state_graph.to_dot("state_chain", &mut state_f).unwrap();
 //             }));
 
@@ -495,40 +495,40 @@ impl Arbitrary for HardBlock {
 //                     break;
 //                 }
 
-//                 for b in hard_blocks.iter() {
-//                     match hard_chain.append_block(b.clone()) {
+//                 for b in pow_blocks.iter() {
+//                     match pow_chain.append_block(b.clone()) {
 //                         Ok(_) => {
-//                             hard_to_append.push(b.clone());
+//                             pow_to_append.push(b.clone());
 //                         }
 
 //                         Err(reason) => {
 //                             if let ChainErr::BadHeight = reason {
 //                                 // Do nothing
 //                             } else {
-//                                 let mut hard_rejected = hard_rejected.lock();
-//                                 hard_rejected.insert(b.clone(), reason);
+//                                 let mut pow_rejected = pow_rejected.lock();
+//                                 pow_rejected.insert(b.clone(), reason);
 //                             }
 //                         }
 //                     }
 //                 }
 
-//                 for b in hard_to_append.iter() {
+//                 for b in pow_to_append.iter() {
 //                     let block_hash = b.block_hash().unwrap();
 
-//                     hard_blocks.remove(b);
+//                     pow_blocks.remove(b);
 
-//                     if hard_chain.is_canonical(&block_hash) {
-//                         let mut hard_appended = hard_appended.lock();
-//                         hard_appended.insert(b.clone());
+//                     if pow_chain.is_canonical(&block_hash) {
+//                         let mut pow_appended = pow_appended.lock();
+//                         pow_appended.insert(b.clone());
 //                     } else {
-//                         let mut hard_non_canonical = hard_non_canonical.lock();
-//                         hard_non_canonical.insert(b.clone());
+//                         let mut pow_non_canonical = pow_non_canonical.lock();
+//                         pow_non_canonical.insert(b.clone());
 //                     }
 //                 }
 
 //                 //std::thread::sleep_ms(140);
 
-//                 if hard_blocks.is_empty() {
+//                 if pow_blocks.is_empty() {
 //                     break;
 //                 }
 
@@ -536,15 +536,15 @@ impl Arbitrary for HardBlock {
 //             }
 
 //             {
-//                 let hard_chain = hard_chain.chain.read();
+//                 let pow_chain = pow_chain.chain.read();
 
-//                 assert_eq!(hard_chain.canonical_tip_height(), test_set.hard_canonical.height());
+//                 assert_eq!(pow_chain.canonical_tip_height(), test_set.pow_canonical.height());
 //             }
 
 //             true
 //         }
 
-//         fn it_verifies_hashes(block: HardBlock) -> bool {
+//         fn it_verifies_hashes(block: PowBlock) -> bool {
 //             let mut block = block.clone();
 
 //             assert!(!block.verify_hash());
@@ -553,8 +553,8 @@ impl Arbitrary for HardBlock {
 //             block.verify_hash()
 //         }
 
-//         fn serialize_deserialize(block: HardBlock) -> bool {
-//             HardBlock::from_bytes(&HardBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
+//         fn serialize_deserialize(block: PowBlock) -> bool {
+//             PowBlock::from_bytes(&PowBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
 
 //             true
 //         }

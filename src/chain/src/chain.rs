@@ -2361,7 +2361,7 @@ mod tests {
     #[test]
     fn it_rewinds_to_genesis() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
+        let mut pow_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -2416,90 +2416,90 @@ mod tests {
         let height_6_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 6]);
         let height_7_key = crypto::hash_slice(&vec![0, 0, 0, 0, 0, 0, 0, 7]);
 
-        hard_chain.append_block(A.clone()).unwrap();
-        hard_chain.append_block(B.clone()).unwrap();
-        hard_chain.append_block(C.clone()).unwrap();
-        hard_chain.append_block(D.clone()).unwrap();
-        hard_chain.append_block(E.clone()).unwrap();
-        hard_chain.append_block(F.clone()).unwrap();
-        hard_chain.append_block(G.clone()).unwrap();
+        pow_chain.append_block(A.clone()).unwrap();
+        pow_chain.append_block(B.clone()).unwrap();
+        pow_chain.append_block(C.clone()).unwrap();
+        pow_chain.append_block(D.clone()).unwrap();
+        pow_chain.append_block(E.clone()).unwrap();
+        pow_chain.append_block(F.clone()).unwrap();
+        pow_chain.append_block(G.clone()).unwrap();
 
         assert_eq!(
-            hard_chain.db.get(&height_1_key).unwrap().to_vec(),
+            pow_chain.db.get(&height_1_key).unwrap().to_vec(),
             A.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            hard_chain.db.get(&height_2_key).unwrap().to_vec(),
+            pow_chain.db.get(&height_2_key).unwrap().to_vec(),
             B.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            hard_chain.db.get(&height_3_key).unwrap().to_vec(),
+            pow_chain.db.get(&height_3_key).unwrap().to_vec(),
             C.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            hard_chain.db.get(&height_4_key).unwrap().to_vec(),
+            pow_chain.db.get(&height_4_key).unwrap().to_vec(),
             D.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            hard_chain.db.get(&height_5_key).unwrap().to_vec(),
+            pow_chain.db.get(&height_5_key).unwrap().to_vec(),
             E.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            hard_chain.db.get(&height_6_key).unwrap().to_vec(),
+            pow_chain.db.get(&height_6_key).unwrap().to_vec(),
             F.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            hard_chain.db.get(&height_7_key).unwrap().to_vec(),
+            pow_chain.db.get(&height_7_key).unwrap().to_vec(),
             G.block_hash().unwrap().0.to_vec()
         );
 
-        hard_chain
+        pow_chain
             .rewind(&DummyBlock::genesis().block_hash().unwrap())
             .unwrap();
 
-        assert!(hard_chain
+        assert!(pow_chain
             .orphan_pool
             .get(&A.block_hash().unwrap())
             .is_some());
-        assert!(hard_chain
+        assert!(pow_chain
             .orphan_pool
             .get(&B.block_hash().unwrap())
             .is_some());
-        assert!(hard_chain
+        assert!(pow_chain
             .orphan_pool
             .get(&C.block_hash().unwrap())
             .is_some());
-        assert!(hard_chain
+        assert!(pow_chain
             .orphan_pool
             .get(&D.block_hash().unwrap())
             .is_some());
-        assert!(hard_chain
+        assert!(pow_chain
             .orphan_pool
             .get(&E.block_hash().unwrap())
             .is_some());
-        assert!(hard_chain
+        assert!(pow_chain
             .orphan_pool
             .get(&F.block_hash().unwrap())
             .is_some());
-        assert!(hard_chain
+        assert!(pow_chain
             .orphan_pool
             .get(&G.block_hash().unwrap())
             .is_some());
 
         // Check for heights cleanup
-        assert!(hard_chain.db.get(&height_1_key).is_none());
-        assert!(hard_chain.db.get(&height_2_key).is_none());
-        assert!(hard_chain.db.get(&height_3_key).is_none());
-        assert!(hard_chain.db.get(&height_4_key).is_none());
-        assert!(hard_chain.db.get(&height_5_key).is_none());
-        assert!(hard_chain.db.get(&height_6_key).is_none());
-        assert!(hard_chain.db.get(&height_7_key).is_none());
+        assert!(pow_chain.db.get(&height_1_key).is_none());
+        assert!(pow_chain.db.get(&height_2_key).is_none());
+        assert!(pow_chain.db.get(&height_3_key).is_none());
+        assert!(pow_chain.db.get(&height_4_key).is_none());
+        assert!(pow_chain.db.get(&height_5_key).is_none());
+        assert!(pow_chain.db.get(&height_6_key).is_none());
+        assert!(pow_chain.db.get(&height_7_key).is_none());
     }
 
     #[test]
     fn stages_append_test1() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
+        let mut pow_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -2609,25 +2609,25 @@ mod tests {
         );
         let D_tertiary = Arc::new(D_tertiary);
 
-        hard_chain.append_block(E_second.clone()).unwrap();
-        hard_chain.append_block(F_second.clone()).unwrap();
+        pow_chain.append_block(E_second.clone()).unwrap();
+        pow_chain.append_block(F_second.clone()).unwrap();
 
-        assert_eq!(hard_chain.height(), 0);
+        assert_eq!(pow_chain.height(), 0);
 
         // We should have a disconnected chain of `E''` and `F''`
         // with the tip of `E''` pointing to `F''`.
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             E_second.block_hash().unwrap()
         );
-        let heads_mapping = hard_chain
+        let heads_mapping = pow_chain
             .disconnected_heads_mapping
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let (largest_height, largest_tip) = hard_chain
+        let (largest_height, largest_tip) = pow_chain
             .disconnected_heads_heights
             .get(&E_second.block_hash().unwrap())
             .unwrap();
@@ -2635,73 +2635,73 @@ mod tests {
         assert_eq!(*largest_height, F_second.height());
         assert_eq!(largest_tip, &F_second.block_hash().unwrap());
 
-        hard_chain.append_block(A.clone()).unwrap();
-        hard_chain.append_block(B.clone()).unwrap();
+        pow_chain.append_block(A.clone()).unwrap();
+        pow_chain.append_block(B.clone()).unwrap();
 
-        assert_eq!(hard_chain.height(), 2);
-        assert_eq!(hard_chain.canonical_tip(), B);
+        assert_eq!(pow_chain.height(), 2);
+        assert_eq!(pow_chain.canonical_tip(), B);
 
-        hard_chain.append_block(F.clone()).unwrap();
-        hard_chain.append_block(G.clone()).unwrap();
+        pow_chain.append_block(F.clone()).unwrap();
+        pow_chain.append_block(G.clone()).unwrap();
 
-        assert_eq!(hard_chain.height(), 2);
-        assert_eq!(hard_chain.canonical_tip(), B);
+        assert_eq!(pow_chain.height(), 2);
+        assert_eq!(pow_chain.canonical_tip(), B);
 
         // We should have a disconnected chain of `F` and `G`
         // with the tip of `G` pointing to `F`.
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             F.block_hash().unwrap()
         );
-        let heads_mapping = hard_chain
+        let heads_mapping = pow_chain
             .disconnected_heads_mapping
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let (largest_height, largest_tip) = hard_chain
+        let (largest_height, largest_tip) = pow_chain
             .disconnected_heads_heights
             .get(&F.block_hash().unwrap())
             .unwrap();
         assert!(heads_mapping.contains(&G.block_hash().unwrap()));
         assert_eq!(*largest_height, G.height());
         assert_eq!(largest_tip, &G.block_hash().unwrap());
-        assert_eq!(hard_chain.height(), 2);
-        assert_eq!(hard_chain.canonical_tip(), B);
+        assert_eq!(pow_chain.height(), 2);
+        assert_eq!(pow_chain.canonical_tip(), B);
 
         // We now append `B'` and the canonical tip should still be `B`
-        hard_chain.append_block(B_prime.clone()).unwrap();
+        pow_chain.append_block(B_prime.clone()).unwrap();
 
-        assert_eq!(hard_chain.height(), 2);
-        assert_eq!(hard_chain.canonical_tip(), B);
+        assert_eq!(pow_chain.height(), 2);
+        assert_eq!(pow_chain.canonical_tip(), B);
 
-        hard_chain.append_block(C_prime.clone()).unwrap();
+        pow_chain.append_block(C_prime.clone()).unwrap();
 
-        assert_eq!(hard_chain.height(), 3);
-        assert_eq!(hard_chain.canonical_tip(), C_prime);
+        assert_eq!(pow_chain.height(), 3);
+        assert_eq!(pow_chain.canonical_tip(), C_prime);
 
-        hard_chain.append_block(C.clone()).unwrap();
-        assert_eq!(hard_chain.height(), 3);
-        assert_eq!(hard_chain.canonical_tip(), C_prime);
+        pow_chain.append_block(C.clone()).unwrap();
+        assert_eq!(pow_chain.height(), 3);
+        assert_eq!(pow_chain.canonical_tip(), C_prime);
 
-        hard_chain.append_block(D.clone()).unwrap();
+        pow_chain.append_block(D.clone()).unwrap();
 
-        assert_eq!(hard_chain.height(), 4);
-        assert_eq!(hard_chain.canonical_tip(), D);
+        assert_eq!(pow_chain.height(), 4);
+        assert_eq!(pow_chain.canonical_tip(), D);
 
         // After appending `E` the chain should connect the old tip
         // which is `D` to our previous disconnected chain of `F` -> `G`.
-        hard_chain.append_block(E.clone()).unwrap();
+        pow_chain.append_block(E.clone()).unwrap();
 
-        assert_eq!(hard_chain.height(), 7);
-        assert_eq!(hard_chain.canonical_tip(), G);
+        assert_eq!(pow_chain.height(), 7);
+        assert_eq!(pow_chain.canonical_tip(), G);
     }
 
     #[test]
     fn stages_append_test2() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
+        let mut pow_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -2811,54 +2811,54 @@ mod tests {
         );
         let D_tertiary = Arc::new(D_tertiary);
 
-        hard_chain.append_block(A.clone()).unwrap();
+        pow_chain.append_block(A.clone()).unwrap();
 
-        assert_eq!(hard_chain.height(), 1);
+        assert_eq!(pow_chain.height(), 1);
 
-        hard_chain.append_block(E_second.clone()).unwrap();
+        pow_chain.append_block(E_second.clone()).unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
 
-        hard_chain.append_block(D_second.clone()).unwrap();
+        pow_chain.append_block(D_second.clone()).unwrap();
 
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
 
-        hard_chain.append_block(F_second.clone()).unwrap();
+        pow_chain.append_block(F_second.clone()).unwrap();
 
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
@@ -2868,17 +2868,17 @@ mod tests {
         // We should have a disconnected chain of `E''` and `F''`
         // with the tip of `D''` pointing to `F''`.
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             D_second.block_hash().unwrap()
         );
-        let heads_mapping = hard_chain
+        let heads_mapping = pow_chain
             .disconnected_heads_mapping
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let (largest_height, largest_tip) = hard_chain
+        let (largest_height, largest_tip) = pow_chain
             .disconnected_heads_heights
             .get(&D_second.block_hash().unwrap())
             .unwrap();
@@ -2886,72 +2886,72 @@ mod tests {
         assert_eq!(*largest_height, F_second.height());
         assert_eq!(largest_tip, &F_second.block_hash().unwrap());
 
-        assert_eq!(hard_chain.height(), 1);
-        assert_eq!(hard_chain.canonical_tip(), A);
+        assert_eq!(pow_chain.height(), 1);
+        assert_eq!(pow_chain.canonical_tip(), A);
 
-        hard_chain.append_block(C.clone()).unwrap();
-        hard_chain.append_block(D.clone()).unwrap();
-        hard_chain.append_block(F.clone()).unwrap();
-        hard_chain.append_block(E.clone()).unwrap();
-        hard_chain.append_block(G.clone()).unwrap();
+        pow_chain.append_block(C.clone()).unwrap();
+        pow_chain.append_block(D.clone()).unwrap();
+        pow_chain.append_block(F.clone()).unwrap();
+        pow_chain.append_block(E.clone()).unwrap();
+        pow_chain.append_block(G.clone()).unwrap();
 
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
 
-        assert_eq!(hard_chain.height(), 1);
-        assert_eq!(hard_chain.canonical_tip(), A);
+        assert_eq!(pow_chain.height(), 1);
+        assert_eq!(pow_chain.canonical_tip(), A);
 
         // We now append `B'` and the canonical tip should be `B'`
-        hard_chain.append_block(B_prime.clone()).unwrap();
-        assert_eq!(hard_chain.valid_tips_states.len(), 0);
+        pow_chain.append_block(B_prime.clone()).unwrap();
+        assert_eq!(pow_chain.valid_tips_states.len(), 0);
 
-        assert_eq!(hard_chain.height(), 2);
-        assert_eq!(hard_chain.canonical_tip(), B_prime);
+        assert_eq!(pow_chain.height(), 2);
+        assert_eq!(pow_chain.canonical_tip(), B_prime);
 
-        hard_chain.append_block(C_second.clone()).unwrap();
+        pow_chain.append_block(C_second.clone()).unwrap();
 
         // The chain should now be pointing to `F''` as being the canonical tip
-        assert_eq!(hard_chain.height(), 6);
-        assert_eq!(hard_chain.canonical_tip(), F_second);
+        assert_eq!(pow_chain.height(), 6);
+        assert_eq!(pow_chain.canonical_tip(), F_second);
 
         // We now append `B` and the chain should switch to `G` as the canonical tip
-        hard_chain.append_block(B.clone()).unwrap();
+        pow_chain.append_block(B.clone()).unwrap();
 
-        assert_eq!(hard_chain.height(), 7);
-        assert_eq!(hard_chain.canonical_tip(), G);
+        assert_eq!(pow_chain.height(), 7);
+        assert_eq!(pow_chain.canonical_tip(), G);
     }
 
     #[test]
@@ -2959,7 +2959,7 @@ mod tests {
     /// of appended blocks.
     fn stages_append_test3() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
+        let mut pow_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -3069,8 +3069,8 @@ mod tests {
         );
         let D_tertiary = Arc::new(D_tertiary);
 
-        hard_chain.append_block(C_second.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(C_second.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
@@ -3079,7 +3079,7 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
@@ -3090,30 +3090,30 @@ mod tests {
         assert_eq!(*C_second_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(3));
+        assert_eq!(pow_chain.max_orphan_height, Some(3));
 
-        hard_chain.append_block(D_prime.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(D_prime.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
@@ -3121,58 +3121,58 @@ mod tests {
         );
         assert_eq!(*C_second_ih, 0);
         assert_eq!(*D_prime_ih, 0);
-        assert_eq!(hard_chain.max_orphan_height, Some(4));
+        assert_eq!(pow_chain.max_orphan_height, Some(4));
 
-        hard_chain.append_block(F.clone()).unwrap();
-        assert_eq!(hard_chain.max_orphan_height, Some(6));
-        hard_chain.append_block(D_second.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(F.clone()).unwrap();
+        assert_eq!(pow_chain.max_orphan_height, Some(6));
+        pow_chain.append_block(D_second.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
@@ -3182,75 +3182,75 @@ mod tests {
         assert_eq!(*D_prime_ih, 0);
         assert_eq!(*D_second_ih, 0);
         assert_eq!(*F_ih, 0);
-        assert_eq!(hard_chain.max_orphan_height, Some(6));
+        assert_eq!(pow_chain.max_orphan_height, Some(6));
 
-        hard_chain.append_block(C_prime.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(C_prime.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
-        assert_eq!(hard_chain.max_orphan_height, Some(6));
+        assert_eq!(pow_chain.max_orphan_height, Some(6));
 
         assert_eq!(*C_second_ih, 1);
         assert_eq!(*C_prime_ih, 1);
@@ -3258,86 +3258,86 @@ mod tests {
         assert_eq!(*D_second_ih, 0);
         assert_eq!(*F_ih, 0);
 
-        hard_chain.append_block(D.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(D.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let D_ih = hard_chain
+        let D_ih = pow_chain
             .heights_mapping
             .get(&D.height())
             .unwrap()
             .get(&D.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
-        assert_eq!(hard_chain.max_orphan_height, Some(6));
+        assert_eq!(pow_chain.max_orphan_height, Some(6));
 
         assert_eq!(*C_second_ih, 1);
         assert_eq!(*C_prime_ih, 1);
@@ -3346,99 +3346,99 @@ mod tests {
         assert_eq!(*F_ih, 0);
         assert_eq!(*D_ih, 0);
 
-        hard_chain.append_block(G.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(G.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let D_ih = hard_chain
+        let D_ih = pow_chain
             .heights_mapping
             .get(&D.height())
             .unwrap()
             .get(&D.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
         assert_eq!(*C_second_ih, 1);
         assert_eq!(*C_prime_ih, 1);
@@ -3448,112 +3448,112 @@ mod tests {
         assert_eq!(*G_ih, 0);
         assert_eq!(*D_ih, 0);
 
-        hard_chain.append_block(B_prime.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(B_prime.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let B_prime_ih = hard_chain
+        let B_prime_ih = pow_chain
             .heights_mapping
             .get(&B_prime.height())
             .unwrap()
             .get(&B_prime.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let D_ih = hard_chain
+        let D_ih = pow_chain
             .heights_mapping
             .get(&D.height())
             .unwrap()
             .get(&D.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
         assert_eq!(*C_second_ih, 1);
         assert_eq!(*B_prime_ih, 2);
@@ -3564,125 +3564,125 @@ mod tests {
         assert_eq!(*G_ih, 0);
         assert_eq!(*D_ih, 0);
 
-        hard_chain.append_block(D_tertiary.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(D_tertiary.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let B_prime_ih = hard_chain
+        let B_prime_ih = pow_chain
             .heights_mapping
             .get(&B_prime.height())
             .unwrap()
             .get(&B_prime.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let D_ih = hard_chain
+        let D_ih = pow_chain
             .heights_mapping
             .get(&D.height())
             .unwrap()
             .get(&D.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
             .get(&D_tertiary.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
         assert_eq!(*C_second_ih, 1);
         assert_eq!(*B_prime_ih, 2);
@@ -3694,138 +3694,138 @@ mod tests {
         assert_eq!(*D_ih, 0);
         assert_eq!(*D_tertiary_ih, 0);
 
-        hard_chain.append_block(C.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(C.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let B_prime_ih = hard_chain
+        let B_prime_ih = pow_chain
             .heights_mapping
             .get(&B_prime.height())
             .unwrap()
             .get(&B_prime.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let D_ih = hard_chain
+        let D_ih = pow_chain
             .heights_mapping
             .get(&D.height())
             .unwrap()
             .get(&D.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
             .get(&D_tertiary.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
         assert_eq!(*C_second_ih, 1);
         assert_eq!(*B_prime_ih, 2);
@@ -3838,151 +3838,151 @@ mod tests {
         assert_eq!(*D_ih, 0);
         assert_eq!(*D_tertiary_ih, 0);
 
-        hard_chain.append_block(E_prime.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(E_prime.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let B_prime_ih = hard_chain
+        let B_prime_ih = pow_chain
             .heights_mapping
             .get(&B_prime.height())
             .unwrap()
             .get(&B_prime.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let E_prime_ih = hard_chain
+        let E_prime_ih = pow_chain
             .heights_mapping
             .get(&E_prime.height())
             .unwrap()
             .get(&E_prime.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let D_ih = hard_chain
+        let D_ih = pow_chain
             .heights_mapping
             .get(&D.height())
             .unwrap()
             .get(&D.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
             .get(&D_tertiary.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
         assert_eq!(*C_second_ih, 1);
         assert_eq!(*B_prime_ih, 3);
@@ -3996,158 +3996,158 @@ mod tests {
         assert_eq!(*D_ih, 0);
         assert_eq!(*D_tertiary_ih, 0);
 
-        hard_chain.append_block(B.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(B.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let B_prime_ih = hard_chain
+        let B_prime_ih = pow_chain
             .heights_mapping
             .get(&B_prime.height())
             .unwrap()
             .get(&B_prime.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let E_prime_ih = hard_chain
+        let E_prime_ih = pow_chain
             .heights_mapping
             .get(&E_prime.height())
             .unwrap()
             .get(&E_prime.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let B_ih = hard_chain
+        let B_ih = pow_chain
             .heights_mapping
             .get(&B.height())
             .unwrap()
             .get(&B.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let D_ih = hard_chain
+        let D_ih = pow_chain
             .heights_mapping
             .get(&D.height())
             .unwrap()
             .get(&D.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
             .get(&D_tertiary.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
-        assert_eq!(hard_chain.valid_tips, HashSet::new());
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.valid_tips, HashSet::new());
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
         assert_eq!(*C_second_ih, 1);
         assert_eq!(*B_prime_ih, 3);
@@ -4162,106 +4162,106 @@ mod tests {
         assert_eq!(*D_ih, 0);
         assert_eq!(*D_tertiary_ih, 0);
 
-        hard_chain.append_block(A.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(A.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let B_ih = hard_chain
+        let B_ih = pow_chain
             .heights_mapping
             .get(&B.height())
             .unwrap()
             .get(&B.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let D_ih = hard_chain
+        let D_ih = pow_chain
             .heights_mapping
             .get(&D.height())
             .unwrap()
             .get(&D.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
             .get(&D_tertiary.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::ValidChainTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::ValidChainTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -4281,103 +4281,103 @@ mod tests {
         assert_eq!(*D_ih, 0);
         assert_eq!(*D_tertiary_ih, 0);
 
-        assert_eq!(hard_chain.valid_tips, tips);
-        assert_eq!(hard_chain.height(), 5);
-        assert_eq!(hard_chain.canonical_tip(), E_prime);
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.valid_tips, tips);
+        assert_eq!(pow_chain.height(), 5);
+        assert_eq!(pow_chain.canonical_tip(), E_prime);
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
-        hard_chain.append_block(E_second.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(E_second.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let B_ih = hard_chain
+        let B_ih = pow_chain
             .heights_mapping
             .get(&B.height())
             .unwrap()
             .get(&B.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let D_ih = hard_chain
+        let D_ih = pow_chain
             .heights_mapping
             .get(&D.height())
             .unwrap()
             .get(&D.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
             .get(&D_tertiary.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::ValidChainTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -4398,124 +4398,124 @@ mod tests {
         assert_eq!(*D_ih, 0);
         assert_eq!(*D_tertiary_ih, 0);
 
-        assert_eq!(hard_chain.valid_tips, tips);
-        assert_eq!(hard_chain.height(), 5);
-        assert_eq!(hard_chain.canonical_tip(), E_prime);
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.valid_tips, tips);
+        assert_eq!(pow_chain.height(), 5);
+        assert_eq!(pow_chain.canonical_tip(), E_prime);
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
-        hard_chain.append_block(F_second.clone()).unwrap();
-        let C_prime_ih = hard_chain
+        pow_chain.append_block(F_second.clone()).unwrap();
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let E_prime_ih = hard_chain
+        let E_prime_ih = pow_chain
             .heights_mapping
             .get(&E_prime.height())
             .unwrap()
             .get(&E_prime.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let B_ih = hard_chain
+        let B_ih = pow_chain
             .heights_mapping
             .get(&B.height())
             .unwrap()
             .get(&B.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let D_ih = hard_chain
+        let D_ih = pow_chain
             .heights_mapping
             .get(&D.height())
             .unwrap()
             .get(&D.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
             .get(&D_tertiary.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::ValidChainTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::ValidChainTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -4536,124 +4536,124 @@ mod tests {
         assert_eq!(*D_ih, 0);
         assert_eq!(*D_tertiary_ih, 0);
 
-        assert_eq!(hard_chain.valid_tips, tips);
-        assert_eq!(hard_chain.height(), 6);
-        assert_eq!(hard_chain.canonical_tip(), F_second);
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.valid_tips, tips);
+        assert_eq!(pow_chain.height(), 6);
+        assert_eq!(pow_chain.canonical_tip(), F_second);
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
-        hard_chain.append_block(E.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(E.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_second_ih = hard_chain
+        let F_second_ih = pow_chain
             .heights_mapping
             .get(&F_second.height())
             .unwrap()
             .get(&F_second.block_hash().unwrap())
             .unwrap();
-        let E_prime_ih = hard_chain
+        let E_prime_ih = pow_chain
             .heights_mapping
             .get(&E_prime.height())
             .unwrap()
             .get(&E_prime.block_hash().unwrap())
             .unwrap();
-        let B_prime_ih = hard_chain
+        let B_prime_ih = pow_chain
             .heights_mapping
             .get(&B_prime.height())
             .unwrap()
             .get(&B_prime.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
             .get(&D_tertiary.block_hash().unwrap())
             .unwrap();
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::ValidChainTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToValidChain
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::ValidChainTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -4674,10 +4674,10 @@ mod tests {
         assert_eq!(*B_prime_ih, 4);
         assert_eq!(*D_tertiary_ih, 0);
 
-        assert_eq!(hard_chain.valid_tips, tips);
-        assert_eq!(hard_chain.height(), 7);
-        assert_eq!(hard_chain.canonical_tip(), G);
-        assert_eq!(hard_chain.max_orphan_height, Some(6));
+        assert_eq!(pow_chain.valid_tips, tips);
+        assert_eq!(pow_chain.height(), 7);
+        assert_eq!(pow_chain.canonical_tip(), G);
+        assert_eq!(pow_chain.max_orphan_height, Some(6));
     }
 
     #[test]
@@ -4692,7 +4692,7 @@ mod tests {
     /// tip instead of G at commit hash `d0ad0bd6a7422f6308b96a34a6f7725662c8b7d4`.
     fn stages_append_test4() {
         let db = test_helpers::init_tempdb();
-        let mut hard_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
+        let mut pow_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
 
         let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
         let A = Arc::new(A);
@@ -4802,8 +4802,8 @@ mod tests {
         );
         let D_tertiary = Arc::new(D_tertiary);
 
-        hard_chain.append_block(D_second.clone()).unwrap();
-        let D_second_ih = hard_chain
+        pow_chain.append_block(D_second.clone()).unwrap();
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
@@ -4812,7 +4812,7 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
@@ -4823,11 +4823,11 @@ mod tests {
         assert_eq!(*D_second_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(4));
+        assert_eq!(pow_chain.max_orphan_height, Some(4));
 
         // Check disconnected heads mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
@@ -4836,7 +4836,7 @@ mod tests {
 
         // Check disconnected tips mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
@@ -4845,21 +4845,21 @@ mod tests {
 
         // Check disconnected heads heights mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             (D_second.height(), D_second.block_hash().unwrap())
         );
 
-        hard_chain.append_block(E_second.clone()).unwrap();
-        let D_second_ih = hard_chain
+        pow_chain.append_block(E_second.clone()).unwrap();
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
@@ -4868,14 +4868,14 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
@@ -4887,11 +4887,11 @@ mod tests {
         assert_eq!(*E_second_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(5));
+        assert_eq!(pow_chain.max_orphan_height, Some(5));
 
         // Check disconnected heads mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
@@ -4899,12 +4899,12 @@ mod tests {
         );
 
         // Check disconnected tips mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
@@ -4913,27 +4913,27 @@ mod tests {
 
         // Check disconnected heads heights mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             (E_second.height(), E_second.block_hash().unwrap())
         );
 
-        hard_chain.append_block(C_second.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(C_second.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
@@ -4942,21 +4942,21 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
@@ -4969,15 +4969,15 @@ mod tests {
         assert_eq!(*E_second_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(5));
+        assert_eq!(pow_chain.max_orphan_height, Some(5));
 
         // Check disconnected heads mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
@@ -4985,16 +4985,16 @@ mod tests {
         );
 
         // Check disconnected tips mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&C_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
@@ -5002,38 +5002,38 @@ mod tests {
         );
 
         // Check disconnected heads heights mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&D_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             (E_second.height(), E_second.block_hash().unwrap())
         );
 
-        hard_chain.append_block(F.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(F.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
@@ -5042,28 +5042,28 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
@@ -5077,22 +5077,22 @@ mod tests {
         assert_eq!(*F_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(6));
+        assert_eq!(pow_chain.max_orphan_height, Some(6));
 
         // Check disconnected heads mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             set![E_second.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
@@ -5100,23 +5100,23 @@ mod tests {
         );
 
         // Check disconnected tips mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&C_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             C_second.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
@@ -5124,51 +5124,51 @@ mod tests {
         );
 
         // Check disconnected heads heights mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&D_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             (E_second.height(), E_second.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             (F.height(), F.block_hash().unwrap())
         );
 
-        hard_chain.append_block(F_second.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(F_second.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_second_ih = hard_chain
+        let F_second_ih = pow_chain
             .heights_mapping
             .get(&F_second.height())
             .unwrap()
             .get(&F_second.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
@@ -5177,35 +5177,35 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
@@ -5220,30 +5220,30 @@ mod tests {
         assert_eq!(*F_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(6));
+        assert_eq!(pow_chain.max_orphan_height, Some(6));
 
         // Check disconnected heads mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&F_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             set![F_second.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
@@ -5251,27 +5251,27 @@ mod tests {
         );
 
         // Check disconnected tips mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&C_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             C_second.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
@@ -5279,65 +5279,65 @@ mod tests {
         );
 
         // Check disconnected heads heights mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&F_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             (F_second.height(), F_second.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             (F.height(), F.block_hash().unwrap())
         );
 
-        hard_chain.append_block(C.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(C.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_second_ih = hard_chain
+        let F_second_ih = pow_chain
             .heights_mapping
             .get(&F_second.height())
             .unwrap()
             .get(&F_second.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
@@ -5346,42 +5346,42 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
@@ -5397,37 +5397,37 @@ mod tests {
         assert_eq!(*F_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(6));
+        assert_eq!(pow_chain.max_orphan_height, Some(6));
 
         // Check disconnected heads mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&F_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             set![F_second.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             set![C.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
@@ -5435,34 +5435,34 @@ mod tests {
         );
 
         // Check disconnected tips mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&C_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             C_second.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             F.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
@@ -5470,78 +5470,78 @@ mod tests {
         );
 
         // Check disconnected heads heights mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&F_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             (F_second.height(), F_second.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             (F.height(), F.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             (C.height(), C.block_hash().unwrap())
         );
 
-        hard_chain.append_block(D_prime.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(D_prime.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_second_ih = hard_chain
+        let F_second_ih = pow_chain
             .heights_mapping
             .get(&F_second.height())
             .unwrap()
             .get(&F_second.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
@@ -5550,49 +5550,49 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
@@ -5609,44 +5609,44 @@ mod tests {
         assert_eq!(*D_prime_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(6));
+        assert_eq!(pow_chain.max_orphan_height, Some(6));
 
         // Check disconnected heads mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&F_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             set![F_second.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             set![C.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             set![F.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
@@ -5654,41 +5654,41 @@ mod tests {
         );
 
         // Check disconnected tips mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&C_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             C_second.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             F.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             C.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
@@ -5696,91 +5696,91 @@ mod tests {
         );
 
         // Check disconnected heads heights mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&F_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             (F_second.height(), F_second.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             (F.height(), F.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             (C.height(), C.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             (D_prime.height(), D_prime.block_hash().unwrap())
         );
 
-        hard_chain.append_block(G.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(G.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_second_ih = hard_chain
+        let F_second_ih = pow_chain
             .heights_mapping
             .get(&F_second.height())
             .unwrap()
             .get(&F_second.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
@@ -5789,56 +5789,56 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
@@ -5856,45 +5856,45 @@ mod tests {
         assert_eq!(*D_prime_ih, 0);
 
         // Check disconnected heads mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&F_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&G.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             set![F_second.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             set![C.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             set![G.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
@@ -5902,45 +5902,45 @@ mod tests {
         );
 
         // Check disconnected tips mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&C_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&F.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             C_second.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             C.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             D_prime.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
@@ -5948,97 +5948,97 @@ mod tests {
         );
 
         // Check disconnected heads heights mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&F_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             (F_second.height(), F_second.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             (G.height(), G.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             (C.height(), C.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             (D_prime.height(), D_prime.block_hash().unwrap())
         );
 
-        hard_chain.append_block(D_tertiary.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(D_tertiary.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_second_ih = hard_chain
+        let F_second_ih = pow_chain
             .heights_mapping
             .get(&F_second.height())
             .unwrap()
             .get(&F_second.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
@@ -6047,63 +6047,63 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -6122,55 +6122,55 @@ mod tests {
         assert_eq!(*D_tertiary_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
         // Check disconnected heads mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&F_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&G.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             set![F_second.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             set![C.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             set![G.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             set![D_prime.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -6178,52 +6178,52 @@ mod tests {
         );
 
         // Check disconnected tips mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&C_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&F.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             C_second.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             C.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             D_prime.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             F.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -6231,110 +6231,110 @@ mod tests {
         );
 
         // Check disconnected heads heights mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&F_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             (F_second.height(), F_second.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             (G.height(), G.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             (C.height(), C.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             (D_prime.height(), D_prime.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
             (D_tertiary.height(), D_tertiary.block_hash().unwrap())
         );
 
-        hard_chain.append_block(B_prime.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(B_prime.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_second_ih = hard_chain
+        let F_second_ih = pow_chain
             .heights_mapping
             .get(&F_second.height())
             .unwrap()
             .get(&F_second.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let B_prime_ih = hard_chain
+        let B_prime_ih = pow_chain
             .heights_mapping
             .get(&B_prime.height())
             .unwrap()
             .get(&B_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
@@ -6343,70 +6343,70 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -6426,59 +6426,59 @@ mod tests {
         assert_eq!(*D_tertiary_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
         // Check disconnected heads mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&C_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&F_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&G.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             set![F_second.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             set![C.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             set![G.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             set![D_prime.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -6486,52 +6486,52 @@ mod tests {
         );
 
         // Check disconnected tips mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&C_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&F.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             B_prime.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             C.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             D_prime.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             F.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -6539,120 +6539,120 @@ mod tests {
         );
 
         // Check disconnected heads heights mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&C_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&F_second.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             (F_second.height(), F_second.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             (G.height(), G.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             (C.height(), C.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             (D_prime.height(), D_prime.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
             (D_tertiary.height(), D_tertiary.block_hash().unwrap())
         );
 
-        hard_chain.append_block(C_prime.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(C_prime.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_second_ih = hard_chain
+        let F_second_ih = pow_chain
             .heights_mapping
             .get(&F_second.height())
             .unwrap()
             .get(&F_second.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let B_prime_ih = hard_chain
+        let B_prime_ih = pow_chain
             .heights_mapping
             .get(&B_prime.height())
             .unwrap()
             .get(&B_prime.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
@@ -6661,77 +6661,77 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -6752,35 +6752,35 @@ mod tests {
         assert_eq!(*D_tertiary_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
         // Check disconnected heads mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&C_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&F_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&G.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_mapping
             .get(&D_prime.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
@@ -6791,14 +6791,14 @@ mod tests {
             ]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             set![C.block_hash().unwrap()]
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
@@ -6806,56 +6806,56 @@ mod tests {
         );
 
         // Check disconnected tips mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&C_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&F.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_tips_mapping
             .get(&C_prime.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             B_prime.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             C.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             B_prime.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             F.block_hash().unwrap()
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_tips_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -6863,120 +6863,120 @@ mod tests {
         );
 
         // Check disconnected heads heights mapping
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&C_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&D_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&E_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&F_second.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&D_prime.block_hash().unwrap())
             .is_none());
-        assert!(hard_chain
+        assert!(pow_chain
             .disconnected_heads_heights
             .get(&D_tertiary.block_hash().unwrap())
             .is_none());
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             (F_second.height(), F_second.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             (G.height(), G.block_hash().unwrap())
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .disconnected_heads_heights
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             (C.height(), C.block_hash().unwrap())
         );;
 
-        hard_chain.append_block(B.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(B.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_second_ih = hard_chain
+        let F_second_ih = pow_chain
             .heights_mapping
             .get(&F_second.height())
             .unwrap()
             .get(&F_second.block_hash().unwrap())
             .unwrap();
-        let B_ih = hard_chain
+        let B_ih = pow_chain
             .heights_mapping
             .get(&B.height())
             .unwrap()
             .get(&B.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let B_prime_ih = hard_chain
+        let B_prime_ih = pow_chain
             .heights_mapping
             .get(&B_prime.height())
             .unwrap()
             .get(&B_prime.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
@@ -6985,84 +6985,84 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -7084,82 +7084,82 @@ mod tests {
         assert_eq!(*D_tertiary_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
-        hard_chain.append_block(E.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(E.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_second_ih = hard_chain
+        let F_second_ih = pow_chain
             .heights_mapping
             .get(&F_second.height())
             .unwrap()
             .get(&F_second.block_hash().unwrap())
             .unwrap();
-        let B_ih = hard_chain
+        let B_ih = pow_chain
             .heights_mapping
             .get(&B.height())
             .unwrap()
             .get(&B.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let E_ih = hard_chain
+        let E_ih = pow_chain
             .heights_mapping
             .get(&E.height())
             .unwrap()
             .get(&E.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let B_prime_ih = hard_chain
+        let B_prime_ih = pow_chain
             .heights_mapping
             .get(&B_prime.height())
             .unwrap()
             .get(&B_prime.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
@@ -7168,91 +7168,91 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -7275,88 +7275,88 @@ mod tests {
         assert_eq!(*D_tertiary_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
-        hard_chain.append_block(D.clone()).unwrap();
-        let C_second_ih = hard_chain
+        pow_chain.append_block(D.clone()).unwrap();
+        let C_second_ih = pow_chain
             .heights_mapping
             .get(&C_second.height())
             .unwrap()
             .get(&C_second.block_hash().unwrap())
             .unwrap();
-        let D_second_ih = hard_chain
+        let D_second_ih = pow_chain
             .heights_mapping
             .get(&D_second.height())
             .unwrap()
             .get(&D_second.block_hash().unwrap())
             .unwrap();
-        let E_second_ih = hard_chain
+        let E_second_ih = pow_chain
             .heights_mapping
             .get(&E_second.height())
             .unwrap()
             .get(&E_second.block_hash().unwrap())
             .unwrap();
-        let F_second_ih = hard_chain
+        let F_second_ih = pow_chain
             .heights_mapping
             .get(&F_second.height())
             .unwrap()
             .get(&F_second.block_hash().unwrap())
             .unwrap();
-        let B_ih = hard_chain
+        let B_ih = pow_chain
             .heights_mapping
             .get(&B.height())
             .unwrap()
             .get(&B.block_hash().unwrap())
             .unwrap();
-        let C_ih = hard_chain
+        let C_ih = pow_chain
             .heights_mapping
             .get(&C.height())
             .unwrap()
             .get(&C.block_hash().unwrap())
             .unwrap();
-        let D_ih = hard_chain
+        let D_ih = pow_chain
             .heights_mapping
             .get(&D.height())
             .unwrap()
             .get(&D.block_hash().unwrap())
             .unwrap();
-        let E_ih = hard_chain
+        let E_ih = pow_chain
             .heights_mapping
             .get(&E.height())
             .unwrap()
             .get(&E.block_hash().unwrap())
             .unwrap();
-        let F_ih = hard_chain
+        let F_ih = pow_chain
             .heights_mapping
             .get(&F.height())
             .unwrap()
             .get(&F.block_hash().unwrap())
             .unwrap();
-        let G_ih = hard_chain
+        let G_ih = pow_chain
             .heights_mapping
             .get(&G.height())
             .unwrap()
             .get(&G.block_hash().unwrap())
             .unwrap();
-        let B_prime_ih = hard_chain
+        let B_prime_ih = pow_chain
             .heights_mapping
             .get(&B_prime.height())
             .unwrap()
             .get(&B_prime.block_hash().unwrap())
             .unwrap();
-        let C_prime_ih = hard_chain
+        let C_prime_ih = pow_chain
             .heights_mapping
             .get(&C_prime.height())
             .unwrap()
             .get(&C_prime.block_hash().unwrap())
             .unwrap();
-        let D_prime_ih = hard_chain
+        let D_prime_ih = pow_chain
             .heights_mapping
             .get(&D_prime.height())
             .unwrap()
             .get(&D_prime.block_hash().unwrap())
             .unwrap();
-        let D_tertiary_ih = hard_chain
+        let D_tertiary_ih = pow_chain
             .heights_mapping
             .get(&D_tertiary.height())
             .unwrap()
@@ -7365,98 +7365,98 @@ mod tests {
 
         // Check validations mapping
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F_second.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&B.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&E.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&F.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&G.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&C_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::BelongsToDisconnected
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_prime.block_hash().unwrap())
                 .unwrap(),
             OrphanType::DisconnectedTip
         );
         assert_eq!(
-            *hard_chain
+            *pow_chain
                 .validations_mapping
                 .get(&D_tertiary.block_hash().unwrap())
                 .unwrap(),
@@ -7480,14 +7480,14 @@ mod tests {
         assert_eq!(*D_tertiary_ih, 0);
 
         // Check max orphan height
-        assert_eq!(hard_chain.max_orphan_height, Some(7));
+        assert_eq!(pow_chain.max_orphan_height, Some(7));
 
-        hard_chain.append_block(A.clone()).unwrap();
-        hard_chain.append_block(E_prime.clone()).unwrap();
+        pow_chain.append_block(A.clone()).unwrap();
+        pow_chain.append_block(E_prime.clone()).unwrap();
 
-        assert_eq!(hard_chain.height(), 7);
-        assert_eq!(hard_chain.canonical_tip(), G);
-        assert_eq!(hard_chain.max_orphan_height, Some(6));
+        assert_eq!(pow_chain.height(), 7);
+        assert_eq!(pow_chain.canonical_tip(), G);
+        assert_eq!(pow_chain.max_orphan_height, Some(6));
     }
 
     #[test]
@@ -9017,7 +9017,7 @@ mod tests {
 
         fn it_rewinds_correctly1() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
+            let mut pow_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -9051,48 +9051,48 @@ mod tests {
             ];
 
             for b in blocks {
-                hard_chain.append_block(b).unwrap();
+                pow_chain.append_block(b).unwrap();
             }
 
-            assert_eq!(hard_chain.height(), 7);
-            assert_eq!(hard_chain.canonical_tip(), G.clone());
-            assert_eq!(hard_chain.max_orphan_height, None);
-            assert!(hard_chain.query(&A.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&B.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&C.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&D.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&E.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&F.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&G.block_hash().unwrap()).is_some());
+            assert_eq!(pow_chain.height(), 7);
+            assert_eq!(pow_chain.canonical_tip(), G.clone());
+            assert_eq!(pow_chain.max_orphan_height, None);
+            assert!(pow_chain.query(&A.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&B.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&C.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&D.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&E.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&F.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&G.block_hash().unwrap()).is_some());
 
-            hard_chain.rewind(&B.block_hash().unwrap()).unwrap();
+            pow_chain.rewind(&B.block_hash().unwrap()).unwrap();
 
-            assert_eq!(hard_chain.height(), 2);
-            assert_eq!(hard_chain.canonical_tip(), B);
-            assert_eq!(hard_chain.max_orphan_height, Some(7));
-            assert!(hard_chain.valid_tips.contains(&G.block_hash().unwrap()));
-            assert!(hard_chain.query(&A.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&B.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&C.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&D.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&E.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&F.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&G.block_hash().unwrap()).is_none());
-            assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(pow_chain.height(), 2);
+            assert_eq!(pow_chain.canonical_tip(), B);
+            assert_eq!(pow_chain.max_orphan_height, Some(7));
+            assert!(pow_chain.valid_tips.contains(&G.block_hash().unwrap()));
+            assert!(pow_chain.query(&A.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&B.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&C.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&D.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&E.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&F.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&G.block_hash().unwrap()).is_none());
+            assert_eq!(*pow_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
             let mut tips = HashSet::new();
             tips.insert(G.block_hash().unwrap());
 
-            assert_eq!(hard_chain.valid_tips, tips);
+            assert_eq!(pow_chain.valid_tips, tips);
             true
         }
 
         fn it_rewinds_correctly2() -> bool {
             let db = test_helpers::init_tempdb();
-            let mut hard_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
+            let mut pow_chain = Chain::<DummyBlock>::new(db, DummyBlock::genesis_state(), true);
 
             let mut A = DummyBlock::new(Some(Hash::NULL), crate::random_socket_addr(), 1);
             let A = Arc::new(A);
@@ -9181,68 +9181,68 @@ mod tests {
             block_letters.insert(D_tertiary.block_hash().unwrap(), "D'''");
 
             for b in blocks {
-                hard_chain.append_block(b).unwrap();
+                pow_chain.append_block(b).unwrap();
             }
 
-            assert_eq!(hard_chain.height(), 7);
-            assert_eq!(hard_chain.canonical_tip(), G.clone());
-            assert!(hard_chain.query(&A.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&B.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&C.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&D.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&E.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&F.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&G.block_hash().unwrap()).is_some());
-            assert!(hard_chain.query(&B_prime.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&C_prime.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&D_prime.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&E_prime.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&C_second.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&D_second.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&E_second.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&F_second.block_hash().unwrap()).is_none());
-            assert!(hard_chain.query(&D_tertiary.block_hash().unwrap()).is_none());
+            assert_eq!(pow_chain.height(), 7);
+            assert_eq!(pow_chain.canonical_tip(), G.clone());
+            assert!(pow_chain.query(&A.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&B.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&C.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&D.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&E.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&F.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&G.block_hash().unwrap()).is_some());
+            assert!(pow_chain.query(&B_prime.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&C_prime.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&D_prime.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&E_prime.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&C_second.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&D_second.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&E_second.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&F_second.block_hash().unwrap()).is_none());
+            assert!(pow_chain.query(&D_tertiary.block_hash().unwrap()).is_none());
             let mut tips = HashSet::new();
             tips.insert(F_second.block_hash().unwrap());
             tips.insert(E_prime.block_hash().unwrap());
             tips.insert(D_tertiary.block_hash().unwrap());
 
-            assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
-            assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*pow_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&C_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*pow_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*pow_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
             let mut tips = HashSet::new();
             tips.insert(F_second.block_hash().unwrap());
             tips.insert(E_prime.block_hash().unwrap());
             tips.insert(D_tertiary.block_hash().unwrap());
-            assert_eq!(tips, hard_chain.valid_tips);
+            assert_eq!(tips, pow_chain.valid_tips);
 
-            hard_chain.rewind(&B.block_hash().unwrap()).unwrap();
+            pow_chain.rewind(&B.block_hash().unwrap()).unwrap();
 
-            assert_eq!(*hard_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
-            assert_eq!(*hard_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
-            assert_eq!(*hard_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
-            assert_eq!(*hard_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
-            assert_eq!(*hard_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*pow_chain.validations_mapping.get(&B_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&D_prime.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&E_prime.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*pow_chain.validations_mapping.get(&C_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&D_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&E_second.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&F_second.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*pow_chain.validations_mapping.get(&D_tertiary.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
+            assert_eq!(*pow_chain.validations_mapping.get(&C.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&D.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&E.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&F.block_hash().unwrap()).unwrap(), OrphanType::BelongsToValidChain);
+            assert_eq!(*pow_chain.validations_mapping.get(&G.block_hash().unwrap()).unwrap(), OrphanType::ValidChainTip);
             let mut tips = HashSet::new();
             tips.insert(F_second.block_hash().unwrap());
             tips.insert(E_prime.block_hash().unwrap());
             tips.insert(D_tertiary.block_hash().unwrap());
             tips.insert(G.block_hash().unwrap());
-            assert_eq!(tips, hard_chain.valid_tips);
+            assert_eq!(tips, pow_chain.valid_tips);
 
             true
         }

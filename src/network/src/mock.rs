@@ -50,14 +50,14 @@ pub struct MockNetwork {
     /// Our receiver
     rx: Receiver<(SocketAddr, Vec<u8>)>,
 
-    /// Reference to the `HardChain`
-    hard_chain_ref: HardChainRef,
+    /// Reference to the `PowChain`
+    pow_chain_ref: PowChainRef,
 
     /// Reference to the `StateChain`
     state_chain_ref: StateChainRef,
 
-    /// Sender to `HardChain` block buffer
-    hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
+    /// Sender to `PowChain` block buffer
+    pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
 
     /// Sender to `StateChain` block buffer
     state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
@@ -212,8 +212,8 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
-    fn hard_chain_ref(&self) -> HardChainRef {
-        self.hard_chain_ref.clone()
+    fn pow_chain_ref(&self) -> PowChainRef {
+        self.pow_chain_ref.clone()
     }
 
     fn state_chain_ref(&self) -> StateChainRef {
@@ -228,8 +228,8 @@ impl NetworkInterface for MockNetwork {
         unimplemented!()
     }
 
-    fn hard_chain_sender(&self) -> &Sender<(SocketAddr, Arc<HardBlock>)> {
-        &self.hard_chain_sender
+    fn pow_chain_sender(&self) -> &Sender<(SocketAddr, Arc<PowBlock>)> {
+        &self.pow_chain_sender
     }
 
     fn state_chain_sender(&self) -> &Sender<(SocketAddr, Arc<StateBlock>)> {
@@ -356,18 +356,18 @@ impl MockNetwork {
         rx: Receiver<(SocketAddr, Vec<u8>)>,
         mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>,
         address_mappings: HashMap<SocketAddr, NodeId>,
-        hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
+        pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
         state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
-        hard_chain_ref: HardChainRef,
+        pow_chain_ref: PowChainRef,
         state_chain_ref: StateChainRef,
     ) -> MockNetwork {
         MockNetwork {
             rx,
             mailboxes,
             address_mappings,
-            hard_chain_sender,
+            pow_chain_sender,
             state_chain_sender,
-            hard_chain_ref,
+            pow_chain_ref,
             state_chain_ref,
             peers: Arc::new(RwLock::new(HashMap::new())),
             bootstrap_cache: BootstrapCache::new(PersistentDb::new_in_memory(), 100000),
@@ -403,7 +403,7 @@ impl MockNetwork {
 
     pub fn start_receive_loop(
         network: Arc<Mutex<Self>>,
-        hard_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<HardBlock>)>>>,
+        pow_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<PowBlock>)>>>,
         state_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<StateBlock>)>>>,
     ) {
         loop {
@@ -428,28 +428,28 @@ impl MockNetwork {
                     }
                 }
 
-                let hard_receiver = hard_block_receiver.lock();
-                let hard_iter = hard_receiver
+                let pow_receiver = pow_block_receiver.lock();
+                let pow_iter = pow_receiver
                     .try_iter()
-                    .map(|(a, b)| (a, BlockWrapper::HardBlock(b)));
+                    .map(|(a, b)| (a, BlockWrapper::PowBlock(b)));
 
                 let state_receiver = state_block_receiver.lock();
                 let state_iter = state_receiver
                     .try_iter()
                     .map(|(a, b)| (a, BlockWrapper::StateBlock(b)));
-                let mut iter = hard_iter.chain(state_iter);
+                let mut iter = pow_iter.chain(state_iter);
 
                 while let Some((addr, block)) = iter.next() {
                     match block {
-                        BlockWrapper::HardBlock(block) => {
-                            let hard_chain = network.hard_chain_ref().chain;
-                            let mut chain = hard_chain.write();
+                        BlockWrapper::PowBlock(block) => {
+                            let pow_chain = network.pow_chain_ref().chain;
+                            let mut chain = pow_chain.write();
 
                             match chain.append_block(block.clone()) {
                                 Ok(()) => {
                                     // Forward block
                                     let mut packet =
-                                        ForwardBlock::new(BlockWrapper::HardBlock(block));
+                                        ForwardBlock::new(BlockWrapper::PowBlock(block));
                                     network
                                         .send_to_all_except(&addr, &packet.to_bytes())
                                         .unwrap();

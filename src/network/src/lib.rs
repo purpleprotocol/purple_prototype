@@ -181,7 +181,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
                     test_helpers::init_tempdb(),
                 );
 
-                let (hard_chain, state_chain) = chain::init(db1, db2, db3, true);
+                let (pow_chain, state_chain) = chain::init(db1, db2, db3, true);
 
                 let network = MockNetwork::new(
                     identities[i].0.clone(),
@@ -194,7 +194,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
                     address_mappings.clone(),
                     rx1,
                     rx2,
-                    hard_chain,
+                    pow_chain,
                     state_chain,
                 );
 

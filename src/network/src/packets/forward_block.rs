@@ -103,15 +103,15 @@ impl Packet for ForwardBlock {
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         match packet.block {
-            BlockWrapper::HardBlock(ref block) => {
-                let hard_chain = network.hard_chain_ref();
+            BlockWrapper::PowBlock(ref block) => {
+                let pow_chain = network.pow_chain_ref();
 
                 // Do not push block to queue if we already
                 // have it stored in the chain.
-                if hard_chain.query(&block.block_hash().unwrap()).is_some() {
+                if pow_chain.query(&block.block_hash().unwrap()).is_some() {
                     Ok(())
                 } else {
-                    let mut sender = network.hard_chain_sender().clone();
+                    let mut sender = network.pow_chain_sender().clone();
 
                     #[cfg(not(test))]
                     sender.try_send((addr.clone(), block.clone())).unwrap();
@@ -161,7 +161,7 @@ impl Arbitrary for ForwardBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chain::HardBlock;
+    use chain::PowBlock;
 
     quickcheck! {
         fn serialize_deserialize(tx: Arc<ForwardBlock>) -> bool {

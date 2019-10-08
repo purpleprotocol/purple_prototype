@@ -128,13 +128,13 @@ fn main() {
     let storage_db_path = db_path.join("node_storage");
     let state_db_path = db_path.join("state_db");
     let state_chain_db_path = db_path.join("state_chain_db");
-    let hard_chain_db_path = db_path.join("hard_chain_db");
+    let pow_chain_db_path = db_path.join("pow_chain_db");
     let bootstrap_cache_db_path = bootstrap_cache_path.join("bootstrap_cache_db"); 
 
     let storage_wal_path = db_path.join("node_storage_wal");
     let state_wal_path = db_path.join("state_db_wal");
     let state_chain_wal_path = db_path.join("state_chain_db_wal");
-    let hard_chain_wal_path = db_path.join("hard_chain_db_wal");
+    let pow_chain_wal_path = db_path.join("pow_chain_db_wal");
     let bootstrap_cache_wal_path = bootstrap_cache_path.join("bootstrap_cache_db_wal");
 
     let storage_db = Arc::new(persistence::open_database(
@@ -146,9 +146,9 @@ fn main() {
         &state_chain_db_path,
         &state_chain_wal_path,
     ));
-    let hard_chain_db = Arc::new(persistence::open_database(
-        &hard_chain_db_path,
-        &hard_chain_wal_path,
+    let pow_chain_db = Arc::new(persistence::open_database(
+        &pow_chain_db_path,
+        &pow_chain_wal_path,
     ));
     let bootstrap_cache_db = Arc::new(persistence::open_database(
         &bootstrap_cache_db_path,
@@ -157,16 +157,16 @@ fn main() {
     let mut node_storage = PersistentDb::new(storage_db, None);
     let state_db = PersistentDb::new(state_db, None);
     let state_chain_db = PersistentDb::new(state_chain_db, None);
-    let hard_chain_db = PersistentDb::new(hard_chain_db, None);
+    let pow_chain_db = PersistentDb::new(pow_chain_db, None);
     let bootstrap_cache_db = PersistentDb::new(bootstrap_cache_db, None);
     let bootstrap_cache = BootstrapCache::new(bootstrap_cache_db, argv.bootstrap_cache_size);
 
-    let (hard_chain, state_chain) =
-        chain::init(hard_chain_db, state_chain_db, state_db, argv.archival_mode);
+    let (pow_chain, state_chain) =
+        chain::init(pow_chain_db, state_chain_db, state_db, argv.archival_mode);
 
     info!("Database initialization was successful!");
 
-    let (hard_tx, hard_rx) = channel(10000);
+    let (pow_tx, pow_rx) = channel(10000);
     let (state_tx, state_rx) = channel(10000);
 
     info!("Setting up the network...");
@@ -179,9 +179,9 @@ fn main() {
         argv.network_name.to_owned(),
         skey,
         argv.max_peers,
-        hard_tx,
+        pow_tx,
         state_tx,
-        hard_chain.clone(),
+        pow_chain.clone(),
         state_chain.clone(),
         bootstrap_cache,
         accept_connections.clone()
@@ -210,10 +210,10 @@ fn main() {
 
     // Start the tokio runtime
     runtime.spawn(ok(()).and_then(move |_| {
-        start_chains_switch_poll(hard_chain.clone(), state_chain.clone());
+        start_chains_switch_poll(pow_chain.clone(), state_chain.clone());
 
         // Start listening for blocks
-        start_block_listeners(network.clone(), hard_chain.clone(), state_chain, hard_rx, state_rx);
+        start_block_listeners(network.clone(), pow_chain.clone(), state_chain, pow_rx, state_rx);
 
         // Start listening to connections
         start_listener(network.clone(), accept_connections.clone());
@@ -233,7 +233,7 @@ fn main() {
         {
             if argv.start_mining {
                 // Start mining
-                crate::jobs::start_miner(hard_chain, network.clone(), our_ip).expect("Could not start miner");
+                crate::jobs::start_miner(pow_chain, network.clone(), our_ip).expect("Could not start miner");
             
                 // Start checking for permission to bootstrap to the validator pool
                 network::jobs::start_validator_bootstrap_check(network);
