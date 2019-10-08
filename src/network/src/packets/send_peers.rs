@@ -148,7 +148,7 @@ impl Packet for SendPeers {
         network: &mut N,
         addr: &SocketAddr,
         packet: &SendPeers,
-        conn_type: ConnectionType,
+        _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
             "Received SendPeers packet from {} with nonce {}",

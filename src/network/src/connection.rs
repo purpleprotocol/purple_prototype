@@ -41,8 +41,7 @@ use tokio_io_timeout::TimeoutStream;
 use tokio_timer::Interval;
 use rand::prelude::IteratorRandom;
 
-/// Purple default network port
-pub const PORT: u16 = 44034;
+/// Peer timeout interval
 const PEER_TIMEOUT: u64 = 15000;
 
 /// Time in milliseconds to poll a peer.
@@ -56,10 +55,10 @@ const PEER_REFRESH_INTERVAL: u64 = 10000;
 
 /// Initializes the listener for the given network
 pub fn start_listener(network: Network, accept_connections: Arc<AtomicBool>) -> Spawn {
-    info!("Starting TCP listener on port {}", PORT);
+    info!("Starting TCP listener on port {}", network.port());
 
     // Bind the server's socket.
-    let addr = format!("0.0.0.0:{}", PORT).parse().unwrap();
+    let addr = format!("0.0.0.0:{}", network.port()).parse().unwrap();
     let listener = TcpListener::bind(&addr).expect("unable to bind TCP listener");
     let accept_connections_clone = accept_connections.clone();
 
@@ -472,7 +471,7 @@ pub fn start_peer_list_refresh_interval(network: Network) -> Spawn {
                     
                     let peers_to_connect: Vec<SocketAddr> = network.bootstrap_cache
                         .entries()
-                        .map(|e| e.to_socket_addr())
+                        .map(|e| e.to_socket_addr(network.port()))
                         .choose_multiple(&mut rand::thread_rng(), network.max_peers - peers.len());
 
                     for addr in peers_to_connect.iter() {

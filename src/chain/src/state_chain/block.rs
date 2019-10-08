@@ -141,7 +141,7 @@ impl Block for StateBlock {
         unimplemented!();
     }
 
-    fn after_write() -> Option<Box<FnMut(Arc<StateBlock>)>> {
+    fn after_write() -> Option<Box<dyn FnMut(Arc<StateBlock>)>> {
         let fun = |block| {};
 
         Some(Box::new(fun))

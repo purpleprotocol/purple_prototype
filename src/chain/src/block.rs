@@ -97,7 +97,7 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
     fn address(&self) -> Option<&SocketAddr>;
 
     /// Callback that executes after a block is written to a chain.
-    fn after_write() -> Option<Box<FnMut(Arc<Self>)>>;
+    fn after_write() -> Option<Box<dyn FnMut(Arc<Self>)>>;
 
     /// Condition that must result if successful, returns the state
     /// that is to be associated with the new appended block.
@@ -143,16 +143,24 @@ pub enum BlockWrapper {
 }
 
 impl BlockWrapper {
-    pub fn from_bytes(bytes: &[u8]) -> Result<Arc<BlockWrapper>, &'static str> {
+    pub fn from_pow_block(block: Arc<HardBlock>) -> Self {
+        BlockWrapper::HardBlock(block)
+    }
+
+    pub fn from_state_block(block: Arc<StateBlock>) -> Self {
+        BlockWrapper::StateBlock(block)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<BlockWrapper, &'static str> {
         let first_byte = bytes[0];
 
         match first_byte {
-            HardBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::HardBlock(HardBlock::from_bytes(
+            HardBlock::BLOCK_TYPE => Ok(BlockWrapper::HardBlock(HardBlock::from_bytes(
                 bytes,
-            )?))),
-            StateBlock::BLOCK_TYPE => Ok(Arc::new(BlockWrapper::StateBlock(
+            )?)),
+            StateBlock::BLOCK_TYPE => Ok(BlockWrapper::StateBlock(
                 StateBlock::from_bytes(bytes)?,
-            ))),
+            )),
             _ => return Err("Invalid block type"),
         }
     }

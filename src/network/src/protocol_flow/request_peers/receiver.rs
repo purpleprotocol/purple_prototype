@@ -67,7 +67,7 @@ impl Receiver<RequestPeers, SendPeers> for RequestPeersReceiver {
                 let connected_set: HashSet<&SocketAddr> = connected_peers.iter().collect();
                 let mut peers = self.bootstrap_cache
                     .entries()
-                    .map(|e| e.to_socket_addr())
+                    .map(|e| e.to_socket_addr(network.port()))
                     .filter(|addr| !connected_set.contains(addr) && addr != sender)
                     .choose_multiple(&mut rand::thread_rng(), (packet.requested_peers as usize) - connected_peers.len());
 

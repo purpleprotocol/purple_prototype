@@ -286,6 +286,10 @@ impl Solution {
         nonces
     }
 
+    pub fn nonce(&self) -> u64 {
+        self.nonce as u64
+    }
+
     /// Returns the hash of the solution, as performed in
     /// grin
     /// TODO: Check whether grin sticks to u32s like this

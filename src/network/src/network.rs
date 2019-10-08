@@ -62,6 +62,9 @@ pub struct Network {
     /// Sender to `HardChain` block buffer
     hard_chain_sender: Sender<(SocketAddr, Arc<HardBlock>)>,
 
+    /// The port we are accepting external TCP connections on.
+    port: u16,
+
     /// The name of the network we are on
     pub(crate) network_name: String,
 
@@ -78,6 +81,7 @@ pub struct Network {
 impl Network {
     pub fn new(
         node_id: NodeId,
+        port: u16,
         network_name: String,
         secret_key: Sk,
         max_peers: usize,
@@ -91,6 +95,7 @@ impl Network {
         Network {
             peers: Arc::new(RwLock::new(HashMap::with_capacity(max_peers))),
             node_id,
+            port,
             network_name,
             secret_key,
             max_peers,
@@ -188,6 +193,10 @@ impl NetworkInterface for Network {
 
     fn has_peer_with_id(&self, id: &NodeId) -> bool {
         unimplemented!()
+    }
+
+    fn port(&self) -> u16 {
+        self.port
     }
 
     fn send_to_peer(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {

@@ -16,7 +16,6 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::connection::PORT;
 use std::net::{IpAddr, SocketAddr};
 
 #[derive(Clone, Debug)]
@@ -28,7 +27,7 @@ pub struct BootstrapCacheEntry {
 impl BootstrapCacheEntry {
     /// Maps the ip stored in the cache entry to a `SocketAddr`
     /// with the default application port.
-    pub fn to_socket_addr(&self) -> SocketAddr {
-        SocketAddr::new(self.addr, PORT)
+    pub fn to_socket_addr(&self, port: u16) -> SocketAddr {
+        SocketAddr::new(self.addr, port)
     }
 }

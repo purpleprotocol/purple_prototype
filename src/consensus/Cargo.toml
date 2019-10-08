@@ -5,7 +5,7 @@ authors = ["Octavian Oncescu <octavonce@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-graphlib = { git = "https://github.com/purpleprotocol/graphlib" }
+graphlib = "0.5.3"
 crypto = { path = "../crypto" }
 events = { path = "../events" }
 causality = { path = "../causality" }

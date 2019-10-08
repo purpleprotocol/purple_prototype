@@ -174,6 +174,12 @@ impl<B: Block> ChainRef<B> {
         chain.is_canonical(block_hash)
     }
 
+    /// Returns the current tip of the canonical chain. 
+    pub fn canonical_tip(&self) -> Arc<B> {
+        let chain = self.chain.read();
+        chain.canonical_tip.clone()
+    }
+
     /// Attempts to fetch a block by its hash from the cache
     /// and if it doesn't succeed it then attempts to retrieve
     /// it from the orphan pool.
@@ -2247,7 +2253,7 @@ mod tests {
             Some(&self.ip)
         }
 
-        fn after_write() -> Option<Box<FnMut(Arc<Self>)>> {
+        fn after_write() -> Option<Box<dyn FnMut(Arc<Self>)>> {
             None
         }
 

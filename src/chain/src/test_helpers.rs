@@ -265,7 +265,6 @@ pub fn chain_test_set(
             NormalAddress::random(),
             crate::random_socket_addr(),
             last_hard.height() + 1,
-            0,
             Proof::test_proof(42),
         );
         hard_block.compute_hash();

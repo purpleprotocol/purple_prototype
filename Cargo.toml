@@ -25,6 +25,7 @@ clap = "2.32.0"
 unwrap = "1.2.0"
 hex = "0.3.2"
 itc = "0.1.2"
+lazy_static = "1.2.0"
 log = "0.4.0"
 slog = "2.5.2"
 slog-stdlog = "4.0.0"
@@ -33,7 +34,7 @@ slog-scope = "4"
 slog-term = "2.4.1"
 slog-async = "2.3.0"
 parking_lot = "0.7.1"
-tokio = "0.1.11"
+tokio = "0.1.22"
 futures = "0.1.25"
 dirs = "1.0.4"
 elastic-array = "0.10.0"
@@ -53,6 +54,7 @@ transactions = { path = "src/transactions" }
 chain = { path = "src/chain" }
 miner = { path = "src/miner" }
 mimalloc = "0.1.9"
+reqwest = "0.9.21"
 
 [dev-dependencies.chain]
 path = "src/chain"
@@ -71,7 +73,7 @@ lto = "thin"
 
 [features]
 default = []
-miner-cpu-avx = ["miner/cpu", "miner/avx"]
-miner-cpu = ["miner/cpu"]
-miner-gpu = ["miner/gpu"]
+miner-cpu-avx = ["miner/cpu", "miner/avx", "network/miner"]
+miner-cpu = ["miner/cpu", "network/miner"]
+miner-gpu = ["miner/gpu", "network/miner"]
 
