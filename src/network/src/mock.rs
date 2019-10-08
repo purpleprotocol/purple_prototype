@@ -77,6 +77,9 @@ pub struct MockNetwork {
     /// Our secret key
     secret_key: Sk,
 
+    /// The port we accept connections on 
+    port: u16,
+
     /// The name of the network we are on
     network_name: String,
 
@@ -106,6 +109,10 @@ impl NetworkInterface for MockNetwork {
 
     fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr> {
         unimplemented!();
+    }
+
+    fn port(&self) -> u16 {
+        self.port
     }
 
     fn is_connected_to(&self, address: &SocketAddr) -> bool {
@@ -343,6 +350,7 @@ impl MockNetwork {
     pub fn new(
         node_id: NodeId,
         ip: SocketAddr,
+        port: u16,
         network_name: String,
         secret_key: Sk,
         rx: Receiver<(SocketAddr, Vec<u8>)>,
@@ -366,6 +374,7 @@ impl MockNetwork {
             node_id,
             secret_key,
             ip,
+            port,
             network_name,
         }
     }
@@ -461,7 +470,7 @@ impl MockNetwork {
                                 Ok(()) => {
                                     // Forward block
                                     let mut packet = ForwardBlock::new(BlockWrapper::StateBlock(block));
-                                    
+
                                     network
                                         .send_to_all_except(&addr, &packet.to_bytes())
                                         .unwrap();

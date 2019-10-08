@@ -186,6 +186,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
                 let network = MockNetwork::new(
                     identities[i].0.clone(),
                     addresses[i].clone(),
+                    44034,
                     "test_network".to_owned(),
                     identities[i].1.clone(),
                     tx,

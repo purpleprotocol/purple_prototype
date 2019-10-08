@@ -82,6 +82,9 @@ pub trait NetworkInterface {
     /// Returns a reference to our node id.
     fn our_node_id(&self) -> &NodeId;
 
+    /// Returns the external port we are accepting connections on.
+    fn port(&self) -> u16;
+
     /// Returns a reference to the peer table `RwLock`.
     fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>>;
 

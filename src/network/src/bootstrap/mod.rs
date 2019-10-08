@@ -35,6 +35,7 @@ pub fn bootstrap(
     db: PersistentDb,
     max_peers: usize,
     bootnodes: Vec<SocketAddr>,
+    port: u16,
 ) -> Spawn {
     info!("Bootstrapping...");
 
@@ -42,7 +43,7 @@ pub fn bootstrap(
     if !network.bootstrap_cache.is_empty() {
         let peers_to_connect: Vec<SocketAddr> = network.bootstrap_cache
             .entries()
-            .map(|e| e.to_socket_addr())
+            .map(|e| e.to_socket_addr(port))
             .choose_multiple(&mut rand::thread_rng(), max_peers as usize);
 
         let mut network = network.clone();

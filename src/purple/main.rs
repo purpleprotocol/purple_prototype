@@ -30,6 +30,9 @@ extern crate jsonrpc_macros;
 #[macro_use(slog_error, slog_info, slog_trace, slog_log, slog_o)] 
 extern crate slog;
 
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+extern crate reqwest;
+
 extern crate account;
 extern crate chain;
 extern crate clap;
@@ -66,12 +69,17 @@ use mimalloc::MiMalloc;
 use network::bootstrap::cache::BootstrapCache;
 use network::*;
 use persistence::PersistentDb;
+use tokio::runtime::{Runtime, Builder};
+use std::thread;
+use std::collections::HashMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::net::IpAddr;
+use std::str::FromStr;
 
 // Use mimalloc allocator
 #[global_allocator]
@@ -167,6 +175,7 @@ fn main() {
     let accept_connections = Arc::new(AtomicBool::new(true));
     let network = Network::new(
         node_id,
+        argv.port,
         argv.network_name.to_owned(),
         skey,
         argv.max_peers,
@@ -178,8 +187,29 @@ fn main() {
         accept_connections.clone()
     );
 
+    // Set up runtime
+    let mut runtime = Builder::new()
+        .blocking_threads(10)
+        .name_prefix("purple-runtime-")
+        // Unwind all panics
+        .panic_handler(|err| std::panic::resume_unwind(err))
+        .build()
+        .unwrap();
+
+    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+    let (our_ip, mut runtime) = {
+        debug!("Retrieving external ip...");
+
+        // Retrieve our ip
+        let (our_ip, runtime) = fetch_ip(runtime);
+        let our_ip = SocketAddr::new(our_ip, argv.port);
+
+        debug!("Successfully retrieved external ip address {}", our_ip);
+        (our_ip, runtime)
+    };
+
     // Start the tokio runtime
-    tokio::run(ok(()).and_then(move |_| {
+    runtime.spawn(ok(()).and_then(move |_| {
         start_chains_switch_poll(hard_chain.clone(), state_chain.clone());
 
         // Start listening for blocks
@@ -195,14 +225,15 @@ fn main() {
             node_storage.clone(),
             argv.max_peers,
             argv.bootnodes.clone(),
+            argv.port,
         );
 
         // Start miner related jobs
-        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
+        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
         {
             if argv.start_mining {
                 // Start mining
-                crate::jobs::start_miner(hard_chain, network.clone()).expect("Could not start miner");
+                crate::jobs::start_miner(hard_chain, network.clone(), our_ip).expect("Could not start miner");
             
                 // Start checking for permission to bootstrap to the validator pool
                 network::jobs::start_validator_bootstrap_check(network);
@@ -211,6 +242,25 @@ fn main() {
 
         Ok(())
     }));
+
+    // Block the current thread
+    runtime.shutdown_on_idle()
+        .wait().unwrap();
+}
+
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+/// Returns our ip address
+fn fetch_ip(mut runtime: Runtime) -> (IpAddr, Runtime) {
+    let fut = reqwest::async::Client::new()
+        .get("https://api.ipify.org?format=json")
+        .send()
+        .and_then(|mut resp| resp.json());
+
+    let resp: HashMap<String, String> = runtime.block_on(fut).expect("Could not retrieve external ip address! Please re-start the core to try again!");
+    let ip_str = resp.get("ip").expect("Could not parse external ip address! Please re-start the core to try again!");
+    let ip = IpAddr::from_str(&ip_str).expect("Could not parse external ip address! Please re-start the core to try again!");
+
+    (ip, runtime)
 }
 
 // Fetch stored node id or create new identity and store it
@@ -253,6 +303,7 @@ struct Argv {
     network_name: String,
     bootnodes: Vec<SocketAddr>,
     mempool_size: u16,
+    port: u16,
     bootstrap_cache_size: u64,
     max_peers: usize,
     no_mempool: bool,
@@ -260,7 +311,7 @@ struct Argv {
     archival_mode: bool,
     wipe: bool,
 
-    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
+    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
     start_mining: bool,
 }
 
@@ -318,6 +369,14 @@ fn parse_cli_args() -> Argv {
                 .help("Start the node in interactive mode")
         )
         .arg(
+            Arg::with_name("port")
+                .long("port")
+                .value_name("PORT")
+                .short("p")
+                .help("The port to listen on for incoming connections. Default is 44034")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("start_mining")
                 .long("start-mining")
                 .help("Start the node as a miner node")
@@ -332,12 +391,12 @@ fn parse_cli_args() -> Argv {
         .arg(
             Arg::with_name("wipe")
                 .long("wipe")
-                .help("Wipe the database before starting the node, forcing it to re-sync."),
+                .help("Wipe the database before starting the node, forcing it to re-sync"),
         )
         .arg(
             Arg::with_name("prune")
                 .long("prune")
-                .help("Whether to prune the ledger or to keep the entire transaction history. False by default."),
+                .help("Whether to prune the ledger or to keep the entire transaction history. False by default"),
         )
         .get_matches();
 
@@ -351,6 +410,12 @@ fn parse_cli_args() -> Argv {
         unwrap!(arg.parse(), "Bad value for <MEMPOOL_SIZE>")
     } else {
         150
+    };
+
+    let port: u16 = if let Some(arg) = matches.value_of("port") {
+        unwrap!(arg.parse(), "Bad value for <PORT>")
+    } else {
+        44034
     };
 
     let bootstrap_cache_size: u64 = if let Some(arg) = matches.value_of("bootstrap_cache_size") {
@@ -381,7 +446,7 @@ fn parse_cli_args() -> Argv {
     let bootnodes = if no_bootnodes { Vec::new() } else { bootnodes };
     let start_mining: bool = matches.is_present("start_mining");
 
-    #[cfg(not(any(feature = "miner-cpu", feature = "miner-gpu")))]
+    #[cfg(not(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx")))]
     {
         if start_mining {
             panic!("Invalid argument: start_mining. This option can only be used with the miner bundle!")
@@ -398,8 +463,9 @@ fn parse_cli_args() -> Argv {
         mempool_size,
         archival_mode,
         wipe,
+        port,
 
-        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
+        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
         start_mining,
     }
 }

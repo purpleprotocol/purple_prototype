@@ -34,7 +34,7 @@ slog-scope = "4"
 slog-term = "2.4.1"
 slog-async = "2.3.0"
 parking_lot = "0.7.1"
-tokio = "0.1.11"
+tokio = "0.1.22"
 futures = "0.1.25"
 dirs = "1.0.4"
 elastic-array = "0.10.0"
@@ -54,6 +54,7 @@ transactions = { path = "src/transactions" }
 chain = { path = "src/chain" }
 miner = { path = "src/miner" }
 mimalloc = "0.1.9"
+reqwest = "0.9.21"
 
 [dev-dependencies.chain]
 path = "src/chain"

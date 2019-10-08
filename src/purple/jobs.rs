@@ -27,22 +27,17 @@ use network::Packet;
 use account::NormalAddress;
 use std::net::SocketAddr;
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
 use miner::{PurpleMiner, PluginType, Proof};
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
 lazy_static! {
     static ref MINER_IS_STARTED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
-    
-    // TODO: Retrieve our ip address
-    static ref OUR_IP: SocketAddr = {
-        unimplemented!();
-    };
 }
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu"))]
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
 /// Starts the mining process.
-pub fn start_miner(pow_chain: HardChainRef, network: Network) -> Result<(), &'static str> {
+pub fn start_miner(pow_chain: HardChainRef, network: Network, ip: SocketAddr) -> Result<(), &'static str> {
     if MINER_IS_STARTED.load(Ordering::Relaxed) {
         return Err("The miner is already started!");
     }
@@ -89,7 +84,7 @@ pub fn start_miner(pow_chain: HardChainRef, network: Network) -> Result<(), &'st
                             let mut block = HardBlock::new(
                                 tip.block_hash(), 
                                 collector_address,
-                                *OUR_IP,
+                                ip,
                                 miner_height + 1,
                                 proof,
                             );
