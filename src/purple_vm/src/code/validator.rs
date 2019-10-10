@@ -254,6 +254,23 @@ impl Validator {
 
                                 DEFAULT_TRANSITIONS.to_vec()
                             }
+                            Instruction::And
+                            | Instruction::Or
+                            | Instruction::Xor
+                            | Instruction::Shl
+                            | Instruction::ShrSigned
+                            | Instruction::ShrUnsigned
+                            | Instruction::Rotl
+                            | Instruction::Rotr => {
+                                if self.operand_stack.len() != 2
+                                    || !are_integer_type(&self.operand_stack)
+                                {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
+
+                                DEFAULT_TRANSITIONS.to_vec()
+                            }
                             _ => op.transitions(),
                         };
 
@@ -865,6 +882,10 @@ fn are_float_type(operand_stack: &Stack<VmType>) -> bool {
         }
     }
     return true;
+}
+
+fn are_integer_type(operand_stack: &Stack<VmType>) -> bool {
+    !are_float_type(operand_stack)
 }
 
 fn get_next_elem(val_stack: &Stack<(u8, bool)>) -> (VmType, usize) {
@@ -2211,8 +2232,8 @@ mod tests {
             Instruction::PushOperand.repr(),
             0x02,
             0x00,
-            Instruction::f32Const.repr(),
-            Instruction::i32Const.repr(), // integer operand
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
             0x00,
             0x00,
             0x00,
@@ -2318,7 +2339,7 @@ mod tests {
         assert!(!is_valid(block));
     }
 
-    fn get_no_operands_block_float(instruction: Instruction) -> Vec<u8> {
+    fn get_no_operands_block(instruction: Instruction) -> Vec<u8> {
         vec![
             Instruction::Begin.repr(),
             0x00,
@@ -2332,49 +2353,270 @@ mod tests {
     #[test]
     #[rustfmt::skip]
     fn it_fails_if_no_operands_are_given_for_abs() {
-        let block: Vec<u8> = get_no_operands_block_float(Instruction::Abs);
+        let block: Vec<u8> = get_no_operands_block(Instruction::Abs);
         assert!(!is_valid(block));
     }
 
     #[test]
     #[rustfmt::skip]
     fn it_fails_if_no_operands_are_given_for_neg() {
-        let block: Vec<u8> = get_no_operands_block_float(Instruction::Neg);
+        let block: Vec<u8> = get_no_operands_block(Instruction::Neg);
         assert!(!is_valid(block));
     }
 
     #[test]
     #[rustfmt::skip]
     fn it_fails_if_no_operands_are_given_for_ceil() {
-        let block: Vec<u8> = get_no_operands_block_float(Instruction::Ceil);
+        let block: Vec<u8> = get_no_operands_block(Instruction::Ceil);
         assert!(!is_valid(block));
     }
 
     #[test]
     #[rustfmt::skip]
     fn it_fails_if_no_operands_are_given_for_floor() {
-        let block: Vec<u8> = get_no_operands_block_float(Instruction::Floor);
+        let block: Vec<u8> = get_no_operands_block(Instruction::Floor);
         assert!(!is_valid(block));
     }
 
     #[test]
     #[rustfmt::skip]
     fn it_fails_if_no_operands_are_given_for_trunc() {
-        let block: Vec<u8> = get_no_operands_block_float(Instruction::Trunc);
+        let block: Vec<u8> = get_no_operands_block(Instruction::Trunc);
         assert!(!is_valid(block));
     }
 
     #[test]
     #[rustfmt::skip]
     fn it_fails_if_no_operands_are_given_for_nearest() {
-        let block: Vec<u8> = get_no_operands_block_float(Instruction::Nearest);
+        let block: Vec<u8> = get_no_operands_block(Instruction::Nearest);
         assert!(!is_valid(block));
     }
 
     #[test]
     #[rustfmt::skip]
     fn it_fails_if_no_operands_are_given_for_sqrt() {
-        let block: Vec<u8> = get_no_operands_block_float(Instruction::Sqrt);
+        let block: Vec<u8> = get_no_operands_block(Instruction::Sqrt);
+        assert!(!is_valid(block));
+    }
+
+    fn get_common_block_3_operands_integer(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x03,
+            0x00,
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            0x00,
+            0x00,
+            0x00,
+            0x03,
+            instruction.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_and() {
+        let block: Vec<u8> = get_no_operands_block(Instruction::And);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_or() {
+        let block: Vec<u8> = get_no_operands_block(Instruction::Or);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_xor() {
+        let block: Vec<u8> = get_no_operands_block(Instruction::Xor);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_shl() {
+        let block: Vec<u8> = get_no_operands_block(Instruction::Shl);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_shr_signed() {
+        let block: Vec<u8> = get_no_operands_block(Instruction::ShrSigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_shr_unsigned() {
+        let block: Vec<u8> = get_no_operands_block(Instruction::ShrUnsigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_rotl() {
+        let block: Vec<u8> = get_no_operands_block(Instruction::Rotl);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_rotr() {
+        let block: Vec<u8> = get_no_operands_block(Instruction::Rotr);
+        assert!(!is_valid(block));
+    }
+
+    fn get_common_block_2_operands_as_float(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::f32Const.repr(),
+            Instruction::f32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            instruction.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_and() {
+        let block: Vec<u8> = get_common_block_2_operands_as_float(Instruction::And);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_or() {
+        let block: Vec<u8> = get_common_block_2_operands_as_float(Instruction::Or);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_xor() {
+        let block: Vec<u8> = get_common_block_2_operands_as_float(Instruction::Xor);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_shl() {
+        let block: Vec<u8> = get_common_block_2_operands_as_float(Instruction::Shl);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_shr_signed() {
+        let block: Vec<u8> = get_common_block_2_operands_as_float(Instruction::ShrSigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_shr_unsigned() {
+        let block: Vec<u8> = get_common_block_2_operands_as_float(Instruction::ShrUnsigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_rotl() {
+        let block: Vec<u8> = get_common_block_2_operands_as_float(Instruction::Rotl);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_are_integers_rotr() {
+        let block: Vec<u8> = get_common_block_2_operands_as_float(Instruction::Rotr);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_and() {
+        let block: Vec<u8> = get_common_block_3_operands_integer(Instruction::And);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_or() {
+        let block: Vec<u8> = get_common_block_3_operands_integer(Instruction::Or);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_xor() {
+        let block: Vec<u8> = get_common_block_3_operands_integer(Instruction::Xor);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_shl() {
+        let block: Vec<u8> = get_common_block_3_operands_integer(Instruction::Shl);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_shr_signed() {
+        let block: Vec<u8> = get_common_block_3_operands_integer(Instruction::ShrSigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_shr_unsigned() {
+        let block: Vec<u8> = get_common_block_3_operands_integer(Instruction::ShrUnsigned);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_rotl() {
+        let block: Vec<u8> = get_common_block_3_operands_integer(Instruction::Rotl);
+        assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_operands_number_differs_from_2_higher_for_rotr() {
+        let block: Vec<u8> = get_common_block_3_operands_integer(Instruction::Rotr);
         assert!(!is_valid(block));
     }
 }
