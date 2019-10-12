@@ -173,8 +173,13 @@ pub fn handle_packet<N: NetworkInterface>(
             _ => return Err(NetworkErr::PacketParseErr),
         },
 
+        ForwardBlock::PACKET_TYPE => match ForwardBlock::from_bytes(packet) {
+            Ok(packet) => ForwardBlock::handle(network, peer_addr, &packet, conn_type)?,
+            _ => return Err(NetworkErr::PacketParseErr),
+        },
+
         _ => {
-            debug!("Could not parse packet from {}", peer_addr);
+            debug!("Could not parse packet with type {} from {}", packet_type, peer_addr);
             return Err(NetworkErr::PacketParseErr);
         }
     }

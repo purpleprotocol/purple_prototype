@@ -109,8 +109,9 @@ pub fn start_block_listeners(
                             .unwrap();
                     }
                     Err(err) => info!(
-                        "Chain Error for block {:?}: {:?}",
+                        "Chain Error for block {:?} with height {}: {:?}",
                         block.block_hash().unwrap(),
+                        block.height(),
                         err
                     ),
                 }

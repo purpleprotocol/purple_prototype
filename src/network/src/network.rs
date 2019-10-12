@@ -235,7 +235,8 @@ impl NetworkInterface for Network {
                     self.network_name.as_str(),
                 );
                 peer.send_packet(packet.to_vec())
-                    .unwrap_or(warn!("Failed to send packet to {}", addr));
+                    .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
+                    .unwrap_or(());
             }
         }
 
@@ -260,7 +261,8 @@ impl NetworkInterface for Network {
                     self.network_name.as_str(),
                 );
                 peer.send_packet(packet.to_vec())
-                    .unwrap_or(warn!("Failed to send packet to {}", addr));
+                    .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
+                    .unwrap_or(());
             }
         }
 

@@ -24,13 +24,13 @@ use enum_repr::*;
 ///
 /// Each type is mapped to its index in the loaded plugins list.
 pub enum PluginType {
-    Cuckoo19 = 0,
-    Cuckoo24 = 1,
-    Cuckoo25 = 2,
-    Cuckoo26 = 3,
-    Cuckoo27 = 4,
-    Cuckoo28 = 5,
-    Cuckoo29 = 6,
-    Cuckoo30 = 7,
-    Cuckoo31 = 8,
+    Cuckoo24 = 0,
+    Cuckoo25 = 1,
+    Cuckoo26 = 2,
+    Cuckoo27 = 3,
+    Cuckoo28 = 4,
+    Cuckoo29 = 5,
+    Cuckoo30 = 6,
+    Cuckoo31 = 7,
+    Cuckoo0 = 8,
 }

@@ -43,19 +43,7 @@ use crypto::Hash;
 const SO_SUFFIX: &str = ".cuckooplugin";
 
 cfg_if! {
-    if #[cfg(all(test, feature = "cpu", feature = "avx"))] {
-        static PLUGINS: &[&str] = &[
-            "cuckaroo_cpu_avx2_19",
-        ];
-    } else if #[cfg(all(test, feature = "cpu"))] {
-        static PLUGINS: &[&str] = &[
-            "cuckaroo_cpu_compat_19",
-        ];
-    } else if #[cfg(all(test, feature = "gpu"))] {
-        static PLUGINS: &[&str] = &[
-            "cuckaroo_cuda_19",
-        ];
-    } else if #[cfg(all(feature = "cpu", feature = "avx"))] {
+    if #[cfg(all(feature = "cpu", feature = "avx"))] {
         static PLUGINS: &[&str] = &[
             "cuckaroo_cpu_avx2_24",
             "cuckaroo_cpu_avx2_25",
@@ -396,14 +384,30 @@ impl PurpleMiner {
                           * be returned. */
         plugin: PluginType, // Which plugin to use
     ) -> Result<(), CuckooMinerError> {
-        #[cfg(not(test))]
+        let mut sd = self.shared_data.write();
+
+        #[cfg(feature = "test")]
         {
-            if let PluginType::Cuckoo19 = plugin {
-                panic!("Cannot use cuckoo 19 in release mode! This plugin is just for testing.");
+            if let PluginType::Cuckoo0 = plugin {
+                info!("Mining header {} with height {} in test mode", hex::encode(header), height);
+        
+                //sd.job_id = job_id;
+                sd.height = height;
+                sd.header = header.to_vec();
+                sd.difficulty = difficulty;
+                sd.solutions = vec![SolverSolutions::default()];
+
+                return Ok(())
             }
         }
 
-        let mut sd = self.shared_data.write();
+        #[cfg(not(feature = "test"))]
+        {
+            if let PluginType::Cuckoo0 = plugin {
+                panic!("This plugin type can only be used in test mode!");
+            }
+        }
+
         let mut paused = self.is_paused(plugin);
         if height != sd.height && !paused {
             // stop/pause any existing jobs if job is for a new
@@ -428,6 +432,22 @@ impl PurpleMiner {
     /// 
     /// Returns `None` if the miner is in stand-by.
     pub fn current_height(&self, plugin: PluginType) -> Option<u64> {
+        #[cfg(feature = "test")] 
+        { 
+            // Don't check solver state in test mode
+            if let PluginType::Cuckoo0 = plugin {
+                let sd = self.shared_data.read();
+                return Some(sd.height);
+            }
+        }
+
+        #[cfg(not(feature = "test"))]
+        {
+            if let PluginType::Cuckoo0 = plugin {
+                panic!("This plugin type can only be used in test mode!");
+            }
+        }
+
         if *self.solver_states[plugin.repr()].read() == SolverState::Paused {
             return None;
         }
@@ -440,6 +460,22 @@ impl PurpleMiner {
     /// 
     /// Returns `None` if the miner is in stand-by.
     pub fn current_header_hash(&self, plugin: PluginType) -> Option<Hash> {
+        #[cfg(feature = "test")] 
+        { 
+            // Don't check solver state in test mode
+            if let PluginType::Cuckoo0 = plugin {
+                let sd = self.shared_data.read();
+                return Some(crypto::hash_slice(&sd.header));
+            }
+        }
+
+        #[cfg(not(feature = "test"))]
+        {
+            if let PluginType::Cuckoo0 = plugin {
+                panic!("This plugin type can only be used in test mode!");
+            }
+        }
+
         if *self.solver_states[plugin.repr()].read() == SolverState::Paused {
             return None;
         }
