@@ -104,6 +104,8 @@ impl Packet for ForwardBlock {
     ) -> Result<(), NetworkErr> {
         match packet.block {
             BlockWrapper::PowBlock(ref block) => {
+                info!("Received POW block with hash {} and height {}", block.block_hash().unwrap(), block.height());
+
                 let pow_chain = network.pow_chain_ref();
 
                 // Do not push block to queue if we already
@@ -124,6 +126,8 @@ impl Packet for ForwardBlock {
             }
 
             BlockWrapper::StateBlock(ref block) => {
+                info!("Received state block with hash {} and height {}", block.block_hash().unwrap(), block.height());
+
                 let state_chain = network.state_chain_ref();
 
                 // Do not push block to queue if we already

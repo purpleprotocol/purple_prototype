@@ -481,8 +481,7 @@ fn parse_cli_args() -> Argv {
     let no_bootnodes: bool = matches.is_present("no_bootnodes");
     let bootnodes = if no_bootnodes { Vec::new() } else { bootnodes };
 
-    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature 
- = "miner-test-mode"))]
+    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
     let start_mining: bool = matches.is_present("start_mining");
 
     Argv {

@@ -161,7 +161,7 @@ impl Peer {
         let mut sender = self.outbound_buffer.as_ref().unwrap().clone();
         sender
             .try_send(packet)
-            .map_err(|_| NetworkErr::CouldNotSend)
+            .map_err(|err| { debug!("Packet sending error: {:?}", err); NetworkErr::CouldNotSend })
     }
 }
 
