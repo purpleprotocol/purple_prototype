@@ -76,4 +76,5 @@ default = []
 miner-cpu-avx = ["miner/cpu", "miner/avx", "network/miner"]
 miner-cpu = ["miner/cpu", "network/miner"]
 miner-gpu = ["miner/gpu", "network/miner"]
+miner-test-mode = ["miner/cpu", "miner/test", "network/miner"]
 

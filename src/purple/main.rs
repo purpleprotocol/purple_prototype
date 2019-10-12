@@ -30,7 +30,7 @@ extern crate jsonrpc_macros;
 #[macro_use(slog_error, slog_info, slog_trace, slog_log, slog_o)] 
 extern crate slog;
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
 extern crate reqwest;
 
 extern crate account;
@@ -196,7 +196,7 @@ fn main() {
         .build()
         .unwrap();
 
-    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
     let (our_ip, mut runtime) = {
         debug!("Retrieving external ip...");
 
@@ -229,11 +229,17 @@ fn main() {
         );
 
         // Start miner related jobs
-        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
         {
             if argv.start_mining {
+                #[cfg(feature = "miner-test-mode")]
+                let proof_delay = Some(argv.proof_delay);
+
+                #[cfg(not(feature = "miner-test-mode"))]
+                let proof_delay = None;
+
                 // Start mining
-                crate::jobs::start_miner(pow_chain, network.clone(), our_ip).expect("Could not start miner");
+                crate::jobs::start_miner(pow_chain, network.clone(), our_ip, proof_delay).expect("Could not start miner");
             
                 // Start checking for permission to bootstrap to the validator pool
                 network::jobs::start_validator_bootstrap_check(network);
@@ -248,7 +254,7 @@ fn main() {
         .wait().unwrap();
 }
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
 /// Returns our ip address
 fn fetch_ip(mut runtime: Runtime) -> (IpAddr, Runtime) {
     let fut = reqwest::async::Client::new()
@@ -311,12 +317,15 @@ struct Argv {
     archival_mode: bool,
     wipe: bool,
 
-    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
     start_mining: bool,
+
+    #[cfg(feature = "miner-test-mode")]
+    proof_delay: u32,
 }
 
 fn parse_cli_args() -> Argv {
-    let matches = App::new(format!("Purple Protocol v{}", env!("CARGO_PKG_VERSION")))
+    let argv = App::new(format!("Purple Protocol v{}", env!("CARGO_PKG_VERSION")))
         .arg(
             Arg::with_name("network_name")
                 .long("network-name")
@@ -377,11 +386,6 @@ fn parse_cli_args() -> Argv {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("start_mining")
-                .long("start-mining")
-                .help("Start the node as a miner node")
-        )
-        .arg(
             Arg::with_name("max_peers")
                 .long("max-peers")
                 .value_name("MAX_PEERS")
@@ -397,8 +401,33 @@ fn parse_cli_args() -> Argv {
             Arg::with_name("prune")
                 .long("prune")
                 .help("Whether to prune the ledger or to keep the entire transaction history. False by default"),
-        )
-        .get_matches();
+        );
+
+    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+    let argv = {
+        // Miner only flags
+        argv
+            .arg(
+                Arg::with_name("start_mining")
+                    .long("start-mining")
+                    .help("Start the node as a miner node")
+            )
+    };
+
+    #[cfg(feature = "miner-test-mode")]
+    let argv = {
+        // Miner test mode only flags
+        argv
+            .arg(
+                Arg::with_name("proof_delay")
+                    .long("proof-delay")
+                    .value_name("MILLISECONDS")
+                    .help("The time to wait before sending a valid proof. Only used in test mode!")
+                    .takes_value(true),
+            )
+    };
+
+    let matches = argv.get_matches();
 
     let network_name: String = if let Some(arg) = matches.value_of("network_name") {
         unwrap!(arg.parse(), "Expected value for <NETWORK_NAME>")
@@ -438,20 +467,23 @@ fn parse_cli_args() -> Argv {
         BOOTNODES.iter().map(|addr| addr.parse().unwrap()).collect()
     };
 
+    #[cfg(feature = "miner-test-mode")]
+    let proof_delay: u32 = if let Some(arg) = matches.value_of("proof_delay") {
+        unwrap!(arg.parse(), "Bad value for <MILLISECONDS>")
+    } else {
+        1
+    };
+
     let archival_mode: bool = !matches.is_present("prune");
     let no_mempool: bool = matches.is_present("no_mempool");
     let interactive: bool = matches.is_present("interactive");
     let wipe: bool = matches.is_present("wipe");
     let no_bootnodes: bool = matches.is_present("no_bootnodes");
     let bootnodes = if no_bootnodes { Vec::new() } else { bootnodes };
-    let start_mining: bool = matches.is_present("start_mining");
 
-    #[cfg(not(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx")))]
-    {
-        if start_mining {
-            panic!("Invalid argument: start_mining. This option can only be used with the miner bundle!")
-        }
-    }
+    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature 
+ = "miner-test-mode"))]
+    let start_mining: bool = matches.is_present("start_mining");
 
     Argv {
         bootnodes,
@@ -465,8 +497,11 @@ fn parse_cli_args() -> Argv {
         wipe,
         port,
 
-        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
         start_mining,
+
+        #[cfg(feature = "miner-test-mode")]
+        proof_delay
     }
 }
 

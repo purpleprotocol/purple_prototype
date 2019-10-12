@@ -16,6 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#![allow(deprecated, unused)]
+
 use std::sync::Arc;
 use std::sync::atomic::{Ordering, AtomicBool};
 use std::thread;
@@ -27,17 +29,17 @@ use network::Packet;
 use account::NormalAddress;
 use std::net::SocketAddr;
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
 use miner::{PurpleMiner, PluginType, Proof};
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
 lazy_static! {
     static ref MINER_IS_STARTED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 }
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx"))]
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
 /// Starts the mining process.
-pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr) -> Result<(), &'static str> {
+pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, proof_delay: Option<u32>) -> Result<(), &'static str> {
     if MINER_IS_STARTED.load(Ordering::Relaxed) {
         return Err("The miner is already started!");
     }
@@ -56,21 +58,29 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr) -> 
         //
         // If the miner is started, we check for available solutions.
         loop {
-            #[cfg(test)]
-            let plugin_type = PluginType::Cuckoo19;
+            #[cfg(feature = "miner-test-mode")]
+            let plugin_type = PluginType::Cuckoo0;
 
-            #[cfg(not(test))]
-            let plugin_type = PluginType::Cuckoo30;
+            #[cfg(not(feature = "miner-test-mode"))]
+            let plugin_type = PluginType::Cuckoo29;
 
             // The miner is started
             if miner.are_solvers_started() {
-                if let Some(miner_height) = miner.current_height(plugin_type) {      
+                if let Some(miner_height) = miner.current_height(plugin_type) { 
                     let tip = pow_chain.canonical_tip();
                     let current_height = tip.height();
 
                     if miner_height == current_height {
                         // Check for solutions if the height is constant
                         if let Some(solutions) = miner.get_solutions() {
+                            #[cfg(feature = "miner-test-mode")]     
+                            {
+                                // Sleep for delay time
+                                if let Some(proof_delay) = proof_delay {
+                                    thread::sleep_ms(proof_delay);
+                                }
+                            }
+
                             info!("Found solution for block height {}", miner_height);
                             let solution = solutions.sols[0];
                             let nonce = solution.nonce();
