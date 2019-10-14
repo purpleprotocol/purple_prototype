@@ -270,6 +270,7 @@ pub fn chain_test_set(
             Proof::test_proof(42),
             node_id,
         );
+        pow_block.sign_miner(&sk);
         pow_block.compute_hash();
         let pow_block = Arc::new(pow_block);
 
