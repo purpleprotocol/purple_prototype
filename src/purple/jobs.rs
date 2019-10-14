@@ -89,6 +89,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
 
                             // TODO: Set and retrieve the node's collector address
                             let collector_address = NormalAddress::random();
+                            let node_id = network.our_node_id().clone();
 
                             // Create block
                             let mut block = PowBlock::new(
@@ -97,7 +98,9 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                                 ip,
                                 miner_height + 1,
                                 proof,
+                                node_id,
                             );
+                            block.sign_miner(network.secret_key());
                             block.compute_hash();
                             let block = Arc::new(block);
 
