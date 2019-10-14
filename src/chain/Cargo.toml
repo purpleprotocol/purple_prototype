@@ -28,7 +28,7 @@ hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde
 
 [dev-dependencies]
 graphlib = { version = "0.5.3", features = ["dot"] }
-rayon = "1.0.3"
+rayon = "1.2.0"
 test-helpers = { path = "../util/test-helpers" }
 
 [dev-dependencies.miner]

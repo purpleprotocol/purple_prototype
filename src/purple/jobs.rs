@@ -102,14 +102,17 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                             let block = Arc::new(block);
 
                             // Append block to our chain
-                            pow_chain.append_block(block.clone()).map_err(|err| warn!("Could not append block to pow chain! Reason: {:?}", err));
+                            let result = pow_chain.append_block(block.clone()).map_err(|err| warn!("Could not append block to pow chain! Reason: {:?}", err));
 
-                            let block_wrapper = BlockWrapper::from_pow_block(block);
-                            let packet = ForwardBlock::new(block_wrapper);
-                            let packet = packet.to_bytes();
+                            // Only propagate block if the chain append was successful
+                            if let Ok(_) = result {
+                                let block_wrapper = BlockWrapper::from_pow_block(block);
+                                let packet = ForwardBlock::new(block_wrapper);
+                                let packet = packet.to_bytes();
 
-                            // Send block to all of our peers
-                            network.send_to_all(&packet).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
+                                // Send block to all of our peers
+                                network.send_to_all(&packet).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
+                            }
                         } else {
                             //debug!("No solution found...");
                             // TODO: Maybe hook this to a progress visualizer

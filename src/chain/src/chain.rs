@@ -86,8 +86,11 @@ pub enum AppendCondErr {
     /// byzantine action performed by a validator node.
     BadValidator,
 
-    /// The block's proof of work is invalid
+    /// The block's proof of work is invalid.
     BadProof,
+
+    /// The miner's signature on a PoW block is invalid.
+    BadMinerSig,
 }
 
 lazy_static! {

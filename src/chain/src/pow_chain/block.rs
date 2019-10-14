@@ -21,6 +21,7 @@ use crate::chain::*;
 use crate::pow_chain_state::PowChainState;
 use crate::types::*;
 use account::NormalAddress;
+use crypto::{NodeId, Signature, SecretKey as Sk};
 use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
@@ -44,14 +45,15 @@ lazy_static! {
             parent_hash: None,
             proof: Proof::zero(PROOF_SIZE),
             collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
+            miner_id: NodeId::from_pkey(PublicKey([0; 32])),
             height: 0,
             hash: None,
+            miner_signature: None,
             ip: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 44034),
             timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
         };
 
         block.compute_hash();
-
         Arc::new(block)
     };
 }
@@ -65,6 +67,12 @@ pub struct PowBlock {
     /// The address that will collect the
     /// rewards earned by the miner.
     collector_address: NormalAddress,
+
+    /// The `NodeId` belonging to the miner.
+    miner_id: NodeId,
+
+    /// The `Signature` corresponding to the miner's id.
+    miner_signature: Option<Signature>,
 
     /// The hash of the parent block.
     parent_hash: Option<Hash>,
@@ -147,6 +155,11 @@ impl Block for PowBlock {
     ) -> Result<Self::ChainState, ChainErr> {
         let block_hash = block.block_hash().unwrap();
 
+        // Verify the signature of the miner over the block
+        if !block.verify_miner_sig() {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadMinerSig));
+        }
+
         // TODO: Validate difficulty. Issue #118
         let difficulty = 0;
 
@@ -186,6 +199,8 @@ impl Block for PowBlock {
         buf.extend_from_slice(&self.hash.unwrap().0);
         buf.extend_from_slice(&self.parent_hash.unwrap().0);
         buf.extend_from_slice(&self.collector_address.to_bytes());
+        buf.extend_from_slice(&(&self.miner_id.0).0);
+        buf.extend_from_slice(&self.miner_signature.as_ref().unwrap().to_bytes());
         buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(address);
         buf.extend_from_slice(&timestamp);
@@ -265,6 +280,28 @@ impl Block for PowBlock {
             return Err("Incorrect packet structure 5");
         };
 
+        let miner_id = if buf.len() > 32 as usize {
+            let id: Vec<u8> = buf.drain(..32).collect();
+
+            match NodeId::from_bytes(&id) {
+                Ok(address) => address,
+                _ => return Err("Incorrect miner id field"),
+            }
+        } else {
+            return Err("Incorrect packet structure 6");
+        };
+
+        let miner_signature = if buf.len() > 64 as usize {
+            let sig: Vec<u8> = buf.drain(..64).collect();
+
+            match Signature::from_bytes(&sig) {
+                Ok(address) => address,
+                _ => return Err("Incorrect signature field"),
+            }
+        } else {
+            return Err("Incorrect packet structure 7");
+        };
+
         let proof = if buf.len() > 1 + 8 + 8 * PROOF_SIZE {
             let proof: Vec<u8> = buf.drain(..(1 + 8 + 8 * PROOF_SIZE)).collect();
 
@@ -273,7 +310,7 @@ impl Block for PowBlock {
                 _ => return Err("Incorrect proof field"),
             }
         } else {
-            return Err("Incorrect packet structure 6");
+            return Err("Incorrect packet structure 8");
         };
 
         let address = if buf.len() > address_len as usize {
@@ -287,7 +324,7 @@ impl Block for PowBlock {
                 Err(_) => return Err("Invalid ip address"),
             }
         } else {
-            return Err("Incorrect packet structure 7");
+            return Err("Incorrect packet structure 9");
         };
 
         let timestamp = if buf.len() == timestamp_len as usize {
@@ -305,9 +342,11 @@ impl Block for PowBlock {
         Ok(Arc::new(PowBlock {
             timestamp,
             collector_address,
+            miner_id,
             proof,
             hash: Some(hash),
             parent_hash: Some(parent_hash),
+            miner_signature: Some(miner_signature),
             ip: address,
             height,
         }))
@@ -323,16 +362,30 @@ impl PowBlock {
         ip: SocketAddr,
         height: u64,
         proof: Proof,
+        miner_id: NodeId,
     ) -> PowBlock {
         PowBlock {
             parent_hash,
             collector_address,
+            miner_id,
             height,
             hash: None,
+            miner_signature: None,
             ip,
             proof,
             timestamp: Utc::now(),
         }
+    }
+
+    pub fn sign_miner(&mut self, sk: &Sk) {
+        let message = self.compute_sign_message();
+        let sig = crypto::sign(&message, sk);
+        self.miner_signature = Some(sig);
+    }
+
+    pub fn verify_miner_sig(&self) -> bool {
+        let message = self.compute_sign_message();
+        crypto::verify(&message, self.miner_signature.as_ref().unwrap(), &self.miner_id.0)
     }
 
     pub fn compute_hash(&mut self) {
@@ -356,11 +409,38 @@ impl PowBlock {
 
         buf.extend_from_slice(&encoded_height);
 
-        if let Some(parent_hash) = self.parent_hash {
+        if let Some(ref parent_hash) = self.parent_hash {
             buf.extend_from_slice(&parent_hash.0);
         }
 
         buf.extend_from_slice(&self.collector_address.to_bytes());
+        buf.extend_from_slice(&(self.miner_id.0).0);
+        buf.extend_from_slice(&self.proof.to_bytes());
+
+        if let Some(ref miner_signature) = self.miner_signature {
+            buf.extend_from_slice(&miner_signature.to_bytes());
+        }
+
+        buf.extend_from_slice(addr.as_bytes());
+        buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
+        buf
+    }
+
+    fn compute_sign_message(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+        let encoded_height = encode_be_u64!(self.height);
+        let addr = format!("{}", self.ip);
+
+        buf.extend_from_slice(&encoded_height);
+
+        if let Some(ref parent_hash) = self.parent_hash {
+            buf.extend_from_slice(&parent_hash.0);
+        } else {
+            unreachable!();
+        }
+
+        buf.extend_from_slice(&self.collector_address.to_bytes());
+        buf.extend_from_slice(&(self.miner_id.0).0);
         buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(addr.as_bytes());
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
@@ -377,6 +457,8 @@ impl Arbitrary for PowBlock {
             collector_address: Arbitrary::arbitrary(g),
             parent_hash: Some(Arbitrary::arbitrary(g)),
             hash: Some(Arbitrary::arbitrary(g)),
+            miner_id: Arbitrary::arbitrary(g),
+            miner_signature: Some(Arbitrary::arbitrary(g)),
             ip: Arbitrary::arbitrary(g),
             proof: Proof::random(PROOF_SIZE),
             timestamp: Utc::now(),
