@@ -69,6 +69,8 @@ mod packet;
 mod peer;
 mod protocol_flow;
 mod validation;
+mod pool_network;
+mod pool_peer;
 
 pub use bootstrap::*;
 pub use connection::*;
@@ -78,6 +80,8 @@ pub use interface::*;
 pub use network::*;
 pub use packet::*;
 pub use peer::*;
+pub use pool_network::*;
+pub use pool_peer::*;
 
 #[cfg(test)]
 use tempdir::TempDir;
