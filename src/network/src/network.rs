@@ -306,16 +306,10 @@ impl NetworkInterface for Network {
             (peer.id.is_none(), peer.connection_type)
         };
 
-        let is_server = if let ConnectionType::Server = conn_type {
-            true
-        } else {
-            false
-        };
-
         // We should receive a connect packet
         // if the peer's id is non-existent and
         // the connection is of type `Server`.
-        if is_none_id && is_server {
+        if is_none_id {
             match Connect::from_bytes(packet) {
                 Ok(connect_packet) => {
                     debug!(
@@ -342,9 +336,6 @@ impl NetworkInterface for Network {
                     }
                 } 
             }
-        } else if is_none_id && !is_server {
-            debug!("Invalid connect packet from {}", peer);
-            Err(NetworkErr::InvalidConnectPacket)
         } else {
             crate::common::handle_packet(self, conn_type, peer, &packet)?;
 

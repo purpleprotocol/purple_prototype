@@ -51,7 +51,7 @@ pub fn wrap_encrypt_packet(
 /// Wraps a packet without encrypting it.
 ///
 /// ### Header fields
-/// ```
+/// ```ignore
 /// 1) Network layer version          - 8bits
 /// 2) Packet length                  - 16bits
 /// 3) CRC32 of packet + network name - 32bits
