@@ -174,7 +174,7 @@ impl Packet for Connect {
 
                 // Compute session keys
                 let result = match conn_type {
-                    ConnectionType::Client => crypto::client_sk(&peer.pk, &peer.sk, kx_key),
+                    ConnectionType::Client(_) => crypto::client_sk(&peer.pk, &peer.sk, kx_key),
                     ConnectionType::Server => crypto::server_sk(&peer.pk, &peer.sk, kx_key),
                 };
 

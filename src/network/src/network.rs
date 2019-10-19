@@ -20,8 +20,10 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
+use crate::packets::connect_pool::ConnectPool;
 use crate::bootstrap::cache::BootstrapCache;
 use crate::connection::*;
+use crate::peer::{ConnectionType, SubConnectionType};
 use chain::*;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
@@ -165,6 +167,7 @@ impl NetworkInterface for Network {
             self.clone(),
             self.accept_connections.clone(),
             address,
+            SubConnectionType::Normal,
         );
 
         Ok(())
@@ -299,13 +302,20 @@ impl NetworkInterface for Network {
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         let (is_none_id, conn_type) = {
             let peers = self.peers.read();
-            let peer = peers.get(peer).unwrap();
+            let peer = peers.get(peer).ok_or(NetworkErr::PeerNotFound)?;
             (peer.id.is_none(), peer.connection_type)
         };
 
+        let is_server = if let ConnectionType::Server = conn_type {
+            true
+        } else {
+            false
+        };
+
         // We should receive a connect packet
-        // if the peer's id is non-existent.
-        if is_none_id {
+        // if the peer's id is non-existent and
+        // the connection is of type `Server`.
+        if is_none_id && is_server {
             match Connect::from_bytes(packet) {
                 Ok(connect_packet) => {
                     debug!(
@@ -318,19 +328,30 @@ impl NetworkInterface for Network {
 
                     Ok(())
                 }
-                _ => {
-                    // Invalid packet, remove peer
-                    debug!("Invalid connect packet from {}", peer);
-                    Err(NetworkErr::InvalidConnectPacket)
-                }
+
+                _ => match ConnectPool::from_bytes(packet) {
+                    Ok(packet) => {
+                        // TODO: Move peer from default network to a pool network
+                        unimplemented!();
+                    }
+                    
+                    _ => {
+                        // Invalid packet, remove peer
+                        debug!("Invalid connect packet from {}", peer);
+                        Err(NetworkErr::InvalidConnectPacket)
+                    }
+                } 
             }
+        } else if is_none_id && !is_server {
+            debug!("Invalid connect packet from {}", peer);
+            Err(NetworkErr::InvalidConnectPacket)
         } else {
             crate::common::handle_packet(self, conn_type, peer, &packet)?;
 
             // Refresh peer timeout timer
             {
                 let peers = self.peers.read();
-                let peer = peers.get(peer).unwrap();
+                let peer = peers.get(peer).ok_or(NetworkErr::PeerNotFound)?;
                 peer.last_seen.store(0, Ordering::SeqCst);
             }
 

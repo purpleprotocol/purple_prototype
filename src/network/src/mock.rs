@@ -20,7 +20,7 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::*;
-use crate::peer::{ConnectionType, Peer};
+use crate::peer::{ConnectionType, SubConnectionType, Peer};
 use crate::validation::sender::Sender as SenderTrait;
 use crate::bootstrap::cache::BootstrapCache;
 use persistence::PersistentDb;
@@ -91,7 +91,7 @@ impl NetworkInterface for MockNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client(SubConnectionType::Normal), None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
@@ -384,7 +384,7 @@ impl MockNetwork {
     pub fn connect_no_ping(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client(SubConnectionType::Normal), None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();

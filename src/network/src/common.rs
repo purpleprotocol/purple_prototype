@@ -51,10 +51,12 @@ pub fn wrap_encrypt_packet(
 /// Wraps a packet without encrypting it.
 ///
 /// ### Header fields
+/// ```
 /// 1) Network layer version          - 8bits
 /// 2) Packet length                  - 16bits
 /// 3) CRC32 of packet + network name - 32bits
 /// 4) Packet                         - Binary of packet length
+/// ```
 pub fn wrap_packet(packet: &[u8], network_name: &str) -> Vec<u8> {
     let packet_len = packet.len();
     let mut buf: Vec<u8> = Vec::with_capacity(HEADER_SIZE + packet_len);

@@ -24,6 +24,8 @@ use crate::packet::Packet;
 use crate::packets::connect::Connect;
 use crate::bootstrap::cache::BootstrapCache;
 use crate::connection::*;
+use consensus::ConsensusMachine;
+use events::Event;
 use chain::*;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
@@ -41,10 +43,13 @@ use std::sync::mpsc::Sender;
 use futures::sync::mpsc::Sender;
 
 #[derive(Clone)]
-/// Separate network interface specific for validator pools.
+/// Separate network interface specific for validator pools. 
 pub struct PoolNetwork {
     /// Mapping between connected ips and peer information
     pub(crate) peers: Arc<RwLock<HashMap<SocketAddr, PoolPeer>>>,
+
+    /// Associated reference to consensus state machine
+    pub(crate) consensus_machine: Arc<RwLock<ConsensusMachine>>,
 
     /// Our node id
     pub(crate) node_id: NodeId,
@@ -65,9 +70,14 @@ impl PoolNetwork {
         port: u16,
         network_name: String,
         secret_key: Sk,
+        epoch: u64,
+        remaining_events: u64,
+        allocated_events: u64,
+        root_event: Arc<Event>,
     ) -> PoolNetwork {
         PoolNetwork {
             peers: Arc::new(RwLock::new(HashMap::new())),
+            consensus_machine: Arc::new(RwLock::new(ConsensusMachine::new(node_id.clone(), epoch, remaining_events, allocated_events, root_event))),
             node_id,
             port,
             network_name,

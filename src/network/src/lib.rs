@@ -40,6 +40,8 @@ extern crate byteorder;
 extern crate chain;
 extern crate chrono;
 extern crate crypto;
+extern crate consensus;
+extern crate events;
 extern crate futures;
 extern crate hashbrown;
 extern crate hashdb;

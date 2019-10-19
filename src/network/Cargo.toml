@@ -22,6 +22,8 @@ hashdb = "0.3.0"
 chain = { path = "../chain" }
 crypto = { path = "../crypto" }
 persistence = { path = "../persistence" }
+consensus = { path = "../consensus" }
+events = { path = "../events" }
 quickcheck = "0.7.2"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["rayon", "serde"] }
 bin-tools = { path = "../util/bin-tools/" }

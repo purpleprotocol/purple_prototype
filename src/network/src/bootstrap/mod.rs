@@ -17,6 +17,7 @@
 */
 
 use crate::connection::*;
+use crate::peer::SubConnectionType;
 use crate::interface::NetworkInterface;
 use futures::stream;
 use futures::Future;
@@ -90,7 +91,7 @@ pub fn bootstrap(
         let network_clone = network.clone();
 
         let fut = stream::iter_ok(peers_to_connect).for_each(move |addr| {
-            connect_to_peer(network.clone(), accept_connections.clone(), &addr)
+            connect_to_peer(network.clone(), accept_connections.clone(), &addr, SubConnectionType::Normal)
         });
 
         tokio::spawn(fut.and_then(move |_| start_peer_list_refresh_interval(network_clone)))

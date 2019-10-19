@@ -39,6 +39,26 @@ use timer::{Guard, Timer};
 /// Size of the outbound buffer.
 pub const OUTBOUND_BUF_SIZE: usize = 10000;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SessionState {
+    /// We are connected to a potential validator but have not yet determined
+    /// the validity of its validator status.
+    PreValidation,
+
+    /// The validator is waiting to join the pool in the assigned epoch.
+    WaitingToJoin(u64),
+
+    /// The validator is currently active.
+    Active,
+
+    /// The validator is still connected but his session in the pool is finished.
+    Finished,
+
+    /// The validator has been found to be unresponsive or byzantine and
+    /// has been kicked out of the pool.
+    Kicked,
+}
+
 #[derive(Clone)]
 pub struct PoolPeer {
     /// The id of the peer
@@ -77,6 +97,9 @@ pub struct PoolPeer {
     /// Session generated public key
     pub pk: Pk,
 
+    /// Peer session state
+    session_state: SessionState,
+
     /// Session generated secret key
     pub(crate) sk: Sk,
 
@@ -103,6 +126,7 @@ impl PoolPeer {
         connection_type: ConnectionType,
         outbound_buffer: Option<Sender<Vec<u8>>>,
         bootstrap_cache: BootstrapCache,
+        start_epoch: u64,
     ) -> PoolPeer {
         let (pk, sk) = gen_kx_keypair();
 
@@ -116,6 +140,7 @@ impl PoolPeer {
             sent_connect: false,
             connection_type,
             outbound_buffer,
+            session_state: SessionState::WaitingToJoin(start_epoch),
             last_seen: Arc::new(AtomicU64::new(0)),
             last_ping: Arc::new(AtomicU64::new(0)),
             validator: ProtocolValidator::new(bootstrap_cache),

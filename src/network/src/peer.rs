@@ -19,11 +19,11 @@
 use crate::error::NetworkErr;
 use crate::validation::validator::ProtocolValidator;
 use crate::bootstrap::cache::BootstrapCache;
-use crypto::NodeId;
+use crypto::{Hash, NodeId};
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use std::default::Default;
 use std::fmt;
-use std::hash::{Hash, Hasher};
+use std::hash::{Hash as HashTrait, Hasher};
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -37,8 +37,21 @@ use timer::{Guard, Timer};
 
 #[derive(Clone, Debug, Copy)]
 pub enum ConnectionType {
-    Client,
+    Client(SubConnectionType),
     Server,
+}
+
+#[derive(Clone, Debug, Copy)]
+/// Sub-connection type used as flag for connection processing
+/// when we are connecting as `Client`. In the case of the `Server`
+/// type, this is determined at run-time.
+pub enum SubConnectionType {
+    /// Normal connection
+    Normal,
+
+    /// Validator connection with sub-field containing the hash
+    /// of the miner PoW block.
+    Validator(Hash),
 }
 
 /// Size of the outbound buffer.
@@ -120,6 +133,13 @@ impl Peer {
     ) -> Peer {
         let (pk, sk) = gen_kx_keypair();
 
+        match connection_type {
+            ConnectionType::Client(SubConnectionType::Validator(_)) => {
+                panic!("Cannot create a normal peer with the validator sub-connection type!");
+            }
+            _ => { } // Do nothing
+        }
+
         Peer {
             id: id,
             ip: ip,
@@ -178,7 +198,7 @@ impl PartialEq for Peer {
 
 impl Eq for Peer {}
 
-impl Hash for Peer {
+impl HashTrait for Peer {
     fn hash<H: Hasher>(&self, state: &mut H) {
         if let Some(id) = &self.id {
             id.hash(state);
