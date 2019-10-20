@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::pool_network::PoolNetwork;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -85,6 +86,11 @@ pub struct MockNetwork {
 
     /// Associated bootstrap cache
     bootstrap_cache: BootstrapCache,
+
+    #[cfg(feature = "miner")]
+    /// Validator pool sub-network. This field is `None` if we
+    /// are not in a validator pool.
+    current_pool: Option<PoolNetwork>,
 }
 
 impl NetworkInterface for MockNetwork {
@@ -113,6 +119,11 @@ impl NetworkInterface for MockNetwork {
 
     fn port(&self) -> u16 {
         self.port
+    }
+
+    #[cfg(feature = "miner")]
+    fn validator_pool_network_ref(&self) -> Option<PoolNetwork> {
+        self.current_pool.clone()
     }
 
     fn is_connected_to(&self, address: &SocketAddr) -> bool {
@@ -376,6 +387,9 @@ impl MockNetwork {
             ip,
             port,
             network_name,
+
+            #[cfg(feature = "miner")]
+            current_pool: None,
         }
     }
 

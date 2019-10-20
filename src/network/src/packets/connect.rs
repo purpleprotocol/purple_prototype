@@ -166,11 +166,7 @@ impl Packet for Connect {
                 let mut peers = peers.write();
                 let node_id = node_id.clone();
                 let kx_key = &packet.kx_key;
-                let mut peer = if let Some(peer) = peers.get_mut(addr) {
-                    peer
-                } else {
-                    return Err(NetworkErr::PeerNotFound);
-                };
+                let mut peer = peers.get_mut(addr).ok_or(NetworkErr::PeerNotFound)?;
 
                 // Compute session keys
                 let result = match conn_type {

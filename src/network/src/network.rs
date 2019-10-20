@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::pool_network::PoolNetwork;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -78,6 +79,11 @@ pub struct Network {
 
     /// Accept connections boolean reference
     pub(crate) accept_connections: Arc<AtomicBool>,
+
+    #[cfg(feature = "miner")]
+    /// Validator pool sub-network. This field is `None` if we
+    /// are not in a validator pool.
+    current_pool: Option<PoolNetwork>,
 }
 
 impl Network {
@@ -107,6 +113,9 @@ impl Network {
             state_chain_ref,
             bootstrap_cache,
             accept_connections,
+
+            #[cfg(feature = "miner")]
+            current_pool: None,
         }
     }
 
@@ -196,6 +205,11 @@ impl NetworkInterface for Network {
 
     fn has_peer_with_id(&self, id: &NodeId) -> bool {
         unimplemented!()
+    }
+
+    #[cfg(feature = "miner")]
+    fn validator_pool_network_ref(&self) -> Option<PoolNetwork> {
+        self.current_pool.clone()
     }
 
     fn port(&self) -> u16 {
@@ -324,11 +338,29 @@ impl NetworkInterface for Network {
                 }
 
                 _ => match ConnectPool::from_bytes(packet) {
+                    #[cfg(feature = "miner")]
                     Ok(packet) => {
-                        // TODO: Move peer from default network to a pool network
-                        unimplemented!();
+                        debug!(
+                            "Received connect pool packet from {}: {:?}",
+                            peer, packet
+                        );
+
+                        // Handle connect packet
+                        ConnectPool::handle(self, peer, &packet, conn_type)?;
+
+                        Ok(())
                     }
-                    
+
+                    #[cfg(not(feature = "miner"))]
+                    Ok(_) => {
+                        debug!(
+                            "Received connect pool packet from {}: {:?}",
+                            peer, packet
+                        );
+
+                        Err(NetworkErr::NotMiner)
+                    }
+
                     _ => {
                         // Invalid packet, remove peer
                         debug!("Invalid connect packet from {}", peer);

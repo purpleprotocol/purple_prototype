@@ -40,7 +40,7 @@ use timer::{Guard, Timer};
 pub const OUTBOUND_BUF_SIZE: usize = 10000;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum SessionState {
+pub enum SessionState {
     /// We are connected to a potential validator but have not yet determined
     /// the validity of its validator status.
     PreValidation,
@@ -87,9 +87,6 @@ pub struct PoolPeer {
     /// Time in milliseconds since we have sent a ping to the peer.
     pub last_ping: Arc<AtomicU64>,
 
-    /// Wether the peer has sent a `Connect` packet or not.
-    pub sent_connect: bool,
-
     /// Buffer storing packets that are to be
     /// sent to the peer.
     pub outbound_buffer: Option<Sender<Vec<u8>>>,
@@ -98,7 +95,7 @@ pub struct PoolPeer {
     pub pk: Pk,
 
     /// Peer session state
-    session_state: SessionState,
+    pub(crate) session_state: SessionState,
 
     /// Session generated secret key
     pub(crate) sk: Sk,
@@ -108,9 +105,6 @@ pub struct PoolPeer {
 
     /// The peer's encryption key
     pub(crate) tx: Option<SessionKey>,
-
-    /// Associated protocol validator
-    pub(crate) validator: ProtocolValidator,
 }
 
 impl fmt::Debug for PoolPeer {
@@ -125,8 +119,6 @@ impl PoolPeer {
         ip: SocketAddr,
         connection_type: ConnectionType,
         outbound_buffer: Option<Sender<Vec<u8>>>,
-        bootstrap_cache: BootstrapCache,
-        start_epoch: u64,
     ) -> PoolPeer {
         let (pk, sk) = gen_kx_keypair();
 
@@ -137,13 +129,11 @@ impl PoolPeer {
             sk: sk,
             rx: None,
             tx: None,
-            sent_connect: false,
             connection_type,
             outbound_buffer,
-            session_state: SessionState::WaitingToJoin(start_epoch),
+            session_state: SessionState::PreValidation,
             last_seen: Arc::new(AtomicU64::new(0)),
             last_ping: Arc::new(AtomicU64::new(0)),
-            validator: ProtocolValidator::new(bootstrap_cache),
         }
     }
 

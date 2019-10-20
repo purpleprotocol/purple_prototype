@@ -36,7 +36,6 @@ pub struct Ping {
 impl Ping {
     pub fn new() -> Ping {
         let mut rng = rand::thread_rng();
-
         Ping { nonce: rng.gen() }
     }
 }

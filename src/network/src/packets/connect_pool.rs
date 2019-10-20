@@ -161,13 +161,95 @@ impl Packet for ConnectPool {
         Ok(Arc::new(packet))
     }
 
+    #[cfg(not(feature = "miner"))]
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
         packet: &ConnectPool,
         conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        unimplemented!();
+        unreachable!();
+    }
+
+    #[cfg(feature = "miner")]
+    fn handle<N: NetworkInterface>(
+        network: &mut N,
+        addr: &SocketAddr,
+        packet: &ConnectPool,
+        conn_type: ConnectionType,
+    ) -> Result<(), NetworkErr> {
+        let pool_network = network.validator_pool_network_ref().ok_or(NetworkErr::NoPoolSession)?;
+
+        // Verify packet signature
+        if !packet.verify_sig() {
+            return Err(NetworkErr::BadSignature);
+        }
+
+        let our_node_id = network.our_node_id().clone();
+        let node_id = packet.node_id.clone();
+
+        // Avoid connecting to ourselves
+        if our_node_id != node_id {
+            let mut our_pk = None;
+
+            {
+                let node_id = node_id.clone();
+                let kx_key = &packet.kx_key;
+
+                // Remove peer entry from default network interface
+                let mut peer = {
+                    let peers = network.peers();
+                    let mut peers = peers.write();
+                    peers.remove(addr).ok_or(NetworkErr::PeerNotFound)?
+                };
+
+                // Compute session keys
+                let result = match conn_type {
+                    ConnectionType::Client(_) => crypto::client_sk(&peer.pk, &peer.sk, kx_key),
+                    ConnectionType::Server => crypto::server_sk(&peer.pk, &peer.sk, kx_key),
+                };
+
+                let (rx, tx) = if let Ok(result) = result {
+                    result
+                } else {
+                    return Err(NetworkErr::InvalidConnectPacket);
+                };
+
+                // Set generated session keys
+                peer.rx = Some(rx);
+                peer.tx = Some(tx);
+
+                // Mark peer as having sent a connect packet
+                peer.sent_connect = true;
+
+                // Set node id
+                peer.id = Some(node_id);
+
+                // Fetch credentials
+                our_pk = Some(peer.pk.clone());
+
+                // Map peer entry to validator entry
+                let peer = peer.to_validator();
+
+                // Store validator entry
+                let mut pool_peers = pool_network.peers.write();
+                pool_peers.insert(addr.clone(), peer);
+            }
+
+            // If we are the server, also send a connect packet back
+            if let ConnectionType::Server = conn_type {
+                let consensus_m = pool_network.consensus_machine.read();
+
+                debug!("Sending connect packet to {}", addr);
+                let mut packet = ConnectPool::new(our_node_id, our_pk.unwrap(), consensus_m.start_pow_block);
+                packet.sign(network.secret_key());
+                network.send_raw(addr, &packet.to_bytes())?;
+            }
+
+            Ok(())
+        } else {
+            Err(NetworkErr::SelfConnect)
+        }
     }
 }
 

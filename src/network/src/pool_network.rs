@@ -27,7 +27,7 @@ use crate::connection::*;
 use consensus::ConsensusMachine;
 use events::Event;
 use chain::*;
-use crypto::NodeId;
+use crypto::{Hash, NodeId};
 use crypto::SecretKey as Sk;
 use hashbrown::{HashMap, HashSet};
 use parking_lot::RwLock;
@@ -69,6 +69,8 @@ impl PoolNetwork {
         node_id: NodeId,
         port: u16,
         network_name: String,
+        start_pow_block: Hash,
+        end_pow_block: Hash,
         secret_key: Sk,
         epoch: u64,
         remaining_events: u64,
@@ -77,7 +79,7 @@ impl PoolNetwork {
     ) -> PoolNetwork {
         PoolNetwork {
             peers: Arc::new(RwLock::new(HashMap::new())),
-            consensus_machine: Arc::new(RwLock::new(ConsensusMachine::new(node_id.clone(), epoch, remaining_events, allocated_events, root_event))),
+            consensus_machine: Arc::new(RwLock::new(ConsensusMachine::new(node_id.clone(), epoch, remaining_events, allocated_events, start_pow_block, end_pow_block, root_event))),
             node_id,
             port,
             network_name,
@@ -149,6 +151,11 @@ impl NetworkInterface for PoolNetwork {
 
     fn has_peer(&self, addr: &SocketAddr) -> bool {
         self.peers.read().get(addr).is_some()
+    }
+
+    #[cfg(feature = "miner")]
+    fn validator_pool_network_ref(&self) -> Option<PoolNetwork> {
+        Some(self.clone())
     }
 
     fn has_peer_with_id(&self, id: &NodeId) -> bool {

@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::pool_peer::{PoolPeer, SessionState};
 use crate::error::NetworkErr;
 use crate::validation::validator::ProtocolValidator;
 use crate::bootstrap::cache::BootstrapCache;
@@ -182,6 +183,24 @@ impl Peer {
         sender
             .try_send(packet)
             .map_err(|err| { debug!("Packet sending error: {:?}", err); NetworkErr::CouldNotSend })
+    }
+
+    /// Consumes a `Peer` struct and returns a `PeerPool` struct
+    /// that can be appended to a validator network peer table.
+    pub fn to_validator(self) -> PoolPeer {
+        PoolPeer {
+            rx: self.rx,
+            tx: self.tx,
+            pk: self.pk,
+            sk: self.sk,
+            id: self.id,
+            ip: self.ip,
+            last_seen: self.last_seen,
+            last_ping: self.last_ping,
+            connection_type: self.connection_type,
+            outbound_buffer: self.outbound_buffer,
+            session_state: SessionState::PreValidation,
+        }
     }
 }
 

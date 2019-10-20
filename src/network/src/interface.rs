@@ -17,6 +17,7 @@
 */
 
 use crate::chain::*;
+use crate::pool_network::PoolNetwork;
 use crate::error::NetworkErr;
 use crate::peer::Peer;
 use crate::bootstrap::cache::BootstrapCache;
@@ -87,6 +88,10 @@ pub trait NetworkInterface {
 
     /// Returns a reference to the peer table `RwLock`.
     fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>>;
+
+    #[cfg(feature = "miner")]
+    /// Returns a reference to the validator pool sub-network interface.
+    fn validator_pool_network_ref(&self) -> Option<PoolNetwork>;
 
     /// Returns a reference to the `PowChain`.
     fn pow_chain_ref(&self) -> PowChainRef;
