@@ -26,14 +26,6 @@ use std::io::Cursor;
 // Currency hashes per key
 pub const CUR_GROUP_CAPACITY: usize = 50;
 
-#[cfg(not(test))]
-// Mininum amount of transactions required for
-// being able to create a currency.
-pub const MIN_CREATOR_NONCE: u64 = 50;
-
-#[cfg(test)]
-pub const MIN_CREATOR_NONCE: u64 = 0;
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateCurrency {
     pub creator: NormalAddress,
@@ -132,11 +124,6 @@ impl CreateCurrency {
         let mut balance = Balance::from_bytes(&bin_creator_balance).unwrap();
 
         balance -= self.fee.clone();
-
-        // Check nonce validity
-        if nonce < MIN_CREATOR_NONCE {
-            return false;
-        }
 
         if nonce + 1 != self.nonce {
             return false;

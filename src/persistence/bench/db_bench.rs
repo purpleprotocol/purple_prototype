@@ -1,4 +1,4 @@
-#![feature(test)]
+//#![feature(test)]
 
 #[macro_use]
 extern crate criterion;
