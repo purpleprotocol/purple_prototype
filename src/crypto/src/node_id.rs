@@ -50,6 +50,12 @@ impl std::fmt::Debug for NodeId {
     }
 }
 
+impl std::fmt::Display for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(self.0))
+    }
+}
+
 impl Arbitrary for NodeId {
     fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> NodeId {
         let mut rng = rand::thread_rng();

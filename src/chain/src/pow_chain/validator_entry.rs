@@ -16,10 +16,22 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod block;
-pub mod chain;
-pub mod chain_state;
-pub mod validator_entry;
-pub mod epoch_info;
+use std::net::SocketAddr;
 
-pub use self::chain_state::*;
+#[derive(Clone, Debug, PartialEq)]
+pub struct ValidatorEntry {
+    /// The ip of the validator
+    pub(crate) ip: SocketAddr,
+
+    /// Total allocated events for this validator.
+    pub(crate) total_allocated: u64,
+}
+
+impl ValidatorEntry {
+    pub fn new(ip: SocketAddr, total_allocated: u64) -> ValidatorEntry {
+        ValidatorEntry {
+            ip,
+            total_allocated,
+        }
+    }
+}

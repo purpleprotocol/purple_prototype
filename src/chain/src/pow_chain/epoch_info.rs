@@ -16,10 +16,21 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod block;
-pub mod chain;
-pub mod chain_state;
-pub mod validator_entry;
-pub mod epoch_info;
+use hashbrown::HashSet;
+use crypto::NodeId;
 
-pub use self::chain_state::*;
+#[derive(Clone, Debug, PartialEq)]
+pub struct EpochInfo {
+    /// Current epoch
+    pub(crate) epoch: u64,
+
+    /// Set containing node ids that should join the pool in this epoch.
+    pub(crate) should_join: HashSet<NodeId>,
+
+    /// Set containing node ids that should remain in the pool in this epoch
+    /// i.e. not join nor leave the pool.
+    pub(crate) should_remain: HashSet<NodeId>,
+
+    /// Set containing node ids that should leave the pool at the end of this epoch.
+    pub(crate) should_leave: HashSet<NodeId>,
+}

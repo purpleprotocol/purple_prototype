@@ -21,7 +21,7 @@
 use crate::block::Block;
 use crate::pow_chain::block::*;
 use crate::pow_chain::chain::*;
-use crate::pow_chain_state::PowChainState;
+use crate::pow_chain::PowChainState;
 use crate::state_chain::block::*;
 use crate::state_chain::chain::*;
 use crate::state_chain::state::*;

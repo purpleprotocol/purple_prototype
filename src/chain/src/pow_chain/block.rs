@@ -18,8 +18,10 @@
 
 use crate::block::Block;
 use crate::chain::*;
-use crate::pow_chain_state::PowChainState;
+use crate::pow_chain::PowChainState;
+use crate::pow_chain::validator_entry::ValidatorEntry;
 use crate::types::*;
+use hashbrown::HashSet;
 use account::NormalAddress;
 use crypto::{NodeId, Signature, SecretKey as Sk};
 use bin_tools::*;
@@ -37,6 +39,17 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
+
+/// The minimum number of validators that can be in a pool
+/// at a given time. If there are less validators available
+/// they will be buffered until this number is reached after
+/// which a pool session can be started.
+pub const PENDING_VAL_BUF_SIZE: u64 = 10;
+
+/// The maximum amount of validators that can be active at the same time.
+/// If more validators are available, they will be buffered until other 
+/// validators leave the pool.
+pub const MAX_POOL_SIZE: u64 = 60;
 
 lazy_static! {
     /// Atomic reference count to pow chain genesis block
@@ -179,6 +192,111 @@ impl Block for PowBlock {
         ) {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadProof));
         }
+
+        let exists = chain_state.pending_validator_lookup.get(&block.miner_id).is_some()
+            || chain_state.active_validator_lookup.get(&block.miner_id).is_some()
+            || chain_state.active_validator_ips.get(&block.ip).is_some()
+            || chain_state.pending_validator_ips.get(&block.ip).is_some();
+
+        // Check for existence in the pool
+        if exists {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::AlreadyInPool));
+        }
+
+        // Buffer validator if there are not enough validators in the pool
+        if chain_state.active_validator_count() < PENDING_VAL_BUF_SIZE {
+            let start_epoch = block.height() + (PENDING_VAL_BUF_SIZE - chain_state.active_validator_count());
+            
+            // TODO: Calculate end epoch, to keep it simple for now,
+            // each validator's lifetime will be 1 epoch.
+            let end_epoch = start_epoch + 1;
+
+            // TODO: Calculate total allocated events
+            let total_allocated = 1000;
+
+            // Create entry
+            let entry = ValidatorEntry::new(block.ip, total_allocated);
+
+            // Push miner id to the pending validators stack
+            chain_state.pending_validators.push(block.miner_id.clone());
+
+            // Add validator entry to lookup table
+            chain_state.pending_validator_lookup.insert(block.miner_id.clone(), entry);
+
+            // Add validator ip to pending ips set
+            chain_state.pending_validator_ips.insert(block.ip);
+
+            // Add to start epochs mapping
+            if let Some(entries) = chain_state.start_epochs_mapping.get_mut(&start_epoch) {
+                entries.insert(block.miner_id.clone());
+            } else {
+                let mut entries = HashSet::new();
+                entries.insert(block.miner_id.clone());
+                chain_state.start_epochs_mapping.insert(start_epoch, entries);
+            }
+
+            // Add to end epochs mapping
+            if let Some(entries) = chain_state.end_epochs_mapping.get_mut(&end_epoch) {
+                entries.insert(block.miner_id.clone());
+            } else {
+                let mut entries = HashSet::new();
+                entries.insert(block.miner_id.clone());
+                chain_state.end_epochs_mapping.insert(end_epoch, entries);
+            }
+
+            info!("Not enough validators to form a pool. Validator {} has been buffered. The next possible pool will be able to form at epoch {}", block.miner_id, start_epoch);
+        } else if chain_state.active_validator_count() >= MAX_POOL_SIZE {
+            // Also buffer validator if we have more than the maximum pool size
+            let start_epoch = chain_state.first_end_epoch.unwrap();
+            
+            // TODO: Calculate end epoch. To keep it simple for now,
+            // each validator's lifetime in the pool will be 1 epoch.
+            let end_epoch = start_epoch + 1;
+
+            // TODO: Calculate total allocated events
+            let total_allocated = 1000;
+
+            // Create entry
+            let entry = ValidatorEntry::new(block.ip, total_allocated);
+
+            // Push miner id to the pending validators stack
+            chain_state.pending_validators.push(block.miner_id.clone());
+
+            // Add validator entry to lookup table
+            chain_state.pending_validator_lookup.insert(block.miner_id.clone(), entry);
+
+            // Add validator ip to pending ips set
+            chain_state.pending_validator_ips.insert(block.ip);
+
+            // Add to start epochs mapping
+            if let Some(entries) = chain_state.start_epochs_mapping.get_mut(&start_epoch) {
+                entries.insert(block.miner_id.clone());
+            } else {
+                let mut entries = HashSet::new();
+                entries.insert(block.miner_id.clone());
+                chain_state.start_epochs_mapping.insert(start_epoch, entries);
+            }
+
+            // Add to end epochs mapping
+            if let Some(entries) = chain_state.end_epochs_mapping.get_mut(&end_epoch) {
+                entries.insert(block.miner_id.clone());
+            } else {
+                let mut entries = HashSet::new();
+                entries.insert(block.miner_id.clone());
+                chain_state.end_epochs_mapping.insert(end_epoch, entries);
+            }
+
+            info!("Too many validators in the pool! Validator {} has been buffered. The next epoch where it is possible to join is {}", block.miner_id, start_epoch);
+        } else {
+            // Otherwise, we simply join the validator to the next epoch's set
+            unimplemented!();
+        }
+
+        // Remove old validators
+        unimplemented!();
+
+        // Set new chain state height
+        chain_state.height = block.height();
 
         Ok(chain_state)
     }

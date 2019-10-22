@@ -91,6 +91,9 @@ pub enum AppendCondErr {
 
     /// The miner's signature on a PoW block is invalid.
     BadMinerSig,
+
+    /// The validator with the given id or ip is already in the validator pool.
+    AlreadyInPool,
 }
 
 lazy_static! {
