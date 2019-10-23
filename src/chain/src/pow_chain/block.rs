@@ -227,11 +227,11 @@ impl Block for PowBlock {
 
         // Buffer validator if there are not enough validators in the pool
         if chain_state.active_validator_count() < PENDING_VAL_BUF_SIZE {
-            let start_epoch = cur_epoch + (PENDING_VAL_BUF_SIZE - chain_state.active_validator_count());
+            let start_epoch = (cur_epoch - 1) + (PENDING_VAL_BUF_SIZE - chain_state.active_validator_count());
             
             // TODO: Calculate end epoch, to keep it simple for now,
-            // each validator's lifetime will be 1 epoch.
-            let end_epoch = start_epoch + 1;
+            // each validator's lifetime will be 10 epoch.
+            let end_epoch = start_epoch + 10;
 
             // TODO: Calculate total allocated events
             let total_allocated = 1000;
@@ -272,8 +272,8 @@ impl Block for PowBlock {
             let start_epoch = chain_state.first_end_epoch.unwrap();
             
             // TODO: Calculate end epoch. To keep it simple for now,
-            // each validator's lifetime in the pool will be 1 epoch.
-            let end_epoch = start_epoch + 1;
+            // each validator's lifetime in the pool will be 10 epochs.
+            let end_epoch = start_epoch + 10;
 
             // TODO: Calculate total allocated events
             let total_allocated = 1000;
@@ -315,8 +315,8 @@ impl Block for PowBlock {
             let start_epoch = block.height();
             
             // TODO: Calculate end epoch. To keep it simple for now,
-            // each validator's lifetime in the pool will be 1 epoch.
-            let end_epoch = start_epoch + 1;
+            // each validator's lifetime in the pool will be 10 epochs.
+            let end_epoch = start_epoch + 10;
 
             // TODO: Calculate total allocated events
             let total_allocated = 1000;
