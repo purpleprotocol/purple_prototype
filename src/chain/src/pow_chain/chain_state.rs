@@ -42,11 +42,6 @@ pub struct PowChainState {
     /// Current edge bits
     pub(crate) edge_bits: u8,
 
-    /// If existing, this denotes the first epoch that will be 
-    /// able to have an active validator set. This is `None` if
-    /// there is an active validator set.
-    pub(crate) first_start_epoch: Option<u64>,
-
     /// This denotes the first epoch where a validator will be 
     /// leaving the active validator set. This is `None` if there
     /// is no current active validator set.
@@ -59,10 +54,7 @@ pub struct PowChainState {
 
     /// Stack containing buffered validator ids that are 
     /// currently awaiting to join the validator pool.
-    pub(crate) pending_validators: Vec<NodeId>,
-
-    // /// Backlog containing the information of the latest 10 epochs.
-    // pub(crate) epoch_backlog: VecDeque<EpochInfo>,
+    pub(crate) pending_validators: VecDeque<NodeId>,
 
     /// Lookup table between node ids and active validator entries.
     pub(crate) active_validator_lookup: HashMap<NodeId, ValidatorEntry>,
@@ -89,11 +81,9 @@ impl PowChainState {
             height: 0,
             difficulty: 0,
             edge_bits: miner::MIN_EDGE_BITS,
-            first_start_epoch: Some(PENDING_VAL_BUF_SIZE),
             first_end_epoch: None,
             last_end_epoch: None,
-            pending_validators: Vec::new(),
-            //epoch_backlog: VecDeque::with_capacity(EPOCH_BACKLOG_SIZE),
+            pending_validators: VecDeque::new(),
             active_validator_lookup: HashMap::new(),
             pending_validator_lookup: HashMap::new(),
             active_validator_ips: HashSet::new(),
