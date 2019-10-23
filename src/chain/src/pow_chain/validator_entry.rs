@@ -21,10 +21,10 @@ use std::net::SocketAddr;
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValidatorEntry {
     /// The ip of the validator
-    pub(crate) ip: SocketAddr,
+    pub ip: SocketAddr,
 
     /// Total allocated events for this validator.
-    pub(crate) total_allocated: u64,
+    pub total_allocated: u64,
 }
 
 impl ValidatorEntry {

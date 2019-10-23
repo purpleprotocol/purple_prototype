@@ -1127,8 +1127,6 @@ impl<B: Block> Chain<B> {
         let mut to_attach = Vec::with_capacity(B::MAX_ORPHANS);
         let our_head_hash = self.disconnected_tips_mapping.get(tip_hash).unwrap();
 
-        let mut cleanup = false;
-
         // Find a matching disconnected chain head
         for (head_hash, _) in self.disconnected_heads_mapping.iter() {
             // Skip our tip
@@ -1149,7 +1147,6 @@ impl<B: Block> Chain<B> {
                 status = OrphanType::BelongsToDisconnected;
             }
         }
-
 
         let cur_head = self
             .disconnected_tips_mapping
@@ -1492,6 +1489,11 @@ impl<B: Block> Chain<B> {
     /// Returns the height of the canonical tip
     pub fn canonical_tip_height(&self) -> u64 {
         self.canonical_tip.height()
+    }
+
+    /// Returns the associated state of the canonical tip
+    pub fn canonical_tip_state(&self) -> B::ChainState {
+        self.canonical_tip_state.inner_cloned()
     }
 
     pub fn query_by_height(&self, height: u64) -> Option<Arc<B>> {

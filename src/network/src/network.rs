@@ -83,7 +83,7 @@ pub struct Network {
     #[cfg(feature = "miner")]
     /// Validator pool sub-network. This field is `None` if we
     /// are not in a validator pool.
-    current_pool: Option<PoolNetwork>,
+    pub(crate) current_pool: Option<PoolNetwork>,
 }
 
 impl Network {
