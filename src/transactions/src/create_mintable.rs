@@ -18,7 +18,7 @@
 
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use create_currency::{CUR_GROUP_CAPACITY, MIN_CREATOR_NONCE};
+use create_currency::CUR_GROUP_CAPACITY;
 use crypto::{Hash, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
@@ -129,11 +129,6 @@ impl CreateMintable {
         let mut balance = Balance::from_bytes(&bin_creator_balance).unwrap();
 
         balance -= self.fee.clone();
-
-        // Check nonce validity
-        if nonce < MIN_CREATOR_NONCE {
-            return false;
-        }
 
         if nonce + 1 != self.nonce {
             return false;

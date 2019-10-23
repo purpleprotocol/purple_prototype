@@ -21,24 +21,27 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use crypto::NodeId;
-use crypto::{KxPublicKey as KxPk, PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{NodeId, Hash, KxPublicKey as KxPk, PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Connect {
+/// A `ConnectPool` packet is used by a successful miner
+/// to connect to a validator pool.
+pub struct ConnectPool {
     node_id: NodeId,
+    pow_block_hash: Hash,
     kx_key: KxPk,
     signature: Option<Signature>,
 }
 
-impl Connect {
-    pub fn new(node_id: NodeId, kx_key: KxPk) -> Connect {
-        Connect {
-            node_id: node_id,
-            kx_key: kx_key,
+impl ConnectPool {
+    pub fn new(node_id: NodeId, kx_key: KxPk, pow_block_hash: Hash) -> ConnectPool {
+        ConnectPool {
+            node_id,
+            kx_key,
+            pow_block_hash,
             signature: None,
         }
     }
@@ -64,8 +67,8 @@ impl Connect {
     }
 }
 
-impl Packet for Connect {
-    const PACKET_TYPE: u8 = 1;
+impl Packet for ConnectPool {
+    const PACKET_TYPE: u8 = 7;
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
@@ -79,19 +82,21 @@ impl Packet for Connect {
         let node_id = &self.node_id.0;
         let kx_key = &self.kx_key.0;
 
-        // Connect packet structure:
-        // 1) Packet type(1)   - 8bits
+        // ConnectPool packet structure:
+        // 1) Packet type(7)   - 8bits
         // 2) Key exchange pk  - 32byte binary
         // 3) Node id          - 32byte binary
-        // 4) Signature        - 64byte binary
+        // 4) Pow block hash   - 32byte binary
+        // 5) Signature        - 64byte binary
         buffer.write_u8(packet_type).unwrap();
         buffer.extend_from_slice(kx_key);
         buffer.extend_from_slice(&node_id.0);
+        buffer.extend_from_slice(&self.pow_block_hash.0);
         buffer.extend_from_slice(&signature);
         buffer
     }
 
-    fn from_bytes(bin: &[u8]) -> Result<Arc<Connect>, NetworkErr> {
+    fn from_bytes(bin: &[u8]) -> Result<Arc<ConnectPool>, NetworkErr> {
         let mut rdr = Cursor::new(bin.to_vec());
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
@@ -129,14 +134,26 @@ impl Packet for Connect {
             return Err(NetworkErr::BadFormat);
         };
 
+        let pow_block_hash = if buf.len() > 32 as usize {
+            let node_id_vec: Vec<u8> = buf.drain(..32).collect();
+            let mut b = [0; 32];
+
+            b.copy_from_slice(&node_id_vec);
+
+            Hash(b)
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
         let signature = if buf.len() == 64 as usize {
             Signature::new(&buf)
         } else {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = Connect {
+        let packet = ConnectPool {
             node_id,
+            pow_block_hash,
             kx_key,
             signature: Some(signature),
         };
@@ -144,12 +161,26 @@ impl Packet for Connect {
         Ok(Arc::new(packet))
     }
 
+    #[cfg(not(feature = "miner"))]
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &Connect,
+        packet: &ConnectPool,
         conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
+        unreachable!();
+    }
+
+    #[cfg(feature = "miner")]
+    fn handle<N: NetworkInterface>(
+        network: &mut N,
+        addr: &SocketAddr,
+        packet: &ConnectPool,
+        conn_type: ConnectionType,
+    ) -> Result<(), NetworkErr> {
+        let pool_network = network.validator_pool_network_ref().ok_or(NetworkErr::NoPoolSession)?;
+
+        // Verify packet signature
         if !packet.verify_sig() {
             return Err(NetworkErr::BadSignature);
         }
@@ -162,11 +193,15 @@ impl Packet for Connect {
             let mut our_pk = None;
 
             {
-                let peers = network.peers();
-                let mut peers = peers.write();
                 let node_id = node_id.clone();
                 let kx_key = &packet.kx_key;
-                let mut peer = peers.get_mut(addr).ok_or(NetworkErr::PeerNotFound)?;
+
+                // Remove peer entry from default network interface
+                let mut peer = {
+                    let peers = network.peers();
+                    let mut peers = peers.write();
+                    peers.remove(addr).ok_or(NetworkErr::PeerNotFound)?
+                };
 
                 // Compute session keys
                 let result = match conn_type {
@@ -193,18 +228,20 @@ impl Packet for Connect {
                 // Fetch credentials
                 our_pk = Some(peer.pk.clone());
 
-                // Add peer address to bootstrap cache
-                network
-                    .bootstrap_cache()
-                    .store_address(&peer.ip)
-                    .map_err(|err| warn!("Could not store address {} in the bootstrap cache, reason: {:?}", peer.ip, err))
-                    .unwrap_or(());
+                // Map peer entry to validator entry
+                let peer = peer.to_validator();
+
+                // Store validator entry
+                let mut pool_peers = pool_network.peers.write();
+                pool_peers.insert(addr.clone(), peer);
             }
 
             // If we are the server, also send a connect packet back
             if let ConnectionType::Server = conn_type {
+                let consensus_m = pool_network.consensus_machine.read();
+
                 debug!("Sending connect packet to {}", addr);
-                let mut packet = Connect::new(our_node_id, our_pk.unwrap());
+                let mut packet = ConnectPool::new(our_node_id, our_pk.unwrap(), consensus_m.start_pow_block);
                 packet.sign(network.secret_key());
                 network.send_raw(addr, &packet.to_bytes())?;
             }
@@ -216,14 +253,15 @@ impl Packet for Connect {
     }
 }
 
-fn assemble_message(obj: &Connect) -> Vec<u8> {
+fn assemble_message(obj: &ConnectPool) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::with_capacity(64);
 
     let kx_key = obj.kx_key.0;
     let node_id = (obj.node_id.0).0;
 
-    buf.extend_from_slice(&[Connect::PACKET_TYPE]);
+    buf.extend_from_slice(&[ConnectPool::PACKET_TYPE]);
     buf.extend_from_slice(&kx_key);
+    buf.extend_from_slice(&obj.pow_block_hash.0);
     buf.extend_from_slice(&node_id);
 
     buf
@@ -236,13 +274,14 @@ use quickcheck::Arbitrary;
 use crypto::Identity;
 
 #[cfg(test)]
-impl Arbitrary for Connect {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Connect {
+impl Arbitrary for ConnectPool {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> ConnectPool {
         let (pk, _) = crypto::gen_kx_keypair();
         let id = Identity::new();
 
-        Connect {
+        ConnectPool {
             node_id: NodeId(*id.pkey()),
+            pow_block_hash: Arbitrary::arbitrary(g),
             kx_key: pk,
             signature: Some(Arbitrary::arbitrary(g)),
         }
@@ -262,61 +301,18 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    #[test]
-    fn it_successfuly_performs_connect_handshake() {
-        let networks = crate::init_test_networks(2);
-        let addr1 = networks[0].1;
-        let addr2 = networks[1].1;
-        let n1 = networks[0].2.clone();
-        let n2 = networks[1].2.clone();
-        let network1 = networks[0].0.clone();
-        let network1_c = network1.clone();
-        let network2 = networks[1].0.clone();
-        let network2_c = network2.clone();
-
-        {
-            // Attempt to connect the first peer to the second
-            network1_c.lock().connect(&addr2).unwrap();
-        }
-
-        // Pause main thread for a bit before
-        // making assertions.
-        thread::sleep(Duration::from_millis(1600));
-
-        let peer1 = {
-            let network = network2_c.lock();
-            let peers = network.peers();
-            let peers = peers.read();
-            peers.get(&addr1).unwrap().clone()
-        };
-
-        let peer2 = {
-            let network = network1_c.lock();
-            let peers = network.peers();
-            let peers = peers.read();
-            peers.get(&addr2).unwrap().clone()
-        };
-
-        // Check if the peers have the same session keys
-        assert_eq!(peer1.rx.as_ref().unwrap(), peer2.tx.as_ref().unwrap());
-        assert_eq!(peer2.rx.as_ref().unwrap(), peer1.tx.as_ref().unwrap());
-
-        // Check if the peers have the correct node ids
-        assert_eq!(peer1.id.unwrap(), n1);
-        assert_eq!(peer2.id.unwrap(), n2);
-    }
-
     quickcheck! {
-        fn serialize_deserialize(tx: Arc<Connect>) -> bool {
-            tx == Connect::from_bytes(&Connect::to_bytes(&tx)).unwrap()
+        fn serialize_deserialize(tx: Arc<ConnectPool>) -> bool {
+            tx == ConnectPool::from_bytes(&ConnectPool::to_bytes(&tx)).unwrap()
         }
 
         fn verify_signature(id1: Identity, id2: Identity) -> bool {
             let id = Identity::new();
             let (pk, _) = crypto::gen_kx_keypair();
-            let mut packet = Connect {
+            let mut packet = ConnectPool {
                 node_id: NodeId(*id.pkey()),
                 kx_key: pk,
+                pow_block_hash: crypto::hash_slice(b""),
                 signature: None,
             };
 

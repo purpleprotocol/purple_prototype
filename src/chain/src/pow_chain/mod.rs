@@ -18,3 +18,8 @@
 
 pub mod block;
 pub mod chain;
+pub mod chain_state;
+pub mod validator_entry;
+pub mod epoch_info;
+
+pub use self::chain_state::*;

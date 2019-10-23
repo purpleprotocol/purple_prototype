@@ -21,12 +21,12 @@
 use crate::block::Block;
 use crate::pow_chain::block::*;
 use crate::pow_chain::chain::*;
-use crate::pow_chain_state::PowChainState;
+use crate::pow_chain::PowChainState;
 use crate::state_chain::block::*;
 use crate::state_chain::chain::*;
 use crate::state_chain::state::*;
 use account::NormalAddress;
-use crypto::Hash;
+use crypto::{NodeId, Hash};
 use graphlib::{Graph, VertexId};
 use hashbrown::{HashMap, HashSet};
 use miner::Proof;
@@ -258,6 +258,8 @@ pub fn chain_test_set(
         // }
 
         let last_pow_hash = last_pow.block_hash().unwrap();
+        let (pk, sk) = crypto::gen_keypair();
+        let node_id = NodeId(pk);
 
         // Generate one new pow block
         let mut pow_block = PowBlock::new(
@@ -266,7 +268,9 @@ pub fn chain_test_set(
             crate::random_socket_addr(),
             last_pow.height() + 1,
             Proof::test_proof(42),
+            node_id,
         );
+        pow_block.sign_miner(&sk);
         pow_block.compute_hash();
         let pow_block = Arc::new(pow_block);
 

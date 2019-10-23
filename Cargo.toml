@@ -53,7 +53,7 @@ network = { path = "src/network" }
 transactions = { path = "src/transactions" }
 chain = { path = "src/chain" }
 miner = { path = "src/miner" }
-mimalloc = "0.1.9"
+mimalloc = "0.1.10"
 reqwest = "0.9.21"
 
 [dev-dependencies.chain]

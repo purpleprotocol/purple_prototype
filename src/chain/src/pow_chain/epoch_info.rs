@@ -16,17 +16,21 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod connect;
-pub mod forward_block;
-pub mod ping;
-pub mod pong;
-pub mod request_peers;
-pub mod send_peers;
-pub mod connect_pool;
-pub use self::connect::*;
-pub use self::forward_block::*;
-pub use self::ping::*;
-pub use self::pong::*;
-pub use self::request_peers::*;
-pub use self::send_peers::*;
-pub use self::connect_pool::*;
+use hashbrown::HashSet;
+use crypto::NodeId;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct EpochInfo {
+    /// Current epoch
+    pub(crate) epoch: u64,
+
+    /// Set containing node ids that should join the pool in this epoch.
+    pub(crate) should_join: HashSet<NodeId>,
+
+    /// Set containing node ids that should remain in the pool in this epoch
+    /// i.e. not join nor leave the pool.
+    pub(crate) should_remain: HashSet<NodeId>,
+
+    /// Set containing node ids that should leave the pool at the end of this epoch.
+    pub(crate) should_leave: HashSet<NodeId>,
+}

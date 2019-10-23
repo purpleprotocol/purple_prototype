@@ -16,11 +16,13 @@ os:
 matrix:
   include:
     - os: windows
+      python: "3.7"
       before_install:
-      - choco install python
+      - export PATH="/c/Python37:/c/Python37/Scripts:/c/ProgramData/chocolatey/lib/ninja/tools:$PATH"
+      - choco install python --version 3.7.4
+      - python -m pip install --upgrade pip
       - choco install ninja
-      - export PATH="/c/Python37:/c/ProgramData/chocolatey/lib/ninja/tools:$PATH"
-      - /c/Python37/Scripts/pip install numpy
+      - pip install numpy
       - eval "$(python vcvars_proxy.py
         'c:/Program Files (x86)/Microsoft Visual Studio/2017/BuildTools/Common7/Tools/VsDevCmd.bat'
         '-arch=amd64'
@@ -34,8 +36,13 @@ matrix:
     - rust: nightly
   fast_finish: true
 
+before_script:
+  - rustup component add clippy
+
 script:
-  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then cargo test --verbose --all                        ; fi
-  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then cargo build --verbose                             ; fi
-  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cargo test --verbose --all --features miner-cpu  ; fi
-  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cargo build --verbose --features miner-cpu       ; fi
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then cargo clippy --all-targets --all                        ; fi
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then cargo test --verbose --all                              ; fi
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then cargo build --verbose                                   ; fi
+  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cargo clippy --all-targets --all --features miner-cpu  ; fi
+  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cargo test --verbose --all --features miner-cpu        ; fi
+  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cargo build --verbose --features miner-cpu             ; fi

@@ -16,17 +16,22 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod connect;
-pub mod forward_block;
-pub mod ping;
-pub mod pong;
-pub mod request_peers;
-pub mod send_peers;
-pub mod connect_pool;
-pub use self::connect::*;
-pub use self::forward_block::*;
-pub use self::ping::*;
-pub use self::pong::*;
-pub use self::request_peers::*;
-pub use self::send_peers::*;
-pub use self::connect_pool::*;
+use std::net::SocketAddr;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ValidatorEntry {
+    /// The ip of the validator
+    pub ip: SocketAddr,
+
+    /// Total allocated events for this validator.
+    pub total_allocated: u64,
+}
+
+impl ValidatorEntry {
+    pub fn new(ip: SocketAddr, total_allocated: u64) -> ValidatorEntry {
+        ValidatorEntry {
+            ip,
+            total_allocated,
+        }
+    }
+}

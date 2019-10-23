@@ -16,19 +16,19 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::pool_peer::{PoolPeer, SessionState};
 use crate::error::NetworkErr;
 use crate::validation::validator::ProtocolValidator;
 use crate::bootstrap::cache::BootstrapCache;
-use crypto::{Hash, NodeId};
+use crypto::NodeId;
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use std::default::Default;
 use std::fmt;
-use std::hash::{Hash as HashTrait, Hasher};
+use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
+use peer::ConnectionType;
 
 #[cfg(test)]
 use parking_lot::Mutex;
@@ -36,30 +36,31 @@ use parking_lot::Mutex;
 #[cfg(test)]
 use timer::{Guard, Timer};
 
-#[derive(Clone, Debug, Copy)]
-pub enum ConnectionType {
-    Client(SubConnectionType),
-    Server,
-}
-
-#[derive(Clone, Debug, Copy)]
-/// Sub-connection type used as flag for connection processing
-/// when we are connecting as `Client`. In the case of the `Server`
-/// type, this is determined at run-time.
-pub enum SubConnectionType {
-    /// Normal connection
-    Normal,
-
-    /// Validator connection with sub-field containing the hash
-    /// of the miner PoW block.
-    Validator(Hash),
-}
-
 /// Size of the outbound buffer.
 pub const OUTBOUND_BUF_SIZE: usize = 10000;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SessionState {
+    /// We are connected to a potential validator but have not yet determined
+    /// the validity of its validator status.
+    PreValidation,
+
+    /// The validator is waiting to join the pool in the assigned epoch.
+    WaitingToJoin(u64),
+
+    /// The validator is currently active.
+    Active,
+
+    /// The validator is still connected but his session in the pool is finished.
+    Finished,
+
+    /// The validator has been found to be unresponsive or byzantine and
+    /// has been kicked out of the pool.
+    Kicked,
+}
+
 #[derive(Clone)]
-pub struct Peer {
+pub struct PoolPeer {
     /// The id of the peer
     ///
     /// An option is used in order to store the peer's
@@ -86,15 +87,15 @@ pub struct Peer {
     /// Time in milliseconds since we have sent a ping to the peer.
     pub last_ping: Arc<AtomicU64>,
 
-    /// Wether the peer has sent a `Connect` packet or not.
-    pub sent_connect: bool,
-
     /// Buffer storing packets that are to be
     /// sent to the peer.
     pub outbound_buffer: Option<Sender<Vec<u8>>>,
 
     /// Session generated public key
     pub pk: Pk,
+
+    /// Peer session state
+    pub(crate) session_state: SessionState,
 
     /// Session generated secret key
     pub(crate) sk: Sk,
@@ -104,65 +105,35 @@ pub struct Peer {
 
     /// The peer's encryption key
     pub(crate) tx: Option<SessionKey>,
-
-    /// Associated protocol validator
-    pub(crate) validator: ProtocolValidator,
-
-    #[cfg(test)]
-    pub(crate) timeout_guard: Option<Guard>,
-
-    #[cfg(test)]
-    pub(crate) timer: Option<Arc<Mutex<Timer>>>,
-
-    #[cfg(test)]
-    pub(crate) send_ping: bool,
 }
 
-impl fmt::Debug for Peer {
+impl fmt::Debug for PoolPeer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Peer(id: {:?}, ip: {:?})", self.id, self.ip)
+        write!(f, "PoolPeer(id: {:?}, ip: {:?})", self.id, self.ip)
     }
 }
 
-impl Peer {
+impl PoolPeer {
     pub fn new(
         id: Option<NodeId>,
         ip: SocketAddr,
         connection_type: ConnectionType,
         outbound_buffer: Option<Sender<Vec<u8>>>,
-        bootstrap_cache: BootstrapCache,
-    ) -> Peer {
+    ) -> PoolPeer {
         let (pk, sk) = gen_kx_keypair();
 
-        match connection_type {
-            ConnectionType::Client(SubConnectionType::Validator(_)) => {
-                panic!("Cannot create a normal peer with the validator sub-connection type!");
-            }
-            _ => { } // Do nothing
-        }
-
-        Peer {
+        PoolPeer {
             id: id,
             ip: ip,
             pk: pk,
             sk: sk,
             rx: None,
             tx: None,
-            sent_connect: false,
             connection_type,
             outbound_buffer,
+            session_state: SessionState::PreValidation,
             last_seen: Arc::new(AtomicU64::new(0)),
             last_ping: Arc::new(AtomicU64::new(0)),
-            validator: ProtocolValidator::new(bootstrap_cache),
-
-            #[cfg(test)]
-            timeout_guard: None,
-
-            #[cfg(test)]
-            timer: None,
-
-            #[cfg(test)]
-            send_ping: true,
         }
     }
 
@@ -177,35 +148,17 @@ impl Peer {
         self.tx = Some(tx);
     }
 
-    /// Attempts to place a packet in the outbound buffer of a `Peer`.
+    /// Attempts to place a packet in the outbound buffer of a `PoolPeer`.
     pub fn send_packet(&self, packet: Vec<u8>) -> Result<(), NetworkErr> {
         let mut sender = self.outbound_buffer.as_ref().unwrap().clone();
         sender
             .try_send(packet)
             .map_err(|err| { debug!("Packet sending error: {:?}", err); NetworkErr::CouldNotSend })
     }
-
-    /// Consumes a `Peer` struct and returns a `PeerPool` struct
-    /// that can be appended to a validator network peer table.
-    pub fn to_validator(self) -> PoolPeer {
-        PoolPeer {
-            rx: self.rx,
-            tx: self.tx,
-            pk: self.pk,
-            sk: self.sk,
-            id: self.id,
-            ip: self.ip,
-            last_seen: self.last_seen,
-            last_ping: self.last_ping,
-            connection_type: self.connection_type,
-            outbound_buffer: self.outbound_buffer,
-            session_state: SessionState::PreValidation,
-        }
-    }
 }
 
-impl PartialEq for Peer {
-    fn eq(&self, other: &Peer) -> bool {
+impl PartialEq for PoolPeer {
+    fn eq(&self, other: &PoolPeer) -> bool {
         match (&self.id, &other.id) {
             // Check both ids and ips
             (Some(id1), Some(id2)) => id1 == id2 && self.ip == other.ip,
@@ -215,9 +168,9 @@ impl PartialEq for Peer {
     }
 }
 
-impl Eq for Peer {}
+impl Eq for PoolPeer {}
 
-impl HashTrait for Peer {
+impl Hash for PoolPeer {
     fn hash<H: Hasher>(&self, state: &mut H) {
         if let Some(id) = &self.id {
             id.hash(state);

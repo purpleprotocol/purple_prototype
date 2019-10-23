@@ -108,7 +108,7 @@ pub fn start_block_listeners(
                             .send_to_all_except(&addr, &packet.to_bytes())
                             .unwrap();
                     }
-                    Err(err) => info!(
+                    Err(err) => info!( // TODO: Handle chain errors
                         "Chain Error for block {:?} with height {}: {:?}",
                         block.block_hash().unwrap(),
                         block.height(),
@@ -141,7 +141,7 @@ pub fn start_block_listeners(
                             .send_to_all_except(&addr, &packet.to_bytes())
                             .unwrap();
                     }
-                    Err(err) => info!(
+                    Err(err) => info!( // TODO: Handle chain errors
                         "Chain Error for block {:?}: {:?}",
                         block.block_hash().unwrap(),
                         err

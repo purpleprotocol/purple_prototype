@@ -1,5 +1,3 @@
-#![feature(test)]
-
 #[macro_use]
 extern crate criterion;
 
@@ -11,7 +9,6 @@ extern crate patricia_trie;
 extern crate persistence;
 extern crate quickcheck;
 extern crate rand;
-extern crate test;
 extern crate test_helpers;
 extern crate transactions;
 
@@ -24,7 +21,6 @@ use mimalloc::MiMalloc;
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use std::sync::Arc;
-use test::Bencher;
 use transactions::Tx;
 
 #[global_allocator]

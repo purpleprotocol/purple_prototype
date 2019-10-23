@@ -65,10 +65,6 @@ pub enum ChainErr {
 /// Reasons for a bad append condition
 #[derive(Clone, Debug, PartialEq)]
 pub enum AppendCondErr {
-    /// The referenced easy block's height is lower
-    /// than the height of the easy chain.
-    BadEasyHeight,
-
     /// Default reason, mostly used for testing.
     Default,
 
@@ -86,8 +82,14 @@ pub enum AppendCondErr {
     /// byzantine action performed by a validator node.
     BadValidator,
 
-    /// The block's proof of work is invalid
+    /// The block's proof of work is invalid.
     BadProof,
+
+    /// The miner's signature on a PoW block is invalid.
+    BadMinerSig,
+
+    /// The validator with the given id or ip is already in the validator pool.
+    AlreadyInPool,
 }
 
 lazy_static! {
@@ -1115,7 +1117,12 @@ impl<B: Block> Chain<B> {
 
     /// Attempts to attach a disconnected chain tip to other
     /// disconnected chains. Returns the final status of the tip.
-    fn attempt_attach(&mut self, tip_hash: &Hash, initial_status: OrphanType) -> OrphanType {
+    fn attempt_attach(&mut self, tip_hash: &Hash, initial_status: OrphanType) -> Result<OrphanType, ChainErr> {
+        let tip_height = {
+            let tip = self.orphan_pool.get(tip_hash).unwrap();
+            tip.height()
+        };
+
         let mut status = initial_status;
         let mut to_attach = Vec::with_capacity(B::MAX_ORPHANS);
         let our_head_hash = self.disconnected_tips_mapping.get(tip_hash).unwrap();
@@ -1131,6 +1138,11 @@ impl<B: Block> Chain<B> {
 
             // Attach chain to our tip
             if head.parent_hash().unwrap() == *tip_hash {
+                if head.height() != tip_height + 1 {
+                    self.cleanup_block_data(tip_height, tip_hash);
+                    return Err(ChainErr::BadHeight);
+                }
+
                 to_attach.push(head_hash.clone());
                 status = OrphanType::BelongsToDisconnected;
             }
@@ -1190,7 +1202,7 @@ impl<B: Block> Chain<B> {
             }
         }
 
-        status
+        Ok(status)
     }
 
     /// Attempts to attach a canonical chain tip to other
@@ -1479,6 +1491,11 @@ impl<B: Block> Chain<B> {
         self.canonical_tip.height()
     }
 
+    /// Returns the associated state of the canonical tip
+    pub fn canonical_tip_state(&self) -> B::ChainState {
+        self.canonical_tip_state.inner_cloned()
+    }
+
     pub fn query_by_height(&self, height: u64) -> Option<Arc<B>> {
         let encoded_height = encode_be_u64!(height);
         let key = crypto::hash_slice(&encoded_height);
@@ -1680,7 +1697,7 @@ impl<B: Block> Chain<B> {
                                     self.disconnected_tips_mapping
                                         .insert(block_hash.clone(), head.clone());
                                     let status = self
-                                        .attempt_attach(&block_hash, OrphanType::DisconnectedTip);
+                                        .attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
 
                                     if let OrphanType::DisconnectedTip = status {
                                         self.traverse_inverse(block, 0, false);
@@ -1787,7 +1804,7 @@ impl<B: Block> Chain<B> {
                                         .insert(block_hash.clone(), head.clone());
 
                                     let status = self
-                                        .attempt_attach(&block_hash, OrphanType::DisconnectedTip);
+                                        .attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
 
                                     if let OrphanType::DisconnectedTip = status {
                                         self.disconnected_tips_mapping
@@ -1913,7 +1930,7 @@ impl<B: Block> Chain<B> {
                             self.orphan_pool.insert(block_hash.clone(), block.clone());
 
                             let status =
-                                self.attempt_attach(&block_hash, OrphanType::DisconnectedTip);
+                                self.attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
                             let mut found_match = None;
 
                             // Attempt to attach the new disconnected
@@ -1922,6 +1939,12 @@ impl<B: Block> Chain<B> {
                                 let tip = self.orphan_pool.get(tip_hash).unwrap();
 
                                 if parent_hash == tip.block_hash().unwrap() {
+                                    // Check block height and cleanup if it doesn't match
+                                    if (tip.height() + 1) != block.height() {
+                                        self.cleanup_paths(&block_hash);
+                                        return Err(ChainErr::BadHeight);
+                                    }
+                                    
                                     found_match = Some(tip);
                                     break;
                                 }

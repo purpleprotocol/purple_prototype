@@ -31,11 +31,28 @@ impl NodeId {
     pub fn from_pkey(pk: PublicKey) -> NodeId {
         NodeId(pk)
     }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<NodeId, &'static str> {
+        if bytes.len() != 32 {
+            return Err("Invalid slice length! Expected 32 bytes!");
+        }
+
+        let mut inner = [0; 32];
+        inner.copy_from_slice(bytes);
+
+        Ok(NodeId(PublicKey(inner)))
+    }
 }
 
 impl std::fmt::Debug for NodeId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "NodeId({})", hex::encode(self.0))
+    }
+}
+
+impl std::fmt::Display for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(self.0))
     }
 }
 

@@ -17,7 +17,7 @@
 */
 
 use crate::pow_chain::chain::*;
-use crate::pow_chain_state::PowChainState;
+use crate::pow_chain::PowChainState;
 use crate::state_chain::chain::*;
 use crate::state_chain::state::ChainState;
 use lazy_static::*;

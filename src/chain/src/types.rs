@@ -73,6 +73,10 @@ where
         self.state
     }
 
+    pub fn inner_cloned(&self) -> S {
+        self.state.clone()
+    }
+
     pub fn flush(mut self) -> Result<FlushedChainState<S>, ChainErr> {
         self.state.flush()?;
         Ok(FlushedChainState { state: self.state })

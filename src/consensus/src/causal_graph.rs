@@ -460,6 +460,7 @@ impl CausalGraph {
         }
     }
 
+    #[allow(clippy::all)]
     pub(crate) fn highest(&self) -> Arc<Event> {
         let (highest, _) = &self.highest;
 
@@ -474,6 +475,7 @@ impl CausalGraph {
         }
     }
 
+    #[allow(clippy::all)]
     pub(crate) fn highest_exclusive(&self, node_id: &NodeId) -> Option<Arc<Event>> {
         let (highest, _) = &self.highest;
 
@@ -508,6 +510,7 @@ impl CausalGraph {
         }
     }
 
+    #[allow(clippy::all)]
     pub(crate) fn highest_following(&self) -> Option<Arc<Event>> {
         let (highest_following, _) = &self.highest_following;
 

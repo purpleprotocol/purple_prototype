@@ -92,7 +92,7 @@ const BOOTNODES: &'static [&'static str] = &[
 ];
 
 fn main() {
-     let drain =
+    let drain =
         slog_async::Async::default(
         slog_envlogger::new(
         slog_term::CompactFormat::new(

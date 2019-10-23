@@ -16,17 +16,18 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::pool_network::PoolNetwork;
+use crate::Peer;
+use crate::pool_peer::PoolPeer;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
-use crate::packets::connect_pool::ConnectPool;
 use crate::bootstrap::cache::BootstrapCache;
 use crate::connection::*;
-use crate::peer::{ConnectionType, SubConnectionType};
+use consensus::ConsensusMachine;
+use events::Event;
 use chain::*;
-use crypto::NodeId;
+use crypto::{Hash, NodeId};
 use crypto::SecretKey as Sk;
 use hashbrown::{HashMap, HashSet};
 use parking_lot::RwLock;
@@ -34,7 +35,6 @@ use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use Peer;
 
 #[cfg(test)]
 use std::sync::mpsc::Sender;
@@ -43,9 +43,13 @@ use std::sync::mpsc::Sender;
 use futures::sync::mpsc::Sender;
 
 #[derive(Clone)]
-pub struct Network {
+/// Separate network interface specific for validator pools. 
+pub struct PoolNetwork {
     /// Mapping between connected ips and peer information
-    pub(crate) peers: Arc<RwLock<HashMap<SocketAddr, Peer>>>,
+    pub(crate) peers: Arc<RwLock<HashMap<SocketAddr, PoolPeer>>>,
+
+    /// Associated reference to consensus state machine
+    pub(crate) consensus_machine: Arc<RwLock<ConsensusMachine>>,
 
     /// Our node id
     pub(crate) node_id: NodeId,
@@ -53,78 +57,33 @@ pub struct Network {
     /// Our secret key
     pub(crate) secret_key: Sk,
 
-    /// Reference to the `PowChain`
-    pow_chain_ref: PowChainRef,
-
-    /// Reference to the `StateChain`
-    state_chain_ref: StateChainRef,
-
-    /// Sender to `StateChain` block buffer
-    state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
-
-    /// Sender to `PowChain` block buffer
-    pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
-
     /// The port we are accepting external TCP connections on.
     port: u16,
 
     /// The name of the network we are on
     pub(crate) network_name: String,
-
-    /// Maximum number of allowed peers, default is 8
-    pub(crate) max_peers: usize,
-
-    /// Bootstrap cache
-    pub(crate) bootstrap_cache: BootstrapCache,
-
-    /// Accept connections boolean reference
-    pub(crate) accept_connections: Arc<AtomicBool>,
-
-    #[cfg(feature = "miner")]
-    /// Validator pool sub-network. This field is `None` if we
-    /// are not in a validator pool.
-    pub(crate) current_pool: Option<PoolNetwork>,
 }
 
-impl Network {
+impl PoolNetwork {
     pub fn new(
         node_id: NodeId,
         port: u16,
         network_name: String,
+        start_pow_block: Hash,
+        end_pow_block: Hash,
         secret_key: Sk,
-        max_peers: usize,
-        pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
-        state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
-        pow_chain_ref: PowChainRef,
-        state_chain_ref: StateChainRef,
-        bootstrap_cache: BootstrapCache,
-        accept_connections: Arc<AtomicBool>,
-    ) -> Network {
-        Network {
-            peers: Arc::new(RwLock::new(HashMap::with_capacity(max_peers))),
+        epoch: u64,
+        remaining_events: u64,
+        allocated_events: u64,
+        root_event: Arc<Event>,
+    ) -> PoolNetwork {
+        PoolNetwork {
+            peers: Arc::new(RwLock::new(HashMap::new())),
+            consensus_machine: Arc::new(RwLock::new(ConsensusMachine::new(node_id.clone(), epoch, remaining_events, allocated_events, start_pow_block, end_pow_block, root_event))),
             node_id,
             port,
             network_name,
             secret_key,
-            max_peers,
-            pow_chain_sender,
-            state_chain_sender,
-            pow_chain_ref,
-            state_chain_ref,
-            bootstrap_cache,
-            accept_connections,
-
-            #[cfg(feature = "miner")]
-            current_pool: None,
-        }
-    }
-
-    pub fn add_peer(&mut self, addr: SocketAddr, peer: Peer) -> Result<(), NetworkErr> {
-        if self.peer_count() < self.max_peers {
-            self.peers.write().insert(addr, peer);
-            Ok(())
-        } else {
-            Err(NetworkErr::MaximumPeersReached)
         }
     }
 
@@ -168,18 +127,9 @@ impl Network {
     }
 }
 
-impl NetworkInterface for Network {
+impl NetworkInterface for PoolNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
-        info!("Connecting to {}", address);
-
-        connect_to_peer(
-            self.clone(),
-            self.accept_connections.clone(),
-            address,
-            SubConnectionType::Normal,
-        );
-
-        Ok(())
+        unimplemented!();
     }
 
     fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr> {
@@ -203,13 +153,13 @@ impl NetworkInterface for Network {
         self.peers.read().get(addr).is_some()
     }
 
-    fn has_peer_with_id(&self, id: &NodeId) -> bool {
-        unimplemented!()
-    }
-
     #[cfg(feature = "miner")]
     fn validator_pool_network_ref(&self) -> Option<PoolNetwork> {
-        self.current_pool.clone()
+        Some(self.clone())
+    }
+
+    fn has_peer_with_id(&self, id: &NodeId) -> bool {
+        unimplemented!()
     }
 
     fn port(&self) -> u16 {
@@ -298,31 +248,30 @@ impl NetworkInterface for Network {
     }
 
     fn pow_chain_ref(&self) -> PowChainRef {
-        self.pow_chain_ref.clone()
+        unimplemented!();
     }
 
     fn state_chain_ref(&self) -> StateChainRef {
-        self.state_chain_ref.clone()
+        unimplemented!();
     }
 
     fn pow_chain_sender(&self) -> &Sender<(SocketAddr, Arc<PowBlock>)> {
-        &self.pow_chain_sender
+        unimplemented!();
     }
 
     fn state_chain_sender(&self) -> &Sender<(SocketAddr, Arc<StateBlock>)> {
-        &self.state_chain_sender
+        unimplemented!();
     }
 
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
         let (is_none_id, conn_type) = {
             let peers = self.peers.read();
-            let peer = peers.get(peer).ok_or(NetworkErr::PeerNotFound)?;
+            let peer = peers.get(peer).unwrap();
             (peer.id.is_none(), peer.connection_type)
         };
 
         // We should receive a connect packet
-        // if the peer's id is non-existent and
-        // the connection is of type `Server`.
+        // if the peer's id is non-existent.
         if is_none_id {
             match Connect::from_bytes(packet) {
                 Ok(connect_packet) => {
@@ -336,37 +285,11 @@ impl NetworkInterface for Network {
 
                     Ok(())
                 }
-
-                _ => match ConnectPool::from_bytes(packet) {
-                    #[cfg(feature = "miner")]
-                    Ok(packet) => {
-                        debug!(
-                            "Received connect pool packet from {}: {:?}",
-                            peer, packet
-                        );
-
-                        // Handle connect packet
-                        ConnectPool::handle(self, peer, &packet, conn_type)?;
-
-                        Ok(())
-                    }
-
-                    #[cfg(not(feature = "miner"))]
-                    Ok(_) => {
-                        debug!(
-                            "Received connect pool packet from {}: {:?}",
-                            peer, packet
-                        );
-
-                        Err(NetworkErr::NotMiner)
-                    }
-
-                    _ => {
-                        // Invalid packet, remove peer
-                        debug!("Invalid connect packet from {}", peer);
-                        Err(NetworkErr::InvalidConnectPacket)
-                    }
-                } 
+                _ => {
+                    // Invalid packet, remove peer
+                    debug!("Invalid connect packet from {}", peer);
+                    Err(NetworkErr::InvalidConnectPacket)
+                }
             }
         } else {
             crate::common::handle_packet(self, conn_type, peer, &packet)?;
@@ -374,7 +297,7 @@ impl NetworkInterface for Network {
             // Refresh peer timeout timer
             {
                 let peers = self.peers.read();
-                let peer = peers.get(peer).ok_or(NetworkErr::PeerNotFound)?;
+                let peer = peers.get(peer).unwrap();
                 peer.last_seen.store(0, Ordering::SeqCst);
             }
 
@@ -395,7 +318,7 @@ impl NetworkInterface for Network {
     }
 
     fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>> {
-        self.peers.clone()
+        unimplemented!();
     }
 
     fn secret_key(&self) -> &Sk {
@@ -403,6 +326,6 @@ impl NetworkInterface for Network {
     }
 
     fn bootstrap_cache(&self) -> BootstrapCache {
-        self.bootstrap_cache.clone()
+        unimplemented!();
     }
 }

@@ -451,6 +451,7 @@ macro_rules! count {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 

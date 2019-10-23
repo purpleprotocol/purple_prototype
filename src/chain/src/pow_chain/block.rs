@@ -18,9 +18,12 @@
 
 use crate::block::Block;
 use crate::chain::*;
-use crate::pow_chain_state::PowChainState;
+use crate::pow_chain::PowChainState;
+use crate::pow_chain::validator_entry::ValidatorEntry;
 use crate::types::*;
+use hashbrown::HashSet;
 use account::NormalAddress;
+use crypto::{NodeId, Signature, SecretKey as Sk};
 use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
@@ -37,6 +40,17 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
+/// The minimum number of validators that can be in a pool
+/// at a given time. If there are less validators available
+/// they will be buffered until this number is reached after
+/// which a pool session can be started.
+pub const PENDING_VAL_BUF_SIZE: u64 = 10;
+
+/// The maximum amount of validators that can be active at the same time.
+/// If more validators are available, they will be buffered until other 
+/// validators leave the pool.
+pub const MAX_POOL_SIZE: u64 = 60;
+
 lazy_static! {
     /// Atomic reference count to pow chain genesis block
     static ref GENESIS_RC: Arc<PowBlock> = {
@@ -44,14 +58,15 @@ lazy_static! {
             parent_hash: None,
             proof: Proof::zero(PROOF_SIZE),
             collector_address: NormalAddress::from_pkey(PublicKey([0; 32])),
+            miner_id: NodeId::from_pkey(PublicKey([0; 32])),
             height: 0,
             hash: None,
+            miner_signature: None,
             ip: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 44034),
             timestamp: Utc.ymd(2018, 4, 1).and_hms(9, 10, 11), // TODO: Change this accordingly
         };
 
         block.compute_hash();
-
         Arc::new(block)
     };
 }
@@ -65,6 +80,12 @@ pub struct PowBlock {
     /// The address that will collect the
     /// rewards earned by the miner.
     collector_address: NormalAddress,
+
+    /// The `NodeId` belonging to the miner.
+    miner_id: NodeId,
+
+    /// The `Signature` corresponding to the miner's id.
+    miner_signature: Option<Signature>,
 
     /// The hash of the parent block.
     parent_hash: Option<Hash>,
@@ -147,6 +168,11 @@ impl Block for PowBlock {
     ) -> Result<Self::ChainState, ChainErr> {
         let block_hash = block.block_hash().unwrap();
 
+        // Verify the signature of the miner over the block
+        if !block.verify_miner_sig() {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadMinerSig));
+        }  
+
         // TODO: Validate difficulty. Issue #118
         let difficulty = 0;
 
@@ -167,6 +193,180 @@ impl Block for PowBlock {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadProof));
         }
 
+        let exists = chain_state.pending_validator_lookup.get(&block.miner_id).is_some()
+            || chain_state.active_validator_lookup.get(&block.miner_id).is_some()
+            || chain_state.active_validator_ips.get(&block.ip).is_some()
+            || chain_state.pending_validator_ips.get(&block.ip).is_some();
+
+        // Check for existence in the pool
+        if exists {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::AlreadyInPool));
+        }
+
+        let cur_epoch = block.height();
+
+        // Remove old validators
+        if let Some(entries) = chain_state.end_epochs_mapping.remove(&cur_epoch) {
+            // Clean validators from all fields
+            for id in entries.iter() {
+                let val_entry = chain_state.active_validator_lookup.remove(id).unwrap();
+                chain_state.active_validator_ips.remove(&val_entry.ip);
+                info!("Removed validator {} in epoch {}", id, cur_epoch);
+            }
+
+            // If this is the last end epoch, reset fields
+            if let (Some(last_end_epoch), Some(first_end_epoch)) = (chain_state.last_end_epoch, chain_state.first_end_epoch) {
+                if chain_state.active_validator_count() == 0 {
+                    assert_eq!(last_end_epoch, first_end_epoch);
+                }
+
+                chain_state.first_end_epoch = None;
+                chain_state.last_end_epoch = None;
+            }
+        }
+
+        // Buffer validator if there are not enough validators in the pool
+        if chain_state.active_validator_count() < PENDING_VAL_BUF_SIZE {
+            let start_epoch = (cur_epoch - 1) + (PENDING_VAL_BUF_SIZE - chain_state.active_validator_count());
+            
+            // TODO: Calculate end epoch, to keep it simple for now,
+            // each validator's lifetime will be 10 epoch.
+            let end_epoch = start_epoch + 10;
+
+            // TODO: Calculate total allocated events
+            let total_allocated = 1000;
+
+            // Create entry
+            let entry = ValidatorEntry::new(block.ip, total_allocated);
+
+            // Push miner id to the pending validators stack
+            chain_state.pending_validators.push_back(block.miner_id.clone());
+
+            // Add validator entry to lookup table
+            chain_state.pending_validator_lookup.insert(block.miner_id.clone(), entry);
+
+            // Add validator ip to pending ips set
+            chain_state.pending_validator_ips.insert(block.ip);
+
+            // Add to start epochs mapping
+            if let Some(entries) = chain_state.start_epochs_mapping.get_mut(&start_epoch) {
+                entries.insert(block.miner_id.clone());
+            } else {
+                let mut entries = HashSet::new();
+                entries.insert(block.miner_id.clone());
+                chain_state.start_epochs_mapping.insert(start_epoch, entries);
+            }
+
+            // Add to end epochs mapping
+            if let Some(entries) = chain_state.end_epochs_mapping.get_mut(&end_epoch) {
+                entries.insert(block.miner_id.clone());
+            } else {
+                let mut entries = HashSet::new();
+                entries.insert(block.miner_id.clone());
+                chain_state.end_epochs_mapping.insert(end_epoch, entries);
+            }
+
+            info!("Not enough validators to form a pool. Validator {} has been buffered. The next possible pool will be able to form at epoch {}", block.miner_id, start_epoch);
+        } else if chain_state.active_validator_count() >= MAX_POOL_SIZE {
+            // Also buffer validator if we have more than the maximum pool size
+            let start_epoch = chain_state.first_end_epoch.unwrap();
+            
+            // TODO: Calculate end epoch. To keep it simple for now,
+            // each validator's lifetime in the pool will be 10 epochs.
+            let end_epoch = start_epoch + 10;
+
+            // TODO: Calculate total allocated events
+            let total_allocated = 1000;
+
+            // Create entry
+            let entry = ValidatorEntry::new(block.ip, total_allocated);
+
+            // Push miner id to the pending validators stack
+            chain_state.pending_validators.push_back(block.miner_id.clone());
+
+            // Add validator entry to lookup table
+            chain_state.pending_validator_lookup.insert(block.miner_id.clone(), entry);
+
+            // Add validator ip to pending ips set
+            chain_state.pending_validator_ips.insert(block.ip);
+
+            // Add to start epochs mapping
+            if let Some(entries) = chain_state.start_epochs_mapping.get_mut(&start_epoch) {
+                entries.insert(block.miner_id.clone());
+            } else {
+                let mut entries = HashSet::new();
+                entries.insert(block.miner_id.clone());
+                chain_state.start_epochs_mapping.insert(start_epoch, entries);
+            }
+
+            // Add to end epochs mapping
+            if let Some(entries) = chain_state.end_epochs_mapping.get_mut(&end_epoch) {
+                entries.insert(block.miner_id.clone());
+            } else {
+                let mut entries = HashSet::new();
+                entries.insert(block.miner_id.clone());
+                chain_state.end_epochs_mapping.insert(end_epoch, entries);
+            }
+
+            info!("Too many validators in the pool! Validator {} has been buffered. The next epoch where it is possible to join is {}", block.miner_id, start_epoch);
+        } else {
+            // Otherwise, we simply join the validator to the next epoch's set
+            // Also buffer validator if we have more than the maximum pool size
+            let start_epoch = block.height();
+            
+            // TODO: Calculate end epoch. To keep it simple for now,
+            // each validator's lifetime in the pool will be 10 epochs.
+            let end_epoch = start_epoch + 10;
+
+            // TODO: Calculate total allocated events
+            let total_allocated = 1000;
+
+            // Create entry
+            let entry = ValidatorEntry::new(block.ip, total_allocated);
+
+            // Add validator entry to lookup table
+            chain_state.active_validator_lookup.insert(block.miner_id.clone(), entry);
+
+            // Add validator ip to active ips set
+            chain_state.active_validator_ips.insert(block.ip);
+
+            // Add to start epochs mapping
+            if let Some(entries) = chain_state.start_epochs_mapping.get_mut(&start_epoch) {
+                entries.insert(block.miner_id.clone());
+            } else {
+                let mut entries = HashSet::new();
+                entries.insert(block.miner_id.clone());
+                chain_state.start_epochs_mapping.insert(start_epoch, entries);
+            }
+
+            // Add to end epochs mapping
+            if let Some(entries) = chain_state.end_epochs_mapping.get_mut(&end_epoch) {
+                entries.insert(block.miner_id.clone());
+            } else {
+                let mut entries = HashSet::new();
+                entries.insert(block.miner_id.clone());
+                chain_state.end_epochs_mapping.insert(end_epoch, entries);
+            }
+
+            info!("Joined validator {} in epoch {}", block.miner_id, block.height());
+        }
+
+        // If we don't have active validators and the pending buffer is full, 
+        // we empty the buffer and join all pending validators in the next epoch.
+        if chain_state.active_validator_count() == 0 && chain_state.pending_validator_count() == PENDING_VAL_BUF_SIZE {
+            while let Some(validator) = chain_state.pending_validators.pop_front() {
+                let entry = chain_state.pending_validator_lookup.remove(&validator).unwrap();
+                info!("Joined validator {} in epoch {}", validator, block.height());
+
+                chain_state.pending_validator_ips.remove(&entry.ip);
+                chain_state.active_validator_ips.insert(entry.ip.clone());
+                chain_state.active_validator_lookup.insert(validator, entry);
+            }
+        } 
+
+        // Set new chain state height
+        chain_state.height = cur_epoch;
+
         Ok(chain_state)
     }
 
@@ -186,6 +386,8 @@ impl Block for PowBlock {
         buf.extend_from_slice(&self.hash.unwrap().0);
         buf.extend_from_slice(&self.parent_hash.unwrap().0);
         buf.extend_from_slice(&self.collector_address.to_bytes());
+        buf.extend_from_slice(&(&self.miner_id.0).0);
+        buf.extend_from_slice(&self.miner_signature.as_ref().unwrap().to_bytes());
         buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(address);
         buf.extend_from_slice(&timestamp);
@@ -265,6 +467,28 @@ impl Block for PowBlock {
             return Err("Incorrect packet structure 5");
         };
 
+        let miner_id = if buf.len() > 32 as usize {
+            let id: Vec<u8> = buf.drain(..32).collect();
+
+            match NodeId::from_bytes(&id) {
+                Ok(address) => address,
+                _ => return Err("Incorrect miner id field"),
+            }
+        } else {
+            return Err("Incorrect packet structure 6");
+        };
+
+        let miner_signature = if buf.len() > 64 as usize {
+            let sig: Vec<u8> = buf.drain(..64).collect();
+
+            match Signature::from_bytes(&sig) {
+                Ok(address) => address,
+                _ => return Err("Incorrect signature field"),
+            }
+        } else {
+            return Err("Incorrect packet structure 7");
+        };
+
         let proof = if buf.len() > 1 + 8 + 8 * PROOF_SIZE {
             let proof: Vec<u8> = buf.drain(..(1 + 8 + 8 * PROOF_SIZE)).collect();
 
@@ -273,7 +497,7 @@ impl Block for PowBlock {
                 _ => return Err("Incorrect proof field"),
             }
         } else {
-            return Err("Incorrect packet structure 6");
+            return Err("Incorrect packet structure 8");
         };
 
         let address = if buf.len() > address_len as usize {
@@ -287,7 +511,7 @@ impl Block for PowBlock {
                 Err(_) => return Err("Invalid ip address"),
             }
         } else {
-            return Err("Incorrect packet structure 7");
+            return Err("Incorrect packet structure 9");
         };
 
         let timestamp = if buf.len() == timestamp_len as usize {
@@ -305,9 +529,11 @@ impl Block for PowBlock {
         Ok(Arc::new(PowBlock {
             timestamp,
             collector_address,
+            miner_id,
             proof,
             hash: Some(hash),
             parent_hash: Some(parent_hash),
+            miner_signature: Some(miner_signature),
             ip: address,
             height,
         }))
@@ -323,16 +549,30 @@ impl PowBlock {
         ip: SocketAddr,
         height: u64,
         proof: Proof,
+        miner_id: NodeId,
     ) -> PowBlock {
         PowBlock {
             parent_hash,
             collector_address,
+            miner_id,
             height,
             hash: None,
+            miner_signature: None,
             ip,
             proof,
             timestamp: Utc::now(),
         }
+    }
+
+    pub fn sign_miner(&mut self, sk: &Sk) {
+        let message = self.compute_sign_message();
+        let sig = crypto::sign(&message, sk);
+        self.miner_signature = Some(sig);
+    }
+
+    pub fn verify_miner_sig(&self) -> bool {
+        let message = self.compute_sign_message();
+        crypto::verify(&message, self.miner_signature.as_ref().unwrap(), &self.miner_id.0)
     }
 
     pub fn compute_hash(&mut self) {
@@ -356,11 +596,38 @@ impl PowBlock {
 
         buf.extend_from_slice(&encoded_height);
 
-        if let Some(parent_hash) = self.parent_hash {
+        if let Some(ref parent_hash) = self.parent_hash {
             buf.extend_from_slice(&parent_hash.0);
         }
 
         buf.extend_from_slice(&self.collector_address.to_bytes());
+        buf.extend_from_slice(&(self.miner_id.0).0);
+        buf.extend_from_slice(&self.proof.to_bytes());
+
+        if let Some(ref miner_signature) = self.miner_signature {
+            buf.extend_from_slice(&miner_signature.to_bytes());
+        }
+
+        buf.extend_from_slice(addr.as_bytes());
+        buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
+        buf
+    }
+
+    fn compute_sign_message(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+        let encoded_height = encode_be_u64!(self.height);
+        let addr = format!("{}", self.ip);
+
+        buf.extend_from_slice(&encoded_height);
+
+        if let Some(ref parent_hash) = self.parent_hash {
+            buf.extend_from_slice(&parent_hash.0);
+        } else {
+            unreachable!();
+        }
+
+        buf.extend_from_slice(&self.collector_address.to_bytes());
+        buf.extend_from_slice(&(self.miner_id.0).0);
         buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(addr.as_bytes());
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
@@ -377,6 +644,8 @@ impl Arbitrary for PowBlock {
             collector_address: Arbitrary::arbitrary(g),
             parent_hash: Some(Arbitrary::arbitrary(g)),
             hash: Some(Arbitrary::arbitrary(g)),
+            miner_id: Arbitrary::arbitrary(g),
+            miner_signature: Some(Arbitrary::arbitrary(g)),
             ip: Arbitrary::arbitrary(g),
             proof: Proof::random(PROOF_SIZE),
             timestamp: Utc::now(),

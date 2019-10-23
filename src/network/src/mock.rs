@@ -16,11 +16,12 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::pool_network::PoolNetwork;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::*;
-use crate::peer::{ConnectionType, Peer};
+use crate::peer::{ConnectionType, SubConnectionType, Peer};
 use crate::validation::sender::Sender as SenderTrait;
 use crate::bootstrap::cache::BootstrapCache;
 use persistence::PersistentDb;
@@ -85,13 +86,18 @@ pub struct MockNetwork {
 
     /// Associated bootstrap cache
     bootstrap_cache: BootstrapCache,
+
+    #[cfg(feature = "miner")]
+    /// Validator pool sub-network. This field is `None` if we
+    /// are not in a validator pool.
+    current_pool: Option<PoolNetwork>,
 }
 
 impl NetworkInterface for MockNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client(SubConnectionType::Normal), None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
@@ -113,6 +119,11 @@ impl NetworkInterface for MockNetwork {
 
     fn port(&self) -> u16 {
         self.port
+    }
+
+    #[cfg(feature = "miner")]
+    fn validator_pool_network_ref(&self) -> Option<PoolNetwork> {
+        self.current_pool.clone()
     }
 
     fn is_connected_to(&self, address: &SocketAddr) -> bool {
@@ -376,6 +387,9 @@ impl MockNetwork {
             ip,
             port,
             network_name,
+
+            #[cfg(feature = "miner")]
+            current_pool: None,
         }
     }
 
@@ -384,7 +398,7 @@ impl MockNetwork {
     pub fn connect_no_ping(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client(SubConnectionType::Normal), None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();

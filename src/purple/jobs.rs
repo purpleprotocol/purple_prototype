@@ -35,6 +35,7 @@ use miner::{PurpleMiner, PluginType, Proof};
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
 lazy_static! {
     static ref MINER_IS_STARTED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+    static ref MINER_IS_PAUSED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 }
 
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
@@ -89,6 +90,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
 
                             // TODO: Set and retrieve the node's collector address
                             let collector_address = NormalAddress::random();
+                            let node_id = network.our_node_id().clone();
 
                             // Create block
                             let mut block = PowBlock::new(
@@ -97,19 +99,30 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                                 ip,
                                 miner_height + 1,
                                 proof,
+                                node_id,
                             );
+                            block.sign_miner(network.secret_key());
                             block.compute_hash();
                             let block = Arc::new(block);
 
                             // Append block to our chain
-                            pow_chain.append_block(block.clone()).map_err(|err| warn!("Could not append block to pow chain! Reason: {:?}", err));
+                            let result = pow_chain.append_block(block.clone()).map_err(|err| warn!("Could not append block to pow chain! Reason: {:?}", err));
 
-                            let block_wrapper = BlockWrapper::from_pow_block(block);
-                            let packet = ForwardBlock::new(block_wrapper);
-                            let packet = packet.to_bytes();
+                            // Only propagate block if the chain append was successful
+                            if let Ok(_) = result {
+                                let block_wrapper = BlockWrapper::from_pow_block(block);
+                                let packet = ForwardBlock::new(block_wrapper);
+                                let packet = packet.to_bytes();
 
-                            // Send block to all of our peers
-                            network.send_to_all(&packet).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
+                                // Send block to all of our peers
+                                network.send_to_all(&packet).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
+
+                                // Pause solvers
+                                miner.pause_solvers();
+                                MINER_IS_PAUSED.store(true, Ordering::Relaxed);
+                            } else {
+                                warn!("Could not send pow block! Reason: Unsuccessful chain append");
+                            }
                         } else {
                             //debug!("No solution found...");
                             // TODO: Maybe hook this to a progress visualizer
@@ -128,19 +141,26 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                     //debug!("Miner is stand-by...");
                 }
             } else {
-                // Schedule miner to work on the current tip
-                let tip = pow_chain.canonical_tip();
-                let current_height = tip.height();
-                let header_hash = tip.block_hash().unwrap();
-                let difficulty = 0; // TODO: Calculate difficulty #118
+                let is_paused = MINER_IS_PAUSED.load(Ordering::Relaxed);
 
-                debug!("Starting solvers...");
+                if !is_paused {
+                    // Schedule miner to work on the current tip
+                    let tip = pow_chain.canonical_tip();
+                    let current_height = tip.height();
+                    let header_hash = tip.block_hash().unwrap();
+                    let difficulty = 0; // TODO: Calculate difficulty #118
 
-                // Start solver threads
-                miner.start_solvers();
+                    debug!("Starting solvers...");
 
-                debug!("Solvers started!");
-                miner.notify(current_height, &header_hash.0, difficulty, plugin_type);
+                    // Start solver threads
+                    miner.start_solvers();
+
+                    debug!("Solvers started!");
+                    miner.notify(current_height, &header_hash.0, difficulty, plugin_type);
+                } else {
+                    // TODO: Unpause miner once we have exited a pool and can mine again
+                    unimplemented!();
+                }
             }
 
             // Don't hog the scheduler

@@ -18,9 +18,7 @@
 
 use crate::causal_graph::CausalGraph;
 use crate::validation::ValidationResp;
-use crate::validator_state::ValidatorState;
-use causality::Stamp;
-use crypto::NodeId;
+use crypto::{Hash, NodeId};
 use events::Event;
 use hashbrown::HashMap;
 use std::sync::Arc;
@@ -40,6 +38,14 @@ pub struct ConsensusMachine {
 
     /// Our share of allocated events
     allocated_events: u64,
+
+    /// The pow block hash denoting the start epoch
+    /// of our participation in the pool.
+    pub start_pow_block: Hash,
+
+    /// The pow block hash denoting the end period
+    /// of our participation in the pool
+    pub end_pow_block: Hash,
 }
 
 impl ConsensusMachine {
@@ -48,10 +54,14 @@ impl ConsensusMachine {
         epoch: u64,
         remaining_blocks: u64,
         allocated_events: u64,
+        start_pow_block: Hash,
+        end_pow_block: Hash,
         root_event: Arc<Event>,
     ) -> ConsensusMachine {
         ConsensusMachine {
             causal_graph: CausalGraph::new(node_id, root_event, epoch, remaining_blocks),
+            start_pow_block,
+            end_pow_block,
             allocated_events,
         }
     }
@@ -60,6 +70,8 @@ impl ConsensusMachine {
     pub fn new_with_test_mode(node_id: NodeId, root_event: Arc<Event>) -> ConsensusMachine {
         ConsensusMachine {
             causal_graph: CausalGraph::new_with_test_mode(node_id, root_event, 0, 1000),
+            start_pow_block: Hash::random(),
+            end_pow_block: Hash::random(),
             allocated_events: 1000,
         }
     }
@@ -133,6 +145,7 @@ mod tests {
     use super::*;
     use crypto::{Hash, Identity};
     use quickcheck::*;
+    use causality::Stamp;
     use rand::{thread_rng, Rng};
 
     #[test]

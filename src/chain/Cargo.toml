@@ -13,6 +13,7 @@ lru = "0.1.13"
 rlp = "0.3.0"
 parking_lot = "0.7.1"
 hex = "0.3.2"
+log = "0.4.0"
 patricia-trie = "0.3.0"
 account = { path = "../account" }
 crypto = { path = "../crypto" }
@@ -28,7 +29,7 @@ hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde
 
 [dev-dependencies]
 graphlib = { version = "0.5.3", features = ["dot"] }
-rayon = "1.0.3"
+rayon = "1.2.0"
 test-helpers = { path = "../util/test-helpers" }
 
 [dev-dependencies.miner]

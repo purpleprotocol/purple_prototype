@@ -22,7 +22,8 @@ use crate::interface::NetworkInterface;
 use crate::network::Network;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
-use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
+use crate::packets::connect_pool::ConnectPool;
+use crate::peer::{ConnectionType, SubConnectionType, Peer, OUTBOUND_BUF_SIZE};
 use crate::validation::sender::Sender;
 use crypto::{Nonce, Signature};
 use std::io::BufReader;
@@ -83,11 +84,12 @@ pub fn connect_to_peer(
     network: Network,
     accept_connections: Arc<AtomicBool>,
     addr: &SocketAddr,
+    connection_type: SubConnectionType,
 ) -> Spawn {
     let connect = TcpStream::connect(addr)
         .map_err(|e| warn!("connect failed = {:?}", e))
         .and_then(move |sock| {
-            process_connection(network, sock, accept_connections, ConnectionType::Client)
+            process_connection(network, sock, accept_connections, ConnectionType::Client(connection_type))
         });
 
     tokio::spawn(connect)
@@ -109,7 +111,8 @@ fn process_connection(
     let addr = sock.get_ref().peer_addr().unwrap();
 
     match client_or_server {
-        ConnectionType::Client => info!("Connecting to {}", addr),
+        ConnectionType::Client(SubConnectionType::Normal) => info!("Connecting to {}", addr),
+        ConnectionType::Client(SubConnectionType::Validator(_)) => info!("Connecting to validator {}", addr),
         ConnectionType::Server => info!("Received connection request from {}", addr),
     };
 
@@ -145,25 +148,46 @@ fn process_connection(
             let mut writer = writer;
 
             {
-                let mut peers = network.peers.write();
+                let mut peers = network.peers.read();
 
-                if let Some(peer) = peers.get_mut(&addr) {
+                if let Some(peer) = peers.get(&addr) {
                     // Write a connect packet if we are the client.
-                    if let ConnectionType::Client = client_or_server {
-                        // Send `Connect` packet.
-                        let mut connect = Connect::new(node_id.clone(), peer.pk);
-                        connect.sign(&skey);
+                    match client_or_server {
+                        ConnectionType::Client(SubConnectionType::Normal) => {
+                            // Send `Connect` packet.
+                            let mut connect = Connect::new(node_id.clone(), peer.pk);
+                            connect.sign(&skey);
 
-                        let packet = connect.to_bytes();
-                        let packet =
-                            crate::common::wrap_packet(&packet, network.network_name.as_str());
-                        debug!("Sending connect packet to {}", addr);
+                            let packet = connect.to_bytes();
+                            let packet =
+                                crate::common::wrap_packet(&packet, network.network_name.as_str());
+                            debug!("Sending connect packet to {}", addr);
 
-                        writer
-                            .poll_write(&packet)
-                            .map_err(|err| warn!("write failed = {:?}", err))
-                            .and_then(|_| Ok(()))
-                            .unwrap();
+                            writer
+                                .poll_write(&packet)
+                                .map_err(|err| warn!("write failed = {:?}", err))
+                                .and_then(|_| Ok(()))
+                                .unwrap();
+                        }
+
+                        ConnectionType::Client(SubConnectionType::Validator(block_hash)) => {
+                            // Send `ConnectPool` packet.
+                            let mut connect = ConnectPool::new(node_id.clone(), peer.pk, block_hash);
+                            connect.sign(&skey);
+
+                            let packet = connect.to_bytes();
+                            let packet =
+                                crate::common::wrap_packet(&packet, network.network_name.as_str());
+                            debug!("Sending connect pool packet to {}", addr);
+
+                            writer
+                                .poll_write(&packet)
+                                .map_err(|err| warn!("write failed = {:?}", err))
+                                .and_then(|_| Ok(()))
+                                .unwrap();
+                        }
+
+                        _ => { } // Do nothing
                     }
                 } else {
                     return err("no peer found");
@@ -204,10 +228,10 @@ fn process_connection(
         .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
         .fold((reader, network.clone()), move |(reader, network), _| {
             // Read header
-            let line = io::read_exact(reader, vec![0; common::HEADER_SIZE])
+            let line = io::read_exact(reader, vec![0; common::HEADER_SIZE]) // TODO: Find a way to not allocate a buffer for each packet
                 // Decode header
                 .and_then(move |(reader, buffer)| {
-                    let header = common::decode_header(&buffer).map_err(|err| {
+                    let header = common::decode_header(&buffer).map_err(|err| { // TODO: Handle header read error
                         io::Error::new(
                             io::ErrorKind::Other,
                             format!("Header read error for {}: {:?}", addr, err),
@@ -216,7 +240,7 @@ fn process_connection(
 
                     // Only accept our current network version
                     if header.network_version != common::NETWORK_VERSION {
-                        return Err(io::Error::new(
+                        return Err(io::Error::new( // TODO: Handle header read error
                             io::ErrorKind::Other,
                             format!(
                                 "Header read error for {}: {:?}",
@@ -237,7 +261,7 @@ fn process_connection(
                 .and_then(move |(reader, network, header, buffer)| {
                     common::verify_crc32(&header, &buffer, network.network_name.as_str()).map_err(
                         |err| {
-                            io::Error::new(
+                            io::Error::new( // TODO: Handle header read error
                                 io::ErrorKind::Other,
                                 format!("Header read error for {}: {:?}", addr, err),
                             )
@@ -258,27 +282,32 @@ fn process_connection(
                             if peer.sent_connect {
                                 // Decode nonce which is always the
                                 // first 12 bytes in the packet.
-                                let (nonce_buf, buffer) = buffer.split_at(12);
+                                let nonce_buf = &buffer[..12];
                                 let mut nonce: [u8; 12] = [0; 12];
-                                nonce.copy_from_slice(&nonce_buf);
+                                nonce.copy_from_slice(nonce_buf);
                                 let nonce = Nonce(nonce);
 
                                 // The next 64 bytes in the packet are
                                 // the signature of the packet.
-                                let (sig_buf, buffer) = buffer.split_at(64);
-                                let sig = Signature::new(&sig_buf);
+                                let sig_buf = &buffer[12..76];
+                                let sig = Signature::new(sig_buf);
+
+                                // Get a slice of the remaining length 
+                                // which is the packet payload.
+                                let packet_slice = &buffer[76..];
 
                                 // Verify packet signature
-                                if !crypto::verify(&buffer, &sig, &peer.id.as_ref().unwrap().0) {
-                                    return Err(io::Error::new(
+                                if !crypto::verify(packet_slice, &sig, &peer.id.as_ref().unwrap().0) {
+                                    return Err(io::Error::new( // TODO: Handle signature error
                                         io::ErrorKind::Other,
                                         format!("Packet signature error for {}", addr),
                                     ));
                                 }
 
-                                buf = common::decrypt(&buffer, &nonce, peer.tx.as_ref().unwrap())
+                                // Decrypt payload
+                                buf = common::decrypt(packet_slice, &nonce, peer.tx.as_ref().unwrap())
                                     .map_err(|_| {
-                                        io::Error::new(
+                                        io::Error::new( // TODO: Handle encryption error
                                             io::ErrorKind::Other,
                                             format!("Encryption error for {}", addr),
                                         )
@@ -358,28 +387,26 @@ fn process_connection(
             let last_ping = peer.last_ping.fetch_add(TIMER_INTERVAL, Ordering::SeqCst);
 
             if last_ping > PING_INTERVAL {
-                {
-                    let mut sender = peer.validator.ping_pong.sender.lock();
+                let mut sender = peer.validator.ping_pong.sender.lock();
 
-                    if let Ok(ping) = sender.send(()) {
-                        peer.last_ping.store(0, Ordering::SeqCst);
+                if let Ok(ping) = sender.send(()) {
+                    peer.last_ping.store(0, Ordering::SeqCst);
 
-                        debug!("Sending Ping packet to {}", addr);
+                    debug!("Sending Ping packet to {}", addr);
 
-                        network_clone2
-                            .send_to_peer(&addr, ping.to_bytes())
-                            .map_err(|err| warn!("Could not send ping to {}: {:?}", addr, err))
-                            .unwrap_or(());
+                    network_clone2
+                        .send_to_peer(&addr, ping.to_bytes())
+                        .map_err(|err| warn!("Could not send ping to {}: {:?}", addr, err))
+                        .unwrap_or(());
 
-                        debug!("Sent Ping packet to {}", addr);
-                    } else {
-                        times_denied += 1;
+                    debug!("Sent Ping packet to {}", addr);
+                } else {
+                    times_denied += 1;
 
-                        // Reset sender if it's stuck
-                        if times_denied > 10 {
-                            times_denied = 0;
-                            sender.reset();
-                        }
+                    // Reset sender if it's stuck
+                    if times_denied > 10 {
+                        times_denied = 0;
+                        sender.reset();
                     }
                 }
             }

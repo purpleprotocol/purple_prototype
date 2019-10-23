@@ -18,11 +18,13 @@
 
 #![allow(non_snake_case, unused)]
 
+#[macro_use]
+extern crate log;
+
 mod block;
 mod chain;
 mod pow_chain;
 mod init;
-mod pow_chain_state;
 mod state_chain;
 mod types;
 
@@ -34,7 +36,6 @@ pub use block::*;
 pub use pow_chain::block::*;
 pub use pow_chain::chain::*;
 pub use init::*;
-pub use pow_chain_state::*;
 pub use state_chain::block::*;
 pub use state_chain::chain::*;
 pub use state_chain::state::*;
