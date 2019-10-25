@@ -237,7 +237,7 @@ impl Block for PowBlock {
             let total_allocated = 1000;
 
             // Create entry
-            let entry = ValidatorEntry::new(block.ip, total_allocated);
+            let entry = ValidatorEntry::new(block.ip, block.block_hash().unwrap(), total_allocated);
 
             // Push miner id to the pending validators stack
             chain_state.pending_validators.push_back(block.miner_id.clone());
@@ -279,7 +279,7 @@ impl Block for PowBlock {
             let total_allocated = 1000;
 
             // Create entry
-            let entry = ValidatorEntry::new(block.ip, total_allocated);
+            let entry = ValidatorEntry::new(block.ip, block.block_hash().unwrap(), total_allocated);
 
             // Push miner id to the pending validators stack
             chain_state.pending_validators.push_back(block.miner_id.clone());
@@ -322,7 +322,7 @@ impl Block for PowBlock {
             let total_allocated = 1000;
 
             // Create entry
-            let entry = ValidatorEntry::new(block.ip, total_allocated);
+            let entry = ValidatorEntry::new(block.ip, block.block_hash().unwrap(), total_allocated);
 
             // Add validator entry to lookup table
             chain_state.active_validator_lookup.insert(block.miner_id.clone(), entry);

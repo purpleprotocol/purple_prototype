@@ -156,37 +156,35 @@ pub fn handle_packet<N: NetworkInterface>(
 
     match packet_type {
         Ping::PACKET_TYPE => match Ping::from_bytes(packet) {
-            Ok(packet) => Ping::handle(network, peer_addr, &packet, conn_type)?,
-            _ => return Err(NetworkErr::PacketParseErr),
+            Ok(packet) => Ping::handle(network, peer_addr, &packet, conn_type),
+            _ => Err(NetworkErr::PacketParseErr),
         },
 
         Pong::PACKET_TYPE => match Pong::from_bytes(packet) {
-            Ok(packet) => Pong::handle(network, peer_addr, &packet, conn_type)?,
-            _ => return Err(NetworkErr::PacketParseErr),
+            Ok(packet) => Pong::handle(network, peer_addr, &packet, conn_type),
+            _ => Err(NetworkErr::PacketParseErr),
         },
 
         RequestPeers::PACKET_TYPE => match RequestPeers::from_bytes(packet) {
-            Ok(packet) => RequestPeers::handle(network, peer_addr, &packet, conn_type)?,
-            _ => return Err(NetworkErr::PacketParseErr),
+            Ok(packet) => RequestPeers::handle(network, peer_addr, &packet, conn_type),
+            _ => Err(NetworkErr::PacketParseErr),
         },
 
         SendPeers::PACKET_TYPE => match SendPeers::from_bytes(packet) {
-            Ok(packet) => SendPeers::handle(network, peer_addr, &packet, conn_type)?,
-            _ => return Err(NetworkErr::PacketParseErr),
+            Ok(packet) => SendPeers::handle(network, peer_addr, &packet, conn_type),
+            _ => Err(NetworkErr::PacketParseErr),
         },
 
         ForwardBlock::PACKET_TYPE => match ForwardBlock::from_bytes(packet) {
-            Ok(packet) => ForwardBlock::handle(network, peer_addr, &packet, conn_type)?,
-            _ => return Err(NetworkErr::PacketParseErr),
+            Ok(packet) => ForwardBlock::handle(network, peer_addr, &packet, conn_type),
+            _ => Err(NetworkErr::PacketParseErr),
         },
 
         _ => {
             debug!("Could not parse packet with type {} from {}", packet_type, peer_addr);
-            return Err(NetworkErr::PacketParseErr);
+            Err(NetworkErr::PacketParseErr)
         }
     }
-
-    Ok(())
 }
 
 #[cfg(test)]

@@ -54,6 +54,9 @@ pub struct PoolNetwork {
     /// Our node id
     pub(crate) node_id: NodeId,
 
+    /// The hash of the pow block that we have mined
+    pub(crate) start_pow_block: Hash,
+
     /// Our secret key
     pub(crate) secret_key: Sk,
 
@@ -69,19 +72,19 @@ impl PoolNetwork {
         node_id: NodeId,
         port: u16,
         network_name: String,
-        start_pow_block: Hash,
-        end_pow_block: Hash,
         secret_key: Sk,
         epoch: u64,
-        remaining_events: u64,
+        start_pow_block: Hash,
+        validator_set: &HashMap<NodeId, u64>, 
         allocated_events: u64,
         root_event: Arc<Event>,
     ) -> PoolNetwork {
         PoolNetwork {
             peers: Arc::new(RwLock::new(HashMap::new())),
-            consensus_machine: Arc::new(RwLock::new(ConsensusMachine::new(node_id.clone(), epoch, remaining_events, allocated_events, start_pow_block, end_pow_block, root_event))),
+            consensus_machine: Arc::new(RwLock::new(ConsensusMachine::new(node_id.clone(), epoch, validator_set, allocated_events, root_event))),
             node_id,
             port,
+            start_pow_block,
             network_name,
             secret_key,
         }

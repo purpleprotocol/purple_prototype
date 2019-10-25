@@ -18,10 +18,13 @@
 
 use crate::interface::NetworkInterface;
 use crate::network::Network;
+use crate::pool_network::PoolNetwork;
 use tokio::executor::Spawn;
 use tokio::prelude::future::ok;
 use tokio::prelude::*;
 use tokio_timer::Interval;
+use events::Event;
+use std::sync::Arc;
 use std::time::{Instant, Duration};
 
 #[cfg(feature = "miner")]
@@ -53,8 +56,20 @@ pub fn start_validator_bootstrap_check(network: Network) -> Spawn {
                 let pool_network = if let Some(pool_network) = &network.current_pool {
                     pool_network.clone()
                 } else {
-                    // TODO: Initialize pool network
-                    unimplemented!(); 
+                    let validator_set = pow_state.get_active_validator_set();
+                    let start_pow_block = pow_state.get_start_pow_block(&our_node_id).unwrap();
+
+                    PoolNetwork::new(
+                        network.our_node_id().clone(), 
+                        network.port(),
+                        network.network_name.clone(),
+                        network.secret_key.clone(),
+                        pow_state.height,
+                        start_pow_block,
+                        &validator_set,
+                        10000, // TODO: Set total allocated events for the whole pool
+                        Arc::new(Event::Root),
+                    )
                 };
 
                 let mut pool_network_clone = pool_network.clone();

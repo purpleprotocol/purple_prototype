@@ -17,20 +17,25 @@
 */
 
 use std::net::SocketAddr;
+use crypto::Hash;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValidatorEntry {
     /// The ip of the validator
     pub ip: SocketAddr,
 
+    /// The hash of the mined pow block by the validator
+    pub start_pow_block: Hash,
+
     /// Total allocated events for this validator.
     pub total_allocated: u64,
 }
 
 impl ValidatorEntry {
-    pub fn new(ip: SocketAddr, total_allocated: u64) -> ValidatorEntry {
+    pub fn new(ip: SocketAddr, start_pow_block: Hash, total_allocated: u64) -> ValidatorEntry {
         ValidatorEntry {
             ip,
+            start_pow_block,
             total_allocated,
         }
     }
