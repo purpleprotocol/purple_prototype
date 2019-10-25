@@ -35,44 +35,32 @@ pub enum CGError {
 #[derive(Debug)]
 pub struct ConsensusMachine {
     pub(crate) causal_graph: CausalGraph,
-
-    /// Our share of allocated events
-    allocated_events: u64,
-
-    /// The pow block hash denoting the start epoch
-    /// of our participation in the pool.
-    pub start_pow_block: Hash,
-
-    /// The pow block hash denoting the end period
-    /// of our participation in the pool
-    pub end_pow_block: Hash,
 }
 
 impl ConsensusMachine {
     pub fn new(
         node_id: NodeId,
         epoch: u64,
-        remaining_blocks: u64,
-        allocated_events: u64,
-        start_pow_block: Hash,
-        end_pow_block: Hash,
+        validator_set: &HashMap<NodeId, u64>, 
+        allocated: u64,
         root_event: Arc<Event>,
     ) -> ConsensusMachine {
-        ConsensusMachine {
-            causal_graph: CausalGraph::new(node_id, root_event, epoch, remaining_blocks),
-            start_pow_block,
-            end_pow_block,
-            allocated_events,
-        }
+        let mut machine = ConsensusMachine {
+            causal_graph: CausalGraph::new(node_id, root_event, epoch, 0),
+        };
+
+        machine
+            .causal_graph
+            .pool_state
+            .inject(validator_set, allocated, false);
+        
+        machine
     }
 
     #[cfg(test)]
     pub fn new_with_test_mode(node_id: NodeId, root_event: Arc<Event>) -> ConsensusMachine {
         ConsensusMachine {
             causal_graph: CausalGraph::new_with_test_mode(node_id, root_event, 0, 1000),
-            start_pow_block: Hash::random(),
-            end_pow_block: Hash::random(),
-            allocated_events: 1000,
         }
     }
 
@@ -85,7 +73,7 @@ impl ConsensusMachine {
     pub fn inject(&mut self, validator_set: &HashMap<NodeId, u64>, allocated: u64) {
         self.causal_graph
             .pool_state
-            .inject(validator_set, allocated);
+            .inject(validator_set, allocated, true);
     }
 
     /// Attempts to push an atomic reference to an

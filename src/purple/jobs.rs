@@ -158,8 +158,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                     debug!("Solvers started!");
                     miner.notify(current_height, &header_hash.0, difficulty, plugin_type);
                 } else {
-                    // TODO: Unpause miner once we have exited a pool and can mine again
-                    unimplemented!();
+                    debug!("Miner is paused...");
                 }
             }
 

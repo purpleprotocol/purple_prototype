@@ -238,10 +238,8 @@ impl Packet for ConnectPool {
 
             // If we are the server, also send a connect packet back
             if let ConnectionType::Server = conn_type {
-                let consensus_m = pool_network.consensus_machine.read();
-
                 debug!("Sending connect packet to {}", addr);
-                let mut packet = ConnectPool::new(our_node_id, our_pk.unwrap(), consensus_m.start_pow_block);
+                let mut packet = ConnectPool::new(our_node_id, our_pk.unwrap(), pool_network.start_pow_block);
                 packet.sign(network.secret_key());
                 network.send_raw(addr, &packet.to_bytes())?;
             }

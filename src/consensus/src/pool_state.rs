@@ -107,7 +107,7 @@ impl PoolState {
 
     /// Performs an injection of new validators and allocated
     /// events that the whole pool can produce.
-    pub fn inject(&mut self, validator_set: &HashMap<NodeId, u64>, allocated: u64) {
+    pub fn inject(&mut self, validator_set: &HashMap<NodeId, u64>, allocated: u64, increment_epoch: bool) {
         let mut fork_stack: Vec<(Stamp, Option<NodeId>)> = vec![(Stamp::seed(), None)];
         let mut forked = vec![];
 
@@ -183,8 +183,10 @@ impl PoolState {
             }
         }
 
-        // Go to next epoch
-        self.epoch += 1;
+        if increment_epoch {
+            // Go to next epoch
+            self.epoch += 1;
+        }
 
         // Inject allocated events
         self.remaining_events = allocated;
@@ -210,7 +212,7 @@ mod tests {
         let ids_hm = node_ids.iter().cloned().map(|id| (id, 500)).collect();
 
         let mut pool_state = PoolState::new(0, 1000);
-        pool_state.inject(&ids_hm, 500);
+        pool_state.inject(&ids_hm, 500, true);
 
         // Account for first four nodes
         for i in 0..4 {
@@ -365,7 +367,7 @@ mod tests {
         let ids_hm = node_ids.iter().cloned().map(|id| (id, 500)).collect();
 
         let mut pool_state = PoolState::new(0, 1000);
-        pool_state.inject(&ids_hm, 500);
+        pool_state.inject(&ids_hm, 500, true);
 
         assert_eq!(
             pool_state.account_sent_by_validator(&non_belonging_id),
@@ -388,7 +390,7 @@ mod tests {
         let ids_hm = node_ids.iter().cloned().map(|id| (id, 500)).collect();
 
         let mut pool_state = PoolState::new(0, 1000);
-        pool_state.inject(&ids_hm, 500);
+        pool_state.inject(&ids_hm, 500, true);
 
         // Account for first four nodes
         for i in 0..3 {
@@ -416,7 +418,7 @@ mod tests {
         let ids_hm = node_ids.iter().cloned().map(|id| (id, 1)).collect();
 
         let mut pool_state = PoolState::new(0, 500);
-        pool_state.inject(&ids_hm, 500);
+        pool_state.inject(&ids_hm, 500, true);
 
         // Account for first four nodes
         for i in 0..4 {
@@ -444,7 +446,7 @@ mod tests {
         let ids_hm = node_ids.iter().cloned().map(|id| (id, 500)).collect();
 
         let mut pool_state = PoolState::new(0, 0);
-        pool_state.inject(&ids_hm, 2);
+        pool_state.inject(&ids_hm, 2, true);
 
         pool_state.account_sent_by_validator(&node_ids[0]).unwrap();
         pool_state.account_sent_by_validator(&node_ids[1]).unwrap();
@@ -470,7 +472,7 @@ mod tests {
         let ids_hm = node_ids.iter().cloned().map(|id| (id, 500)).collect();
 
         let mut pool_state = PoolState::new(0, 1000);
-        pool_state.inject(&ids_hm, 500);
+        pool_state.inject(&ids_hm, 500, true);
 
         assert_eq!(
             pool_state
