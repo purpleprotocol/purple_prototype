@@ -53,8 +53,8 @@ impl OpenContract {
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         let bin_owner = &self.owner.to_bytes();
         let bin_address = &self.address.clone().unwrap().to_bytes();
-        let bin_currency_hash = &self.asset_hash.to_vec();
-        let bin_fee_hash = &self.fee_hash.to_vec();
+        let bin_currency_hash = &self.asset_hash.0;
+        let bin_fee_hash = &self.fee_hash.0;
         let self_payable: Vec<u8> = if self.self_payable { vec![1] } else { vec![0] };
 
         let code = &self.code;

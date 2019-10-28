@@ -45,8 +45,6 @@ impl Burn {
     /// Validates the transaction against the provided state.
     pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
         let zero = Balance::from_bytes(b"0.0").unwrap();
-        let burner = &self.burner.clone();
-        let signature = &self.signature.clone();
 
         // You cannot burn 0 coins
         if self.amount == zero {
@@ -58,8 +56,8 @@ impl Burn {
         }
 
         let bin_burner = &self.burner.to_bytes();
-        let bin_asset_hash = &self.asset_hash.to_vec();
-        let bin_fee_hash = &self.fee_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.0;
+        let bin_fee_hash = &self.fee_hash.0;
 
         // Convert address to strings
         let burner = hex::encode(bin_burner);

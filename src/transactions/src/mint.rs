@@ -44,8 +44,6 @@ impl Mint {
     /// Validates the transaction against the provided state.
     pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
         let zero = Balance::from_bytes(b"0.0").unwrap();
-        let minter = &self.minter.clone();
-        let signature = &self.signature.clone();
 
         // You cannot mint 0 tokens
         if self.amount == zero {
@@ -58,8 +56,8 @@ impl Mint {
 
         let bin_minter = &self.minter.to_bytes();
         let bin_receiver = &self.receiver.to_bytes();
-        let bin_asset_hash = &self.asset_hash.to_vec();
-        let bin_fee_hash = &self.fee_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.0;
+        let bin_fee_hash = &self.fee_hash.0;
 
         // Convert addresses to strings
         let minter = hex::encode(bin_minter);

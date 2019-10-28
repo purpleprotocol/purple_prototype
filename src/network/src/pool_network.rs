@@ -19,11 +19,13 @@
 use crate::Peer;
 use crate::pool_peer::PoolPeer;
 use crate::error::NetworkErr;
+use crate::network::Network;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
 use crate::bootstrap::cache::BootstrapCache;
 use crate::connection::*;
+use crate::peer::SubConnectionType;
 use consensus::ConsensusMachine;
 use events::Event;
 use chain::*;
@@ -60,6 +62,9 @@ pub struct PoolNetwork {
     /// Our secret key
     pub(crate) secret_key: Sk,
 
+    /// Reference to the base network interface
+    pub(crate) network_ref: Arc<Network>,
+
     /// The port we are accepting external TCP connections on.
     port: u16,
 
@@ -70,6 +75,7 @@ pub struct PoolNetwork {
 impl PoolNetwork {
     pub fn new(
         node_id: NodeId,
+        network_ref: Network,
         port: u16,
         network_name: String,
         secret_key: Sk,
@@ -87,6 +93,7 @@ impl PoolNetwork {
             start_pow_block,
             network_name,
             secret_key,
+            network_ref: Arc::new(network_ref),
         }
     }
 
@@ -132,7 +139,16 @@ impl PoolNetwork {
 
 impl NetworkInterface for PoolNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
-        unimplemented!();
+        info!("Initializing pool connection to {}", address);
+
+        connect_to_peer(
+            (*self.network_ref).clone(),
+            self.network_ref.accept_connections.clone(),
+            address,
+            SubConnectionType::Validator(self.start_pow_block),
+        );
+
+        Ok(())
     }
 
     fn connect_to_known(&self, peer: &NodeId) -> Result<(), NetworkErr> {
