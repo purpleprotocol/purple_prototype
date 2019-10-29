@@ -40,9 +40,9 @@ before_script:
   - rustup component add clippy
 
 script:
-  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then cargo clippy --all-targets --all                        ; fi
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then cargo clippy --all                                      ; fi
   - if [ "$TRAVIS_OS_NAME" = "windows" ]; then cargo test --verbose --all                              ; fi
   - if [ "$TRAVIS_OS_NAME" = "windows" ]; then cargo build --verbose                                   ; fi
-  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cargo clippy --all-targets --all --features miner-cpu  ; fi
-  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cargo test --verbose --all --features miner-cpu        ; fi
+  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cargo clippy --all --features miner-cpu                ; fi
+  - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cargo test --verbose --all                             ; fi
   - if [ "$TRAVIS_OS_NAME" != "windows" ]; then cargo build --verbose --features miner-cpu             ; fi
