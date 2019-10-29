@@ -61,6 +61,7 @@ pub fn start_validator_bootstrap_check(network: Network) -> Spawn {
 
                     PoolNetwork::new(
                         network.our_node_id().clone(), 
+                        network.clone(),
                         network.port(),
                         network.network_name.clone(),
                         network.secret_key.clone(),
