@@ -49,7 +49,6 @@ extern crate hashdb;
 extern crate itc;
 extern crate jsonrpc_core;
 extern crate jump;
-extern crate mimalloc;
 extern crate network;
 extern crate parking_lot;
 extern crate persistence;
@@ -65,7 +64,6 @@ use futures::future::ok;
 use futures::sync::mpsc::channel;
 use futures::Future;
 use hashdb::HashDB;
-use mimalloc::MiMalloc;
 use network::bootstrap::cache::BootstrapCache;
 use network::*;
 use persistence::PersistentDb;
@@ -81,7 +79,20 @@ use std::sync::Arc;
 use std::net::IpAddr;
 use std::str::FromStr;
 
-// Use mimalloc allocator
+#[cfg(not(feature = "mimalloc-allocator"))]
+use std::alloc::System;
+
+#[cfg(not(feature = "mimalloc-allocator"))]
+#[global_allocator]
+static GLOBAL: System = System;
+
+#[cfg(feature = "mimalloc-allocator")]
+extern crate mimalloc;
+
+#[cfg(feature = "mimalloc-allocator")]
+use mimalloc::MiMalloc;
+
+#[cfg(feature = "mimalloc-allocator")]
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 

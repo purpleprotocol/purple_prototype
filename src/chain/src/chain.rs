@@ -182,6 +182,12 @@ impl<B: Block> ChainRef<B> {
         chain.canonical_tip.clone()
     }
 
+    /// Returns the canonical tip state of the chain.
+    pub fn canonical_tip_state(&self) -> B::ChainState {
+        let chain = self.chain.read();
+        chain.canonical_tip_state()
+    }
+
     /// Attempts to fetch a block by its hash from the cache
     /// and if it doesn't succeed it then attempts to retrieve
     /// it from the orphan pool.

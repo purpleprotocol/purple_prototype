@@ -39,6 +39,18 @@ lazy_static! {
 }
 
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+pub fn is_miner_paused() -> bool {
+    MINER_IS_PAUSED.load(Ordering::Relaxed)
+}
+
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+pub fn unpause_miner() -> bool {
+    let previous = MINER_IS_PAUSED.load(Ordering::Relaxed);
+    MINER_IS_PAUSED.store(false, Ordering::Relaxed);
+    previous
+}
+
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
 /// Starts the mining process.
 pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, proof_delay: Option<u32>) -> Result<(), &'static str> {
     if MINER_IS_STARTED.load(Ordering::Relaxed) {
@@ -145,10 +157,11 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
 
                 if !is_paused {
                     // Schedule miner to work on the current tip
+                    let tip_state = pow_chain.canonical_tip_state();
                     let tip = pow_chain.canonical_tip();
                     let current_height = tip.height();
                     let header_hash = tip.block_hash().unwrap();
-                    let difficulty = 0; // TODO: Calculate difficulty #118
+                    let difficulty = tip_state.difficulty;
 
                     debug!("Starting solvers...");
 
