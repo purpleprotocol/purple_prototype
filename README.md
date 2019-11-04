@@ -48,18 +48,13 @@ cargo build
 A Purple node can also be run from a docker container:
 
 ```
-docker build .
+docker build -t purple .
 ```
 
 ## Running
-To run the node in development mode with all logging enabled:
-
-##### Set permission to run the script
-```
-chmod ug+x ./run_debug.sh
-```
+After building the docker image, to run the node with all logging enabled:
 
 ##### Run node
 ```
-./run_debug.sh
+docker run -it purple
 ```

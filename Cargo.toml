@@ -53,8 +53,8 @@ network = { path = "src/network" }
 transactions = { path = "src/transactions" }
 chain = { path = "src/chain" }
 miner = { path = "src/miner" }
-mimalloc = "0.1.10"
 reqwest = "0.9.21"
+mimalloc = "0.1.10"
 
 [dev-dependencies.chain]
 path = "src/chain"
@@ -70,9 +70,11 @@ name = "purple"
 
 [profile.release]
 lto = "thin"
+codegen-units=1
 
 [features]
-default = []
+default = ["mimalloc-allocator"]
+mimalloc-allocator = []
 miner-cpu-avx = ["miner/cpu", "miner/avx", "network/miner"]
 miner-cpu = ["miner/cpu", "network/miner"]
 miner-gpu = ["miner/gpu", "network/miner"]

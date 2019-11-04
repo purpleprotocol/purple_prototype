@@ -6,26 +6,21 @@ RUN apk add --no-cache \
     g++ \
     curl \
     cmake \
-    'rust=1.31.1-r1' \
-    'cargo=1.31.1-r1' \
+    rust \
+    cargo \
+    clang \
     linux-headers
 
-RUN apk add 'openssl=1.0.2q-r0' 'openssl-dev=1.0.2q-r0'  --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/v3.8/main/
+RUN apk add 'openssl=1.1.1d-r2' 'openssl-dev=1.1.1d-r2'  --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/v3.8/main/
 
 ADD . /opt/app
 WORKDIR /opt/app
 
-RUN cargo rustc --release -- -C target-feature=+crt-static -C codegen-units=16 # -Z thinlto
+RUN cargo rustc --release -- -C target-feature=+crt-static -C codegen-units=1
 FROM alpine:edge
 
-WORKDIR /opt/app
-COPY --from=0 /opt/app/target/release/purple .
-
-RUN apk update
-RUN apk --no-cache --update add bash
-RUN rm -rf /var/cache/apk/*
-
+COPY --from=0 /opt/app/target/release/purple /
 EXPOSE 44034
 
-ADD run_release.sh .
-RUN chmod +x run_release.sh
+ENV RUST_LOG info
+ENTRYPOINT ["/purple"]
