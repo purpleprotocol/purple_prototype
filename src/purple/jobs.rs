@@ -100,7 +100,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                             let sol_u64s = solution.to_u64s();
                             let proof = Proof::new(sol_u64s, nonce, solutions.edge_bits as u8);
 
-                            // TODO: Set and retrieve the node's collector address
+                            // TODO: Set and retrieve the node's collector address #157
                             let collector_address = NormalAddress::random();
                             let node_id = network.our_node_id().clone();
 
@@ -126,12 +126,12 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                                 let packet = ForwardBlock::new(block_wrapper);
                                 let packet = packet.to_bytes();
 
-                                // Send block to all of our peers
-                                network.send_to_all(&packet).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
-
                                 // Pause solvers
                                 miner.pause_solvers();
                                 MINER_IS_PAUSED.store(true, Ordering::Relaxed);
+
+                                // Send block to all of our peers
+                                network.send_to_all(&packet).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
                             } else {
                                 warn!("Could not send pow block! Reason: Unsuccessful chain append");
                             }
