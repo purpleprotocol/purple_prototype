@@ -83,7 +83,7 @@ pub struct Network {
     #[cfg(feature = "miner")]
     /// Validator pool sub-network. This field is `None` if we
     /// are not in a validator pool.
-    pub(crate) current_pool: Option<PoolNetwork>,
+    pub(crate) current_pool: Arc<RwLock<Option<PoolNetwork>>>,
 }
 
 impl Network {
@@ -115,7 +115,7 @@ impl Network {
             accept_connections,
 
             #[cfg(feature = "miner")]
-            current_pool: None,
+            current_pool: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -208,7 +208,7 @@ impl NetworkInterface for Network {
     }
 
     #[cfg(feature = "miner")]
-    fn validator_pool_network_ref(&self) -> Option<PoolNetwork> {
+    fn validator_pool_network_ref(&self) -> Arc<RwLock<Option<PoolNetwork>>> {
         self.current_pool.clone()
     }
 

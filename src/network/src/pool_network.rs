@@ -173,8 +173,8 @@ impl NetworkInterface for PoolNetwork {
     }
 
     #[cfg(feature = "miner")]
-    fn validator_pool_network_ref(&self) -> Option<PoolNetwork> {
-        Some(self.clone())
+    fn validator_pool_network_ref(&self) -> Arc<RwLock<Option<PoolNetwork>>> {
+        unimplemented!();
     }
 
     fn has_peer_with_id(&self, id: &NodeId) -> bool {
