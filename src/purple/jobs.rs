@@ -19,6 +19,8 @@
 #![allow(deprecated, unused)]
 
 use std::sync::Arc;
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::sync::atomic::{Ordering, AtomicBool};
 use std::thread;
 use parking_lot::RwLock;
@@ -28,6 +30,7 @@ use network::packets::ForwardBlock;
 use network::Packet;
 use account::NormalAddress;
 use std::net::SocketAddr;
+use std::borrow::BorrowMut;
 
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
 use miner::{PurpleMiner, PluginType, Proof};
@@ -58,9 +61,13 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
     }
 
     info!("Starting miner...");
+
+    let builder = thread::Builder::new()
+        .name("Miner main thread".to_owned());
     
-    thread::spawn(move || {
-        let mut miner = PurpleMiner::new();
+    builder.spawn(move || {
+        let miner = PurpleMiner::new();
+        let miner = Rc::new(RefCell::new(miner));
 
         // Flag miner as being started
         MINER_IS_STARTED.store(true, Ordering::Relaxed);
@@ -77,15 +84,21 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
             #[cfg(not(feature = "miner-test-mode"))]
             let plugin_type = PluginType::Cuckoo29;
 
+            let are_solvers_started = { miner.borrow().are_solvers_started() };
+
             // The miner is started
-            if miner.are_solvers_started() {
-                if let Some(miner_height) = miner.current_height(plugin_type) { 
+            if are_solvers_started {
+                let current_height = { miner.borrow().current_height(plugin_type) };
+
+                if let Some(miner_height) = current_height { 
                     let tip = pow_chain.canonical_tip();
                     let current_height = tip.height();
 
                     if miner_height == current_height {
+                        let solutions = { miner.borrow().get_solutions() };
+
                         // Check for solutions if the height is constant
-                        if let Some(solutions) = miner.get_solutions() {
+                        if let Some(solutions) = solutions {
                             #[cfg(feature = "miner-test-mode")]     
                             {
                                 // Sleep for delay time
@@ -122,16 +135,27 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
 
                             // Only propagate block if the chain append was successful
                             if let Ok(_) = result {
+                                debug!("Creating block...");
+
                                 let block_wrapper = BlockWrapper::from_pow_block(block);
                                 let packet = ForwardBlock::new(block_wrapper);
                                 let packet = packet.to_bytes();
 
+                                debug!("Pausing solvers...");
+
                                 // Pause solvers
-                                miner.pause_solvers();
+                                {
+                                    (*miner).borrow_mut().pause_solvers();
+                                }
                                 MINER_IS_PAUSED.store(true, Ordering::Relaxed);
+
+                                debug!("Sending block...");
 
                                 // Send block to all of our peers
                                 network.send_to_all(&packet).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
+
+                                // Wait a bit for buffers flush
+                                thread::sleep_ms(1000);
                             } else {
                                 warn!("Could not send pow block! Reason: Unsuccessful chain append");
                             }
@@ -140,11 +164,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                             // TODO: Maybe hook this to a progress visualizer
                         }
                     } else if miner_height < current_height {
-                        let header_hash = tip.block_hash().unwrap();
-                        let difficulty = 0; // TODO: Calculate difficulty #118
-                        
-                        // Re-schedule miner to work on the current height
-                        miner.notify(current_height, &header_hash.0, difficulty, plugin_type);
+                        try_notify(miner.clone(), pow_chain.clone(), plugin_type);
                     } else {
                         unreachable!();
                     }
@@ -153,32 +173,43 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                     //debug!("Miner is stand-by...");
                 }
             } else {
-                let is_paused = MINER_IS_PAUSED.load(Ordering::Relaxed);
-
-                if !is_paused {
-                    // Schedule miner to work on the current tip
-                    let tip_state = pow_chain.canonical_tip_state();
-                    let tip = pow_chain.canonical_tip();
-                    let current_height = tip.height();
-                    let header_hash = tip.block_hash().unwrap();
-                    let difficulty = tip_state.difficulty;
-
-                    debug!("Starting solvers...");
-
-                    // Start solver threads
-                    miner.start_solvers();
-
-                    debug!("Solvers started!");
-                    miner.notify(current_height, &header_hash.0, difficulty, plugin_type);
-                } else {
-                    debug!("Miner is paused...");
-                }
+                try_notify(miner.clone(), pow_chain.clone(), plugin_type);
             }
 
             // Don't hog the scheduler
             thread::sleep_ms(1);
         }
-    });
-    
+    }).map_err(|_| "Could not start miner thread!")?;
+
     Ok(())
+}
+
+#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+fn try_notify(mut miner: Rc<RefCell<PurpleMiner>>, pow_chain: PowChainRef, plugin_type: PluginType) {
+    let is_paused = MINER_IS_PAUSED.load(Ordering::Relaxed);
+
+    if !is_paused {
+        let mut miner = (*miner).borrow_mut();
+
+        // Schedule miner to work on the current tip
+        let tip_state = pow_chain.canonical_tip_state();
+        let tip = pow_chain.canonical_tip();
+        let current_height = tip.height();
+        let header_hash = tip.block_hash().unwrap();
+        let difficulty = tip_state.difficulty;
+
+        if !miner.are_solvers_started() {
+            debug!("Starting solvers...");
+
+            // Start solver threads
+            miner.start_solvers();
+
+            debug!("Solvers started!");
+        }
+
+        miner.notify(current_height, &header_hash.0, difficulty, plugin_type);
+    } else {
+        thread::sleep_ms(1000);
+        debug!("Miner is paused...");
+    }
 }
