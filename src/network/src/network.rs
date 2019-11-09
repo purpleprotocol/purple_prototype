@@ -84,6 +84,10 @@ pub struct Network {
     /// Validator pool sub-network. This field is `None` if we
     /// are not in a validator pool.
     pub(crate) current_pool: Arc<RwLock<Option<PoolNetwork>>>,
+
+    #[cfg(feature = "miner")]
+    /// Our retrieved ip address
+    pub(crate) our_ip: SocketAddr,
 }
 
 impl Network {
@@ -99,6 +103,7 @@ impl Network {
         state_chain_ref: StateChainRef,
         bootstrap_cache: BootstrapCache,
         accept_connections: Arc<AtomicBool>,
+        our_ip: Option<SocketAddr>,
     ) -> Network {
         Network {
             peers: Arc::new(RwLock::new(HashMap::with_capacity(max_peers))),
@@ -116,6 +121,9 @@ impl Network {
 
             #[cfg(feature = "miner")]
             current_pool: Arc::new(RwLock::new(None)),
+
+            #[cfg(feature = "miner")]
+            our_ip: our_ip.unwrap(),
         }
     }
 

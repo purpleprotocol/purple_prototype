@@ -44,6 +44,7 @@ pub fn start_validator_bootstrap_check(network: Network) -> Spawn {
             debug!("Triggering validator pool bootstrap check...");
             
             let our_node_id = network.our_node_id();
+            let our_ip = network.our_ip.ip();
 
             // Retrieve current state
             let pow_ref = network.pow_chain_ref();
@@ -94,7 +95,7 @@ pub fn start_validator_bootstrap_check(network: Network) -> Spawn {
                 let iter = pow_state.active_validator_lookup
                     .iter()
                     .chain(pow_state.pending_validator_lookup.iter())
-                    .filter(move |(_, entry)| !pool_network.is_connected_to(&entry.ip));
+                    .filter(move |(_, entry)| !pool_network.is_connected_to(&entry.ip) && entry.ip.ip() != our_ip);
 
                 for (id, entry) in iter {
                     pool_network_clone
