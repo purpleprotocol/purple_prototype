@@ -25,6 +25,7 @@ use crate::packets::connect::Connect;
 use crate::packets::connect_pool::ConnectPool;
 use crate::peer::{ConnectionType, SubConnectionType, Peer, OUTBOUND_BUF_SIZE};
 use crate::validation::sender::Sender;
+use persistence::PersistentDb;
 use crypto::{Nonce, Signature};
 use std::io::BufReader;
 use std::iter;
@@ -52,7 +53,7 @@ const TIMER_INTERVAL: u64 = 10;
 const PING_INTERVAL: u64 = 500;
 
 /// Interval in milliseconds for triggering a peer list refresh.
-const PEER_REFRESH_INTERVAL: u64 = 10000;
+const PEER_REFRESH_INTERVAL: u64 = 3000;
 
 /// Initializes the listener for the given network
 pub fn start_listener(network: Network, accept_connections: Arc<AtomicBool>) -> Spawn {
@@ -456,7 +457,14 @@ fn process_connection(
 /// Starts a background job responsible for requesting and
 /// connecting to peers when we aren't connected to the maximum
 /// number of peers.
-pub fn start_peer_list_refresh_interval(network: Network) -> Spawn {
+pub fn start_peer_list_refresh_interval(
+    network: Network,
+    accept_connections: Arc<AtomicBool>,
+    db: PersistentDb,
+    max_peers: usize,
+    bootnodes: Vec<SocketAddr>,
+    port: u16
+) -> Spawn {
     debug!("Starting peer list refresh interval...");
 
     let refresh_interval = Interval::new(Instant::now(), Duration::from_millis(PEER_REFRESH_INTERVAL))
@@ -494,19 +502,8 @@ pub fn start_peer_list_refresh_interval(network: Network) -> Spawn {
                             .unwrap_or(());
                     }
                 } else {
-                    debug!("No connections available! Fallback to bootstrap cache...");
-                    
-                    let peers_to_connect: Vec<SocketAddr> = network.bootstrap_cache
-                        .entries()
-                        .map(|e| e.to_socket_addr(network.port()))
-                        .choose_multiple(&mut rand::thread_rng(), network.max_peers - peers.len());
-
-                    for addr in peers_to_connect.iter() {
-                        network
-                            .connect(addr)
-                            .map_err(|err| warn!("Could not connect to {}, reason: {:?}", addr, err))
-                            .unwrap_or(());
-                    }
+                    debug!("No connections available! Fallback to bootstrap script...");  
+                    crate::bootstrap::bootstrap(network.clone(), accept_connections.clone(), db.clone(), max_peers, bootnodes.clone(), port, false);
                 }
             } else if peers.len() == network.max_peers {
                 debug!("We have enough peers. No need to refresh the peer list");

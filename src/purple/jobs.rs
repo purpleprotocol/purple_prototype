@@ -144,9 +144,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                                 debug!("Pausing solvers...");
 
                                 // Pause solvers
-                                {
-                                    (*miner).borrow_mut().pause_solvers();
-                                }
+                                { (*miner).borrow_mut().pause_solvers(); }
                                 MINER_IS_PAUSED.store(true, Ordering::Relaxed);
 
                                 debug!("Sending block...");
@@ -154,8 +152,8 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                                 // Send block to all of our peers
                                 network.send_to_all(&packet).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
 
-                                // Wait a bit for buffers flush
-                                thread::sleep_ms(1000);
+                                // Wait a bit for buffers to flush
+                                thread::sleep_ms(150);
                             } else {
                                 warn!("Could not send pow block! Reason: Unsuccessful chain append");
                             }
@@ -209,7 +207,7 @@ fn try_notify(mut miner: Rc<RefCell<PurpleMiner>>, pow_chain: PowChainRef, plugi
 
         miner.notify(current_height, &header_hash.0, difficulty, plugin_type);
     } else {
-        thread::sleep_ms(1000);
         debug!("Miner is paused...");
+        thread::sleep_ms(1000);
     }
 }

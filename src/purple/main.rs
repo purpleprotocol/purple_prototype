@@ -237,6 +237,7 @@ fn main() {
             argv.max_peers,
             argv.bootnodes.clone(),
             argv.port,
+            true,
         );
 
         // Start miner related jobs
