@@ -190,9 +190,14 @@ impl PurpleMiner {
 
         let stop_fn = solver.lib.get_stop_solver_instance();
 
+        let builder = thread::Builder::new()
+            .name(format!("Stop handle thread {}", instance));
+
         // monitor whether to send a stop signal to the solver, which should
         // end the current solve attempt below
-        let stop_handle = thread::spawn(move || loop {
+        let stop_handle = builder.spawn(move || loop {
+            thread::sleep(time::Duration::from_micros(100));
+
             let ctx_ptr = control_ctx.0.as_ptr();
             while let Some(message) = control_rx.iter().next() {
                 match message {
@@ -206,7 +211,7 @@ impl PurpleMiner {
                     _ => {}
                 };
             }
-        });
+        }).unwrap();
 
         // Mark solver as paused
         {
@@ -349,7 +354,11 @@ impl PurpleMiner {
             self.solver_loop_txs.push(solver_tx);
             self.solver_stopped_rxs.push(solver_stopped_rx);
             self.solver_states.push(solver_state);
-            thread::spawn(move || {
+            
+            let builder = thread::Builder::new()
+                .name(format!("Solver thread {}", i));
+
+            builder.spawn(move || {
                 let _ = PurpleMiner::solver_thread(
                     s,
                     i,
@@ -359,7 +368,7 @@ impl PurpleMiner {
                     solver_stopped_tx,
                     solver_state_clone,
                 );
-            });
+            }).unwrap();
             i += 1;
         }
         self.miner_state = MinerState::Ready;
