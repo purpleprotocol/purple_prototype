@@ -91,7 +91,7 @@ pub trait NetworkInterface {
 
     #[cfg(feature = "miner")]
     /// Returns a reference to the validator pool sub-network interface.
-    fn validator_pool_network_ref(&self) -> Option<PoolNetwork>;
+    fn validator_pool_network_ref(&self) -> Arc<RwLock<Option<PoolNetwork>>>;
 
     /// Returns a reference to the `PowChain`.
     fn pow_chain_ref(&self) -> PowChainRef;

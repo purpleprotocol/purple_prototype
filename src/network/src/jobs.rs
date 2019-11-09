@@ -31,6 +31,9 @@ use std::time::{Instant, Duration};
 const VALIDATOR_BOOTSTRAP_INTERVAL: u64 = 1000;
 
 #[cfg(feature = "miner")]
+const POOL_NETWORK_HANDLER_INTERVAL: u64 = 1;
+
+#[cfg(feature = "miner")]
 /// Starts an asynchronous job that checks if the current
 /// node can bootstrap to an active validator pool.
 pub fn start_validator_bootstrap_check(network: Network) -> Spawn {
@@ -41,6 +44,7 @@ pub fn start_validator_bootstrap_check(network: Network) -> Spawn {
             debug!("Triggering validator pool bootstrap check...");
             
             let our_node_id = network.our_node_id();
+            let our_ip = network.our_ip.ip();
 
             // Retrieve current state
             let pow_ref = network.pow_chain_ref();
@@ -53,13 +57,18 @@ pub fn start_validator_bootstrap_check(network: Network) -> Spawn {
             if pow_state.is_pending_or_active(&our_node_id) {
                 debug!("Establishing connection to pool peers...");
 
-                let pool_network = if let Some(pool_network) = &network.current_pool {
+                let current_pool = {
+                    let pool_ref = network.current_pool.read();
+                    (*pool_ref).clone()
+                };
+
+                let pool_network = if let Some(pool_network) = current_pool {
                     pool_network.clone()
                 } else {
                     let validator_set = pow_state.get_active_validator_set();
                     let start_pow_block = pow_state.get_start_pow_block(&our_node_id).unwrap();
 
-                    PoolNetwork::new(
+                    let pool_network = PoolNetwork::new(
                         network.our_node_id().clone(), 
                         network.clone(),
                         network.port(),
@@ -70,7 +79,15 @@ pub fn start_validator_bootstrap_check(network: Network) -> Spawn {
                         &validator_set,
                         10000, // TODO: Set total allocated events for the whole pool
                         Arc::new(Event::Root),
-                    )
+                    );
+
+                    // Set pool network entry in the default network interface
+                    {
+                        let mut pool_ref = network.current_pool.write();
+                        *pool_ref = Some(pool_network.clone()); 
+                    }
+
+                    pool_network
                 };
 
                 let mut pool_network_clone = pool_network.clone();
@@ -78,7 +95,7 @@ pub fn start_validator_bootstrap_check(network: Network) -> Spawn {
                 let iter = pow_state.active_validator_lookup
                     .iter()
                     .chain(pow_state.pending_validator_lookup.iter())
-                    .filter(move |(_, entry)| !pool_network.is_connected_to(&entry.ip));
+                    .filter(move |(_, entry)| !pool_network.is_connected_to(&entry.ip) && entry.ip.ip() != our_ip);
 
                 for (id, entry) in iter {
                     pool_network_clone
@@ -94,4 +111,22 @@ pub fn start_validator_bootstrap_check(network: Network) -> Spawn {
         .and_then(|_| Ok(()));
 
     tokio::spawn(refresh_interval)
+}
+
+#[cfg(feature = "miner")]
+pub fn start_pool_network_handler(network: Network) -> Spawn {
+    debug!("Starting validator pool bootstrap checker interval...");
+
+    let interval = Interval::new(Instant::now(), Duration::from_millis(VALIDATOR_BOOTSTRAP_INTERVAL))
+        .fold(network, move |mut network, _| {
+            debug!("Triggering pool handler...");
+            
+            //
+
+            Ok(network)
+        })
+        .map_err(|err| warn!("Pool handler error: {:?}", err))
+        .and_then(|_| Ok(()));
+
+    tokio::spawn(interval)
 }

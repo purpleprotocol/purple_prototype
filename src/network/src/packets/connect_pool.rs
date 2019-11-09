@@ -178,7 +178,11 @@ impl Packet for ConnectPool {
         packet: &ConnectPool,
         conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        let pool_network = network.validator_pool_network_ref().ok_or(NetworkErr::NoPoolSession)?;
+        let pool_network = {
+            let pool_ref = network.validator_pool_network_ref();
+            let pool_ref = pool_ref.read();
+            (*pool_ref).clone().ok_or(NetworkErr::NoPoolSession)?
+        };
 
         // Verify packet signature
         if !packet.verify_sig() {

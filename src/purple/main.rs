@@ -184,19 +184,6 @@ fn main() {
 
     let (node_id, skey) = fetch_credentials(&mut node_storage);
     let accept_connections = Arc::new(AtomicBool::new(true));
-    let network = Network::new(
-        node_id,
-        argv.port,
-        argv.network_name.to_owned(),
-        skey,
-        argv.max_peers,
-        pow_tx,
-        state_tx,
-        pow_chain.clone(),
-        state_chain.clone(),
-        bootstrap_cache,
-        accept_connections.clone()
-    );
 
     // Set up runtime
     let mut runtime = Builder::new()
@@ -219,6 +206,38 @@ fn main() {
         (our_ip, runtime)
     };
 
+    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+    let network = Network::new(
+        node_id,
+        argv.port,
+        argv.network_name.to_owned(),
+        skey,
+        argv.max_peers,
+        pow_tx,
+        state_tx,
+        pow_chain.clone(),
+        state_chain.clone(),
+        bootstrap_cache,
+        accept_connections.clone(),
+        Some(our_ip),
+    );
+
+    #[cfg(not(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode")))]
+    let network = Network::new(
+        node_id,
+        argv.port,
+        argv.network_name.to_owned(),
+        skey,
+        argv.max_peers,
+        pow_tx,
+        state_tx,
+        pow_chain.clone(),
+        state_chain.clone(),
+        bootstrap_cache,
+        accept_connections.clone(),
+        None,
+    );
+
     // Start the tokio runtime
     runtime.spawn(ok(()).and_then(move |_| {
         start_chains_switch_poll(pow_chain.clone(), state_chain.clone());
@@ -237,6 +256,7 @@ fn main() {
             argv.max_peers,
             argv.bootnodes.clone(),
             argv.port,
+            true,
         );
 
         // Start miner related jobs

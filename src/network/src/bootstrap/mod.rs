@@ -37,6 +37,7 @@ pub fn bootstrap(
     max_peers: usize,
     bootnodes: Vec<SocketAddr>,
     port: u16,
+    start_interval: bool,
 ) -> Spawn {
     info!("Bootstrapping...");
 
@@ -50,8 +51,11 @@ pub fn bootstrap(
         let mut network = network.clone();
         let network_clone = network.clone();
         let network_clone2 = network.clone();
+        let network_clone3 = network.clone();
         let accept_connections = accept_connections.clone();
         let accept_connections_clone = accept_connections.clone();
+        let accept_connections_clone2 = accept_connections.clone();
+        let bootnodes_clone = bootnodes.clone();
 
         let fut = stream::iter_ok(peers_to_connect)
             .for_each(move |addr| {
@@ -76,7 +80,13 @@ pub fn bootstrap(
                 }
             });
 
-        tokio::spawn(fut.and_then(move |_| start_peer_list_refresh_interval(network_clone2)))
+        tokio::spawn(fut.and_then(move |_| {
+            if start_interval {
+                start_peer_list_refresh_interval(network_clone3, accept_connections_clone2, db.clone(), max_peers, bootnodes_clone, port);
+            }
+
+            Ok(())
+        }))
     } else {
         debug!("Bootstrap cache is empty! Connecting to bootnodes...");
 
@@ -87,6 +97,7 @@ pub fn bootstrap(
         }
 
         let accept_connections = accept_connections.clone();
+        let accept_connections_clone = accept_connections.clone();
         let network = network.clone();
         let network_clone = network.clone();
 
@@ -94,7 +105,13 @@ pub fn bootstrap(
             connect_to_peer(network.clone(), accept_connections.clone(), &addr, SubConnectionType::Normal)
         });
 
-        tokio::spawn(fut.and_then(move |_| start_peer_list_refresh_interval(network_clone)))
+        tokio::spawn(fut.and_then(move |_| {
+            if start_interval {
+                start_peer_list_refresh_interval(network_clone, accept_connections_clone, db.clone(), max_peers, bootnodes, port);
+            }
+
+            Ok(())
+        }))
     }
 }
 
