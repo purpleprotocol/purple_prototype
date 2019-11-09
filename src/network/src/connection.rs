@@ -161,14 +161,14 @@ fn process_connection(
 
                             let packet = connect.to_bytes();
                             let packet =
-                                crate::common::wrap_packet(&packet, network.network_name.as_str());
+                                crate::common::wrap_packet(&packet, network.network_name.as_str(), false);
                             debug!("Sending connect packet to {}", addr);
 
                             writer
                                 .poll_write(&packet)
                                 .map_err(|err| warn!("write failed = {:?}", err))
                                 .and_then(|_| Ok(()))
-                                .unwrap();
+                                .unwrap_or(());
                         }
 
                         ConnectionType::Client(SubConnectionType::Validator(block_hash)) => {
@@ -178,14 +178,14 @@ fn process_connection(
 
                             let packet = connect.to_bytes();
                             let packet =
-                                crate::common::wrap_packet(&packet, network.network_name.as_str());
+                                crate::common::wrap_packet(&packet, network.network_name.as_str(), true);
                             debug!("Sending connect pool packet to {}", addr);
 
                             writer
                                 .poll_write(&packet)
                                 .map_err(|err| warn!("write failed = {:?}", err))
                                 .and_then(|_| Ok(()))
-                                .unwrap();
+                                .unwrap_or(());
                         }
 
                         _ => { } // Do nothing

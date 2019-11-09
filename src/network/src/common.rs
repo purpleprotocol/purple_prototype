@@ -29,7 +29,7 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 
 pub const NETWORK_VERSION: u8 = 0;
-pub const HEADER_SIZE: usize = 7; // Total of 7 bytes. 1 + 2 + 4;
+pub const HEADER_SIZE: usize = 8; // Total of 8 bytes. 1 + 1 + 2 + 4;
 
 /// Encrypts and wraps a packet with the default network header. Also signs
 /// the encrypted packet and attaches the signature to the packet.
@@ -38,6 +38,7 @@ pub fn wrap_encrypt_packet(
     node_sk: &Sk,
     key: &SessionKey,
     network_name: &str,
+    pool_packet: bool,
 ) -> Vec<u8> {
     let (encrypted, nonce) = crypto::seal(packet, key);
     let sig = crypto::sign(encrypted.as_slice(), node_sk);
@@ -45,6 +46,7 @@ pub fn wrap_encrypt_packet(
     wrap_packet(
         &[&nonce.0, sig_bytes.as_slice(), encrypted.as_slice()].concat(),
         network_name,
+        pool_packet,
     )
 }
 
@@ -53,11 +55,12 @@ pub fn wrap_encrypt_packet(
 /// ### Header fields
 /// ```ignore
 /// 1) Network layer version          - 8bits
-/// 2) Packet length                  - 16bits
-/// 3) CRC32 of packet + network name - 32bits
-/// 4) Packet                         - Binary of packet length
+/// 2) Pool packet                    - 8bits
+/// 3) Packet length                  - 16bits
+/// 4) CRC32 of packet + network name - 32bits
+/// 5) Packet                         - Binary of packet length
 /// ```
-pub fn wrap_packet(packet: &[u8], network_name: &str) -> Vec<u8> {
+pub fn wrap_packet(packet: &[u8], network_name: &str, pool_packet: bool) -> Vec<u8> {
     let packet_len = packet.len();
     let mut buf: Vec<u8> = Vec::with_capacity(HEADER_SIZE + packet_len);
     let mut crc32 = Hasher::new();
@@ -67,6 +70,13 @@ pub fn wrap_packet(packet: &[u8], network_name: &str) -> Vec<u8> {
     let crc32 = crc32.finalize();
 
     buf.write_u8(NETWORK_VERSION).unwrap();
+
+    if pool_packet {
+        buf.write_u8(1).unwrap();
+    } else {
+        buf.write_u8(0).unwrap();
+    }
+
     buf.write_u16::<BigEndian>(packet_len as u16).unwrap();
     buf.write_u32::<BigEndian>(crc32).unwrap();
     buf.extend_from_slice(packet);
@@ -92,6 +102,20 @@ pub fn decode_header(header: &[u8]) -> Result<PacketHeader, NetworkErr> {
 
     rdr.set_position(1);
 
+    let is_pool_packet = if let Ok(result) = rdr.read_u8() {
+        if result == 0 {
+            false
+        } else if result == 1 {
+            true
+        } else {
+            return Err(NetworkErr::BadFormat);
+        }
+    } else {
+        return Err(NetworkErr::BadFormat);
+    };
+
+    rdr.set_position(2);
+
     let packet_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
         result
     } else {
@@ -102,7 +126,7 @@ pub fn decode_header(header: &[u8]) -> Result<PacketHeader, NetworkErr> {
         return Err(NetworkErr::BadFormat);
     }
 
-    rdr.set_position(3);
+    rdr.set_position(4);
 
     let crc32 = if let Ok(result) = rdr.read_u32::<BigEndian>() {
         result
@@ -112,6 +136,7 @@ pub fn decode_header(header: &[u8]) -> Result<PacketHeader, NetworkErr> {
 
     Ok(PacketHeader {
         packet_len,
+        is_pool_packet,
         crc32,
         network_version,
     })
@@ -207,6 +232,20 @@ pub fn unwrap_decrypt_packet(
 
     rdr.set_position(1);
 
+    let is_pool_packet = if let Ok(result) = rdr.read_u8() {
+        if result == 0 {
+            false
+        } else if result == 1 {
+            true
+        } else {
+            return Err(NetworkErr::BadFormat);
+        }
+    } else {
+        return Err(NetworkErr::BadFormat);
+    };
+
+    rdr.set_position(2);
+
     let packet_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
         result
     } else {
@@ -217,7 +256,7 @@ pub fn unwrap_decrypt_packet(
         return Err(NetworkErr::BadFormat);
     }
 
-    rdr.set_position(3);
+    rdr.set_position(4);
 
     let packet_crc32 = if let Ok(result) = rdr.read_u32::<BigEndian>() {
         result
@@ -226,7 +265,7 @@ pub fn unwrap_decrypt_packet(
     };
 
     let mut buf: Vec<u8> = rdr.into_inner();
-    let _: Vec<u8> = buf.drain(..7).collect();
+    let _: Vec<u8> = buf.drain(..HEADER_SIZE).collect();
 
     let nonce = if buf.len() > 12 as usize {
         let mut nonce = [0; 12];
@@ -280,7 +319,7 @@ mod tests {
             let id = Identity::new();
             let key = SessionKey([0; 32]);
 
-            assert_eq!(packet, unwrap_decrypt_packet(&wrap_encrypt_packet(&packet, id.skey(), &key, "test"), &key, "test").unwrap());
+            assert_eq!(packet, unwrap_decrypt_packet(&wrap_encrypt_packet(&packet, id.skey(), &key, "test", false), &key, "test").unwrap());
             true
         }
 
@@ -290,8 +329,8 @@ mod tests {
                 .into_iter()
                 .map(|_| rng.gen())
                 .collect();
-            let wrapped = wrap_packet(&packet, "test");
-            let (header, _tail) = wrapped.split_at(7);
+            let wrapped = wrap_packet(&packet, "test", false);
+            let (header, _tail) = wrapped.split_at(HEADER_SIZE);
             super::decode_header(&header).unwrap();
             true
         }

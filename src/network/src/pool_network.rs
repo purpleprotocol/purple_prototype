@@ -195,6 +195,7 @@ impl NetworkInterface for PoolNetwork {
                     &self.secret_key,
                     rx,
                     self.network_name.as_str(),
+                    true,
                 );
                 peer.send_packet(packet)
             } else {
@@ -219,6 +220,7 @@ impl NetworkInterface for PoolNetwork {
                     &self.secret_key,
                     rx,
                     self.network_name.as_str(),
+                    true,
                 );
                 peer.send_packet(packet.to_vec())
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
@@ -245,6 +247,7 @@ impl NetworkInterface for PoolNetwork {
                     &self.secret_key,
                     rx,
                     self.network_name.as_str(),
+                    true,
                 );
                 peer.send_packet(packet.to_vec())
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
@@ -259,7 +262,7 @@ impl NetworkInterface for PoolNetwork {
         let peers = self.peers.read();
 
         if let Some(peer) = peers.get(peer) {
-            let packet = crate::common::wrap_packet(&packet, self.network_name.as_str());
+            let packet = crate::common::wrap_packet(&packet, self.network_name.as_str(), true);
             peer.send_packet(packet)
         } else {
             Err(NetworkErr::PeerNotFound)
