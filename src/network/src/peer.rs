@@ -86,7 +86,7 @@ pub struct Peer {
     /// Time in milliseconds since we have sent a ping to the peer.
     pub last_ping: Arc<AtomicU64>,
 
-    /// Wether the peer has sent a `Connect` packet or not.
+    /// Whether the peer has sent a `Connect` packet or not.
     pub sent_connect: bool,
 
     /// Buffer storing packets that are to be

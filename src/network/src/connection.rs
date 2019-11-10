@@ -161,14 +161,14 @@ fn process_connection(
 
                             let packet = connect.to_bytes();
                             let packet =
-                                crate::common::wrap_packet(&packet, network.network_name.as_str());
+                                crate::common::wrap_packet(&packet, network.network_name.as_str(), false);
                             debug!("Sending connect packet to {}", addr);
 
                             writer
                                 .poll_write(&packet)
                                 .map_err(|err| warn!("write failed = {:?}", err))
                                 .and_then(|_| Ok(()))
-                                .unwrap();
+                                .unwrap_or(());
                         }
 
                         ConnectionType::Client(SubConnectionType::Validator(block_hash)) => {
@@ -178,14 +178,14 @@ fn process_connection(
 
                             let packet = connect.to_bytes();
                             let packet =
-                                crate::common::wrap_packet(&packet, network.network_name.as_str());
+                                crate::common::wrap_packet(&packet, network.network_name.as_str(), true);
                             debug!("Sending connect pool packet to {}", addr);
 
                             writer
                                 .poll_write(&packet)
                                 .map_err(|err| warn!("write failed = {:?}", err))
                                 .and_then(|_| Ok(()))
-                                .unwrap();
+                                .unwrap_or(());
                         }
 
                         _ => { } // Do nothing
@@ -330,18 +330,40 @@ fn process_connection(
 
                     Ok((reader, network, header, packet))
                 })
-                .and_then(move |(reader, network, _, vec)| {
+                .and_then(move |(reader, network, header, vec)| {
                     if vec.len() == 0 {
                         Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
                     } else {
-                        Ok((reader, network, vec))
+                        Ok((reader, network, header, vec))
                     }
                 });
 
             let refuse_connection = refuse_connection.clone();
 
-            line.map(move |(reader, mut network, message)| {
-                let result = network.process_packet(&addr, &message);
+            line.map(move |(reader, mut network, header, message)| {
+                let result = if header.is_pool_packet {
+                    #[cfg(feature = "miner")]
+                    {
+                        let pool_network = {
+                            let pool_ref = network.current_pool.read();
+                            (*pool_ref).clone()
+                        };
+
+                        if let Some(mut pool_network) = pool_network {
+                            pool_network.process_packet(&addr, &message)
+                        } else {
+                            Err(NetworkErr::NoPoolSession)
+                        }
+                    }
+
+                    #[cfg(not(feature = "miner"))]
+                    {
+                        Err(NetworkErr::NoPoolSession)
+                    }
+                } else {
+                    network.process_packet(&addr, &message)
+                };
+
                 (reader, network, result)
             })
             .map(move |(reader, network, result)| {

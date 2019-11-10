@@ -120,7 +120,6 @@ pub fn verify(
                 .unwrap();
 
             if let Err(err) = ctx.verify(proof) {
-                println!("DEBUG ERR: {:?}", err);
                 return Err(VerifyError::InvalidProof);
             }
         }

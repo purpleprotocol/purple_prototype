@@ -234,6 +234,7 @@ impl NetworkInterface for Network {
                     &self.secret_key,
                     rx,
                     self.network_name.as_str(),
+                    false,
                 );
                 peer.send_packet(packet)
             } else {
@@ -258,6 +259,7 @@ impl NetworkInterface for Network {
                     &self.secret_key,
                     rx,
                     self.network_name.as_str(),
+                    false,
                 );
                 peer.send_packet(packet.to_vec())
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
@@ -284,6 +286,7 @@ impl NetworkInterface for Network {
                     &self.secret_key,
                     rx,
                     self.network_name.as_str(),
+                    false,
                 );
                 peer.send_packet(packet.to_vec())
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
@@ -298,7 +301,7 @@ impl NetworkInterface for Network {
         let peers = self.peers.read();
 
         if let Some(peer) = peers.get(peer) {
-            let packet = crate::common::wrap_packet(&packet, self.network_name.as_str());
+            let packet = crate::common::wrap_packet(&packet, self.network_name.as_str(), false);
             peer.send_packet(packet)
         } else {
             Err(NetworkErr::PeerNotFound)
@@ -345,36 +348,11 @@ impl NetworkInterface for Network {
                     Ok(())
                 }
 
-                _ => match ConnectPool::from_bytes(packet) {
-                    #[cfg(feature = "miner")]
-                    Ok(packet) => {
-                        debug!(
-                            "Received connect pool packet from {}: {:?}",
-                            peer, packet
-                        );
-
-                        // Handle connect packet
-                        ConnectPool::handle(self, peer, &packet, conn_type)?;
-
-                        Ok(())
-                    }
-
-                    #[cfg(not(feature = "miner"))]
-                    Ok(_) => {
-                        debug!(
-                            "Received connect pool packet from {}: {:?}",
-                            peer, packet
-                        );
-
-                        Err(NetworkErr::NotMiner)
-                    }
-
-                    _ => {
-                        // Invalid packet, remove peer
-                        debug!("Invalid connect packet from {}", peer);
-                        Err(NetworkErr::InvalidConnectPacket)
-                    }
-                } 
+                _ => {
+                    // Invalid packet, remove peer
+                    debug!("Invalid connect packet from {}", peer);
+                    Err(NetworkErr::InvalidConnectPacket)
+                }
             }
         } else {
             crate::common::handle_packet(self, conn_type, peer, &packet)?;

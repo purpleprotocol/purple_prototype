@@ -159,6 +159,7 @@ impl NetworkInterface for MockNetwork {
                 &self.secret_key,
                 key,
                 self.network_name.as_str(),
+                false,
             );
             mailbox.send((self.ip.clone(), packet)).unwrap();
             Ok(())

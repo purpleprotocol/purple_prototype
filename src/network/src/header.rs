@@ -22,6 +22,9 @@ pub struct PacketHeader {
     /// The version of the network layer
     pub(crate) network_version: u8,
 
+    /// Whether the packet is a validator pool packet
+    pub(crate) is_pool_packet: bool,
+
     /// The crc32 of the packet data
     pub(crate) crc32: u32,
 
