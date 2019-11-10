@@ -170,7 +170,7 @@ pub fn decrypt(packet: &[u8], nonce: &Nonce, key: &SessionKey) -> Result<Vec<u8>
     }
 }
 
-/// Parses and handles a packet.
+/// Parses and handles default network a packet.
 pub fn handle_packet<N: NetworkInterface>(
     network: &mut N,
     conn_type: ConnectionType,
@@ -210,6 +210,16 @@ pub fn handle_packet<N: NetworkInterface>(
             Err(NetworkErr::PacketParseErr)
         }
     }
+}
+
+/// Parses and handles a packet.
+pub fn handle_pool_packet<N: NetworkInterface>(
+    network: &mut N,
+    conn_type: ConnectionType,
+    peer_addr: &SocketAddr,
+    packet: &[u8],
+) -> Result<(), NetworkErr> {
+    unimplemented!();
 }
 
 #[cfg(test)]

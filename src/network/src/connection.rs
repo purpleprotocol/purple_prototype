@@ -330,18 +330,40 @@ fn process_connection(
 
                     Ok((reader, network, header, packet))
                 })
-                .and_then(move |(reader, network, _, vec)| {
+                .and_then(move |(reader, network, header, vec)| {
                     if vec.len() == 0 {
                         Err(io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe"))
                     } else {
-                        Ok((reader, network, vec))
+                        Ok((reader, network, header, vec))
                     }
                 });
 
             let refuse_connection = refuse_connection.clone();
 
-            line.map(move |(reader, mut network, message)| {
-                let result = network.process_packet(&addr, &message);
+            line.map(move |(reader, mut network, header, message)| {
+                let result = if header.is_pool_packet {
+                    #[cfg(feature = "miner")]
+                    {
+                        let pool_network = {
+                            let pool_ref = network.current_pool.read();
+                            (*pool_ref).clone()
+                        };
+
+                        if let Some(mut pool_network) = pool_network {
+                            pool_network.process_packet(&addr, &message)
+                        } else {
+                            Err(NetworkErr::NoPoolSession)
+                        }
+                    }
+
+                    #[cfg(not(feature = "miner"))]
+                    {
+                        Err(NetworkErr::NoPoolSession)
+                    }
+                } else {
+                    network.process_packet(&addr, &message)
+                };
+
                 (reader, network, result)
             })
             .map(move |(reader, network, result)| {

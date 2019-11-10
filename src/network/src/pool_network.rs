@@ -22,7 +22,7 @@ use crate::error::NetworkErr;
 use crate::network::Network;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
-use crate::packets::connect::Connect;
+use crate::packets::connect_pool::ConnectPool;
 use crate::bootstrap::cache::BootstrapCache;
 use crate::connection::*;
 use crate::peer::SubConnectionType;
@@ -295,26 +295,26 @@ impl NetworkInterface for PoolNetwork {
         // We should receive a connect packet
         // if the peer's id is non-existent.
         if is_none_id {
-            match Connect::from_bytes(packet) {
+            match ConnectPool::from_bytes(packet) {
                 Ok(connect_packet) => {
                     debug!(
-                        "Received connect packet from {}: {:?}",
+                        "Received connect pool packet from {}: {:?}",
                         peer, connect_packet
                     );
 
                     // Handle connect packet
-                    Connect::handle(self, peer, &connect_packet, conn_type)?;
+                    ConnectPool::handle(self, peer, &connect_packet, conn_type)?;
 
                     Ok(())
                 }
                 _ => {
                     // Invalid packet, remove peer
-                    debug!("Invalid connect packet from {}", peer);
+                    debug!("Invalid connect pool packet from {}", peer);
                     Err(NetworkErr::InvalidConnectPacket)
                 }
             }
         } else {
-            crate::common::handle_packet(self, conn_type, peer, &packet)?;
+            crate::common::handle_pool_packet(self, conn_type, peer, &packet)?;
 
             // Refresh peer timeout timer
             {

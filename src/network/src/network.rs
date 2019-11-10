@@ -348,36 +348,11 @@ impl NetworkInterface for Network {
                     Ok(())
                 }
 
-                _ => match ConnectPool::from_bytes(packet) {
-                    #[cfg(feature = "miner")]
-                    Ok(packet) => {
-                        debug!(
-                            "Received connect pool packet from {}: {:?}",
-                            peer, packet
-                        );
-
-                        // Handle connect packet
-                        ConnectPool::handle(self, peer, &packet, conn_type)?;
-
-                        Ok(())
-                    }
-
-                    #[cfg(not(feature = "miner"))]
-                    Ok(_) => {
-                        debug!(
-                            "Received connect pool packet from {}: {:?}",
-                            peer, packet
-                        );
-
-                        Err(NetworkErr::NotMiner)
-                    }
-
-                    _ => {
-                        // Invalid packet, remove peer
-                        debug!("Invalid connect packet from {}", peer);
-                        Err(NetworkErr::InvalidConnectPacket)
-                    }
-                } 
+                _ => {
+                    // Invalid packet, remove peer
+                    debug!("Invalid connect packet from {}", peer);
+                    Err(NetworkErr::InvalidConnectPacket)
+                }
             }
         } else {
             crate::common::handle_packet(self, conn_type, peer, &packet)?;
