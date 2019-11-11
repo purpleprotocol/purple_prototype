@@ -20,6 +20,7 @@ use crate::pool_peer::{PoolPeer, SessionState};
 use crate::error::NetworkErr;
 use crate::validation::validator::ProtocolValidator;
 use crate::bootstrap::cache::BootstrapCache;
+use crate::validation::pool_validator::PoolProtocolValidator;
 use crypto::{Hash, NodeId};
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use std::default::Default;
@@ -200,6 +201,7 @@ impl Peer {
             connection_type: self.connection_type,
             outbound_buffer: self.outbound_buffer,
             session_state: SessionState::PreValidation,
+            validator: PoolProtocolValidator::new(),
         }
     }
 }

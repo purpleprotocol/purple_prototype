@@ -26,6 +26,10 @@ use crate::packets::connect_pool::ConnectPool;
 use crate::bootstrap::cache::BootstrapCache;
 use crate::connection::*;
 use crate::peer::SubConnectionType;
+use crate::validation::sender::Sender as SenderTrait;
+use tokio_timer::Interval;
+use tokio::prelude::future::ok;
+use tokio::prelude::*;
 use consensus::ConsensusMachine;
 use events::Event;
 use chain::*;
@@ -37,6 +41,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 #[cfg(test)]
 use crossbeam_channel::Sender;
@@ -174,7 +179,7 @@ impl NetworkInterface for PoolNetwork {
 
     #[cfg(feature = "miner")]
     fn validator_pool_network_ref(&self) -> Arc<RwLock<Option<PoolNetwork>>> {
-        unimplemented!();
+        Arc::new(RwLock::new(Some(self.clone())))
     }
 
     fn has_peer_with_id(&self, id: &NodeId) -> bool {
@@ -349,5 +354,67 @@ impl NetworkInterface for PoolNetwork {
 
     fn bootstrap_cache(&self) -> BootstrapCache {
         unimplemented!();
+    }
+
+    fn after_connect(&self, addr: &SocketAddr) {
+        debug!("Executing after connect callback for {}", addr);
+
+        let peers_clone = self.peers.clone();
+        let network_clone = self.clone();
+        let network_clone2 = self.clone();
+        let addr = addr.clone();
+        let addr_clone = addr.clone();
+        let addr_clone2 = addr.clone();
+
+        // Spawn a repeating task at a given interval for this peer
+        let peer_interval = Interval::new_interval(Duration::from_millis(crate::connection::TIMER_INTERVAL))
+            .take_while(move |_| ok(network_clone.has_peer(&addr)))
+            .fold(0, move |mut times_denied, _| {
+                let peers = peers_clone.clone();
+                let addr = addr_clone.clone();
+                let peers = peers.read();
+                let peer = peers.get(&addr).unwrap();
+
+                let _ = peer.last_seen.fetch_add(crate::connection::TIMER_INTERVAL, Ordering::SeqCst);
+                let last_ping = peer.last_ping.fetch_add(crate::connection::TIMER_INTERVAL, Ordering::SeqCst);
+
+                if last_ping > crate::connection::PING_INTERVAL {
+                    let mut sender = peer.validator.ping_pong.sender.lock();
+
+                    if let Ok(ping) = sender.send(()) {
+                        peer.last_ping.store(0, Ordering::SeqCst);
+
+                        debug!("Sending pool Ping packet to {}", addr);
+
+                        network_clone2
+                            .send_to_peer(&addr, ping.to_bytes())
+                            .map_err(|err| warn!("Could not send pool ping to {}: {:?}", addr, err))
+                            .unwrap_or(());
+
+                        debug!("Sent Ping packet to {}", addr);
+                    } else {
+                        times_denied += 1;
+
+                        // HACK: Reset sender if it's stuck
+                        if times_denied > 10 {
+                            times_denied = 0;
+                            sender.reset();
+                        }
+                    }
+                }
+
+                ok(times_denied)
+            })
+            .map_err(move |e| {
+                warn!("Peer interval error for {}: {}", addr, e);
+                ()
+            })
+            .and_then(move |_| {
+                debug!("Peer interval timer for {} has finished!", addr_clone2);
+                Ok(())
+            });
+    
+    
+        tokio::spawn(peer_interval);
     }
 }

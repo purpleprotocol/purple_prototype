@@ -114,4 +114,8 @@ pub trait NetworkInterface: Clone + Send {
 
     /// Returns a handle to the bootstrap cache.
     fn bootstrap_cache(&self) -> BootstrapCache;
+
+    /// Call-back that executes after a `Connect` or `ConnectPool`
+    /// packet has been successfully processed from a peer.
+    fn after_connect(&self, peer: &SocketAddr);
 }

@@ -357,6 +357,8 @@ impl NetworkInterface for MockNetwork {
     fn bootstrap_cache(&self) -> BootstrapCache {
         self.bootstrap_cache.clone()
     }
+
+    fn after_connect(&self, _peer: &SocketAddr) { }
 }
 
 impl MockNetwork {

@@ -209,6 +209,9 @@ impl Packet for Connect {
                 network.send_raw(addr, &packet.to_bytes())?;
             }
 
+            // Execute after connect callback
+            network.after_connect(addr);
+
             Ok(())
         } else {
             Err(NetworkErr::SelfConnect)

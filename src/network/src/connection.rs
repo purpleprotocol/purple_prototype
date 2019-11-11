@@ -44,16 +44,16 @@ use tokio_timer::Interval;
 use rand::prelude::IteratorRandom;
 
 /// Peer timeout interval
-const PEER_TIMEOUT: u64 = 15000;
+pub(crate) const PEER_TIMEOUT: u64 = 15000;
 
 /// Time in milliseconds to poll a peer.
-const TIMER_INTERVAL: u64 = 10;
+pub(crate) const TIMER_INTERVAL: u64 = 10;
 
 /// A ping will be send at this interval in milliseconds.
-const PING_INTERVAL: u64 = 500;
+pub(crate) const PING_INTERVAL: u64 = 500;
 
 /// Interval in milliseconds for triggering a peer list refresh.
-const PEER_REFRESH_INTERVAL: u64 = 3000;
+pub(crate) const PEER_REFRESH_INTERVAL: u64 = 3000;
 
 /// Initializes the listener for the given network
 pub fn start_listener(network: Network, accept_connections: Arc<AtomicBool>) -> Spawn {
@@ -393,58 +393,6 @@ fn process_connection(
             })
         });
 
-    let peers_clone = network.peers.clone();
-    let addr_clone = addr.clone();
-    let addr_clone2 = addr.clone();
-
-    // Spawn a repeating task at a given interval for this peer
-    let peer_interval = Interval::new_interval(Duration::from_millis(TIMER_INTERVAL))
-        .take_while(move |_| ok(network_clone.has_peer(&addr)))
-        .fold(0, move |mut times_denied, _| {
-            let peers = peers_clone.clone();
-            let addr = addr_clone.clone();
-            let peers = peers.read();
-            let peer = peers.get(&addr).unwrap();
-
-            let _ = peer.last_seen.fetch_add(TIMER_INTERVAL, Ordering::SeqCst);
-            let last_ping = peer.last_ping.fetch_add(TIMER_INTERVAL, Ordering::SeqCst);
-
-            if last_ping > PING_INTERVAL {
-                let mut sender = peer.validator.ping_pong.sender.lock();
-
-                if let Ok(ping) = sender.send(()) {
-                    peer.last_ping.store(0, Ordering::SeqCst);
-
-                    debug!("Sending Ping packet to {}", addr);
-
-                    network_clone2
-                        .send_to_peer(&addr, ping.to_bytes())
-                        .map_err(|err| warn!("Could not send ping to {}: {:?}", addr, err))
-                        .unwrap_or(());
-
-                    debug!("Sent Ping packet to {}", addr);
-                } else {
-                    times_denied += 1;
-
-                    // HACK: Reset sender if it's stuck
-                    if times_denied > 10 {
-                        times_denied = 0;
-                        sender.reset();
-                    }
-                }
-            }
-
-            ok(times_denied)
-        })
-        .map_err(move |e| {
-            warn!("Peer interval error for {}: {}", addr, e);
-            ()
-        })
-        .and_then(move |_| {
-            debug!("Peer interval timer for {} has finished!", addr_clone2);
-            Ok(())
-        });
-
     // Now that we've got futures representing each half of the socket, we
     // use the `select` combinator to wait for either half to be done to
     // tear down the other. Then we spawn off the result.
@@ -472,8 +420,7 @@ fn process_connection(
         ok(())
     }));
 
-    tokio::spawn(socket_writer);
-    tokio::spawn(peer_interval)
+    tokio::spawn(socket_writer)
 }
 
 /// Starts a background job responsible for requesting and
