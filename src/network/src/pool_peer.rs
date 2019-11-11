@@ -19,6 +19,7 @@
 use crate::error::NetworkErr;
 use crate::validation::validator::ProtocolValidator;
 use crate::bootstrap::cache::BootstrapCache;
+use crate::validation::pool_validator::PoolProtocolValidator;
 use crypto::NodeId;
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use std::default::Default;
@@ -94,6 +95,9 @@ pub struct PoolPeer {
     /// Session generated public key
     pub pk: Pk,
 
+    /// Associated protocol validator
+    pub(crate) validator: PoolProtocolValidator,
+
     /// Peer session state
     pub(crate) session_state: SessionState,
 
@@ -134,6 +138,7 @@ impl PoolPeer {
             session_state: SessionState::PreValidation,
             last_seen: Arc::new(AtomicU64::new(0)),
             last_ping: Arc::new(AtomicU64::new(0)),
+            validator: PoolProtocolValidator::new(),
         }
     }
 

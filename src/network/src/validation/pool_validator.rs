@@ -16,21 +16,22 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-//! The protocol validation is modeled as a finite state machine
-//! which receives as input the type of the packet received by
-//! a peer and allows or disallows certain packet types from
-//! being sent.
-//!
-//! For example, a peer cannot send a `Pong` or `SendPeers` packet
-//! without first receiving a `Ping` or `RequestPeers` packet.
-//!
-//! Two finite-state machines are initialized for each peer and for
-//! each protocol interaction, a `Sender` and a `Receiver` machines.
-//!
-//! The outputs of the `Sender` are the inputs of the `Receiver` and
-//! vice-versa.
+use crate::protocol_flow::ping_pong::PingPong;
+use crate::bootstrap::cache::BootstrapCache;
+use std::default::Default;
 
-pub mod receiver;
-pub mod sender;
-pub mod validator;
-pub mod pool_validator;
+#[derive(Clone, Debug)]
+/// Struct wrapping all pool protocol flows. This
+/// is instantiated once per each connected peer.
+pub struct PoolProtocolValidator {
+    /// Ping/Pong protocol flow
+    pub(crate) ping_pong: PingPong,
+}
+
+impl PoolProtocolValidator {
+    pub fn new() -> PoolProtocolValidator {
+        PoolProtocolValidator {
+            ping_pong: Default::default(),
+        }
+    }
+}

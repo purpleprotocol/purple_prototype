@@ -242,11 +242,14 @@ impl Packet for ConnectPool {
 
             // If we are the server, also send a connect packet back
             if let ConnectionType::Server = conn_type {
-                debug!("Sending connect packet to {}", addr);
+                debug!("Sending connect pool packet to {}", addr);
                 let mut packet = ConnectPool::new(our_node_id, our_pk.unwrap(), pool_network.start_pow_block);
                 packet.sign(network.secret_key());
                 network.send_raw(addr, &packet.to_bytes())?;
             }
+
+            // Execute after connect callback
+            network.after_connect(addr);
 
             Ok(())
         } else {
@@ -298,7 +301,6 @@ mod tests {
     use crypto::NodeId;
     use hashbrown::HashMap;
     use parking_lot::Mutex;
-    use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;

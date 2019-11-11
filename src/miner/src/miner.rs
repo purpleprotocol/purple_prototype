@@ -33,8 +33,8 @@ use parking_lot::RwLock;
 use rand::Rng;
 use std::path::PathBuf;
 use std::ptr::NonNull;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
+use crossbeam_channel::unbounded;
+use crossbeam_channel::{Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::time;
@@ -175,9 +175,9 @@ impl PurpleMiner {
         mut solver: SolverInstance,
         instance: usize,
         shared_data: Arc<RwLock<JobData>>,
-        control_rx: mpsc::Receiver<ControlMessage>,
-        solver_loop_rx: mpsc::Receiver<ControlMessage>,
-        solver_stopped_tx: mpsc::Sender<ControlMessage>,
+        control_rx: Receiver<ControlMessage>,
+        solver_loop_rx: Receiver<ControlMessage>,
+        solver_stopped_tx: Sender<ControlMessage>,
         solver_state: Arc<RwLock<SolverState>>,
     ) {
         {
@@ -345,9 +345,9 @@ impl PurpleMiner {
         let mut i = 0;
         for s in solvers {
             let sd = self.shared_data.clone();
-            let (control_tx, control_rx) = mpsc::channel::<ControlMessage>();
-            let (solver_tx, solver_rx) = mpsc::channel::<ControlMessage>();
-            let (solver_stopped_tx, solver_stopped_rx) = mpsc::channel::<ControlMessage>();
+            let (control_tx, control_rx) = unbounded::<ControlMessage>();
+            let (solver_tx, solver_rx) = unbounded::<ControlMessage>();
+            let (solver_stopped_tx, solver_stopped_rx) = unbounded::<ControlMessage>();
             let solver_state = Arc::new(RwLock::new(SolverState::Starting));
             let solver_state_clone = solver_state.clone();
             self.control_txs.push(control_tx);
