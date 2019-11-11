@@ -39,7 +39,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 #[cfg(test)]
-use std::sync::mpsc::Sender;
+use crossbeam_channel::Sender;
 
 #[cfg(not(test))]
 use futures::sync::mpsc::Sender;

@@ -31,10 +31,10 @@ use std::sync::Arc;
 use futures::sync::mpsc::Sender;
 
 #[cfg(test)]
-use std::sync::mpsc::Sender;
+use crossbeam_channel::Sender;
 
 /// Generic network layer interface.
-pub trait NetworkInterface {
+pub trait NetworkInterface: Clone + Send {
     /// Attempts to connect to the peer with the given ip.
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr>;
 

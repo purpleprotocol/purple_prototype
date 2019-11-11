@@ -219,7 +219,24 @@ pub fn handle_pool_packet<N: NetworkInterface>(
     peer_addr: &SocketAddr,
     packet: &[u8],
 ) -> Result<(), NetworkErr> {
-    unimplemented!();
+    let packet_type = packet[0];
+
+    match packet_type {
+        Ping::PACKET_TYPE => match Ping::from_bytes(packet) {
+            Ok(packet) => Ping::handle(network, peer_addr, &packet, conn_type),
+            _ => Err(NetworkErr::PacketParseErr),
+        },
+
+        Pong::PACKET_TYPE => match Pong::from_bytes(packet) {
+            Ok(packet) => Pong::handle(network, peer_addr, &packet, conn_type),
+            _ => Err(NetworkErr::PacketParseErr),
+        },
+
+        _ => {
+            debug!("Could not parse packet with type {} from {}", packet_type, peer_addr);
+            Err(NetworkErr::PacketParseErr)
+        }
+    }
 }
 
 #[cfg(test)]

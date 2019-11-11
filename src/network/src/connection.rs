@@ -426,7 +426,7 @@ fn process_connection(
                 } else {
                     times_denied += 1;
 
-                    // Reset sender if it's stuck
+                    // HACK: Reset sender if it's stuck
                     if times_denied > 10 {
                         times_denied = 0;
                         sender.reset();

@@ -32,15 +32,16 @@ use crypto::SecretKey as Sk;
 use hashbrown::HashMap;
 use parking_lot::{Mutex, RwLock};
 use rayon::prelude::*;
+use crossbeam_channel::{Receiver, Sender};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 
 /// Peer timeout in milliseconds
 const PEER_TIMEOUT: u64 = 1000;
 const PING_INTERVAL: u64 = 50;
 
+#[derive(Clone)]
 /// Mock network layer used for testing.
 pub struct MockNetwork {
     /// Mapping between node ids and their mailboxes

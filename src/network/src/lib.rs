@@ -53,6 +53,7 @@ extern crate rlp;
 extern crate tokio;
 extern crate tokio_io_timeout;
 extern crate tokio_timer;
+extern crate crossbeam_channel;
 
 #[cfg(test)]
 pub mod mock;
@@ -116,7 +117,7 @@ pub fn random_socket_addr() -> SocketAddr {
 use std::sync::Arc;
 
 #[cfg(test)]
-use std::sync::mpsc::*;
+use crossbeam_channel::*;
 
 #[cfg(test)]
 use parking_lot::{Mutex, RwLock};
@@ -160,9 +161,9 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
         Vec::with_capacity(peers);
 
     for i in 0..peers {
-        let (rx, tx) = channel();
-        let (rx1, tx1) = channel();
-        let (rx2, tx2) = channel();
+        let (rx, tx) = unbounded();
+        let (rx1, tx1) = unbounded();
+        let (rx2, tx2) = unbounded();
         address_mappings.insert(addresses[i].clone(), identities[i].0.clone());
         mailboxes.insert(identities[i].0.clone(), rx);
         let mb_clone = mailboxes.clone();
@@ -170,7 +171,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
         let am_clone = address_mappings.clone();
         let a_clone = addresses.clone();
 
-        let (s, r) = channel();
+        let (s, r) = unbounded();
 
         thread::Builder::new()
             .name(format!("Peer {}", i + 1))
