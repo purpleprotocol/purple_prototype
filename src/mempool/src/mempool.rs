@@ -16,27 +16,91 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use hashbrown::HashMap;
+use graphlib::Graph;
+use account::Balance;
+use chrono::{DateTime, Utc};
+use hashbrown::{HashSet, HashMap};
 use transactions::Tx;
+use std::collections::BTreeMap;
 use crypto::Hash;
 
-/// Memory pool used to store yet not processed
+/// Memory pool used to store valid yet not processed
 /// transactions.
 pub struct Mempool {
     /// Lookup table between transaction hashes
     /// and transaction data.
     tx_lookup: HashMap<Hash, Tx>,
 
+    /// Mapping between transaction hashes and a timestamp
+    /// denoting the moment they have been added to the mempool.
+    timestamp_lookup: HashMap<Hash, DateTime<Utc>>,
+
+    /// Mapping between timestamps of the moment transactions have
+    /// been added to the mempool and the respective transactions
+    /// hashes.
+    timestamp_reverse_lookup: BTreeMap<DateTime<Utc>, Hash>,
+
+    /// Set containing hashes of transactions that 
+    /// are currently orphans.
+    orphan_set: HashSet<Hash>,
+
+    /// Mapping between currency hashes and transaction
+    /// fees. Note that orphan transactions are not stored
+    /// in this map.
+    /// 
+    /// Each entry in the map is an ordered binary tree 
+    /// map between transaction fees and transaction hashes.
+    fee_map: HashMap<Hash, BTreeMap<Balance, Hash>>,
+
+    /// Transaction dependency graph.
+    dependency_graph: Graph<Hash>,
+
+    /// Vector of preferred currencies. The element at
+    /// index 0 in the vector is the first preferred,
+    /// the one at index 1 is the second, etc.
+    /// 
+    /// When choosing transactions to take out of the
+    /// mempool, they will be taken in the order of 
+    /// preference that is found in this vector, if
+    /// there is no preferred currency, they will be
+    /// taken out of all available currencies from
+    /// the biggest fee to the least.
+    preferred_currencies: Vec<Hash>,
+
+    /// Ratio of preferred transaction to include in a ready batch,
+    /// for example if 50 preference ratio is given, 50% of the transactions
+    /// taken from the mempool in one batch will be based on the preference
+    /// options, the rest will be taken from each stored currency equally 
+    /// from the biggest fee to the lowest.
+    /// 
+    /// Must be a number between 50 and 100.
+    preference_ratio: u8,
+
     /// The maximum amount of transactions that the
     /// mempool is allowed to store.
-    max_size: u32,
+    max_size: u64,
 }
 
 impl Mempool {
-    pub fn new(max_size: u32) -> Mempool {
+    pub fn new(
+        max_size: u64, 
+        preferred_currencies: Vec<Hash>,
+        preference_ratio: u8,
+    ) -> Mempool {
+        if preference_ratio < 50 || preference_ratio > 100 {
+            panic!(format!("Invalid preference ratio! Expected a number between 50 and 100! Got: {}", preference_ratio));
+        }
+
         Mempool {
-            tx_lookup: HashMap::with_capacity(max_size as usize),
+            tx_lookup: HashMap::new(),
+            timestamp_lookup: HashMap::new(),
+            fee_map: HashMap::new(),
+            orphan_set: HashSet::new(),
+            dependency_graph: Graph::new(),
+            timestamp_reverse_lookup: BTreeMap::new(),
             max_size,
+            preferred_currencies,
+            preference_ratio,
         }
     }
 

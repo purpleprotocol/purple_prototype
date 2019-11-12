@@ -339,7 +339,7 @@ fn get_storage_path(network_name: &str) -> PathBuf {
 struct Argv {
     network_name: String,
     bootnodes: Vec<SocketAddr>,
-    mempool_size: u16,
+    mempool_size: u64,
     port: u16,
     bootstrap_cache_size: u64,
     max_peers: usize,
@@ -368,7 +368,7 @@ fn parse_cli_args() -> Argv {
             Arg::with_name("mempool_size")
                 .long("mempool-size")
                 .value_name("MEMPOOL_SIZE")
-                .help("The size in megabytes of the mempool")
+                .help("The maximum number of transactions that the mempool is allowed to store")
                 .takes_value(true),
         )
         .arg(
@@ -466,10 +466,10 @@ fn parse_cli_args() -> Argv {
         DEFAULT_NETWORK_NAME.to_owned()
     };
 
-    let mempool_size: u16 = if let Some(arg) = matches.value_of("mempool_size") {
+    let mempool_size: u64 = if let Some(arg) = matches.value_of("mempool_size") {
         unwrap!(arg.parse(), "Bad value for <MEMPOOL_SIZE>")
     } else {
-        150
+        700000
     };
 
     let port: u16 = if let Some(arg) = matches.value_of("port") {
