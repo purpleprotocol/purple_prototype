@@ -232,6 +232,11 @@ pub fn handle_pool_packet<N: NetworkInterface>(
             _ => Err(NetworkErr::PacketParseErr),
         },
 
+        ForwardEvent::PACKET_TYPE => match ForwardEvent::from_bytes(packet) {
+            Ok(packet) => ForwardEvent::handle(network, peer_addr, &packet, conn_type),
+            _ => Err(NetworkErr::PacketParseErr),
+        },
+
         _ => {
             debug!("Could not parse packet with type {} from {}", packet_type, peer_addr);
             Err(NetworkErr::PacketParseErr)
