@@ -67,6 +67,7 @@ pub use mint::*;
 pub use open_contract::*;
 pub use send::*;
 
+use account::{Address, Balance};
 use crypto::{Hash, Identity};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
@@ -126,6 +127,49 @@ impl Tx {
             Tx::Mint(ref tx) => tx.hash,
             Tx::CreateUnique(ref tx) => tx.hash,
             Tx::ChangeMinter(ref tx) => tx.hash,
+        }
+    }
+
+    pub fn fee(&self) -> Balance {
+        match *self {
+            Tx::Call(ref tx) => tx.fee.clone(),
+            Tx::OpenContract(ref tx) => tx.fee.clone(),
+            Tx::Send(ref tx) => tx.fee.clone(),
+            Tx::Burn(ref tx) => tx.fee.clone(),
+            Tx::CreateCurrency(ref tx) => tx.fee.clone(),
+            Tx::CreateMintable(ref tx) => tx.fee.clone(),
+            Tx::Mint(ref tx) => tx.fee.clone(),
+            Tx::CreateUnique(ref tx) => tx.fee.clone(),
+            Tx::ChangeMinter(ref tx) => tx.fee.clone(),
+        }
+    }
+
+    pub fn fee_hash(&self) -> Hash {
+        match *self {
+            Tx::Call(ref tx) => tx.fee_hash,
+            Tx::OpenContract(ref tx) => tx.fee_hash,
+            Tx::Send(ref tx) => tx.fee_hash,
+            Tx::Burn(ref tx) => tx.fee_hash,
+            Tx::CreateCurrency(ref tx) => tx.fee_hash,
+            Tx::CreateMintable(ref tx) => tx.fee_hash,
+            Tx::Mint(ref tx) => tx.fee_hash,
+            Tx::CreateUnique(ref tx) => tx.fee_hash,
+            Tx::ChangeMinter(ref tx) => tx.fee_hash,
+        }
+    }
+
+    /// Returns the address of the transaction creator.
+    pub fn creator_address(&self) -> Address {
+        match *self {
+            Tx::Call(ref tx) => Address::Normal(tx.from),
+            Tx::OpenContract(ref tx) => Address::Normal(tx.owner),
+            Tx::Send(ref tx) => Address::Normal(tx.from),
+            Tx::Burn(ref tx) => Address::Normal(tx.burner),
+            Tx::CreateCurrency(ref tx) => Address::Normal(tx.creator),
+            Tx::CreateMintable(ref tx) => Address::Normal(tx.creator),
+            Tx::Mint(ref tx) => Address::Normal(tx.minter),
+            Tx::CreateUnique(ref tx) => Address::Normal(tx.creator),
+            Tx::ChangeMinter(ref tx) => Address::Normal(tx.minter),
         }
     }
 

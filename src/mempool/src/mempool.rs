@@ -16,20 +16,26 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use graphlib::Graph;
+use crate::error::MempoolErr;
+use graphlib::{Graph, VertexId};
 use account::Balance;
 use chrono::{DateTime, Utc};
 use hashbrown::{HashSet, HashMap};
 use transactions::Tx;
 use std::collections::BTreeMap;
 use crypto::Hash;
+use std::sync::Arc;
 
 /// Memory pool used to store valid yet not processed
 /// transactions.
 pub struct Mempool {
     /// Lookup table between transaction hashes
     /// and transaction data.
-    tx_lookup: HashMap<Hash, Tx>,
+    tx_lookup: HashMap<Hash, Arc<Tx>>,
+
+    /// Mapping between transaction hashes and their 
+    /// vertex ids in the dependency graph.
+    vertex_id_lookup: HashMap<Hash, VertexId>,
 
     /// Mapping between transaction hashes and a timestamp
     /// denoting the moment they have been added to the mempool.
@@ -93,6 +99,7 @@ impl Mempool {
 
         Mempool {
             tx_lookup: HashMap::new(),
+            vertex_id_lookup: HashMap::new(),
             timestamp_lookup: HashMap::new(),
             fee_map: HashMap::new(),
             orphan_set: HashSet::new(),
@@ -113,7 +120,53 @@ impl Mempool {
     /// Removes the transaction with the given `Hash` from the 
     /// mempool and returns it. Returns `None` if there is no 
     /// such transaction in the mempool.
-    pub fn remove(&mut self, tx_hash: &Hash) -> Option<Tx> {
-        self.tx_lookup.remove(tx_hash)
+    pub fn remove(&mut self, tx_hash: &Hash) -> Option<Arc<Tx>> {
+        let tx = self.tx_lookup.remove(tx_hash)?;
+        let vertex_id = self.vertex_id_lookup.remove(tx_hash).unwrap();
+        let fee = tx.fee();
+        let fee_hash = tx.fee_hash();
+        let mut remove_fee_map = false;
+
+        // Clean up
+        self.orphan_set.remove(tx_hash);
+        self.dependency_graph.remove(&vertex_id);
+
+        // Clean entry from timestamp lookups
+        if let Some(timestamp) = self.timestamp_lookup.remove(tx_hash) {
+            self.timestamp_reverse_lookup.remove(&timestamp);
+        }
+
+        // Clean entry from fee map
+        if let Some(fee_map) = self.fee_map.get_mut(&fee_hash) {
+            fee_map.remove(&fee);
+
+            // Clean up fee map entry if it's empty
+            if fee_map.is_empty() {
+                remove_fee_map = true;
+            }
+        }
+
+        if remove_fee_map {
+            self.fee_map.remove(&fee_hash);
+        }
+
+        Some(tx)
+    }   
+
+    /// Attempts to append a transaction to the mempool.
+    pub fn append_tx(&mut self, tx: Arc<Tx>) -> Result<(), MempoolErr> {
+        unimplemented!();
+    }
+
+    /// Attempts to retrieve a number of valid transactions from
+    /// the mempool. The resulting transaction list will be in a
+    /// canonical ordering. Returns `None` if there are no valid
+    /// transactions in the mempool.
+    pub fn take(&mut self, count: usize) -> Option<Vec<Arc<Tx>>> {
+        if self.tx_lookup.is_empty() {
+            return None;
+        }
+
+        unimplemented!();
     }
 }

@@ -25,20 +25,20 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Call {
-    from: NormalAddress,
-    to: ContractAddress,
-    inputs: String, // TODO: Change to contract inputs type
-    amount: Balance,
-    fee: Balance,
-    gas_price: Balance,
-    gas_limit: Gas,
-    asset_hash: Hash,
-    fee_hash: Hash,
-    nonce: u64,
+    pub(crate) from: NormalAddress,
+    pub(crate) to: ContractAddress,
+    pub(crate) inputs: String, // TODO: Change to contract inputs type
+    pub(crate) amount: Balance,
+    pub(crate) fee: Balance,
+    pub(crate) gas_price: Balance,
+    pub(crate) gas_limit: Gas,
+    pub(crate) asset_hash: Hash,
+    pub(crate) fee_hash: Hash,
+    pub(crate) nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
+    pub(crate) signature: Option<Signature>,
 }
 
 impl Call {
