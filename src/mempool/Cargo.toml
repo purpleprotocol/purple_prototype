@@ -12,3 +12,4 @@ hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde
 transactions = { path = "../transactions" }
 account = { path = "../account" }
 crypto = { path = "../crypto" }
+chain = { path = "../chain" }

@@ -20,4 +20,10 @@
 pub enum MempoolErr {
     /// The mempool is currently full.
     Full,
+
+    /// The appended transaction causes a double spend.
+    DoubleSpend,
+
+    /// The given transaction already exists in the mempool.
+    AlreadyInMempool
 }

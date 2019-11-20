@@ -130,6 +130,34 @@ impl Tx {
         }
     }
 
+    pub fn nonce(&self) -> u64 {
+        match *self {
+            Tx::Call(ref tx) => tx.nonce,
+            Tx::OpenContract(ref tx) => tx.nonce,
+            Tx::Send(ref tx) => tx.nonce,
+            Tx::Burn(ref tx) => tx.nonce,
+            Tx::CreateCurrency(ref tx) => tx.nonce,
+            Tx::CreateMintable(ref tx) => tx.nonce,
+            Tx::Mint(ref tx) => tx.nonce,
+            Tx::CreateUnique(ref tx) => tx.nonce,
+            Tx::ChangeMinter(ref tx) => tx.nonce,
+        }
+    }
+
+    pub fn tx_hash(&self) -> Option<Hash> {
+        match *self {
+            Tx::Call(ref tx) => tx.hash,
+            Tx::OpenContract(ref tx) => tx.hash,
+            Tx::Send(ref tx) => tx.hash,
+            Tx::Burn(ref tx) => tx.hash,
+            Tx::CreateCurrency(ref tx) => tx.hash,
+            Tx::CreateMintable(ref tx) => tx.hash,
+            Tx::Mint(ref tx) => tx.hash,
+            Tx::CreateUnique(ref tx) => tx.hash,
+            Tx::ChangeMinter(ref tx) => tx.hash,
+        }
+    }
+
     pub fn fee(&self) -> Balance {
         match *self {
             Tx::Call(ref tx) => tx.fee.clone(),

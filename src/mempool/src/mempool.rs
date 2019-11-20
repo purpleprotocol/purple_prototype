@@ -17,8 +17,9 @@
 */
 
 use crate::error::MempoolErr;
+use chain::PowChainRef;
 use graphlib::{Graph, VertexId};
-use account::Balance;
+use account::{Address, Balance};
 use chrono::{DateTime, Utc};
 use hashbrown::{HashSet, HashMap};
 use transactions::Tx;
@@ -61,6 +62,11 @@ pub struct Mempool {
     /// Transaction dependency graph.
     dependency_graph: Graph<Hash>,
 
+    /// Mapping between addresses that have issued transactions
+    /// which are currently stored in the mempool and the sub-mapping
+    /// of transaction nonces and their hashes.
+    address_mappings: HashMap<Address, BTreeMap<u64, Hash>>,
+
     /// Vector of preferred currencies. The element at
     /// index 0 in the vector is the first preferred,
     /// the one at index 1 is the second, etc.
@@ -85,10 +91,14 @@ pub struct Mempool {
     /// The maximum amount of transactions that the
     /// mempool is allowed to store.
     max_size: u64,
+
+    /// Reference to the pow chain.
+    chain_ref: PowChainRef,
 }
 
 impl Mempool {
     pub fn new(
+        chain_ref: PowChainRef,
         max_size: u64, 
         preferred_currencies: Vec<Hash>,
         preference_ratio: u8,
@@ -102,12 +112,14 @@ impl Mempool {
             vertex_id_lookup: HashMap::new(),
             timestamp_lookup: HashMap::new(),
             fee_map: HashMap::new(),
+            address_mappings: HashMap::new(),
             orphan_set: HashSet::new(),
             dependency_graph: Graph::new(),
             timestamp_reverse_lookup: BTreeMap::new(),
             max_size,
             preferred_currencies,
             preference_ratio,
+            chain_ref,
         }
     }
 
@@ -122,6 +134,8 @@ impl Mempool {
     /// such transaction in the mempool.
     pub fn remove(&mut self, tx_hash: &Hash) -> Option<Arc<Tx>> {
         let tx = self.tx_lookup.remove(tx_hash)?;
+        let address = tx.creator_address();
+        let nonce = tx.nonce();
         let vertex_id = self.vertex_id_lookup.remove(tx_hash).unwrap();
         let fee = tx.fee();
         let fee_hash = tx.fee_hash();
@@ -130,6 +144,22 @@ impl Mempool {
         // Clean up
         self.orphan_set.remove(tx_hash);
         self.dependency_graph.remove(&vertex_id);
+
+        let mut remove_nonces_mapping = false;
+
+        // Clean up from address mappings 
+        {
+            let nonces_mapping = self.address_mappings.get_mut(&address).unwrap(); 
+            nonces_mapping.remove(&nonce).unwrap();
+
+            if nonces_mapping.is_empty() {
+                remove_nonces_mapping = true;
+            }
+        }
+
+        if remove_nonces_mapping {
+            self.address_mappings.remove(&address).unwrap();
+        }
 
         // Clean entry from timestamp lookups
         if let Some(timestamp) = self.timestamp_lookup.remove(tx_hash) {
@@ -155,6 +185,33 @@ impl Mempool {
 
     /// Attempts to append a transaction to the mempool.
     pub fn append_tx(&mut self, tx: Arc<Tx>) -> Result<(), MempoolErr> {
+        if self.tx_lookup.len() >= self.max_size as usize {
+            return Err(MempoolErr::Full);
+        }
+
+        let tx_addr = tx.creator_address();
+        let tx_nonce = tx.nonce();
+        let tx_hash = tx.tx_hash().unwrap();
+
+        // Check for existence
+        if self.exists(&tx_hash) {
+            return Err(MempoolErr::AlreadyInMempool);
+        }
+
+        // Check for double spends
+        let double_spend = {
+            if let Some(nonce_mapping) = self.address_mappings.get(&tx_addr) {
+                nonce_mapping.get(&tx_nonce).is_some()
+            } else {
+                false
+            }
+        };
+
+        if double_spend {
+            return Err(MempoolErr::DoubleSpend);
+        }
+
+        // TODO: Place tx in the dependency graph
         unimplemented!();
     }
 
