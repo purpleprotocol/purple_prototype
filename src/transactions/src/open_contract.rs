@@ -26,21 +26,21 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OpenContract {
-    owner: NormalAddress,
-    code: Vec<u8>,
-    default_state: Vec<u8>,
-    amount: Balance,
-    asset_hash: Hash,
-    fee: Balance,
-    fee_hash: Hash,
-    self_payable: bool,
-    nonce: u64,
+    pub(crate) owner: NormalAddress,
+    pub(crate) code: Vec<u8>,
+    pub(crate) default_state: Vec<u8>,
+    pub(crate) amount: Balance,
+    pub(crate) asset_hash: Hash,
+    pub(crate) fee: Balance,
+    pub(crate) fee_hash: Hash,
+    pub(crate) self_payable: bool,
+    pub(crate) nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    address: Option<ContractAddress>,
+    pub(crate) address: Option<ContractAddress>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
+    pub(crate) signature: Option<Signature>,
 }
 
 impl OpenContract {

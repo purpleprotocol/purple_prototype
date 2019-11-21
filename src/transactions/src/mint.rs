@@ -25,17 +25,17 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Mint {
-    minter: NormalAddress,
-    receiver: Address,
-    amount: Balance,
-    asset_hash: Hash,
-    fee_hash: Hash,
-    fee: Balance,
-    nonce: u64,
+    pub(crate) minter: NormalAddress,
+    pub(crate) receiver: Address,
+    pub(crate) amount: Balance,
+    pub(crate) asset_hash: Hash,
+    pub(crate) fee_hash: Hash,
+    pub(crate) fee: Balance,
+    pub(crate) nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
+    pub(crate) signature: Option<Signature>,
 }
 
 impl Mint {

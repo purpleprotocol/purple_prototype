@@ -1222,6 +1222,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mempool"
+version = "0.1.0"
+dependencies = [
+ "account 0.1.0",
+ "chain 0.1.0",
+ "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crypto 0.1.0",
+ "graphlib 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)",
+ "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "transactions 0.1.0",
+]
+
+[[package]]
 name = "merkle_light"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1729,6 +1743,7 @@ dependencies = [
  "jump 0.1.0",
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "mempool 0.1.0",
  "mimalloc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "miner 0.1.0",
  "network 0.1.0",

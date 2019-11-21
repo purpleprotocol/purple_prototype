@@ -27,16 +27,16 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Burn {
-    burner: NormalAddress,
-    amount: Balance,
-    fee: Balance,
-    asset_hash: Hash,
-    fee_hash: Hash,
-    nonce: u64,
+    pub(crate) burner: NormalAddress,
+    pub(crate) amount: Balance,
+    pub(crate) fee: Balance,
+    pub(crate) asset_hash: Hash,
+    pub(crate) fee_hash: Hash,
+    pub(crate) nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Signature>,
+    pub(crate) signature: Option<Signature>,
 }
 
 impl Burn {

@@ -26,20 +26,20 @@ use std::io::Cursor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateMintable {
-    pub creator: NormalAddress,
-    pub receiver: Address,
-    pub minter_address: Address,
-    pub asset_hash: Hash,
-    pub coin_supply: u64,
-    pub max_supply: u64,
-    pub precision: u8,
-    pub fee_hash: Hash,
-    pub fee: Balance,
-    pub nonce: u64,
+    pub(crate) creator: NormalAddress,
+    pub(crate) receiver: Address,
+    pub(crate) minter_address: Address,
+    pub(crate) asset_hash: Hash,
+    pub(crate) coin_supply: u64,
+    pub(crate) max_supply: u64,
+    pub(crate) precision: u8,
+    pub(crate) fee_hash: Hash,
+    pub(crate) fee: Balance,
+    pub(crate) nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub hash: Option<Hash>,
+    pub(crate) hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub signature: Option<Signature>,
+    pub(crate) signature: Option<Signature>,
 }
 
 impl CreateMintable {

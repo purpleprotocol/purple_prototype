@@ -68,7 +68,7 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
     const MAX_CHECKPOINTS: usize = 4;
 
     /// How many blocks to keep behind the canonical
-    /// chain when pruning is enabled. This number should
+    /// chain tip when pruning is enabled. This number should
     /// be equal to `CHECKPOINT_INTERVAL * MAX_CHECKPOINTS`.
     const BLOCKS_TO_KEEP: usize = 100;
 

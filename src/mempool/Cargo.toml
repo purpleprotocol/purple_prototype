@@ -1,0 +1,15 @@
+[package]
+name = "mempool"
+version = "0.1.0"
+authors = ["Octavian Oncescu <octavonce@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+parking_lot = "0.7.1"
+chrono = "0.4.6"
+graphlib = "0.5.3"
+hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
+transactions = { path = "../transactions" }
+account = { path = "../account" }
+crypto = { path = "../crypto" }
+chain = { path = "../chain" }

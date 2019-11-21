@@ -27,28 +27,28 @@ use CreateMintable;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ChangeMinter {
     /// The current minter
-    pub minter: NormalAddress,
+    pub(crate) minter: NormalAddress,
 
     /// The address of the new minter
-    pub new_minter: Address,
+    pub(crate) new_minter: Address,
 
     /// The global identifier of the mintable asset
-    pub asset_hash: Hash,
+    pub(crate) asset_hash: Hash,
 
     /// The global identifier of the asset in which
     /// the transaction fee is paid in.
-    pub fee_hash: Hash,
+    pub(crate) fee_hash: Hash,
 
     /// The transaction's fee
-    pub fee: Balance,
+    pub(crate) fee: Balance,
 
     /// Nonce
-    pub nonce: u64,
+    pub(crate) nonce: u64,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub hash: Option<Hash>,
+    pub(crate) hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub signature: Option<Signature>,
+    pub(crate) signature: Option<Signature>,
 }
 
 impl ChangeMinter {

@@ -30,37 +30,37 @@ pub const META_FIELD_SIZE: usize = 32;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateUnique {
     /// The asset creator's address
-    pub creator: NormalAddress,
+    pub(crate) creator: NormalAddress,
 
     /// The receiver of the asset
-    pub receiver: Address,
+    pub(crate) receiver: Address,
 
     /// The global identifier of the asset
-    pub asset_hash: Hash,
+    pub(crate) asset_hash: Hash,
 
     /// The id of the currency that the transaction is paid in
-    pub fee_hash: Hash,
+    pub(crate) fee_hash: Hash,
 
     /// The name of the asset
-    pub name: [u8; ASSET_NAME_SIZE],
+    pub(crate) name: [u8; ASSET_NAME_SIZE],
 
     // 5 optional fields of 32 bytes for metadata. 160 bytes in total.
-    pub meta1: Option<[u8; META_FIELD_SIZE]>,
-    pub meta2: Option<[u8; META_FIELD_SIZE]>,
-    pub meta3: Option<[u8; META_FIELD_SIZE]>,
-    pub meta4: Option<[u8; META_FIELD_SIZE]>,
-    pub meta5: Option<[u8; META_FIELD_SIZE]>,
+    pub(crate) meta1: Option<[u8; META_FIELD_SIZE]>,
+    pub(crate) meta2: Option<[u8; META_FIELD_SIZE]>,
+    pub(crate) meta3: Option<[u8; META_FIELD_SIZE]>,
+    pub(crate) meta4: Option<[u8; META_FIELD_SIZE]>,
+    pub(crate) meta5: Option<[u8; META_FIELD_SIZE]>,
 
     /// The fee of the transaction
-    pub fee: Balance,
+    pub(crate) fee: Balance,
 
     // Nonce
-    pub nonce: u64,
+    pub(crate) nonce: u64,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub hash: Option<Hash>,
+    pub(crate) hash: Option<Hash>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub signature: Option<Signature>,
+    pub(crate) signature: Option<Signature>,
 }
 
 impl CreateUnique {
