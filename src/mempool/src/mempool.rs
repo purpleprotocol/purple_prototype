@@ -23,7 +23,7 @@ use account::{Address, Balance};
 use chrono::{DateTime, Utc};
 use hashbrown::{HashSet, HashMap};
 use transactions::Tx;
-use std::collections::BTreeMap;
+use std::collections::{VecDeque, BTreeMap};
 use crypto::Hash;
 use std::sync::Arc;
 
@@ -57,7 +57,7 @@ pub struct Mempool {
     /// 
     /// Each entry in the map is an ordered binary tree 
     /// map between transaction fees and transaction hashes.
-    fee_map: HashMap<Hash, BTreeMap<Balance, Hash>>,
+    fee_map: HashMap<Hash, BTreeMap<Balance, VecDeque<Hash>>>,
 
     /// Transaction dependency graph.
     dependency_graph: Graph<Hash>,
@@ -211,7 +211,58 @@ impl Mempool {
             return Err(MempoolErr::DoubleSpend);
         }
 
-        // TODO: Place tx in the dependency graph
+        let tx_fee = tx.fee();
+        let tx_fee_cur = tx.fee_hash();
+        let timestamp = Utc::now();
+
+        // Place transaction in respective mappings
+        self.tx_lookup.insert(tx_hash.clone(), tx.clone());
+        self.timestamp_lookup.insert(tx_hash.clone(), timestamp.clone());
+        self.timestamp_reverse_lookup.insert(timestamp, tx_hash.clone());
+        
+        // Place transaction in fee mappings
+        if let Some(cur_entry) = self.fee_map.get_mut(&tx_fee_cur) {
+            if let Some(fee_entry) = cur_entry.get_mut(&tx_fee) {
+                fee_entry.push_back(tx_hash.clone());
+            } else {
+                let mut fee_entry = VecDeque::new();
+
+                fee_entry.push_back(tx_hash.clone());
+                cur_entry.insert(tx_fee, fee_entry);
+            }
+        } else {
+            let mut cur_entry = BTreeMap::new();
+            let mut fee_entry = VecDeque::new();
+
+            fee_entry.push_back(tx_hash.clone());
+            cur_entry.insert(tx_fee, fee_entry);
+
+            self.fee_map.insert(tx_fee_cur, cur_entry);
+        }
+
+        // Place transaction in address mappings
+        if let Some(addr_entry) = self.address_mappings.get_mut(&tx_addr) {
+            addr_entry.insert(tx_nonce, tx_hash.clone());
+        } else {
+            let mut addr_entry = BTreeMap::new();
+            
+            addr_entry.insert(tx_nonce, tx_hash.clone());
+            self.address_mappings.insert(tx_addr, addr_entry);
+        }
+
+        // Place transaction in the dependency graph
+        // TODO: Construct dependency graph structure
+        let vertex_id = self.dependency_graph.add_vertex(tx_hash.clone());
+        self.vertex_id_lookup.insert(tx_hash, vertex_id);
+
+        Ok(())
+    }
+
+    /// Attempts to perform a prune on the transactions stored 
+    /// in the memory pool, removing the oldest transactions 
+    /// that have the lowest fees. The prune will be performed
+    /// only if the mempool is more than 80% full.
+    pub fn prune(&mut self) {
         unimplemented!();
     }
 
