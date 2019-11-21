@@ -132,6 +132,10 @@ impl Mempool {
     /// Removes the transaction with the given `Hash` from the 
     /// mempool and returns it. Returns `None` if there is no 
     /// such transaction in the mempool.
+    /// 
+    /// This operation will orphan any transactions that depend
+    /// on the given transaction. Use `Mempool::remove_branch()`
+    /// to remove any dependent transactions as well.
     pub fn remove(&mut self, tx_hash: &Hash) -> Option<Arc<Tx>> {
         let tx = self.tx_lookup.remove(tx_hash)?;
         let address = tx.creator_address();
@@ -182,6 +186,13 @@ impl Mempool {
 
         Some(tx)
     }   
+
+    /// Removes the transaction with the given `Hash` from the 
+    /// mempool and any dependent transactions and returns them. 
+    /// Returns `None` if there is no such transaction in the mempool.
+    pub fn remove_branch(&mut self, tx_hash: &Hash) -> Option<Vec<Arc<Tx>>> {
+        unimplemented!();
+    }
 
     /// Attempts to append a transaction to the mempool.
     pub fn append_tx(&mut self, tx: Arc<Tx>) -> Result<(), MempoolErr> {
@@ -262,6 +273,8 @@ impl Mempool {
     /// in the memory pool, removing the oldest transactions 
     /// that have the lowest fees. The prune will be performed
     /// only if the mempool is more than 80% full.
+    /// 
+    /// This operation is idempotent.
     pub fn prune(&mut self) {
         unimplemented!();
     }
@@ -277,4 +290,9 @@ impl Mempool {
 
         unimplemented!();
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 }
