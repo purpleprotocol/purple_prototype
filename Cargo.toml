@@ -7,11 +7,8 @@ publish = false
 [workspace]
 members = [
     "src/account",
-    "src/causality",
     "src/chain",
-    "src/consensus",
     "src/crypto",
-    "src/events",
     "src/jump",
     "src/miner",
     "src/network",
@@ -42,13 +39,11 @@ elastic-array = "0.10.0"
 jsonrpc-core = "9.0.0"
 jsonrpc-macros = "9.0.0"
 hashdb = "0.3.0"
-rocksdb = "0.12.2"
+rocksdb = "0.13.0"
 account = { path = "src/account" }
 purple_vm = { path = "src/purple_vm" }
 crypto = { path = "src/crypto" } 
 jump = { path = "src/jump" }
-events = { path = "src/events" }
-consensus = { path = "src/consensus" }
 persistence = { path = "src/persistence" }
 network = { path = "src/network" }
 transactions = { path = "src/transactions" }

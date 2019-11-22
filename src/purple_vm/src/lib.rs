@@ -32,20 +32,10 @@ extern crate serde_derive;
 #[macro_use]
 extern crate lazy_static;
 
-extern crate bitvec;
-extern crate byteorder;
-extern crate crypto;
-extern crate hashbrown;
-extern crate patricia_trie;
-extern crate persistence;
-extern crate rand;
-extern crate regex;
-extern crate rust_decimal;
-
-pub use code::*;
-pub use error::*;
-pub use gas::*;
-pub use virtual_machine::*;
+pub use crate::code::*;
+pub use crate::error::*;
+pub use crate::gas::*;
+pub use crate::virtual_machine::*;
 
 mod address;
 mod code;

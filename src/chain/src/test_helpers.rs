@@ -22,9 +22,6 @@ use crate::block::Block;
 use crate::pow_chain::block::*;
 use crate::pow_chain::chain::*;
 use crate::pow_chain::PowChainState;
-use crate::state_chain::block::*;
-use crate::state_chain::chain::*;
-use crate::state_chain::state::*;
 use account::NormalAddress;
 use crypto::{NodeId, Hash};
 use graphlib::{Graph, VertexId};
@@ -34,47 +31,33 @@ use parking_lot::RwLock;
 use rand::prelude::*;
 use std::sync::Arc;
 
-pub fn init_test_chains() -> (PowChainRef, StateChainRef) {
+pub fn init_test_chains() -> PowChainRef {
     let easy_db = test_helpers::init_tempdb();
     let pow_db = test_helpers::init_tempdb();
-    let state_db = test_helpers::init_tempdb();
-    let state_storage_db = test_helpers::init_tempdb();
     let pow_chain = Arc::new(RwLock::new(PowChain::new(
         pow_db,
         PowChainState::genesis(),
         true,
     )));
     let pow_chain_ref = PowChainRef::new(pow_chain);
-    let state_chain = Arc::new(RwLock::new(StateChain::new(
-        state_db,
-        ChainState::new(state_storage_db),
-        true,
-    ))); // TODO: Replace this with genesis state
-    let state_chain_ref = StateChainRef::new(state_chain);
 
-    (pow_chain_ref, state_chain_ref)
+    pow_chain_ref
 }
 
 /// Wrapper struct around a block test set
 #[derive(Clone, Debug)]
 pub struct BlockTestSet {
     pub pow_graph: Graph<Arc<PowBlock>>,
-    pub state_graph: Graph<Arc<StateBlock>>,
     pub pow_blocks: Vec<Arc<PowBlock>>,
-    pub state_blocks: Vec<Arc<StateBlock>>,
     pub pow_canonical: Arc<PowBlock>,
-    pub state_canonical: Arc<StateBlock>,
 }
 
 impl BlockTestSet {
     pub fn new() -> BlockTestSet {
         BlockTestSet {
             pow_graph: Graph::new(),
-            state_graph: Graph::new(),
             pow_blocks: Vec::new(),
-            state_blocks: Vec::new(),
             pow_canonical: PowBlock::genesis(),
-            state_canonical: StateBlock::genesis(),
         }
     }
 }
@@ -88,7 +71,6 @@ pub fn chain_test_set(
     depth: usize,
     fork_rate: u64,
     generate_byzantine: bool,
-    generate_state: bool,
 ) -> BlockTestSet {
     if depth < 5 {
         panic!("Invalid depth parameter! Minimum is 5.");
@@ -100,13 +82,11 @@ pub fn chain_test_set(
 
     let mut pow_chain_buf: Graph<Arc<PowBlock>> = Graph::new();
     let mut pow_canonical_tip: Option<VertexId> = None;
-    let mut state_chain_buf: Graph<Arc<StateBlock>> = Graph::new();
-    let mut state_canonical_tip: Option<VertexId> = None;
     let mut cur_pow_height: u64 = 0;
     let mut rng = rand::thread_rng();
 
     // For each iteration, generate one pow block and several easy
-    // blocks along with the associated state blocks.
+    // blocks.
     loop {
         // Stop at desired depth
         if cur_pow_height >= depth as u64 {
@@ -295,38 +275,22 @@ pub fn chain_test_set(
         if generate_byzantine {
             unimplemented!();
         }
-
-        // Generate state blocks
-        if generate_state {
-            unimplemented!();
-        }
     }
 
     // Assemble test set
     let mut test_set = BlockTestSet::new();
     let pow_ids: Vec<&VertexId> = pow_chain_buf.vertices().collect();
-    let state_ids: Vec<&VertexId> = state_chain_buf.vertices().collect();
 
     test_set.pow_blocks = pow_ids
         .iter()
         .map(|id| pow_chain_buf.fetch(id).unwrap().clone())
         .collect();
 
-    test_set.state_blocks = state_ids
-        .iter()
-        .map(|id| state_chain_buf.fetch(id).unwrap().clone())
-        .collect();
-
     if let Some(ref id) = pow_canonical_tip {
         test_set.pow_canonical = pow_chain_buf.fetch(id).unwrap().clone();
     }
 
-    if let Some(ref id) = state_canonical_tip {
-        test_set.state_canonical = state_chain_buf.fetch(id).unwrap().clone();
-    }
-
     test_set.pow_graph = pow_chain_buf;
-    test_set.state_graph = state_chain_buf;
 
     // The hard test set must have at least one block
     // which follows the genesis block.

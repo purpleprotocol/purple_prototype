@@ -24,7 +24,7 @@ use std::cell::RefCell;
 use std::sync::atomic::{Ordering, AtomicBool};
 use std::thread;
 use parking_lot::RwLock;
-use chain::{PowBlock, Block, PowChainRef, BlockWrapper};
+use chain::{PowBlock, Block, PowChainRef};
 use network::{Network, NetworkInterface};
 use network::packets::ForwardBlock;
 use network::Packet;
@@ -137,8 +137,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                             if let Ok(_) = result {
                                 debug!("Creating block...");
 
-                                let block_wrapper = BlockWrapper::from_pow_block(block);
-                                let packet = ForwardBlock::new(block_wrapper);
+                                let packet = ForwardBlock::new(block);
                                 let packet = packet.to_bytes();
 
                                 debug!("Pausing solvers...");

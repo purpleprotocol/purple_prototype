@@ -17,7 +17,7 @@
 */
 
 use crate::types::{BranchType, Flushable};
-use crate::{ChainErr, PowBlock, StateBlock};
+use crate::{ChainErr, PowBlock};
 use chrono::prelude::*;
 use crypto::Hash;
 use std::boxed::Box;
@@ -133,78 +133,4 @@ pub enum SwitchResult {
 
     /// The chain cannot ever be switched so it can be safely deleted.
     CannotEverSwitch,
-}
-
-/// Wrapper enum used **only** for serialization/deserialization
-#[derive(Clone, Debug, PartialEq)]
-pub enum BlockWrapper {
-    PowBlock(Arc<PowBlock>),
-    StateBlock(Arc<StateBlock>),
-}
-
-impl BlockWrapper {
-    pub fn from_pow_block(block: Arc<PowBlock>) -> Self {
-        BlockWrapper::PowBlock(block)
-    }
-
-    pub fn from_state_block(block: Arc<StateBlock>) -> Self {
-        BlockWrapper::StateBlock(block)
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Result<BlockWrapper, &'static str> {
-        let first_byte = bytes[0];
-
-        match first_byte {
-            PowBlock::BLOCK_TYPE => Ok(BlockWrapper::PowBlock(PowBlock::from_bytes(
-                bytes,
-            )?)),
-            StateBlock::BLOCK_TYPE => Ok(BlockWrapper::StateBlock(
-                StateBlock::from_bytes(bytes)?,
-            )),
-            _ => return Err("Invalid block type"),
-        }
-    }
-
-    pub fn to_bytes(&self) -> Vec<u8> {
-        match self {
-            BlockWrapper::PowBlock(block) => block.to_bytes(),
-            BlockWrapper::StateBlock(block) => block.to_bytes(),
-        }
-    }
-
-    pub fn block_hash(&self) -> Option<Hash> {
-        match self {
-            BlockWrapper::PowBlock(block) => block.block_hash(),
-            BlockWrapper::StateBlock(block) => block.block_hash(),
-        }
-    }
-}
-
-impl quickcheck::Arbitrary for BlockWrapper {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> BlockWrapper {
-        use rand::Rng;
-
-        let mut rng = rand::thread_rng();
-        let random = rng.gen_range(0, 2);
-
-        match random {
-            0 => BlockWrapper::PowBlock(quickcheck::Arbitrary::arbitrary(g)),
-            1 => BlockWrapper::StateBlock(quickcheck::Arbitrary::arbitrary(g)),
-            _ => panic!(),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use quickcheck::*;
-
-    quickcheck! {
-        fn wrapper_serialize_deserialize(block: BlockWrapper) -> bool {
-            BlockWrapper::from_bytes(&BlockWrapper::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
-
-            true
-        }
-    }
 }

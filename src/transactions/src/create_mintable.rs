@@ -16,9 +16,9 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::create_currency::CUR_GROUP_CAPACITY;
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use create_currency::CUR_GROUP_CAPACITY;
 use crypto::{Hash, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};

@@ -598,10 +598,10 @@ impl Arbitrary for Mint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CreateMintable;
+    use crate::create_currency::CreateCurrency;
     use account::NormalAddress;
-    use create_currency::CreateCurrency;
     use crypto::Identity;
-    use CreateMintable;
 
     #[test]
     fn validate() {

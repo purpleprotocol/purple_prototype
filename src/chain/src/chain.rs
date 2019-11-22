@@ -6936,7 +6936,7 @@ mod tests {
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             (C.height(), C.block_hash().unwrap())
-        );;
+        );
 
         pow_chain.append_block(B.clone()).unwrap();
         let C_second_ih = pow_chain

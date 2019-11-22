@@ -16,10 +16,10 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::instruction_set::{Instruction, CT_FLOW_OPS};
+use crate::primitives::r#type::VmType;
+use crate::stack::Stack;
 use bitvec::Bits;
-use instruction_set::{Instruction, CT_FLOW_OPS};
-use primitives::r#type::VmType;
-use stack::Stack;
 
 #[derive(Clone, Debug)]
 pub struct Function {

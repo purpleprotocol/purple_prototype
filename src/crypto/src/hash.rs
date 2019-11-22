@@ -17,7 +17,7 @@
 */
 
 use blake2_rfc::blake2b::blake2b;
-use blake_hasher::BlakeHasher;
+use crate::blake_hasher::BlakeHasher;
 use crc32fast::Hasher as CrcHasher;
 use hashdb::Hasher;
 use quickcheck::Arbitrary;

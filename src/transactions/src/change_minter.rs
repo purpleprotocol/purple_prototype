@@ -22,7 +22,7 @@ use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
-use CreateMintable;
+use crate::CreateMintable;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ChangeMinter {

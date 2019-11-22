@@ -16,14 +16,14 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::code::transition::Transition;
+use crate::frame::Frame;
+use crate::instruction_set::OPS_LIST;
+use crate::instruction_set::{Instruction, CT_FLOW_OPS};
+use crate::primitives::control_flow::CfOperator;
+use crate::primitives::r#type::VmType;
+use crate::stack::Stack;
 use bitvec::Bits;
-use code::transition::Transition;
-use frame::Frame;
-use instruction_set::OPS_LIST;
-use instruction_set::{Instruction, CT_FLOW_OPS};
-use primitives::control_flow::CfOperator;
-use primitives::r#type::VmType;
-use stack::Stack;
 
 /// Maximum allowed operands.
 const OPERAND_STACK_SIZE: usize = 1024;

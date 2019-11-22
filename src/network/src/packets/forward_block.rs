@@ -21,7 +21,7 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use chain::{Block, BlockWrapper};
+use chain::{Block, PowBlock};
 use crypto::NodeId;
 use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
@@ -30,11 +30,11 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ForwardBlock {
-    block: BlockWrapper,
+    block: Arc<PowBlock>,
 }
 
 impl ForwardBlock {
-    pub fn new(block: BlockWrapper) -> ForwardBlock {
+    pub fn new(block: Arc<PowBlock>) -> ForwardBlock {
         ForwardBlock { block }
     }
 }
@@ -83,7 +83,7 @@ impl Packet for ForwardBlock {
         let _: Vec<u8> = buf.drain(..5).collect();
 
         let block = if buf.len() == block_len as usize {
-            match BlockWrapper::from_bytes(&buf) {
+            match PowBlock::from_bytes(&buf) {
                 Ok(result) => result,
                 _ => return Err(NetworkErr::BadFormat),
             }
@@ -102,50 +102,26 @@ impl Packet for ForwardBlock {
         packet: &ForwardBlock,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        match packet.block {
-            BlockWrapper::PowBlock(ref block) => {
-                info!("Received POW block with hash {} and height {}", block.block_hash().unwrap(), block.height());
+        let block = &packet.block;
 
-                let pow_chain = network.pow_chain_ref();
+        info!("Received POW block with hash {} and height {}", block.block_hash().unwrap(), block.height());
 
-                // Do not push block to queue if we already
-                // have it stored in the chain.
-                if pow_chain.query(&block.block_hash().unwrap()).is_some() {
-                    Ok(())
-                } else {
-                    let mut sender = network.pow_chain_sender().clone();
+        let pow_chain = network.pow_chain_ref();
 
-                    #[cfg(not(test))]
-                    sender.try_send((addr.clone(), block.clone())).unwrap();
+        // Do not push block to queue if we already
+        // have it stored in the chain.
+        if pow_chain.query(&block.block_hash().unwrap()).is_some() {
+            Ok(())
+        } else {
+            let mut sender = network.pow_chain_sender().clone();
 
-                    #[cfg(test)]
-                    sender.send((addr.clone(), block.clone())).unwrap();
+            #[cfg(not(test))]
+            sender.try_send((addr.clone(), block.clone())).unwrap();
 
-                    Ok(())
-                }
-            }
+            #[cfg(test)]
+            sender.send((addr.clone(), block.clone())).unwrap();
 
-            BlockWrapper::StateBlock(ref block) => {
-                info!("Received state block with hash {} and height {}", block.block_hash().unwrap(), block.height());
-
-                let state_chain = network.state_chain_ref();
-
-                // Do not push block to queue if we already
-                // have it stored in the chain.
-                if state_chain.query(&block.block_hash().unwrap()).is_some() {
-                    Ok(())
-                } else {
-                    let mut sender = network.state_chain_sender().clone();
-
-                    #[cfg(not(test))]
-                    sender.try_send((addr.clone(), block.clone())).unwrap();
-
-                    #[cfg(test)]
-                    sender.send((addr.clone(), block.clone())).unwrap();
-
-                    Ok(())
-                }
-            }
+            Ok(())
         }
     }
 }

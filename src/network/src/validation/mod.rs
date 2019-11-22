@@ -33,4 +33,3 @@
 pub mod receiver;
 pub mod sender;
 pub mod validator;
-pub mod pool_validator;

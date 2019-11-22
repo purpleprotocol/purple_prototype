@@ -16,9 +16,9 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use address::Address;
-use primitives::control_flow::CfOperator;
-use stack::Stack;
+use crate::address::Address;
+use crate::primitives::control_flow::CfOperator;
+use crate::stack::Stack;
 use std::fmt;
 
 #[derive(Debug, Clone)]

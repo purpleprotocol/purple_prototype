@@ -16,14 +16,12 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::common;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::network::Network;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
-use crate::packets::connect_pool::ConnectPool;
-use crate::peer::{ConnectionType, SubConnectionType, Peer, OUTBOUND_BUF_SIZE};
+use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
 use crate::validation::sender::Sender;
 use persistence::PersistentDb;
 use crypto::{Nonce, Signature};
@@ -85,12 +83,11 @@ pub fn connect_to_peer(
     network: Network,
     accept_connections: Arc<AtomicBool>,
     addr: &SocketAddr,
-    connection_type: SubConnectionType,
 ) -> Spawn {
     let connect = TcpStream::connect(addr)
         .map_err(|e| warn!("connect failed = {:?}", e))
         .and_then(move |sock| {
-            process_connection(network, sock, accept_connections, ConnectionType::Client(connection_type))
+            process_connection(network, sock, accept_connections, ConnectionType::Client)
         });
 
     tokio::spawn(connect)
@@ -112,8 +109,7 @@ fn process_connection(
     let addr = sock.get_ref().peer_addr().unwrap();
 
     match client_or_server {
-        ConnectionType::Client(SubConnectionType::Normal) => info!("Connecting to {}", addr),
-        ConnectionType::Client(SubConnectionType::Validator(_)) => info!("Connecting to validator {}", addr),
+        ConnectionType::Client => info!("Connecting to {}", addr),
         ConnectionType::Server => info!("Received connection request from {}", addr),
     };
 
@@ -154,32 +150,15 @@ fn process_connection(
                 if let Some(peer) = peers.get(&addr) {
                     // Write a connect packet if we are the client.
                     match client_or_server {
-                        ConnectionType::Client(SubConnectionType::Normal) => {
+                        ConnectionType::Client => {
                             // Send `Connect` packet.
                             let mut connect = Connect::new(node_id.clone(), peer.pk);
                             connect.sign(&skey);
 
                             let packet = connect.to_bytes();
                             let packet =
-                                crate::common::wrap_packet(&packet, network.network_name.as_str(), false);
+                                crate::common::wrap_packet(&packet, network.network_name.as_str());
                             debug!("Sending connect packet to {}", addr);
-
-                            writer
-                                .poll_write(&packet)
-                                .map_err(|err| warn!("write failed = {:?}", err))
-                                .and_then(|_| Ok(()))
-                                .unwrap_or(());
-                        }
-
-                        ConnectionType::Client(SubConnectionType::Validator(block_hash)) => {
-                            // Send `ConnectPool` packet.
-                            let mut connect = ConnectPool::new(node_id.clone(), peer.pk, block_hash);
-                            connect.sign(&skey);
-
-                            let packet = connect.to_bytes();
-                            let packet =
-                                crate::common::wrap_packet(&packet, network.network_name.as_str(), true);
-                            debug!("Sending connect pool packet to {}", addr);
 
                             writer
                                 .poll_write(&packet)
@@ -229,10 +208,10 @@ fn process_connection(
         .take_while(move |_| ok(!refuse_connection_clone.load(Ordering::Relaxed)))
         .fold((reader, network.clone()), move |(reader, network), _| {
             // Read header
-            let line = io::read_exact(reader, vec![0; common::HEADER_SIZE]) // TODO: Find a way to not allocate a buffer for each packet
+            let line = io::read_exact(reader, vec![0; crate::common::HEADER_SIZE]) // TODO: Find a way to not allocate a buffer for each packet
                 // Decode header
                 .and_then(move |(reader, buffer)| {
-                    let header = common::decode_header(&buffer).map_err(|err| { // TODO: Handle header read error
+                    let header = crate::common::decode_header(&buffer).map_err(|err| { // TODO: Handle header read error
                         io::Error::new(
                             io::ErrorKind::Other,
                             format!("Header read error for {}: {:?}", addr, err),
@@ -240,7 +219,7 @@ fn process_connection(
                     })?;
 
                     // Only accept our current network version
-                    if header.network_version != common::NETWORK_VERSION {
+                    if header.network_version != crate::common::NETWORK_VERSION {
                         return Err(io::Error::new( // TODO: Handle header read error
                             io::ErrorKind::Other,
                             format!(
@@ -260,7 +239,7 @@ fn process_connection(
                 })
                 // Verify crc32 checksum
                 .and_then(move |(reader, network, header, buffer)| {
-                    common::verify_crc32(&header, &buffer, network.network_name.as_str()).map_err(
+                    crate::common::verify_crc32(&header, &buffer, network.network_name.as_str()).map_err(
                         |err| {
                             io::Error::new( // TODO: Handle header read error
                                 io::ErrorKind::Other,
@@ -306,7 +285,7 @@ fn process_connection(
                                 }
 
                                 // Decrypt payload
-                                buf = common::decrypt(packet_slice, &nonce, peer.tx.as_ref().unwrap())
+                                buf = crate::common::decrypt(packet_slice, &nonce, peer.tx.as_ref().unwrap())
                                     .map_err(|_| {
                                         io::Error::new( // TODO: Handle encryption error
                                             io::ErrorKind::Other,
@@ -341,29 +320,7 @@ fn process_connection(
             let refuse_connection = refuse_connection.clone();
 
             line.map(move |(reader, mut network, header, message)| {
-                let result = if header.is_pool_packet {
-                    #[cfg(feature = "miner")]
-                    {
-                        let pool_network = {
-                            let pool_ref = network.current_pool.read();
-                            (*pool_ref).clone()
-                        };
-
-                        if let Some(mut pool_network) = pool_network {
-                            pool_network.process_packet(&addr, &message)
-                        } else {
-                            Err(NetworkErr::NoPoolSession)
-                        }
-                    }
-
-                    #[cfg(not(feature = "miner"))]
-                    {
-                        Err(NetworkErr::NoPoolSession)
-                    }
-                } else {
-                    network.process_packet(&addr, &message)
-                };
-
+                let result = network.process_packet(&addr, &message);
                 (reader, network, result)
             })
             .map(move |(reader, network, result)| {

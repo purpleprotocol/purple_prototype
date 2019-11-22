@@ -20,7 +20,7 @@ use std::cmp::{Ordering, PartialOrd};
 use std::fmt;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub};
 use std::{f32, f64};
-use VmError;
+use crate::VmError;
 
 // TODO: When the const generics feature (https://github.com/rust-lang/rfcs/blob/master/text/2000-const-generics.md) 
 // gets to a stable version remove the conversions done on arrays with length greather than 32

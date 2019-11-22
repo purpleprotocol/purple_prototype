@@ -18,8 +18,6 @@
 
 use crate::pow_chain::chain::*;
 use crate::pow_chain::PowChainState;
-use crate::state_chain::chain::*;
-use crate::state_chain::state::ChainState;
 use lazy_static::*;
 use parking_lot::RwLock;
 use persistence::PersistentDb;
@@ -30,23 +28,21 @@ use std::cell::RefCell;
 
 #[cfg(not(feature = "test"))]
 lazy_static! {
-    static ref CHAIN_REFS: Arc<RwLock<Option<(PowChainRef, StateChainRef)>>> =
+    static ref CHAIN_REF: Arc<RwLock<Option<PowChainRef>>> =
         Arc::new(RwLock::new(None));
 }
 
 #[cfg(feature = "test")]
 thread_local! {
-    static CHAIN_REFS: RefCell<Option<(PowChainRef, StateChainRef)>> = RefCell::new(None);
+    static CHAIN_REF: RefCell<Option<PowChainRef>> = RefCell::new(None);
 }
 
 #[cfg(not(feature = "test"))]
 /// Init chain module. Call this before any other function.
 pub fn init(
     pow_chain_db: PersistentDb,
-    state_chain_db: PersistentDb,
-    state_db: PersistentDb,
     archival_mode: bool,
-) -> (PowChainRef, StateChainRef) {
+) -> PowChainRef {
     let pow_chain = Arc::new(RwLock::new(PowChain::new(
         pow_chain_db,
         PowChainState::genesis(),
@@ -61,8 +57,8 @@ pub fn init(
     let pow_chain = PowChainRef::new(pow_chain);
     let state_chain = StateChainRef::new(state_chain);
 
-    let mut refs = CHAIN_REFS.write();
-    *refs = Some((easy_chain.clone(), pow_chain.clone(), state_chain.clone()));
+    let mut chain_ref = CHAIN_REF.write();
+    *chain_ref = Some((easy_chain.clone(), pow_chain.clone(), state_chain.clone()));
 
     (pow_chain, state_chain)
 }
@@ -70,78 +66,52 @@ pub fn init(
 #[cfg(feature = "test")]
 pub fn init(
     pow_chain_db: PersistentDb,
-    state_chain_db: PersistentDb,
-    state_db: PersistentDb,
     archival_mode: bool,
-) -> (PowChainRef, StateChainRef) {
+) -> PowChainRef {
     let pow_chain = Arc::new(RwLock::new(PowChain::new(
         pow_chain_db,
         PowChainState::genesis(),
         archival_mode,
     )));
-    let state_chain = Arc::new(RwLock::new(StateChain::new(
-        state_chain_db,
-        ChainState::new(state_db),
-        archival_mode,
-    )));
 
     let pow_chain = PowChainRef::new(pow_chain);
-    let state_chain = StateChainRef::new(state_chain);
 
-    CHAIN_REFS.with(|refs| {
-        let mut refs = refs.borrow_mut();
-        *refs = Some((pow_chain.clone(), state_chain.clone()));
+    CHAIN_REF.with(|chain_ref| {
+        let mut chain_ref = chain_ref.borrow_mut();
+        *chain_ref = Some(pow_chain.clone());
     });
 
-    (pow_chain, state_chain)
+    pow_chain
 }
 
 #[cfg(not(feature = "test"))]
-pub fn chain_refs() -> (PowChainRef, StateChainRef) {
-    let refs = CHAIN_REFS.read();
-    refs.clone().unwrap()
+pub fn chain_ref() -> PowChainRef {
+    let chain_ref = CHAIN_REF.read();
+    chain_ref.clone().unwrap()
 }
 
 #[cfg(feature = "test")]
-pub fn chain_refs() -> (PowChainRef, StateChainRef) {
-    CHAIN_REFS.with(|refs| {
-        let refs = refs.borrow();
-        refs.clone().unwrap()
+pub fn chain_ref() -> PowChainRef {
+    CHAIN_REF.with(|chain_ref| {
+        let chain_ref = chain_ref.borrow();
+        chain_ref.clone().unwrap()
     })
 }
 
 #[cfg(not(feature = "test"))]
 pub fn pow_chain_ref() -> PowChainRef {
-    let refs = CHAIN_REFS.read();
-    let (pow_ref, _) = refs.clone().unwrap();
+    let chain_ref = CHAIN_REF.read();
+    let (pow_ref, _) = chain_ref.clone().unwrap();
 
     pow_ref
 }
 
 #[cfg(feature = "test")]
 pub fn pow_chain_ref() -> PowChainRef {
-    CHAIN_REFS.with(|refs| {
-        let refs = refs.borrow();
-        let (pow_ref, _) = refs.clone().unwrap();
+    CHAIN_REF.with(|chain_ref| {
+        let chain_ref = chain_ref.borrow();
+        let pow_ref = chain_ref.clone().unwrap();
 
         pow_ref
-    })
-}
-
-#[cfg(not(feature = "test"))]
-pub fn state_chain_ref() -> StateChainRef {
-    let refs = CHAIN_REFS.read();
-    let (_, _, state_ref) = refs.clone().unwrap();
-
-    state_ref
-}
-
-#[cfg(feature = "test")]
-pub fn state_chain_ref() -> StateChainRef {
-    CHAIN_REFS.with(|refs| {
-        let refs = refs.borrow();
-        let (_, state_ref) = refs.clone().unwrap();
-
-        state_ref
     })
 }
