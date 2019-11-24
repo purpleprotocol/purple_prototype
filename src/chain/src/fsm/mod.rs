@@ -16,41 +16,5 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(non_snake_case, unused)]
-
-#[macro_use]
-extern crate log;
-
-mod block;
-mod chain;
-mod pow_chain;
-mod init;
-mod types;
-mod fsm;
-
-#[cfg(test)]
-mod test_helpers;
-
-pub use crate::chain::*;
-pub use crate::block::*;
-pub use crate::pow_chain::block::*;
-pub use crate::pow_chain::chain::*;
-pub use crate::init::*;
-
-#[cfg(test)]
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-
-#[cfg(test)]
-use rand::prelude::*;
-
-#[cfg(test)]
-pub fn random_socket_addr() -> SocketAddr {
-    let mut thread_rng = rand::thread_rng();
-    let i1 = thread_rng.gen();
-    let i2 = thread_rng.gen();
-    let i3 = thread_rng.gen();
-    let i4 = thread_rng.gen();
-
-    let addr = IpAddr::V4(Ipv4Addr::new(i1, i2, i3, i4));
-    SocketAddr::new(addr, 44034)
-}
+mod branch_fsm;
+pub use self::branch_fsm::*;

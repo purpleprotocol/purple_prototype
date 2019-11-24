@@ -18,6 +18,7 @@
 
 use crate::types::{BranchType, Flushable};
 use crate::{ChainErr, PowBlock};
+use crate::fsm::BranchFsm;
 use chrono::prelude::*;
 use crypto::Hash;
 use std::boxed::Box;
@@ -27,9 +28,12 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 /// Generic block interface
-pub trait Block: Debug + PartialEq + Eq + HashTrait {
+pub trait Block: Debug + PartialEq + Eq + HashTrait + Sized {
     /// Per tip validation state
     type ChainState: Clone + Debug + Flushable + PartialEq;
+
+    /// Finite state machine used to validate chain branches
+    type BranchValidator: BranchFsm<Self>;
 
     /// Size of the block cache.
     const BLOCK_CACHE_SIZE: usize = 20;
@@ -109,28 +113,9 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait {
         branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr>;
 
-    /// A switch condition determines if a non-canonical chain can become
-    /// canonical based on the associated chain state.
-    fn switch_condition(_tip: Arc<Self>, _chain_state: Self::ChainState) -> SwitchResult {
-        SwitchResult::Switch
-    }
-
     /// Serializes the block.
     fn to_bytes(&self) -> Vec<u8>;
 
     /// Deserializes the block
     fn from_bytes(bytes: &[u8]) -> Result<Arc<Self>, &'static str>;
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum SwitchResult {
-    /// Proceed with switching chains.
-    Switch,
-
-    /// The chain will not be switched but it might be able
-    /// to in the future.
-    MayBeAbleToSwitch,
-
-    /// The chain cannot ever be switched so it can be safely deleted.
-    CannotEverSwitch,
 }

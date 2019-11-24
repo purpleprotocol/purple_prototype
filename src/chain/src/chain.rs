@@ -564,53 +564,6 @@ impl<B: Block> Chain<B> {
         self.db.get(block_hash).is_some()
     }
 
-    /// Returns true if the chain has buffered switch requests.
-    pub fn has_switch_requests(&self) -> bool {
-        !self.switch_requests.is_empty()
-    }
-
-    /// Attempts to flush the switch request buffer, potentially
-    /// yielding a new canonical chain.
-    ///
-    /// This must be called externally.
-    pub fn flush_switch_buffer(&mut self) {
-        let mut greatest_height = None;
-        let mut greatest_tip = None;
-
-        for tip_hash in self.switch_requests.iter() {
-            let tip = self.orphan_pool.get(tip_hash).unwrap();
-            let tip_state = self.valid_tips_states.get(tip_hash).unwrap();
-            let condition_result = B::switch_condition(tip.clone(), tip_state.clone().inner());
-
-            match condition_result {
-                SwitchResult::CannotEverSwitch => {
-                    // TODO: Delete branch
-                    unimplemented!();
-                }
-
-                SwitchResult::MayBeAbleToSwitch => {
-                    // Do nothing
-                }
-
-                SwitchResult::Switch => {
-                    if let Some(height) = greatest_height {
-                        if tip.height() > height {
-                            greatest_height = Some(tip.height());
-                            greatest_tip = Some(tip.clone());
-                        }
-                    } else {
-                        greatest_height = Some(tip.height());
-                        greatest_tip = Some(tip.clone());
-                    }
-                }
-            }
-        }
-
-        if let Some(tip) = greatest_tip {
-            self.switch(tip);
-        }
-    }
-
     fn update_max_orphan_height(&mut self, new_height: u64) {
         if self.max_orphan_height.is_none() {
             self.max_orphan_height = Some(new_height);
@@ -1046,26 +999,7 @@ impl<B: Block> Chain<B> {
             .is_none());
 
         if candidate_tip.height() > self.height + B::SWITCH_OFFSET as u64 {
-            let candidate_tip_state = self.valid_tips_states.get(&candidate_hash).unwrap();
-            let condition_result =
-                B::switch_condition(candidate_tip.clone(), candidate_tip_state.clone().inner());
-
-            match condition_result {
-                SwitchResult::CannotEverSwitch => {
-                    self.switch_requests.remove(&candidate_hash);
-
-                    // TODO: Clean up branch
-                }
-
-                SwitchResult::MayBeAbleToSwitch => {
-                    // Buffer switch for later check
-                    self.switch_requests.insert(candidate_hash.clone());
-                }
-
-                SwitchResult::Switch => {
-                    self.switch(candidate_tip);
-                }
-            }
+            self.switch(candidate_tip);
         }
     }
 
