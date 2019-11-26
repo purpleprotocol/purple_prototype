@@ -296,9 +296,6 @@ pub struct Chain<B: Block> {
     /// Validation states associated with the valid tips
     valid_tips_states: HashMap<Hash, UnflushedChainState<B::ChainState>>,
 
-    /// Buffer storing requests for switching chains
-    switch_requests: HashSet<Hash>,
-
     /// Whether the chain is in archival mode or not
     archival_mode: bool,
 }
@@ -425,7 +422,6 @@ impl<B: Block> Chain<B> {
             disconnected_tips_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
             valid_tips: HashSet::with_capacity(B::MAX_ORPHANS),
             valid_tips_states: HashMap::with_capacity(B::MAX_ORPHANS),
-            switch_requests: HashSet::with_capacity(B::MAX_ORPHANS),
             max_orphan_height: None,
             archival_mode,
             height,
@@ -1005,9 +1001,6 @@ impl<B: Block> Chain<B> {
 
     fn switch(&mut self, candidate_tip: Arc<B>) {
         let candidate_hash = candidate_tip.block_hash().unwrap();
-
-        self.switch_requests.remove(&candidate_hash);
-
         let mut to_write: VecDeque<Arc<B>> = VecDeque::new();
         to_write.push_front(candidate_tip.clone());
 
@@ -2079,8 +2072,9 @@ impl<B: Block> Chain<B> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
+    use crate::pow_chain::branch_validator::BValidator;
     use byteorder::WriteBytesExt;
     use chrono::prelude::*;
     use quickcheck::*;
@@ -2113,7 +2107,7 @@ mod tests {
     static NONCE: AtomicUsize = AtomicUsize::new(0);
 
     #[derive(Clone, PartialEq, Debug)]
-    struct DummyState(pub u64);
+    pub struct DummyState(pub u64);
 
     impl DummyState {
         pub fn new(height: u64) -> DummyState {
@@ -2137,7 +2131,7 @@ mod tests {
 
     #[derive(Clone, Debug)]
     /// Dummy block used for testing
-    struct DummyBlock {
+    pub struct DummyBlock {
         hash: Hash,
         parent_hash: Hash,
         height: u64,
@@ -2176,6 +2170,7 @@ mod tests {
 
     impl Block for DummyBlock {
         type ChainState = DummyState;
+        type BranchValidator = BValidator;
 
         fn genesis() -> Arc<Self> {
             let genesis = DummyBlock {

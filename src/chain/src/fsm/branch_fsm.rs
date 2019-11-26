@@ -19,15 +19,16 @@
 use crate::chain::ChainErr;
 use crate::block::Block;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 /// General trait for describing a finite-state machine
 /// used for chain branch validations.
-pub trait BranchFsm<B: Block>: Clone + Debug {
+pub trait BranchFsm<B: Block>: Clone + Debug + Default {
     type State: FsmState;
 
     /// Attempts to mutate the state of the finite-state machine,
     /// returning a reference to the new state if successful.
-    fn mutate_state(&mut self, block: B) -> Result<&Self::State, ChainErr>;
+    fn mutate_state(&mut self, block: Arc<B>) -> Result<&Self::State, ChainErr>;
 
     /// Retrieves a reference to the current state of the finite-state-machine
     fn get_state(&self) -> &Self::State;

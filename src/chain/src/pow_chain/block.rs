@@ -21,6 +21,7 @@ use crate::chain::*;
 use crate::pow_chain::PowChainState;
 use crate::pow_chain::validator_entry::ValidatorEntry;
 use crate::types::*;
+use crate::pow_chain::branch_validator::BValidator;
 use hashbrown::HashSet;
 use account::NormalAddress;
 use crypto::{NodeId, Signature, SecretKey as Sk};
@@ -123,6 +124,7 @@ impl HashTrait for PowBlock {
 
 impl Block for PowBlock {
     type ChainState = PowChainState;
+    type BranchValidator = BValidator;
 
     fn genesis() -> Arc<PowBlock> {
         GENESIS_RC.clone()

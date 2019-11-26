@@ -28,36 +28,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::timer::Interval;
 
-/// Time in milliseconds to poll chains for buffered switch requests.
-const SWITCH_POLL_INTERVAL: u64 = 1;
-
-/// Starts a loop for each chain that will attempt
-/// to perform buffered chain switches.
-pub fn start_chain_switch_poll(pow_chain: PowChainRef) {
-    let pow_interval_fut =
-        Interval::new(Instant::now(), Duration::from_millis(SWITCH_POLL_INTERVAL))
-            .fold(pow_chain, |pow_chain, _| {
-                let has_switch_requests = {
-                    let chain = pow_chain.chain.read();
-                    chain.has_switch_requests()
-                };
-
-                // Flush buffer only if the chain has switch requests
-                //
-                // TODO: Rate limit this
-                if has_switch_requests {
-                    let mut chain = pow_chain.chain.write();
-                    chain.flush_switch_buffer();
-                }
-
-                ok(pow_chain)
-            })
-            .map_err(|e| warn!("Pow switch poll err: {:?}", e))
-            .and_then(|_| ok(()));
-
-    tokio::spawn(pow_interval_fut);
-}
-
 /// Listens for blocks on chain receivers and
 /// forwards them to their respective chains.
 pub fn start_block_listeners(

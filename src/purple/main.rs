@@ -224,8 +224,6 @@ fn main() {
 
     // Start the tokio runtime
     runtime.spawn(ok(()).and_then(move |_| {
-        start_chain_switch_poll(pow_chain.clone());
-
         // Start listening for blocks
         start_block_listeners(network.clone(), pow_chain.clone(), pow_rx);
 
