@@ -17,10 +17,9 @@
 */
 
 pub mod block;
+pub mod checkpoint_block;
+pub mod transaction_block;
 pub mod chain;
 pub mod chain_state;
-pub mod validator_entry;
-pub mod epoch_info;
-pub mod branch_validator;
 
 pub use self::chain_state::*;

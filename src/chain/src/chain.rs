@@ -2074,7 +2074,6 @@ impl<B: Block> Chain<B> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::pow_chain::branch_validator::BValidator;
     use byteorder::WriteBytesExt;
     use chrono::prelude::*;
     use quickcheck::*;
@@ -2170,7 +2169,6 @@ pub mod tests {
 
     impl Block for DummyBlock {
         type ChainState = DummyState;
-        type BranchValidator = BValidator;
 
         fn genesis() -> Arc<Self> {
             let genesis = DummyBlock {
@@ -2205,10 +2203,6 @@ pub mod tests {
 
         fn height(&self) -> u64 {
             self.height
-        }
-
-        fn address(&self) -> Option<&SocketAddr> {
-            Some(&self.ip)
         }
 
         fn after_write() -> Option<Box<dyn FnMut(Arc<Self>)>> {

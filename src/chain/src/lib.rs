@@ -26,7 +26,6 @@ mod chain;
 mod pow_chain;
 mod init;
 mod types;
-mod fsm;
 
 #[cfg(test)]
 mod test_helpers;

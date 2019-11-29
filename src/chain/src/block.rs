@@ -18,7 +18,6 @@
 
 use crate::types::{BranchType, Flushable};
 use crate::{ChainErr, PowBlock};
-use crate::fsm::BranchFsm;
 use chrono::prelude::*;
 use crypto::Hash;
 use std::boxed::Box;
@@ -31,9 +30,6 @@ use std::sync::Arc;
 pub trait Block: Debug + PartialEq + Eq + HashTrait + Sized {
     /// Per tip validation state
     type ChainState: Clone + Debug + Flushable + PartialEq;
-
-    /// Finite state machine used to validate chain branches
-    type BranchValidator: BranchFsm<Self>;
 
     /// Size of the block cache.
     const BLOCK_CACHE_SIZE: usize = 20;
@@ -96,9 +92,6 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait + Sized {
 
     /// Returns the height of the block.
     fn height(&self) -> u64;
-
-    /// Returns the ip of the block's miner
-    fn address(&self) -> Option<&SocketAddr>;
 
     /// Callback that executes after a block is written to a chain.
     fn after_write() -> Option<Box<dyn FnMut(Arc<Self>)>>;
