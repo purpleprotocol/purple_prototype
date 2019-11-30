@@ -32,6 +32,7 @@ mod test_helpers;
 
 pub use crate::chain::*;
 pub use crate::block::*;
+pub use crate::pow_chain::*;
 pub use crate::pow_chain::block::*;
 pub use crate::pow_chain::chain::*;
 pub use crate::init::*;

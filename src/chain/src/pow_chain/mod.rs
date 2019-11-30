@@ -23,3 +23,5 @@ pub mod chain;
 pub mod chain_state;
 
 pub use self::chain_state::*;
+pub use self::checkpoint_block::*;
+pub use self::transaction_block::*;

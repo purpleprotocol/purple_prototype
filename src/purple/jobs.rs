@@ -24,7 +24,7 @@ use std::cell::RefCell;
 use std::sync::atomic::{Ordering, AtomicBool};
 use std::thread;
 use parking_lot::RwLock;
-use chain::{PowBlock, Block, PowChainRef};
+use chain::{PowBlock, CheckpointBlock, Block, PowChainRef};
 use network::{Network, NetworkInterface};
 use network::packets::ForwardBlock;
 use network::Packet;
@@ -118,7 +118,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                             let node_id = network.our_node_id().clone();
 
                             // Create block
-                            let mut block = PowBlock::new(
+                            let mut block = CheckpointBlock::new(
                                 tip.block_hash(), 
                                 collector_address,
                                 ip,
@@ -128,6 +128,8 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                             );
                             block.sign_miner(network.secret_key());
                             block.compute_hash();
+                            let block = Arc::new(block);
+                            let block = PowBlock::Checkpoint(block);
                             let block = Arc::new(block);
 
                             // Append block to our chain
