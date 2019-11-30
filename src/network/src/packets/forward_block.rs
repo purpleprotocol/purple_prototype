@@ -45,15 +45,14 @@ impl Packet for ForwardBlock {
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
         let packet_type: u8 = Self::PACKET_TYPE;
-
         let block = self.block.to_bytes();
 
         // Packet structure:
         // 1) Packet type(6)   - 8bits
-        // 2) Block length     - 32bits
+        // 2) Block length     - 16bits
         // 3) Block            - Binary of block length
         buffer.write_u8(packet_type).unwrap();
-        buffer.write_u32::<BigEndian>(block.len() as u32).unwrap();
+        buffer.write_u16::<BigEndian>(block.len() as u16).unwrap();
         buffer.extend_from_slice(&block);
         buffer
     }
@@ -72,7 +71,7 @@ impl Packet for ForwardBlock {
 
         rdr.set_position(1);
 
-        let block_len = if let Ok(result) = rdr.read_u32::<BigEndian>() {
+        let block_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
         } else {
             return Err(NetworkErr::BadFormat);
@@ -80,7 +79,7 @@ impl Packet for ForwardBlock {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..5).collect();
+        let _: Vec<u8> = buf.drain(..3).collect();
 
         let block = if buf.len() == block_len as usize {
             match PowBlock::from_bytes(&buf) {
@@ -92,7 +91,6 @@ impl Packet for ForwardBlock {
         };
 
         let packet = ForwardBlock { block };
-
         Ok(Arc::new(packet))
     }
 

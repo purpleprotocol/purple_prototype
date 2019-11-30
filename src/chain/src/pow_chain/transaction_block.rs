@@ -20,7 +20,9 @@ use crate::block::Block;
 use crate::chain::*;
 use crate::pow_chain::PowChainState;
 use crate::types::*;
+use transactions::Tx;
 use hashbrown::HashSet;
+use parking_lot::RwLock;
 use account::NormalAddress;
 use crypto::{NodeId, Signature, SecretKey as Sk};
 use bin_tools::*;
@@ -39,20 +41,9 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
-/// The minimum number of validators that can be in a pool
-/// at a given time. If there are less validators available
-/// they will be buffered until this number is reached after
-/// which a pool session can be started.
-pub const PENDING_VAL_BUF_SIZE: u64 = 10;
-
-/// The maximum amount of validators that can be active at the same time.
-/// If more validators are available, they will be buffered until other 
-/// validators leave the pool.
-pub const MAX_POOL_SIZE: u64 = 60;
-
 #[derive(Clone, Debug)]
 /// A block belonging to the `PowChain`.
-pub struct CheckpointBlock {
+pub struct TransactionBlock {
     /// The height of the block.
     height: u64,
 
@@ -69,18 +60,19 @@ pub struct CheckpointBlock {
     /// The hash of the parent block.
     parent_hash: Option<Hash>,
 
-    /// The block's proof of work
-    proof: Proof,
-
     /// The hash of the block.
     hash: Option<Hash>,
+
+    /// Block transaction list. This is `None` if we only
+    /// have the block header.
+    transactions: Option<Arc<RwLock<Vec<Arc<Tx>>>>>,
 
     /// The timestamp of the block.
     timestamp: DateTime<Utc>,
 }
 
-impl PartialEq for CheckpointBlock {
-    fn eq(&self, other: &CheckpointBlock) -> bool {
+impl PartialEq for TransactionBlock {
+    fn eq(&self, other: &TransactionBlock) -> bool {
         // This only makes sense when the block is received
         // when the node is a server i.e. when the block is
         // guaranteed to have a hash because it already passed
@@ -89,18 +81,18 @@ impl PartialEq for CheckpointBlock {
     }
 }
 
-impl Eq for CheckpointBlock {}
+impl Eq for TransactionBlock {}
 
-impl HashTrait for CheckpointBlock {
+impl HashTrait for TransactionBlock {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.block_hash().unwrap().hash(state);
     }
 }
 
-impl Block for CheckpointBlock {
+impl Block for TransactionBlock {
     type ChainState = PowChainState;
 
-    fn genesis() -> Arc<CheckpointBlock> {
+    fn genesis() -> Arc<TransactionBlock> {
         unimplemented!();
     }
 
@@ -128,13 +120,13 @@ impl Block for CheckpointBlock {
         self.timestamp.clone()
     }
 
-    fn after_write() -> Option<Box<dyn FnMut(Arc<CheckpointBlock>)>> {
+    fn after_write() -> Option<Box<dyn FnMut(Arc<TransactionBlock>)>> {
         let fun = |block| {};
         Some(Box::new(fun))
     }
 
     fn append_condition(
-        block: Arc<CheckpointBlock>,
+        block: Arc<TransactionBlock>,
         mut chain_state: Self::ChainState,
         branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr> {
@@ -144,26 +136,6 @@ impl Block for CheckpointBlock {
         if !block.verify_miner_sig() {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadMinerSig));
         }  
-
-        // TODO: Validate difficulty. Issue #118
-        let difficulty = 0;
-
-        #[cfg(test)]
-        let edge_bits = 0;
-
-        #[cfg(not(test))]
-        let edge_bits = chain_state.edge_bits;
-
-        // Validate proof of work
-        if let Err(_) = miner::verify(
-            &block_hash.0,
-            block.proof.nonce as u32,
-            difficulty,
-            edge_bits,
-            &block.proof,
-        ) {
-            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadProof));
-        }
 
         Ok(chain_state)
     }
@@ -177,22 +149,20 @@ impl Block for CheckpointBlock {
         buf.write_u8(Self::BLOCK_TYPE).unwrap();
         buf.write_u8(timestamp_len).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
-        buf.extend_from_slice(&self.hash.unwrap().0);
         buf.extend_from_slice(&self.parent_hash.unwrap().0);
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&(&self.miner_id.0).0);
         buf.extend_from_slice(&self.miner_signature.as_ref().unwrap().to_bytes());
-        buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(&timestamp);
         buf
     }
 
-    fn from_bytes(bytes: &[u8]) -> Result<Arc<CheckpointBlock>, &'static str> {
+    fn from_bytes(bytes: &[u8]) -> Result<Arc<TransactionBlock>, &'static str> {
         let mut rdr = Cursor::new(bytes.to_vec());
         let block_type = if let Ok(result) = rdr.read_u8() {
             result
         } else {
-            return Err("Bad transaction type");
+            return Err("Bad block type");
         };
 
         if block_type != Self::BLOCK_TYPE {
@@ -201,21 +171,13 @@ impl Block for CheckpointBlock {
 
         rdr.set_position(1);
 
-        let address_len = if let Ok(result) = rdr.read_u8() {
-            result
-        } else {
-            return Err("Bad transaction type");
-        };
-
-        rdr.set_position(2);
-
         let timestamp_len = if let Ok(result) = rdr.read_u8() {
             result
         } else {
-            return Err("Bad transaction type");
+            return Err("Bad timestamp len");
         };
 
-        rdr.set_position(3);
+        rdr.set_position(2);
 
         let height = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
@@ -225,18 +187,7 @@ impl Block for CheckpointBlock {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        buf.drain(..11);
-
-        let hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure 1");
-        };
+        buf.drain(..10);
 
         let parent_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
@@ -282,17 +233,6 @@ impl Block for CheckpointBlock {
             return Err("Incorrect packet structure 7");
         };
 
-        let proof = if buf.len() > 1 + 8 + 8 * PROOF_SIZE {
-            let proof: Vec<u8> = buf.drain(..(1 + 8 + 8 * PROOF_SIZE)).collect();
-
-            match Proof::from_bytes(&proof) {
-                Ok(proof) => proof,
-                _ => return Err("Incorrect proof field"),
-            }
-        } else {
-            return Err("Incorrect packet structure 8");
-        };
-
         let timestamp = if buf.len() == timestamp_len as usize {
             match std::str::from_utf8(&buf) {
                 Ok(utf8) => match DateTime::<Utc>::from_str(utf8) {
@@ -305,21 +245,24 @@ impl Block for CheckpointBlock {
             return Err("Invalid block timestamp");
         };
 
-        Ok(Arc::new(CheckpointBlock {
+        let mut block = TransactionBlock {
             timestamp,
             collector_address,
             miner_id,
-            proof,
-            hash: Some(hash),
+            hash: None,
             parent_hash: Some(parent_hash),
             miner_signature: Some(miner_signature),
+            transactions: None,
             height,
-        }))
+        };
+
+        block.compute_hash();
+        Ok(Arc::new(block))
     }
 }
 
-impl CheckpointBlock {
-    pub const BLOCK_TYPE: u8 = 1;
+impl TransactionBlock {
+    pub const BLOCK_TYPE: u8 = 2;
 
     pub fn new(
         parent_hash: Option<Hash>,
@@ -328,15 +271,15 @@ impl CheckpointBlock {
         height: u64,
         proof: Proof,
         miner_id: NodeId,
-    ) -> CheckpointBlock {
-        CheckpointBlock {
+    ) -> TransactionBlock {
+        TransactionBlock {
             parent_hash,
             collector_address,
             miner_id,
             height,
             hash: None,
             miner_signature: None,
-            proof,
+            transactions: None,
             timestamp: Utc::now(),
         }
     }
@@ -378,7 +321,6 @@ impl CheckpointBlock {
 
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&(self.miner_id.0).0);
-        buf.extend_from_slice(&self.proof.to_bytes());
 
         if let Some(ref miner_signature) = self.miner_signature {
             buf.extend_from_slice(&miner_signature.to_bytes());
@@ -402,7 +344,6 @@ impl CheckpointBlock {
 
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&(self.miner_id.0).0);
-        buf.extend_from_slice(&self.proof.to_bytes());
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
         buf
     }
@@ -410,17 +351,33 @@ impl CheckpointBlock {
 
 use quickcheck::*;
 
-impl Arbitrary for CheckpointBlock {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> CheckpointBlock {
-        CheckpointBlock {
+impl Arbitrary for TransactionBlock {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> TransactionBlock {
+        let mut block = TransactionBlock {
             height: Arbitrary::arbitrary(g),
             collector_address: Arbitrary::arbitrary(g),
             parent_hash: Some(Arbitrary::arbitrary(g)),
-            hash: Some(Arbitrary::arbitrary(g)),
+            hash: None,
             miner_id: Arbitrary::arbitrary(g),
             miner_signature: Some(Arbitrary::arbitrary(g)),
-            proof: Proof::random(PROOF_SIZE),
             timestamp: Utc::now(),
+            transactions: None,
+        };
+
+        block.compute_hash();
+        block
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(block: TransactionBlock) -> bool {
+            TransactionBlock::from_bytes(&TransactionBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
+
+            true
         }
     }
 }

@@ -18,6 +18,7 @@ patricia-trie = "0.3.0"
 account = { path = "../account" }
 crypto = { path = "../crypto" }
 miner = { path = "../miner" }
+transactions = { path = "../transactions" }
 persistence = { path = "../persistence" }
 bin-tools = { path = "../util/bin-tools/" }
 hashdb = "0.3.0"

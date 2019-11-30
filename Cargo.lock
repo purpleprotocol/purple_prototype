@@ -276,6 +276,7 @@ dependencies = [
  "rayon 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "test-helpers 0.1.0",
+ "transactions 0.1.0",
 ]
 
 [[package]]

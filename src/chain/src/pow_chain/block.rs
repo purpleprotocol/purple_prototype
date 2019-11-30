@@ -31,8 +31,8 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub enum PowBlock {
     Genesis,
-    Checkpoint(CheckpointBlock),
-    Transaction(TransactionBlock),
+    Checkpoint(Arc<CheckpointBlock>),
+    Transaction(Arc<TransactionBlock>),
 }
 
 impl PartialEq for PowBlock {
@@ -138,14 +138,14 @@ impl Block for PowBlock {
                 PowBlock::Genesis => { }
 
                 PowBlock::Checkpoint(ref block) => {
-                    if let Some(closure) = CheckpointBlock::after_write() {
-                        closure(Arc::new(block.clone())) // TODO: Make this less ugly
+                    if let Some(mut closure) = CheckpointBlock::after_write() {
+                        closure(block.clone()) 
                     }
                 }
 
                 PowBlock::Transaction(ref block) => {
-                    if let Some(closure) = TransactionBlock::after_write() {
-                        closure(Arc::new(block.clone())) // TODO: Make this less ugly
+                    if let Some(mut closure) = TransactionBlock::after_write() {
+                        closure(block.clone()) 
                     }
                 }
             }
@@ -161,13 +161,11 @@ impl Block for PowBlock {
             }
 
             PowBlock::Checkpoint(ref block) => {
-                let block = Arc::new(block.clone()); // TODO: Make this less ugly
-                CheckpointBlock::append_condition(block, chain_state, branch_type)
+                CheckpointBlock::append_condition(block.clone(), chain_state, branch_type)
             }
 
             PowBlock::Transaction(ref block) => {
-                let block = Arc::new(block.clone()); // TODO: Make this less ugly
-                TransactionBlock::append_condition(block, chain_state, branch_type)
+                TransactionBlock::append_condition(block.clone(), chain_state, branch_type)
             }
         }
     }
@@ -189,6 +187,52 @@ impl Block for PowBlock {
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Arc<PowBlock>, &'static str> {
-        unimplemented!();
+        if bytes.len() == 0 {
+            return Err("Cannot receive empty byte buffer!");
+        }
+
+        match bytes[0] {
+            CheckpointBlock::BLOCK_TYPE => {
+                let block = CheckpointBlock::from_bytes(bytes)?;
+                Ok(Arc::new(PowBlock::Checkpoint(block))) // TODO: Make this less ugly
+            }
+
+            TransactionBlock::BLOCK_TYPE => {
+                let block = TransactionBlock::from_bytes(bytes)?;
+                Ok(Arc::new(PowBlock::Transaction(block))) // TODO: Make this less ugly
+            }
+
+            _ => {
+                Err("Invalid block type!")
+            }
+        }
+    }
+}
+
+use quickcheck::*;
+use rand::prelude::*;
+
+impl Arbitrary for PowBlock {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> PowBlock {
+        let rand_num: u8 = rand::thread_rng().gen_range(0, 2);
+
+        match rand_num {
+            0 => PowBlock::Checkpoint(Arbitrary::arbitrary(g)),
+            1 => PowBlock::Transaction(Arbitrary::arbitrary(g)),
+            _ => panic!(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(block: CheckpointBlock) -> bool {
+            PowBlock::from_bytes(&PowBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
+
+            true
+        }
     }
 }

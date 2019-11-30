@@ -166,7 +166,6 @@ impl Block for CheckpointBlock {
         buf.write_u8(Self::BLOCK_TYPE).unwrap();
         buf.write_u8(timestamp_len).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
-        buf.extend_from_slice(&self.hash.unwrap().0);
         buf.extend_from_slice(&self.parent_hash.unwrap().0);
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&(&self.miner_id.0).0);
@@ -190,21 +189,13 @@ impl Block for CheckpointBlock {
 
         rdr.set_position(1);
 
-        let address_len = if let Ok(result) = rdr.read_u8() {
-            result
-        } else {
-            return Err("Bad transaction type");
-        };
-
-        rdr.set_position(2);
-
         let timestamp_len = if let Ok(result) = rdr.read_u8() {
             result
         } else {
-            return Err("Bad transaction type");
+            return Err("Bad timestamp len");
         };
 
-        rdr.set_position(3);
+        rdr.set_position(2);
 
         let height = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
@@ -214,18 +205,7 @@ impl Block for CheckpointBlock {
 
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        buf.drain(..11);
-
-        let hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure 1");
-        };
+        buf.drain(..10);
 
         let parent_hash = if buf.len() > 32 as usize {
             let mut hash = [0; 32];
@@ -294,16 +274,19 @@ impl Block for CheckpointBlock {
             return Err("Invalid block timestamp");
         };
 
-        Ok(Arc::new(CheckpointBlock {
+        let mut block = CheckpointBlock {
             timestamp,
             collector_address,
             miner_id,
             proof,
-            hash: Some(hash),
+            hash: None,
             parent_hash: Some(parent_hash),
             miner_signature: Some(miner_signature),
             height,
-        }))
+        };
+
+        block.compute_hash();
+        Ok(Arc::new(block))
     }
 }
 
@@ -346,13 +329,6 @@ impl CheckpointBlock {
         let hash = crypto::hash_slice(&message);
 
         self.hash = Some(hash);
-    }
-
-    pub fn verify_hash(&self) -> bool {
-        let message = self.compute_hash_message();
-        let oracle = crypto::hash_slice(&message);
-
-        self.hash.unwrap() == oracle
     }
 
     fn compute_hash_message(&self) -> Vec<u8> {
@@ -401,264 +377,38 @@ use quickcheck::*;
 
 impl Arbitrary for CheckpointBlock {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> CheckpointBlock {
-        CheckpointBlock {
+        let mut block = CheckpointBlock {
             height: Arbitrary::arbitrary(g),
             collector_address: Arbitrary::arbitrary(g),
             parent_hash: Some(Arbitrary::arbitrary(g)),
-            hash: Some(Arbitrary::arbitrary(g)),
+            hash: None,
             miner_id: Arbitrary::arbitrary(g),
             miner_signature: Some(Arbitrary::arbitrary(g)),
             proof: Proof::random(PROOF_SIZE),
             timestamp: Utc::now(),
-        }
+        };
+
+        block.compute_hash();
+        block
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::test_helpers::*;
-//     use graphlib::VertexId;
-//     use rayon::prelude::*;
-//     use hashbrown::{HashMap, HashSet};
-//     use parking_lot::Mutex;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::*;
 
-//     macro_rules! is_enum_variant {
-//         ($v:expr, $p:pat) => (
-//             if let $p = $v { true } else { false }
-//         );
-//     }
+    macro_rules! is_enum_variant {
+        ($v:expr, $p:pat) => (
+            if let $p = $v { true } else { false }
+        );
+    }
 
-//     quickcheck! {
-//         fn append_condition_integration() -> bool {
-//             let (pow_chain, _) = init_test_chains();
-//             let test_set = chain_test_set(50, 10, false, false);
-//             let MAX_ITERATIONS = 8000;
-//             let mut cur_iterations = 0;
+    quickcheck! {
+        fn serialize_deserialize(block: CheckpointBlock) -> bool {
+            CheckpointBlock::from_bytes(&CheckpointBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
 
-//             let pow_graph = test_set.pow_graph.clone();
-//             let state_graph = test_set.state_graph.clone();
-
-//             let mut pow_blocks: HashSet<Arc<CheckpointBlock>> = test_set.pow_blocks.iter().cloned().collect();
-//             let pow_appended: Arc<Mutex<HashSet<Arc<CheckpointBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
-//             let pow_non_canonical: Arc<Mutex<HashSet<Arc<CheckpointBlock>>>> = Arc::new(Mutex::new(HashSet::new()));
-//             let pow_rejected: Arc<Mutex<HashMap<Arc<CheckpointBlock>, ChainErr>>> = Arc::new(Mutex::new(HashMap::new()));
-//             let pow_appended_clone = pow_appended.clone();
-//             let pow_non_canonical_clone = pow_non_canonical.clone();
-//             let pow_rejected_clone = pow_rejected.clone();
-//             let mut pow_to_append = Vec::new();
-
-//             // Un-comment this to add failed test cases to
-//             // `src/test/failed_cases`. These can then be
-//             // visualized by using graphviz.
-//             std::panic::set_hook(Box::new(move |_| {
-//                 use std::path::Path;
-//                 use std::fs::File;
-
-//                 let mut pow_graph = pow_graph.clone();
-//                 let pow_appended = pow_appended_clone.lock();
-//                 let pow_non_canonical = pow_non_canonical_clone.lock();
-//                 let pow_rejected = pow_rejected_clone.lock();
-
-//                 let case_id = crypto::gen_bytes(12);
-//                 let case_id = hex::encode(&case_id);
-
-//                 println!("Adding failed case with id {} to src/test/failed_cases...", &case_id);
-
-//                 let timestamp = Utc::now();
-//                 let timestamp = timestamp.to_rfc3339();
-//                 let failed_path = Path::new("src/test/failed_cases");
-//                 let dir_name = format!("src/test/failed_cases/{}-{}", timestamp, case_id);
-//                 let dir_path = Path::new(&dir_name);
-
-//                 // Create failed cases dir if it does not exist
-//                 if std::fs::metadata(&failed_path).is_err() {
-//                     std::fs::create_dir(failed_path).unwrap();
-//                 }
-
-//                 // Create graphs dir
-//                 std::fs::create_dir(&dir_path).unwrap();
-
-//                 // Assemble graphs paths
-//                 let pow_path = dir_path.join("pow_graph.dot");
-//                 let state_path = dir_path.join("state_graph.dot");
-
-//                 let pow_hm: HashMap<VertexId, Arc<CheckpointBlock>> = pow_graph
-//                     .vertices()
-//                     .cloned()
-//                     .map(|id| (id, pow_graph.fetch(&id).unwrap().clone()))
-//                     .collect();
-
-//                 // Map labels so we can see which blocks were appended
-//                 pow_graph.map_labels(|id, _| {
-//                     let block = pow_hm.get(id).unwrap();
-//                     let block_hash = block.block_hash().unwrap();
-//                     let suffix = if pow_appended.contains(block) {
-//                         "CANONICAL".to_owned()
-//                     } else if let Some(r) = pow_rejected.get(block) {
-//                         map_reason(r)
-//                     } else if pow_non_canonical.contains(block) {
-//                         "NON_CANONICAL".to_owned()
-//                     } else {
-//                         "NOT_APPENDED".to_owned()
-//                     };
-
-//                     let block_hash = format!("{}", block_hash);
-//                     let block_hash = &block_hash[..6];
-
-//                     format!("N_{}_H{}_{}", block_hash, block.height(), suffix)
-//                 });
-
-//                 // Create files
-//                 let mut pow_f = File::create(pow_path).unwrap();
-//                 let mut state_f = File::create(state_path).unwrap();
-
-//                 // Write graphs data
-//                 pow_graph.to_dot("pow_chain", &mut pow_f).unwrap();
-//                 state_graph.to_dot("state_chain", &mut state_f).unwrap();
-//             }));
-
-//             // For each iteration, try to append as many blocks as possible
-//             loop {
-//                 if cur_iterations >= MAX_ITERATIONS {
-//                     //panic!("Exceeded iterations limit");
-//                     break;
-//                 }
-
-//                 for b in pow_blocks.iter() {
-//                     match pow_chain.append_block(b.clone()) {
-//                         Ok(_) => {
-//                             pow_to_append.push(b.clone());
-//                         }
-
-//                         Err(reason) => {
-//                             if let ChainErr::BadHeight = reason {
-//                                 // Do nothing
-//                             } else {
-//                                 let mut pow_rejected = pow_rejected.lock();
-//                                 pow_rejected.insert(b.clone(), reason);
-//                             }
-//                         }
-//                     }
-//                 }
-
-//                 for b in pow_to_append.iter() {
-//                     let block_hash = b.block_hash().unwrap();
-
-//                     pow_blocks.remove(b);
-
-//                     if pow_chain.is_canonical(&block_hash) {
-//                         let mut pow_appended = pow_appended.lock();
-//                         pow_appended.insert(b.clone());
-//                     } else {
-//                         let mut pow_non_canonical = pow_non_canonical.lock();
-//                         pow_non_canonical.insert(b.clone());
-//                     }
-//                 }
-
-//                 //std::thread::sleep_ms(140);
-
-//                 if pow_blocks.is_empty() {
-//                     break;
-//                 }
-
-//                 cur_iterations += 1;
-//             }
-
-//             {
-//                 let pow_chain = pow_chain.chain.read();
-
-//                 assert_eq!(pow_chain.canonical_tip_height(), test_set.pow_canonical.height());
-//             }
-
-//             true
-//         }
-
-//         fn it_verifies_hashes(block: CheckpointBlock) -> bool {
-//             let mut block = block.clone();
-
-//             assert!(!block.verify_hash());
-
-//             block.compute_hash();
-//             block.verify_hash()
-//         }
-
-//         fn serialize_deserialize(block: CheckpointBlock) -> bool {
-//             CheckpointBlock::from_bytes(&CheckpointBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
-
-//             true
-//         }
-//     }
-
-//     fn map_reason(reason: &ChainErr) -> String {
-//         let base = "REJECTED";
-
-//         match reason {
-//             ChainErr::AlreadyInChain => {
-//                 format!("{}_DUPLICATE", base)
-//             }
-
-//             ChainErr::BadHeight => {
-//                 format!("{}_BADHEIGHT", base)
-//             }
-
-//             ChainErr::CannotRewindPastRootBlock => {
-//                 format!("{}_CANNOTREWIND", base)
-//             }
-
-//             ChainErr::InvalidParent => {
-//                 format!("{}_BADPARENT", base)
-//             }
-
-//             ChainErr::NoCheckpointFound => {
-//                 format!("{}_NOCHECKPOINT", base)
-//             }
-
-//             ChainErr::NoParentHash => {
-//                 format!("{}_NOPARENTHASH", base)
-//             }
-
-//             ChainErr::NoSuchBlock => {
-//                 format!("{}_NOBLOCK", base)
-//             }
-
-//             ChainErr::TooManyOrphans => {
-//                 format!("{}_ORPHANSFULL", base)
-//             }
-
-//             ChainErr::BadAppendCondition(reason) => {
-//                 let reason = match reason {
-//                     AppendCondErr::BadEasyHeight => {
-//                         "BADHEIGHT"
-//                     }
-
-//                     AppendCondErr::BadEpoch => {
-//                         "BADEPOCH"
-//                     }
-
-//                     AppendCondErr::BadProof => {
-//                         "BADPROOF"
-//                     }
-
-//                     AppendCondErr::BadTransaction => {
-//                         "BADTX"
-//                     }
-
-//                     AppendCondErr::BadValidator => {
-//                         "BADVALIDATOR"
-//                     }
-
-//                     AppendCondErr::Default => {
-//                         "DEFAULT"
-//                     }
-
-//                     AppendCondErr::NoBlockFound => {
-//                         "NOBLOCK"
-//                     }
-//                 };
-
-//                 format!("{}_BADAPPCOND_{}", base, reason)
-//             }
-//         }
-//     }
-// }
+            true
+        }
+    }
+}
