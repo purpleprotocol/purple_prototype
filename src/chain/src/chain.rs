@@ -72,15 +72,8 @@ pub enum AppendCondErr {
     /// in a chain that has been found.
     NoBlockFound,
 
-    /// The block's epoch is invalid.
-    BadEpoch,
-
     /// Validation failed because of an invalid transaction.
     BadTransaction,
-
-    /// Validation failed because of an invalid and potentially
-    /// byzantine action performed by a validator node.
-    BadValidator,
 
     /// The block's proof of work is invalid.
     BadProof,

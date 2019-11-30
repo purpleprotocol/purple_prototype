@@ -47,10 +47,6 @@ pub struct TransactionBlock {
     /// The height of the block.
     height: u64,
 
-    /// The address that will collect the
-    /// rewards earned by the miner.
-    collector_address: NormalAddress,
-
     /// The `NodeId` belonging to the miner.
     miner_id: NodeId,
 
@@ -62,6 +58,12 @@ pub struct TransactionBlock {
 
     /// The hash of the block.
     hash: Option<Hash>,
+
+    /// Merkle root hash of all transactions in the block
+    tx_root: Option<Hash>,
+
+    /// Merkle root hash of the state trie
+    state_root: Option<Hash>,
 
     /// Block transaction list. This is `None` if we only
     /// have the block header.
@@ -150,7 +152,8 @@ impl Block for TransactionBlock {
         buf.write_u8(timestamp_len).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
         buf.extend_from_slice(&self.parent_hash.unwrap().0);
-        buf.extend_from_slice(&self.collector_address.to_bytes());
+        buf.extend_from_slice(&self.tx_root.unwrap().0);
+        buf.extend_from_slice(&self.state_root.unwrap().0);
         buf.extend_from_slice(&(&self.miner_id.0).0);
         buf.extend_from_slice(&self.miner_signature.as_ref().unwrap().to_bytes());
         buf.extend_from_slice(&timestamp);
@@ -200,13 +203,24 @@ impl Block for TransactionBlock {
             return Err("Incorrect packet structure 3");
         };
 
-        let collector_address = if buf.len() > 33 as usize {
-            let addr: Vec<u8> = buf.drain(..33).collect();
+        let tx_root = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
 
-            match NormalAddress::from_bytes(&addr) {
-                Ok(address) => address,
-                _ => return Err("Incorrect address field"),
-            }
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
+        } else {
+            return Err("Incorrect packet structure 4");
+        };
+
+        let state_root = if buf.len() > 32 as usize {
+            let mut hash = [0; 32];
+            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            Hash(hash)
         } else {
             return Err("Incorrect packet structure 5");
         };
@@ -247,8 +261,9 @@ impl Block for TransactionBlock {
 
         let mut block = TransactionBlock {
             timestamp,
-            collector_address,
             miner_id,
+            tx_root: Some(tx_root),
+            state_root: Some(state_root),
             hash: None,
             parent_hash: Some(parent_hash),
             miner_signature: Some(miner_signature),
@@ -266,7 +281,6 @@ impl TransactionBlock {
 
     pub fn new(
         parent_hash: Option<Hash>,
-        collector_address: NormalAddress,
         ip: SocketAddr,
         height: u64,
         proof: Proof,
@@ -274,9 +288,10 @@ impl TransactionBlock {
     ) -> TransactionBlock {
         TransactionBlock {
             parent_hash,
-            collector_address,
             miner_id,
             height,
+            tx_root: None,
+            state_root: None,
             hash: None,
             miner_signature: None,
             transactions: None,
@@ -319,7 +334,6 @@ impl TransactionBlock {
             buf.extend_from_slice(&parent_hash.0);
         }
 
-        buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&(self.miner_id.0).0);
 
         if let Some(ref miner_signature) = self.miner_signature {
@@ -342,7 +356,6 @@ impl TransactionBlock {
             unreachable!();
         }
 
-        buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&(self.miner_id.0).0);
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
         buf
@@ -355,8 +368,9 @@ impl Arbitrary for TransactionBlock {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> TransactionBlock {
         let mut block = TransactionBlock {
             height: Arbitrary::arbitrary(g),
-            collector_address: Arbitrary::arbitrary(g),
             parent_hash: Some(Arbitrary::arbitrary(g)),
+            state_root: Some(Arbitrary::arbitrary(g)),
+            tx_root: Some(Arbitrary::arbitrary(g)),
             hash: None,
             miner_id: Arbitrary::arbitrary(g),
             miner_signature: Some(Arbitrary::arbitrary(g)),
