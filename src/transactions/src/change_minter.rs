@@ -252,17 +252,10 @@ impl ChangeMinter {
     /// 5) New Minter           - 33byte binary
     /// 6) Asset hash           - 32byte binary
     /// 7) Fee hash             - 32byte binary
-    /// 8) Hash                 - 32byte binary
-    /// 9) Signature            - 64byte binary
-    /// 10) Fee                 - Binary of fee length
+    /// 8) Signature            - 64byte binary
+    /// 9) Fee                  - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buf: Vec<u8> = Vec::new();
-
-        let hash = if let Some(hash) = &self.hash {
-            &hash.0
-        } else {
-            return Err("Hash field is missing");
-        };
 
         let mut signature = if let Some(signature) = &self.signature {
             signature.to_bytes()
@@ -288,7 +281,6 @@ impl ChangeMinter {
         buf.append(&mut new_minter.to_vec());
         buf.append(&mut asset_hash.to_vec());
         buf.append(&mut fee_hash.to_vec());
-        buf.append(&mut hash.to_vec());
         buf.append(&mut signature);
         buf.append(&mut fee.to_vec());
 
@@ -370,17 +362,6 @@ impl ChangeMinter {
             return Err("Incorrect packet structure");
         };
 
-        let hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
         let signature = if buf.len() > 64 as usize {
             let sig_vec: Vec<u8> = buf.drain(..64).collect();
 
@@ -403,17 +384,18 @@ impl ChangeMinter {
             return Err("Incorrect packet structure");
         };
 
-        let change_minter = ChangeMinter {
+        let mut change_minter = ChangeMinter {
             minter: minter,
             new_minter: new_minter,
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             fee: fee,
             nonce: nonce,
-            hash: Some(hash),
+            hash: None,
             signature: Some(signature),
         };
 
+        change_minter.compute_hash();
         Ok(change_minter)
     }
 
@@ -447,16 +429,19 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for ChangeMinter {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> ChangeMinter {
-        ChangeMinter {
+        let mut tx = ChangeMinter {
             minter: Arbitrary::arbitrary(g),
             new_minter: Arbitrary::arbitrary(g),
             asset_hash: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
-            hash: Some(Arbitrary::arbitrary(g)),
+            hash: None,
             signature: Some(Arbitrary::arbitrary(g)),
-        }
+        };
+
+        tx.compute_hash();
+        tx
     }
 }
 
@@ -498,7 +483,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(tx.validate(&trie));
     }
@@ -535,7 +520,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -568,7 +553,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -609,7 +594,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         // Apply transaction
         tx.apply(&mut trie);
@@ -648,7 +633,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         // Apply transaction
         tx.apply(&mut trie);
@@ -677,7 +662,7 @@ mod tests {
             let mut tx = tx;
 
             for _ in 0..3 {
-                tx.hash();
+                tx.compute_hash();
             }
 
             tx.verify_hash()
