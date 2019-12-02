@@ -363,11 +363,6 @@ impl CheckpointBlock {
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&(self.miner_id.0).0);
         buf.extend_from_slice(&self.proof.to_bytes());
-
-        if let Some(ref miner_signature) = self.miner_signature {
-            buf.extend_from_slice(&miner_signature.to_bytes());
-        }
-
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
         buf
     }
