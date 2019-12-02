@@ -145,6 +145,10 @@ impl Block for CheckpointBlock {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::DoesntAcceptBlockType));
         }
 
+        if block.height() != chain_state.height + 1 {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadHeight));
+        }
+
         assert!(chain_state.current_validator.is_none());
         assert!(chain_state.txs_blocks_left.is_none());
 
@@ -172,6 +176,7 @@ impl Block for CheckpointBlock {
         chain_state.current_validator = Some(block.miner_id.clone());
         chain_state.txs_blocks_left = Some(ALLOWED_TXS_BLOCKS);
         chain_state.accepts = BlockType::Transaction;
+        chain_state.height = block.height();
 
         Ok(chain_state)
     }

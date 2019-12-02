@@ -146,6 +146,10 @@ impl Block for TransactionBlock {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::DoesntAcceptBlockType));
         }
 
+        if block.height() != chain_state.height + 1 {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadHeight));
+        }
+
         assert!(chain_state.current_validator.is_some());
         assert!(chain_state.txs_blocks_left.is_some());
 
@@ -173,6 +177,7 @@ impl Block for TransactionBlock {
             chain_state.txs_blocks_left = Some(txs_blocks_left);
         }
 
+        chain_state.height = block.height();
         Ok(chain_state)
     }
 

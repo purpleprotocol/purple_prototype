@@ -78,6 +78,9 @@ pub enum AppendCondErr {
     /// The block's proof of work is invalid.
     BadProof,
 
+    /// The block's height is invalid!
+    BadHeight,
+
     /// The miner's signature on a PoW block is invalid.
     BadMinerSig,
 
