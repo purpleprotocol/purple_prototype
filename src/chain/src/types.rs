@@ -37,7 +37,7 @@ pub enum OrphanType {
     DisconnectedTip,
 }
 
-#[derive(Clone, Debug, PartialEq, Copy)]
+#[derive(Clone, Debug, Copy)]
 pub enum BranchType {
     /// The canonical chain branch
     Canonical,
@@ -53,17 +53,17 @@ pub trait Flushable {
 
 /// Chain state wrapper representing an in-memory state
 /// that is not yet flushed to disk.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct UnflushedChainState<S>
 where
-    S: Debug + Sized + Flushable + Clone + PartialEq,
+    S: Debug + Sized + Flushable + Clone,
 {
     state: S,
 }
 
 impl<S> UnflushedChainState<S>
 where
-    S: Debug + Sized + Flushable + Clone + PartialEq,
+    S: Debug + Sized + Flushable + Clone,
 {
     pub fn new(state: S) -> UnflushedChainState<S> {
         UnflushedChainState { state }
@@ -86,17 +86,17 @@ where
 /// Chain state wrapper representing state that is flushed
 /// to disk. This is not modifiable and read-only. To request
 /// a modifiable state which is un-flushed, call `Self::modify()`.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct FlushedChainState<S>
 where
-    S: Debug + Sized + Flushable + Clone + PartialEq,
+    S: Debug + Sized + Flushable + Clone,
 {
     state: S,
 }
 
 impl<S> FlushedChainState<S>
 where
-    S: Debug + Sized + Flushable + Clone + PartialEq,
+    S: Debug + Sized + Flushable + Clone,
 {
     pub fn new(state: S) -> FlushedChainState<S> {
         FlushedChainState { state }

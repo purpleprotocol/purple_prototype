@@ -65,7 +65,7 @@ impl Block for PowBlock {
     }
 
     fn genesis_state() -> Self::ChainState {
-        PowChainState::genesis()
+        unimplemented!();
     }
 
     fn block_hash(&self) -> Option<Hash> {
@@ -227,6 +227,11 @@ impl Arbitrary for PowBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // #[test]
+    // fn chain_integration() {
+
+    // }
 
     quickcheck! {
         fn serialize_deserialize(block: CheckpointBlock) -> bool {

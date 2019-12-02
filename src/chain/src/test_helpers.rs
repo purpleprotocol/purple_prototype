@@ -33,9 +33,10 @@ use std::sync::Arc;
 
 pub fn init_test_chains() -> PowChainRef {
     let pow_db = test_helpers::init_tempdb();
+    let state_db = test_helpers::init_tempdb();
     let pow_chain = Arc::new(RwLock::new(PowChain::new(
         pow_db,
-        PowChainState::genesis(),
+        PowChainState::genesis(state_db),
         true,
     )));
     let pow_chain_ref = PowChainRef::new(pow_chain);

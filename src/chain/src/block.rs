@@ -29,7 +29,7 @@ use std::sync::Arc;
 /// Generic block interface
 pub trait Block: Debug + PartialEq + Eq + HashTrait + Sized {
     /// Per tip validation state
-    type ChainState: Clone + Debug + Flushable + PartialEq;
+    type ChainState: Clone + Debug + Flushable;
 
     /// Size of the block cache.
     const BLOCK_CACHE_SIZE: usize = 20;

@@ -104,7 +104,7 @@ impl Block for TransactionBlock {
     }
 
     fn genesis_state() -> PowChainState {
-        PowChainState::genesis()
+        unimplemented!();
     }
 
     fn height(&self) -> u64 {

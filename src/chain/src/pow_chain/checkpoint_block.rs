@@ -40,9 +40,13 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
+#[cfg(not(test))]
 /// How many transaction blocks the validator is allowed to create
 /// for a successfully appended checkpoint block.
 pub const ALLOWED_TXS_BLOCKS: u32 = 40;
+
+#[cfg(test)]
+pub const ALLOWED_TXS_BLOCKS: u32 = 2;
 
 #[derive(Clone, Debug)]
 /// A block belonging to the `PowChain`.
@@ -103,7 +107,7 @@ impl Block for CheckpointBlock {
     }
 
     fn genesis_state() -> PowChainState {
-        PowChainState::genesis()
+        unimplemented!();
     }
 
     fn height(&self) -> u64 {

@@ -41,36 +41,32 @@ thread_local! {
 /// Init chain module. Call this before any other function.
 pub fn init(
     pow_chain_db: PersistentDb,
+    state_db: PersistentDb,
     archival_mode: bool,
 ) -> PowChainRef {
     let pow_chain = Arc::new(RwLock::new(PowChain::new(
         pow_chain_db,
-        PowChainState::genesis(),
-        archival_mode,
-    )));
-    let state_chain = Arc::new(RwLock::new(StateChain::new(
-        state_chain_db,
-        ChainState::new(state_db),
+        PowChainState::genesis(state_db),
         archival_mode,
     )));
 
     let pow_chain = PowChainRef::new(pow_chain);
-    let state_chain = StateChainRef::new(state_chain);
 
     let mut chain_ref = CHAIN_REF.write();
-    *chain_ref = Some((easy_chain.clone(), pow_chain.clone(), state_chain.clone()));
+    *chain_ref = Some(pow_chain.clone());
 
-    (pow_chain, state_chain)
+    pow_chain
 }
 
 #[cfg(feature = "test")]
 pub fn init(
     pow_chain_db: PersistentDb,
+    state_db: PersistentDb,
     archival_mode: bool,
 ) -> PowChainRef {
     let pow_chain = Arc::new(RwLock::new(PowChain::new(
         pow_chain_db,
-        PowChainState::genesis(),
+        PowChainState::genesis(state_db),
         archival_mode,
     )));
 
@@ -101,9 +97,7 @@ pub fn chain_ref() -> PowChainRef {
 #[cfg(not(feature = "test"))]
 pub fn pow_chain_ref() -> PowChainRef {
     let chain_ref = CHAIN_REF.read();
-    let (pow_ref, _) = chain_ref.clone().unwrap();
-
-    pow_ref
+    chain_ref.clone().unwrap()
 }
 
 #[cfg(feature = "test")]

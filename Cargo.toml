@@ -53,11 +53,11 @@ mempool = { path = "src/mempool" }
 reqwest = "0.9.21"
 mimalloc = "0.1.10"
 
-[dev-dependencies.chain]
+['cfg(test)'.chain]
 path = "src/chain"
 features = ["test"]
 
-[dev-dependencies.persistence]
+['cfg(test)'.persistence]
 path = "src/persistence"
 features = ["test"]
 

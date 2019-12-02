@@ -138,10 +138,12 @@ fn main() {
 
     let storage_db_path = db_path.join("node_storage");
     let pow_chain_db_path = db_path.join("pow_chain_db");
+    let state_db_path = db_path.join("state_db");
     let bootstrap_cache_db_path = bootstrap_cache_path.join("bootstrap_cache_db"); 
 
     let storage_wal_path = db_path.join("node_storage_wal");
     let pow_chain_wal_path = db_path.join("pow_chain_db_wal");
+    let state_wal_path = db_path.join("state_db_wal");
     let bootstrap_cache_wal_path = bootstrap_cache_path.join("bootstrap_cache_db_wal");
 
     let storage_db = Arc::new(persistence::open_database(
@@ -152,17 +154,22 @@ fn main() {
         &pow_chain_db_path,
         &pow_chain_wal_path,
     ));
+    let state_db = Arc::new(persistence::open_database(
+        &state_db_path,
+        &state_wal_path,
+    ));
     let bootstrap_cache_db = Arc::new(persistence::open_database(
         &bootstrap_cache_db_path,
         &bootstrap_cache_wal_path,
     ));
     let mut node_storage = PersistentDb::new(storage_db, None);
     let pow_chain_db = PersistentDb::new(pow_chain_db, None);
+    let state_db = PersistentDb::new(state_db, None);
     let bootstrap_cache_db = PersistentDb::new(bootstrap_cache_db, None);
     let bootstrap_cache = BootstrapCache::new(bootstrap_cache_db, argv.bootstrap_cache_size);
 
     let pow_chain =
-        chain::init(pow_chain_db, argv.archival_mode);
+        chain::init(pow_chain_db, state_db, argv.archival_mode);
 
     info!("Database initialization was successful!");
 

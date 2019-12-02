@@ -2298,21 +2298,21 @@ pub mod tests {
         // The root state should still be the genesis state at this point
         assert_eq!(chain.root_block, DummyBlock::genesis());
         assert_eq!(
-            chain.root_state,
-            FlushedChainState::new(DummyBlock::genesis_state())
+            chain.root_state.clone().inner(),
+            FlushedChainState::new(DummyBlock::genesis_state()).inner()
         );
 
         // Now the state should flush with each added block
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(1)));
+        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(1)).inner());
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(2)));
+        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(2)).inner());
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(3)));
+        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(3)).inner());
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(4)));
+        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(4)).inner());
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(5)));
+        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(5)).inner());
     }
 
     #[test]
@@ -8775,16 +8775,20 @@ pub mod tests {
             chain
                 .valid_tips_states
                 .get(&F_second.block_hash().unwrap())
-                .unwrap(),
-            &UnflushedChainState::new(DummyState::new(F_second.height()))
+                .unwrap()
+                .clone()
+                .inner(),
+            UnflushedChainState::new(DummyState::new(F_second.height())).inner()
         );
         assert!(chain.valid_tips.contains(&D_tertiary.block_hash().unwrap()));
         assert_eq!(
             chain
                 .valid_tips_states
                 .get(&D_tertiary.block_hash().unwrap())
-                .unwrap(),
-            &UnflushedChainState::new(DummyState::new(D_tertiary.height()))
+                .unwrap()
+                .clone()
+                .inner(),
+            UnflushedChainState::new(DummyState::new(D_tertiary.height())).inner()
         );
         chain.append_block(blocks.remove(0)).unwrap(); // D_prime
 
@@ -8802,22 +8806,28 @@ pub mod tests {
             chain
                 .valid_tips_states
                 .get(&E_prime.block_hash().unwrap())
-                .unwrap(),
-            &UnflushedChainState::new(DummyState::new(E_prime.height()))
+                .unwrap()
+                .clone()
+                .inner(),
+            UnflushedChainState::new(DummyState::new(E_prime.height())).inner()
         );
         assert_eq!(
             chain
                 .valid_tips_states
                 .get(&D_tertiary.block_hash().unwrap())
-                .unwrap(),
-            &UnflushedChainState::new(DummyState::new(D_tertiary.height()))
+                .unwrap()
+                .clone()
+                .inner(),
+            UnflushedChainState::new(DummyState::new(D_tertiary.height())).inner()
         );
         assert_eq!(
             chain
                 .valid_tips_states
                 .get(&F_second.block_hash().unwrap())
-                .unwrap(),
-            &UnflushedChainState::new(DummyState::new(F_second.height()))
+                .unwrap()
+                .clone()
+                .inner(),
+            UnflushedChainState::new(DummyState::new(F_second.height())).inner()
         );
     }
 
@@ -8950,9 +8960,9 @@ pub mod tests {
             assert_eq!(chain.height(), 7);
             assert_eq!(chain.canonical_tip, G);
             assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
-            assert_eq!(chain.valid_tips_states.get(&E_prime.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(E_prime.height())));
-            assert_eq!(chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(D_tertiary.height())));
-            assert_eq!(chain.valid_tips_states.get(&F_second.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(F_second.height())));
+            assert_eq!(chain.valid_tips_states.get(&E_prime.block_hash().unwrap()).unwrap().clone().inner(), UnflushedChainState::new(DummyState::new(E_prime.height())).inner());
+            assert_eq!(chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).unwrap().clone().inner(), UnflushedChainState::new(DummyState::new(D_tertiary.height())).inner());
+            assert_eq!(chain.valid_tips_states.get(&F_second.block_hash().unwrap()).unwrap().clone().inner(), UnflushedChainState::new(DummyState::new(F_second.height())).inner());
             assert!(chain.validations_mapping.get(&A.block_hash().unwrap()).is_none());
             assert!(chain.validations_mapping.get(&B.block_hash().unwrap()).is_none());
             assert!(chain.validations_mapping.get(&C.block_hash().unwrap()).is_none());
