@@ -35,7 +35,7 @@ pub struct PowChainState {
     pub(crate) height: u64,
 
     /// Current difficulty
-    pub(crate) difficulty: u64,
+    pub difficulty: u64,
 
     /// Current edge bits
     pub(crate) edge_bits: u8,
