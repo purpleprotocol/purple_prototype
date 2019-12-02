@@ -19,6 +19,7 @@
 use crate::block::Block;
 use crate::chain::*;
 use crate::pow_chain::PowChainState;
+use crate::pow_chain::chain_state::BlockType;
 use crate::types::*;
 use transactions::Tx;
 use hashbrown::HashSet;
@@ -132,12 +133,45 @@ impl Block for TransactionBlock {
         mut chain_state: Self::ChainState,
         branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr> {
+        // Validation
         let block_hash = block.block_hash().unwrap();
 
         // Verify the signature of the miner over the block
         if !block.verify_miner_sig() {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadMinerSig));
         }  
+
+        // Verify that we accept transaction blocks
+        if !chain_state.accepts_tx() {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::DoesntAcceptBlockType));
+        }
+
+        assert!(chain_state.current_validator.is_some());
+        assert!(chain_state.txs_blocks_left.is_some());
+
+        let current_validator = chain_state.current_validator.as_ref().unwrap().clone();
+        let mut txs_blocks_left = chain_state.txs_blocks_left.as_ref().unwrap().clone();
+
+        if current_validator != block.miner_id {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::InvalidMiner));
+        }
+
+        if txs_blocks_left == 0 {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::NoTxBlocksLeft));
+        }
+
+        // TODO: Apply transactions to state before commit
+
+        // Commit
+        txs_blocks_left -= 1;
+
+        if txs_blocks_left == 0 {
+            chain_state.accepts = BlockType::Checkpoint;
+            chain_state.current_validator = None;
+            chain_state.txs_blocks_left = None;
+        } else {
+            chain_state.txs_blocks_left = Some(txs_blocks_left);
+        }
 
         Ok(chain_state)
     }

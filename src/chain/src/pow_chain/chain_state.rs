@@ -23,16 +23,34 @@ use hashbrown::{HashMap, HashSet};
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum BlockType {
+    Checkpoint,
+    Transaction
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct PowChainState {
     /// The current chain height
-    pub height: u64,
+    pub(crate) height: u64,
 
     /// Current difficulty
-    pub difficulty: u64,
+    pub(crate) difficulty: u64,
 
     /// Current edge bits
-    pub edge_bits: u8,
+    pub(crate) edge_bits: u8,
+
+    /// Which block type is accepted next
+    pub(crate) accepts: BlockType,
+
+    /// The current validator's node id. This field
+    /// is `None` if we accept checkpoint blocks.
+    pub(crate) current_validator: Option<NodeId>,
+
+    /// Number of transaction blocks left that the
+    /// current validator is allowed to append. This 
+    /// field is `None` if we accept checkpoint blocks.
+    pub(crate) txs_blocks_left: Option<u32>,
 }
 
 impl PowChainState {
@@ -41,7 +59,18 @@ impl PowChainState {
             height: 0,
             difficulty: 0,
             edge_bits: miner::MIN_EDGE_BITS,
+            accepts: BlockType::Checkpoint, 
+            current_validator: None,
+            txs_blocks_left: None,
         }
+    }
+
+    pub fn accepts_checkpoint(&self) -> bool {
+        self.accepts == BlockType::Checkpoint
+    }
+
+    pub fn accepts_tx(&self) -> bool {
+        self.accepts == BlockType::Transaction
     }
 }
 

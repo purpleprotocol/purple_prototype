@@ -83,6 +83,15 @@ pub enum AppendCondErr {
 
     /// The validator with the given id or ip is already in the validator pool.
     AlreadyInPool,
+
+    /// The block type cannot be accepted by the chain on this step.
+    DoesntAcceptBlockType,
+
+    /// The miner id present in the block is invalid.
+    InvalidMiner,
+
+    /// A transaction block has been issued when there aren't any left.
+    NoTxBlocksLeft,
 }
 
 lazy_static! {

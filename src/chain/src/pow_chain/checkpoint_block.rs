@@ -19,6 +19,7 @@
 use crate::block::Block;
 use crate::chain::*;
 use crate::pow_chain::PowChainState;
+use crate::pow_chain::chain_state::BlockType;
 use crate::types::*;
 use hashbrown::HashSet;
 use account::NormalAddress;
@@ -38,6 +39,10 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
+
+/// How many transaction blocks the validator is allowed to create
+/// for a successfully appended checkpoint block.
+pub const ALLOWED_TXS_BLOCKS: u32 = 40;
 
 #[derive(Clone, Debug)]
 /// A block belonging to the `PowChain`.
@@ -127,12 +132,21 @@ impl Block for CheckpointBlock {
         mut chain_state: Self::ChainState,
         branch_type: BranchType,
     ) -> Result<Self::ChainState, ChainErr> {
+        // Validation
         let block_hash = block.block_hash().unwrap();
 
         // Verify the signature of the miner over the block
         if !block.verify_miner_sig() {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadMinerSig));
         }  
+
+        // Verify that we accept checkpoint blocks
+        if !chain_state.accepts_checkpoint() {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::DoesntAcceptBlockType));
+        }
+
+        assert!(chain_state.current_validator.is_none());
+        assert!(chain_state.txs_blocks_left.is_none());
 
         // TODO: Validate difficulty. Issue #118
         let difficulty = 0;
@@ -153,6 +167,11 @@ impl Block for CheckpointBlock {
         ) {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadProof));
         }
+
+        // Commit
+        chain_state.current_validator = Some(block.miner_id.clone());
+        chain_state.txs_blocks_left = Some(ALLOWED_TXS_BLOCKS);
+        chain_state.accepts = BlockType::Transaction;
 
         Ok(chain_state)
     }
