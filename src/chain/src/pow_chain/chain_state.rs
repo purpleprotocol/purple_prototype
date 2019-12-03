@@ -18,6 +18,7 @@
 
 use crate::chain::ChainErr;
 use crate::types::*;
+use crate::pow_chain::block::GENESIS_HASH_KEY;
 use persistence::PersistentDb;
 use crypto::{Hash, NodeId};
 use hashbrown::{HashMap, HashSet};
@@ -55,6 +56,9 @@ pub struct PowChainState {
     /// current validator is allowed to append. This 
     /// field is `None` if we accept checkpoint blocks.
     pub(crate) txs_blocks_left: Option<u32>,
+
+    /// Hash of the last checkpoint block.
+    pub last_checkpoint: Hash,
 }
 
 impl PowChainState {
@@ -67,6 +71,7 @@ impl PowChainState {
             accepts: BlockType::Checkpoint, 
             current_validator: None,
             txs_blocks_left: None,
+            last_checkpoint: crypto::hash_slice(GENESIS_HASH_KEY),
         }
     }
 
@@ -81,6 +86,7 @@ impl PowChainState {
 
 impl Flushable for PowChainState {
     fn flush(&mut self) -> Result<(), ChainErr> {
+        self.db.flush();
         Ok(())
     }
 }

@@ -55,7 +55,7 @@ pub struct TransactionBlock {
     miner_signature: Option<Signature>,
 
     /// The hash of the parent block.
-    parent_hash: Option<Hash>,
+    parent_hash: Hash,
 
     /// The hash of the block.
     hash: Option<Hash>,
@@ -115,7 +115,7 @@ impl Block for TransactionBlock {
         self.hash.clone()
     }
 
-    fn parent_hash(&self) -> Option<Hash> {
+    fn parent_hash(&self) -> Hash {
         self.parent_hash.clone()
     }
 
@@ -190,7 +190,7 @@ impl Block for TransactionBlock {
         buf.write_u8(Self::BLOCK_TYPE).unwrap();
         buf.write_u8(timestamp_len).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
-        buf.extend_from_slice(&self.parent_hash.unwrap().0);
+        buf.extend_from_slice(&self.parent_hash.0);
         buf.extend_from_slice(&self.tx_root.unwrap().0);
         buf.extend_from_slice(&self.state_root.unwrap().0);
         buf.extend_from_slice(&(&self.miner_id.0).0);
@@ -304,7 +304,7 @@ impl Block for TransactionBlock {
             tx_root: Some(tx_root),
             state_root: Some(state_root),
             hash: None,
-            parent_hash: Some(parent_hash),
+            parent_hash: parent_hash,
             miner_signature: Some(miner_signature),
             transactions: None,
             height,
@@ -319,7 +319,7 @@ impl TransactionBlock {
     pub const BLOCK_TYPE: u8 = 2;
 
     pub fn new(
-        parent_hash: Option<Hash>,
+        parent_hash: Hash,
         ip: SocketAddr,
         height: u64,
         proof: Proof,
@@ -339,57 +339,36 @@ impl TransactionBlock {
     }
 
     pub fn sign_miner(&mut self, sk: &Sk) {
-        let message = self.compute_sign_message();
+        let message = self.compute_message();
         let sig = crypto::sign(&message, sk);
         self.miner_signature = Some(sig);
     }
 
     pub fn verify_miner_sig(&self) -> bool {
-        let message = self.compute_sign_message();
+        let message = self.compute_message();
         crypto::verify(&message, self.miner_signature.as_ref().unwrap(), &self.miner_id.0)
     }
 
     pub fn compute_hash(&mut self) {
-        let message = self.compute_hash_message();
+        let message = self.compute_message();
         let hash = crypto::hash_slice(&message);
 
         self.hash = Some(hash);
     }
 
     pub fn verify_hash(&self) -> bool {
-        let message = self.compute_hash_message();
+        let message = self.compute_message();
         let oracle = crypto::hash_slice(&message);
 
         self.hash.unwrap() == oracle
     }
 
-    fn compute_hash_message(&self) -> Vec<u8> {
+    fn compute_message(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         let encoded_height = encode_be_u64!(self.height);
 
         buf.extend_from_slice(&encoded_height);
-
-        if let Some(ref parent_hash) = self.parent_hash {
-            buf.extend_from_slice(&parent_hash.0);
-        }
-
-        buf.extend_from_slice(&(self.miner_id.0).0);
-        buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
-        buf
-    }
-
-    fn compute_sign_message(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = Vec::new();
-        let encoded_height = encode_be_u64!(self.height);
-
-        buf.extend_from_slice(&encoded_height);
-
-        if let Some(ref parent_hash) = self.parent_hash {
-            buf.extend_from_slice(&parent_hash.0);
-        } else {
-            unreachable!();
-        }
-
+        buf.extend_from_slice(&self.parent_hash.0);
         buf.extend_from_slice(&(self.miner_id.0).0);
         buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
         buf
@@ -402,7 +381,7 @@ impl Arbitrary for TransactionBlock {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> TransactionBlock {
         let mut block = TransactionBlock {
             height: Arbitrary::arbitrary(g),
-            parent_hash: Some(Arbitrary::arbitrary(g)),
+            parent_hash: Arbitrary::arbitrary(g),
             state_root: Some(Arbitrary::arbitrary(g)),
             tx_root: Some(Arbitrary::arbitrary(g)),
             hash: None,

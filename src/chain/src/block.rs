@@ -85,7 +85,7 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait + Sized {
     fn block_hash(&self) -> Option<Hash>;
 
     /// Returns the parent hash of the block.
-    fn parent_hash(&self) -> Option<Hash>;
+    fn parent_hash(&self) -> Hash;
 
     /// Returns the timestamp of the block.
     fn timestamp(&self) -> DateTime<Utc>;

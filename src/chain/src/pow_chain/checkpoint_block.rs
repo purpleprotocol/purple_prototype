@@ -65,7 +65,7 @@ pub struct CheckpointBlock {
     miner_signature: Option<Signature>,
 
     /// The hash of the parent block.
-    parent_hash: Option<Hash>,
+    parent_hash: Hash,
 
     /// The block's proof of work
     proof: Proof,
@@ -118,7 +118,7 @@ impl Block for CheckpointBlock {
         self.hash.clone()
     }
 
-    fn parent_hash(&self) -> Option<Hash> {
+    fn parent_hash(&self) -> Hash {
         self.parent_hash.clone()
     }
 
@@ -167,8 +167,8 @@ impl Block for CheckpointBlock {
 
         // Validate proof of work
         if let Err(_) = miner::verify(
-            &block_hash.0,
-            block.proof.nonce as u32,
+            &chain_state.last_checkpoint.0,
+            block.proof.nonce,
             difficulty,
             edge_bits,
             &block.proof,
@@ -181,6 +181,7 @@ impl Block for CheckpointBlock {
         chain_state.txs_blocks_left = Some(ALLOWED_TXS_BLOCKS);
         chain_state.accepts = BlockType::Transaction;
         chain_state.height = block.height();
+        chain_state.last_checkpoint = block_hash;
 
         Ok(chain_state)
     }
@@ -194,7 +195,7 @@ impl Block for CheckpointBlock {
         buf.write_u8(Self::BLOCK_TYPE).unwrap();
         buf.write_u8(timestamp_len).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
-        buf.extend_from_slice(&self.parent_hash.unwrap().0);
+        buf.extend_from_slice(&self.parent_hash.0);
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&(&self.miner_id.0).0);
         buf.extend_from_slice(&self.miner_signature.as_ref().unwrap().to_bytes());
@@ -279,8 +280,8 @@ impl Block for CheckpointBlock {
             return Err("Incorrect packet structure 7");
         };
 
-        let proof = if buf.len() > 1 + 8 + 8 * PROOF_SIZE {
-            let proof: Vec<u8> = buf.drain(..(1 + 8 + 8 * PROOF_SIZE)).collect();
+        let proof = if buf.len() > 1 + 4 + 8 * PROOF_SIZE {
+            let proof: Vec<u8> = buf.drain(..(1 + 4 + 8 * PROOF_SIZE)).collect();
 
             match Proof::from_bytes(&proof) {
                 Ok(proof) => proof,
@@ -308,7 +309,7 @@ impl Block for CheckpointBlock {
             miner_id,
             proof,
             hash: None,
-            parent_hash: Some(parent_hash),
+            parent_hash,
             miner_signature: Some(miner_signature),
             height,
         };
@@ -322,7 +323,7 @@ impl CheckpointBlock {
     pub const BLOCK_TYPE: u8 = 1;
 
     pub fn new(
-        parent_hash: Option<Hash>,
+        parent_hash: Hash,
         collector_address: NormalAddress,
         ip: SocketAddr,
         height: u64,
@@ -342,52 +343,29 @@ impl CheckpointBlock {
     }
 
     pub fn sign_miner(&mut self, sk: &Sk) {
-        let message = self.compute_sign_message();
+        let message = self.compute_message();
         let sig = crypto::sign(&message, sk);
         self.miner_signature = Some(sig);
     }
 
     pub fn verify_miner_sig(&self) -> bool {
-        let message = self.compute_sign_message();
+        let message = self.compute_message();
         crypto::verify(&message, self.miner_signature.as_ref().unwrap(), &self.miner_id.0)
     }
 
     pub fn compute_hash(&mut self) {
-        let message = self.compute_hash_message();
+        let message = self.compute_message();
         let hash = crypto::hash_slice(&message);
 
         self.hash = Some(hash);
     }
 
-    fn compute_hash_message(&self) -> Vec<u8> {
+    fn compute_message(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         let encoded_height = encode_be_u64!(self.height);
 
         buf.extend_from_slice(&encoded_height);
-
-        if let Some(ref parent_hash) = self.parent_hash {
-            buf.extend_from_slice(&parent_hash.0);
-        }
-
-        buf.extend_from_slice(&self.collector_address.to_bytes());
-        buf.extend_from_slice(&(self.miner_id.0).0);
-        buf.extend_from_slice(&self.proof.to_bytes());
-        buf.extend_from_slice(&self.timestamp.to_rfc3339().as_bytes());
-        buf
-    }
-
-    fn compute_sign_message(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = Vec::new();
-        let encoded_height = encode_be_u64!(self.height);
-
-        buf.extend_from_slice(&encoded_height);
-
-        if let Some(ref parent_hash) = self.parent_hash {
-            buf.extend_from_slice(&parent_hash.0);
-        } else {
-            unreachable!();
-        }
-
+        buf.extend_from_slice(&self.parent_hash.0);
         buf.extend_from_slice(&self.collector_address.to_bytes());
         buf.extend_from_slice(&(self.miner_id.0).0);
         buf.extend_from_slice(&self.proof.to_bytes());
@@ -403,7 +381,7 @@ impl Arbitrary for CheckpointBlock {
         let mut block = CheckpointBlock {
             height: Arbitrary::arbitrary(g),
             collector_address: Arbitrary::arbitrary(g),
-            parent_hash: Some(Arbitrary::arbitrary(g)),
+            parent_hash: Arbitrary::arbitrary(g),
             hash: None,
             miner_id: Arbitrary::arbitrary(g),
             miner_signature: Some(Arbitrary::arbitrary(g)),

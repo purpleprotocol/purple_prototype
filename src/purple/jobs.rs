@@ -92,6 +92,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
 
                 if let Some(miner_height) = current_height { 
                     let tip = pow_chain.canonical_tip();
+                    let tip_state = pow_chain.canonical_tip_state();
                     let current_height = tip.height();
 
                     if miner_height == current_height {
@@ -109,7 +110,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
 
                             info!("Found solution for block height {}", miner_height);
                             let solution = solutions.sols[0];
-                            let nonce = solution.nonce();
+                            let nonce = solution.nonce() as u32;
                             let sol_u64s = solution.to_u64s();
                             let proof = Proof::new(sol_u64s, nonce, solutions.edge_bits as u8);
 
@@ -119,7 +120,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
 
                             // Create block
                             let mut block = CheckpointBlock::new(
-                                tip.block_hash(), 
+                                tip_state.last_checkpoint.clone(), 
                                 collector_address,
                                 ip,
                                 miner_height + 1,

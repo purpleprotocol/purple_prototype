@@ -50,7 +50,7 @@ pub fn init(
 ) -> PowChainRef {
     let pow_chain = Arc::new(RwLock::new(PowChain::new(
         pow_chain_db,
-        PowChainState::genesis(state_db),
+        PowChainState::genesis(state_db.clone()),
         archival_mode,
     )));
 
@@ -63,7 +63,7 @@ pub fn init(
 
     {
         let mut db_ref = STATE_DB_REF.write();
-        *db_ref = Some(state_db.clone());
+        *db_ref = Some(state_db);
     }
 
     pow_chain

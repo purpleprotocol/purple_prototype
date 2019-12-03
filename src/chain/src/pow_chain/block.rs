@@ -28,6 +28,8 @@ use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+pub const GENESIS_HASH_KEY: &[u8] = b"GENESIS";
+
 #[derive(Debug, Clone)]
 pub enum PowBlock {
     Genesis,
@@ -72,7 +74,7 @@ impl Block for PowBlock {
     fn block_hash(&self) -> Option<Hash> {
         match *self {
             PowBlock::Genesis => {
-                Some(crypto::hash_slice(b"GENESIS"))
+                Some(crypto::hash_slice(GENESIS_HASH_KEY))
             }
 
             PowBlock::Checkpoint(ref block) => {
@@ -85,10 +87,10 @@ impl Block for PowBlock {
         }
     }
 
-    fn parent_hash(&self) -> Option<Hash> {
+    fn parent_hash(&self) -> Hash {
         match *self {
             PowBlock::Genesis => {
-                None
+                unimplemented!();
             }
 
             PowBlock::Checkpoint(ref block) => {
