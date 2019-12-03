@@ -30,11 +30,15 @@ use std::cell::RefCell;
 lazy_static! {
     static ref CHAIN_REF: Arc<RwLock<Option<PowChainRef>>> =
         Arc::new(RwLock::new(None));
+    
+    static ref STATE_DB_REF: Arc<RwLock<Option<PersistentDb>>> = 
+        Arc::new(RwLock::new(None));
 }
 
 #[cfg(feature = "test")]
 thread_local! {
     static CHAIN_REF: RefCell<Option<PowChainRef>> = RefCell::new(None);
+    static STATE_DB_REF: RefCell<Option<PersistentDb>> = RefCell::new(None);
 }
 
 #[cfg(not(feature = "test"))]
@@ -52,8 +56,15 @@ pub fn init(
 
     let pow_chain = PowChainRef::new(pow_chain);
 
-    let mut chain_ref = CHAIN_REF.write();
-    *chain_ref = Some(pow_chain.clone());
+    {
+        let mut chain_ref = CHAIN_REF.write();
+        *chain_ref = Some(pow_chain.clone());
+    }
+
+    {
+        let mut db_ref = STATE_DB_REF.write();
+        *db_ref = Some(state_db.clone());
+    }
 
     pow_chain
 }
@@ -66,7 +77,7 @@ pub fn init(
 ) -> PowChainRef {
     let pow_chain = Arc::new(RwLock::new(PowChain::new(
         pow_chain_db,
-        PowChainState::genesis(state_db),
+        PowChainState::genesis(state_db.clone()),
         archival_mode,
     )));
 
@@ -77,20 +88,25 @@ pub fn init(
         *chain_ref = Some(pow_chain.clone());
     });
 
+    STATE_DB_REF.with(|db_ref| {
+        let mut db_ref = db_ref.borrow_mut();
+        *db_ref = Some(state_db);
+    });
+
     pow_chain
 }
 
 #[cfg(not(feature = "test"))]
-pub fn chain_ref() -> PowChainRef {
-    let chain_ref = CHAIN_REF.read();
-    chain_ref.clone().unwrap()
+pub fn state_db_ref() -> PersistentDb {
+    let state_db_ref = STATE_DB_REF.read();
+    state_db_ref.clone().unwrap()
 }
 
 #[cfg(feature = "test")]
-pub fn chain_ref() -> PowChainRef {
-    CHAIN_REF.with(|chain_ref| {
-        let chain_ref = chain_ref.borrow();
-        chain_ref.clone().unwrap()
+pub fn state_db_ref() -> PersistentDb {
+    STATE_DB_REF.with(|state_db_ref| {
+        let state_db_ref = state_db_ref.borrow();
+        state_db_ref.clone().unwrap()
     })
 }
 

@@ -65,7 +65,8 @@ impl Block for PowBlock {
     }
 
     fn genesis_state() -> Self::ChainState {
-        unimplemented!();
+        let db = crate::init::state_db_ref();
+        PowChainState::genesis(db)
     }
 
     fn block_hash(&self) -> Option<Hash> {
