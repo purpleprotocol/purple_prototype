@@ -43,7 +43,7 @@ impl Send {
     pub const TX_TYPE: u8 = 3;
 
     /// Validates the transaction against the provided state.
-    pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
         let zero = Balance::from_bytes(b"0.0").unwrap();
 
         // You cannot send 0 coins

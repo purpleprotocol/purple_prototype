@@ -19,6 +19,8 @@
 use account::{Address, Balance, ContractAddress, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
+use patricia_trie::{TrieDBMut, TrieMut};
+use persistence::{BlakeDbHasher, Codec};
 use purple_vm::Gas;
 use std::io::Cursor;
 use std::str;
@@ -43,6 +45,15 @@ pub struct Call {
 
 impl Call {
     pub const TX_TYPE: u8 = 1;
+
+    /// Validates the transaction against the provided state.
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        unimplemented!();
+    }
+
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        unimplemented!();
+    }
 
     /// Signs the transaction with the given secret key.
     ///

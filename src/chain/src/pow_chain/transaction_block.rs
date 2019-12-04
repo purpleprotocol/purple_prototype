@@ -32,6 +32,8 @@ use chrono::prelude::*;
 use crypto::Hash;
 use crypto::PublicKey;
 use lazy_static::*;
+use patricia_trie::{TrieDBMut, TrieMut};
+use persistence::{PersistentDb, BlakeDbHasher, Codec};
 use miner::{Proof, PROOF_SIZE};
 use std::boxed::Box;
 use std::hash::Hash as HashTrait;
@@ -164,7 +166,29 @@ impl Block for TransactionBlock {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::NoTxBlocksLeft));
         }
 
-        // TODO: Apply transactions to state before commit
+        // Apply transactions to state
+        if let Some(transaction_set) = &block.transactions {
+            let transaction_set = transaction_set.read();
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut chain_state.db, &mut chain_state.state_root);
+
+            for tx in transaction_set.iter() {
+                if tx.validate(&trie) {
+                    tx.apply(&mut trie);
+                } else {
+                    return Err(ChainErr::BadAppendCondition(AppendCondErr::BadTx));
+                }
+            }
+        } else {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::NoTxSet));
+        }
+
+        // Verify that our state root matches the one in the block header
+        if chain_state.state_root != block.state_root.unwrap() {
+            return Err(ChainErr::BadAppendCondition(AppendCondErr::BadStateRoot));
+        }
+
+        // Write new root state entry
+        chain_state.db.put(PersistentDb::ROOT_HASH_KEY, &chain_state.state_root.0);
 
         // Commit
         txs_blocks_left -= 1;

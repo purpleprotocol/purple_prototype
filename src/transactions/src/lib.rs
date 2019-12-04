@@ -74,6 +74,34 @@ pub enum Tx {
 }
 
 impl Tx {
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        match *self {
+            Tx::Call(ref tx) => tx.validate(trie),
+            Tx::OpenContract(ref tx) => tx.validate(trie),
+            Tx::Send(ref tx) => tx.validate(trie),
+            Tx::Burn(ref tx) => tx.validate(trie),
+            Tx::CreateCurrency(ref tx) => tx.validate(trie),
+            Tx::CreateMintable(ref tx) => tx.validate(trie),
+            Tx::Mint(ref tx) => tx.validate(trie),
+            Tx::CreateUnique(ref tx) => tx.validate(trie),
+            Tx::ChangeMinter(ref tx) => tx.validate(trie),
+        }
+    }
+
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        match *self {
+            Tx::Call(ref tx) => tx.apply(trie),
+            Tx::OpenContract(ref tx) => tx.apply(trie),
+            Tx::Send(ref tx) => tx.apply(trie),
+            Tx::Burn(ref tx) => tx.apply(trie),
+            Tx::CreateCurrency(ref tx) => tx.apply(trie),
+            Tx::CreateMintable(ref tx) => tx.apply(trie),
+            Tx::Mint(ref tx) => tx.apply(trie),
+            Tx::CreateUnique(ref tx) => tx.apply(trie),
+            Tx::ChangeMinter(ref tx) => tx.apply(trie),
+        }
+    }
+
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         match *self {
             Tx::Call(ref tx) => tx.to_bytes(),

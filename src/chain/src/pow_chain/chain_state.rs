@@ -57,6 +57,9 @@ pub struct PowChainState {
     /// field is `None` if we accept checkpoint blocks.
     pub(crate) txs_blocks_left: Option<u32>,
 
+    /// Root hash of the state trie
+    pub(crate) state_root: Hash,
+
     /// Hash of the last checkpoint block.
     pub last_checkpoint: Hash,
 }
@@ -71,6 +74,7 @@ impl PowChainState {
             accepts: BlockType::Checkpoint, 
             current_validator: None,
             txs_blocks_left: None,
+            state_root: Hash::NULL_RLP,
             last_checkpoint: crypto::hash_slice(GENESIS_HASH_KEY),
         }
     }

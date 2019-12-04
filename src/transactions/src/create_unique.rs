@@ -66,6 +66,16 @@ pub struct CreateUnique {
 impl CreateUnique {
     pub const TX_TYPE: u8 = 9;
 
+    /// Validates the transaction against the provided state.
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        unimplemented!();
+    }
+
+    /// Applies the burn transaction to the provided database.
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        unimplemented!();
+    }
+
     /// Signs the transaction with the given secret key.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data

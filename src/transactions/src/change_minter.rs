@@ -55,7 +55,7 @@ impl ChangeMinter {
     pub const TX_TYPE: u8 = 8;
 
     /// Validates the transaction against the provided state.
-    pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
         let zero = Balance::from_bytes(b"0.0").unwrap();
 
         if !self.verify_sig() {
@@ -233,7 +233,7 @@ impl ChangeMinter {
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    pub fn verify_sig(&mut self) -> bool {
+    pub fn verify_sig(&self) -> bool {
         let message = assemble_message(&self);
 
         match self.signature {

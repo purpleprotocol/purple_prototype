@@ -81,6 +81,12 @@ pub enum AppendCondErr {
     /// The block's height is invalid!
     BadHeight,
 
+    /// One or more of the provided transactions in the block is invalid
+    BadTx,
+
+    /// Calculate state root does not match the one on the block header
+    BadStateRoot,
+
     /// The miner's signature on a PoW block is invalid.
     BadMinerSig,
 
@@ -95,6 +101,9 @@ pub enum AppendCondErr {
 
     /// A transaction block has been issued when there aren't any left.
     NoTxBlocksLeft,
+
+    /// Tried to apply a transaction block to state without any transaction data.
+    NoTxSet,
 }
 
 lazy_static! {
