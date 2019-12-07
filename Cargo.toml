@@ -51,7 +51,7 @@ chain = { path = "src/chain" }
 miner = { path = "src/miner" }
 mempool = { path = "src/mempool" }
 reqwest = "0.9.21"
-mimalloc = "0.1.10"
+mimalloc = "0.1.11"
 
 ['cfg(test)'.chain]
 path = "src/chain"
