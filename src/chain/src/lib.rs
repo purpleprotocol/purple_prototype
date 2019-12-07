@@ -21,6 +21,9 @@
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate bin_tools;
+
 mod block;
 mod chain;
 mod pow_chain;

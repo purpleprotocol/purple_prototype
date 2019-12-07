@@ -283,6 +283,12 @@ impl std::fmt::Debug for PersistentDb {
     }
 }
 
+impl PartialEq for PersistentDb {
+    fn eq(&self, other: &PersistentDb) -> bool {
+        self.cf_name == other.cf_name
+    }
+}
+
 impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     fn keys(&self) -> std::collections::HashMap<Hash, i32> {
         unimplemented!();

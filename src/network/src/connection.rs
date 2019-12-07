@@ -416,10 +416,14 @@ pub fn start_peer_list_refresh_interval(
                     let missing_peers = network.max_peers - peers.len();
                     let peer = peers.get(&peer_addr).unwrap();
                     let sender = peer.validator.request_peers.sender.clone();
-                    let mut sender = sender.lock();
-                    let result = sender
-                        .send(missing_peers as u8)
-                        .map_err(|err| warn!("Could not send packet to {}, reason: {:?}", peer_addr, err));
+                    
+                    let result = {
+                        let mut sender = sender.lock();
+
+                        sender
+                            .send(missing_peers as u8)
+                            .map_err(|err| warn!("Could not send packet to {}, reason: {:?}", peer_addr, err))
+                    };
 
                     if let Ok(packet) = result {
                         network

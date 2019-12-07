@@ -187,9 +187,6 @@ impl Block for TransactionBlock {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadStateRoot));
         }
 
-        // Write new root state entry
-        chain_state.db.put(PersistentDb::ROOT_HASH_KEY, &chain_state.state_root.0);
-
         // Commit
         txs_blocks_left -= 1;
 
