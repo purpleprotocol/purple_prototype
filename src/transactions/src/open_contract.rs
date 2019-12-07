@@ -46,6 +46,11 @@ pub struct OpenContract {
 impl OpenContract {
     pub const TX_TYPE: u8 = 2;
 
+    /// Validates the transaction against the provided state.
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        unimplemented!();
+    }
+
     /// Applies the open contract transaction to the provided database.
     ///
     /// This function will panic if the `owner` account does not exist
@@ -259,12 +264,11 @@ impl OpenContract {
     /// 9) Address                  - 33byte binary
     /// 10) Currency hash           - 32byte binary
     /// 11) Fee hash                - 32byte binary
-    /// 12) Hash                    - 32byte binary
-    /// 13) Signature               - 64byte binary
-    /// 14) Amount                  - Binary of amount length
-    /// 15) Fee                     - Binary of fee length
-    /// 16) Default state           - Binary of state length
-    /// 17) Code                    - Binary of code length
+    /// 12) Signature               - 64byte binary
+    /// 13) Amount                  - Binary of amount length
+    /// 14) Fee                     - Binary of fee length
+    /// 15) Default state           - Binary of state length
+    /// 16) Code                    - Binary of code length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -273,12 +277,6 @@ impl OpenContract {
             address.to_bytes()
         } else {
             return Err("Address field is missing");
-        };
-
-        let hash = if let Some(hash) = &self.hash {
-            &hash.0
-        } else {
-            return Err("Hash field is missing");
         };
 
         let signature = if let Some(signature) = &self.signature {
@@ -314,7 +312,6 @@ impl OpenContract {
         buffer.append(&mut address.to_vec());
         buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature.to_vec());
         buffer.append(&mut amount.to_vec());
         buffer.append(&mut fee.to_vec());
@@ -436,17 +433,6 @@ impl OpenContract {
             return Err("Incorrect packet structure! Buffer size is smaller than the size for the fee hash field");
         };
 
-        let hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure! Buffer size is smaller than the size for the hash field");
-        };
-
         let signature = if buf.len() > 64 as usize {
             let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
 
@@ -492,7 +478,7 @@ impl OpenContract {
             return Err("Incorrect packet structure! Buffer size is not equal with the size for the code field");
         };
 
-        let open_contract = OpenContract {
+        let mut open_contract = OpenContract {
             owner: owner,
             amount: amount,
             asset_hash: asset_hash,
@@ -503,10 +489,11 @@ impl OpenContract {
             nonce: nonce,
             code: code,
             address: Some(address),
-            hash: Some(hash),
+            hash: None,
             signature: Some(signature),
         };
 
+        open_contract.compute_hash();
         Ok(open_contract)
     }
 
@@ -543,7 +530,7 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for OpenContract {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> OpenContract {
-        OpenContract {
+        let mut tx = OpenContract {
             owner: Arbitrary::arbitrary(g),
             code: Arbitrary::arbitrary(g),
             default_state: Arbitrary::arbitrary(g),
@@ -554,9 +541,12 @@ impl Arbitrary for OpenContract {
             nonce: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             address: Some(Arbitrary::arbitrary(g)),
-            hash: Some(Arbitrary::arbitrary(g)),
+            hash: None,
             signature: Some(Arbitrary::arbitrary(g)),
-        }
+        };
+
+        tx.compute_hash();
+        tx
     }
 }
 
@@ -608,7 +598,7 @@ mod tests {
 
         tx.compute_address();
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         // Apply transaction
         tx.apply(&mut trie);
@@ -669,7 +659,7 @@ mod tests {
             let mut tx = tx;
 
             for _ in 0..3 {
-                tx.hash();
+                tx.compute_hash();
             }
 
             tx.verify_hash()

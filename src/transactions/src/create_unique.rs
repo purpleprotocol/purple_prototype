@@ -66,6 +66,16 @@ pub struct CreateUnique {
 impl CreateUnique {
     pub const TX_TYPE: u8 = 9;
 
+    /// Validates the transaction against the provided state.
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        unimplemented!();
+    }
+
+    /// Applies the burn transaction to the provided database.
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        unimplemented!();
+    }
+
     /// Signs the transaction with the given secret key.
     pub fn sign(&mut self, skey: Sk) {
         // Assemble data
@@ -101,14 +111,13 @@ impl CreateUnique {
     /// 7) Asset hash           - 32byte binary
     /// 8) Fee hash             - 32byte binary
     /// 9) Name                 - 32byte binary
-    /// 10) Hash                - 32byte binary
-    /// 11) Signature           - 64byte binary
-    /// 12) Fee                 - Binary of fee length
-    /// 13) Meta1 (Optional)    - 32byte binary
-    /// 14) Meta2 (Optional)    - 32byte binary
-    /// 15) Meta3 (Optional)    - 32byte binary
-    /// 16) Meta4 (Optional)    - 32byte binary
-    /// 17) Meta5 (Optional)    - 32byte binary
+    /// 10) Signature           - 64byte binary
+    /// 11) Fee                 - Binary of fee length
+    /// 12) Meta1 (Optional)    - 32byte binary
+    /// 13) Meta2 (Optional)    - 32byte binary
+    /// 14) Meta3 (Optional)    - 32byte binary
+    /// 15) Meta4 (Optional)    - 32byte binary
+    /// 16) Meta5 (Optional)    - 32byte binary
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buf: Vec<u8> = Vec::new();
         let mut bitmask: u8 = 0;
@@ -163,7 +172,6 @@ impl CreateUnique {
         buf.append(&mut asset_hash.to_vec());
         buf.append(&mut fee_hash.to_vec());
         buf.append(&mut name.to_vec());
-        buf.append(&mut hash.to_vec());
         buf.append(&mut signature);
         buf.append(&mut fee.to_vec());
 
@@ -284,17 +292,6 @@ impl CreateUnique {
             return Err("Incorrect packet structure");
         };
 
-        let hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
         let signature = if buf.len() > 64 as usize {
             let sig_vec: Vec<u8> = buf.drain(..64).collect();
 
@@ -389,7 +386,7 @@ impl CreateUnique {
             return Err("Incorrect packet structure. Buffer still has data after all fields were deserialized");
         };
 
-        let create_unique = CreateUnique {
+        let mut create_unique = CreateUnique {
             creator: creator,
             receiver: receiver,
             asset_hash: asset_hash,
@@ -402,10 +399,11 @@ impl CreateUnique {
             meta5: meta5,
             fee: fee,
             nonce: nonce,
-            hash: Some(hash),
+            hash: None,
             signature: Some(signature),
         };
 
+        create_unique.compute_hash();
         Ok(create_unique)
     }
 
@@ -510,7 +508,7 @@ impl Arbitrary for CreateUnique {
             None
         };
 
-        CreateUnique {
+        let mut tx = CreateUnique {
             creator: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
             asset_hash: Arbitrary::arbitrary(g),
@@ -523,9 +521,12 @@ impl Arbitrary for CreateUnique {
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
-            hash: Some(Arbitrary::arbitrary(g)),
+            hash: None,
             signature: Some(Arbitrary::arbitrary(g)),
-        }
+        };
+
+        tx.compute_hash();
+        tx
     }
 }
 
@@ -544,7 +545,7 @@ mod tests {
             let mut tx = tx;
 
             for _ in 0..3 {
-                tx.hash();
+                tx.compute_hash();
             }
 
             tx.verify_hash()

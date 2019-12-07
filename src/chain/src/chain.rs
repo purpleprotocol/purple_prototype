@@ -72,24 +72,38 @@ pub enum AppendCondErr {
     /// in a chain that has been found.
     NoBlockFound,
 
-    /// The block's epoch is invalid.
-    BadEpoch,
-
     /// Validation failed because of an invalid transaction.
     BadTransaction,
 
-    /// Validation failed because of an invalid and potentially
-    /// byzantine action performed by a validator node.
-    BadValidator,
-
     /// The block's proof of work is invalid.
     BadProof,
+
+    /// The block's height is invalid!
+    BadHeight,
+
+    /// One or more of the provided transactions in the block is invalid
+    BadTx,
+
+    /// Calculate state root does not match the one on the block header
+    BadStateRoot,
 
     /// The miner's signature on a PoW block is invalid.
     BadMinerSig,
 
     /// The validator with the given id or ip is already in the validator pool.
     AlreadyInPool,
+
+    /// The block type cannot be accepted by the chain on this step.
+    DoesntAcceptBlockType,
+
+    /// The miner id present in the block is invalid.
+    InvalidMiner,
+
+    /// A transaction block has been issued when there aren't any left.
+    NoTxBlocksLeft,
+
+    /// Tried to apply a transaction block to state without any transaction data.
+    NoTxSet,
 }
 
 lazy_static! {
@@ -296,9 +310,6 @@ pub struct Chain<B: Block> {
     /// Validation states associated with the valid tips
     valid_tips_states: HashMap<Hash, UnflushedChainState<B::ChainState>>,
 
-    /// Buffer storing requests for switching chains
-    switch_requests: HashSet<Hash>,
-
     /// Whether the chain is in archival mode or not
     archival_mode: bool,
 }
@@ -351,7 +362,7 @@ impl<B: Block> Chain<B> {
             // We checkpoint states along the way if we can.
             let mut blocks = vec![canonical_tip.clone()];
             let mut state = root_state.clone().modify();
-            let mut block_hash = canonical_tip.parent_hash().unwrap();
+            let mut block_hash = canonical_tip.parent_hash();
 
             // Gather blocks
             loop {
@@ -362,7 +373,7 @@ impl<B: Block> Chain<B> {
                 let block_res = db_ref.get(&block_hash).unwrap();
                 let block = B::from_bytes(&block_res).unwrap();
 
-                block_hash = block.parent_hash().unwrap();
+                block_hash = block.parent_hash();
                 blocks.push(block);
             }
 
@@ -425,7 +436,6 @@ impl<B: Block> Chain<B> {
             disconnected_tips_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
             valid_tips: HashSet::with_capacity(B::MAX_ORPHANS),
             valid_tips_states: HashMap::with_capacity(B::MAX_ORPHANS),
-            switch_requests: HashSet::with_capacity(B::MAX_ORPHANS),
             max_orphan_height: None,
             archival_mode,
             height,
@@ -493,7 +503,7 @@ impl<B: Block> Chain<B> {
         // Traverse parents and remove them until we
         // reach the block with the given hash.
         loop {
-            let parent_hash = current.parent_hash().unwrap();
+            let parent_hash = current.parent_hash();
 
             if parent_hash == *block_hash {
                 break;
@@ -564,53 +574,6 @@ impl<B: Block> Chain<B> {
         self.db.get(block_hash).is_some()
     }
 
-    /// Returns true if the chain has buffered switch requests.
-    pub fn has_switch_requests(&self) -> bool {
-        !self.switch_requests.is_empty()
-    }
-
-    /// Attempts to flush the switch request buffer, potentially
-    /// yielding a new canonical chain.
-    ///
-    /// This must be called externally.
-    pub fn flush_switch_buffer(&mut self) {
-        let mut greatest_height = None;
-        let mut greatest_tip = None;
-
-        for tip_hash in self.switch_requests.iter() {
-            let tip = self.orphan_pool.get(tip_hash).unwrap();
-            let tip_state = self.valid_tips_states.get(tip_hash).unwrap();
-            let condition_result = B::switch_condition(tip.clone(), tip_state.clone().inner());
-
-            match condition_result {
-                SwitchResult::CannotEverSwitch => {
-                    // TODO: Delete branch
-                    unimplemented!();
-                }
-
-                SwitchResult::MayBeAbleToSwitch => {
-                    // Do nothing
-                }
-
-                SwitchResult::Switch => {
-                    if let Some(height) = greatest_height {
-                        if tip.height() > height {
-                            greatest_height = Some(tip.height());
-                            greatest_tip = Some(tip.clone());
-                        }
-                    } else {
-                        greatest_height = Some(tip.height());
-                        greatest_tip = Some(tip.clone());
-                    }
-                }
-            }
-        }
-
-        if let Some(tip) = greatest_tip {
-            self.switch(tip);
-        }
-    }
-
     fn update_max_orphan_height(&mut self, new_height: u64) {
         if self.max_orphan_height.is_none() {
             self.max_orphan_height = Some(new_height);
@@ -633,7 +596,7 @@ impl<B: Block> Chain<B> {
         // hash is the hash of the current canonical
         // tip block.
         assert_eq!(
-            block.parent_hash().unwrap(),
+            block.parent_hash(),
             self.canonical_tip.block_hash().unwrap()
         );
 
@@ -821,7 +784,7 @@ impl<B: Block> Chain<B> {
 
                         // If the orphan directly follows the canonical
                         // tip, write it to the chain.
-                        if orphan.parent_hash().unwrap() == self.canonical_tip.block_hash().unwrap()
+                        if orphan.parent_hash() == self.canonical_tip.block_hash().unwrap()
                         {
                             // Verify append condition
                             let append_condition = match B::append_condition(
@@ -894,7 +857,7 @@ impl<B: Block> Chain<B> {
                             // Filter out orphans that do not follow
                             // the canonical tip.
                             let orphan = self.orphan_pool.get(o).unwrap();
-                            let orphan_parent = orphan.parent_hash().unwrap();
+                            let orphan_parent = orphan.parent_hash();
                             let canonical_tip = self.canonical_tip.block_hash().unwrap();
 
                             if orphan_parent == canonical_tip {
@@ -1046,34 +1009,12 @@ impl<B: Block> Chain<B> {
             .is_none());
 
         if candidate_tip.height() > self.height + B::SWITCH_OFFSET as u64 {
-            let candidate_tip_state = self.valid_tips_states.get(&candidate_hash).unwrap();
-            let condition_result =
-                B::switch_condition(candidate_tip.clone(), candidate_tip_state.clone().inner());
-
-            match condition_result {
-                SwitchResult::CannotEverSwitch => {
-                    self.switch_requests.remove(&candidate_hash);
-
-                    // TODO: Clean up branch
-                }
-
-                SwitchResult::MayBeAbleToSwitch => {
-                    // Buffer switch for later check
-                    self.switch_requests.insert(candidate_hash.clone());
-                }
-
-                SwitchResult::Switch => {
-                    self.switch(candidate_tip);
-                }
-            }
+            self.switch(candidate_tip);
         }
     }
 
     fn switch(&mut self, candidate_tip: Arc<B>) {
         let candidate_hash = candidate_tip.block_hash().unwrap();
-
-        self.switch_requests.remove(&candidate_hash);
-
         let mut to_write: VecDeque<Arc<B>> = VecDeque::new();
         to_write.push_front(candidate_tip.clone());
 
@@ -1081,7 +1022,7 @@ impl<B: Block> Chain<B> {
         // ancestor of both the candidate tip and
         // the canonical tip.
         let horizon = {
-            let mut current = candidate_tip.parent_hash().unwrap();
+            let mut current = candidate_tip.parent_hash();
 
             // Traverse parents until we find a canonical block
             loop {
@@ -1092,7 +1033,7 @@ impl<B: Block> Chain<B> {
                 let cur = self.orphan_pool.get(&current).unwrap();
                 to_write.push_front(cur.clone());
 
-                current = cur.parent_hash().unwrap();
+                current = cur.parent_hash();
             }
 
             current
@@ -1143,7 +1084,7 @@ impl<B: Block> Chain<B> {
             let head = self.orphan_pool.get(head_hash).unwrap();
 
             // Attach chain to our tip
-            if head.parent_hash().unwrap() == *tip_hash {
+            if head.parent_hash() == *tip_hash {
                 if head.height() != tip_height + 1 {
                     self.cleanup_block_data(tip_height, tip_hash);
                     return Err(ChainErr::BadHeight);
@@ -1241,7 +1182,7 @@ impl<B: Block> Chain<B> {
                 assert!(tips.contains(&largest_tip));
 
                 let head = self.orphan_pool.get(h).unwrap();
-                let parent_hash = head.parent_hash().unwrap();
+                let parent_hash = head.parent_hash();
 
                 parent_hash == tip_clone.block_hash().unwrap()
             });
@@ -1342,7 +1283,7 @@ impl<B: Block> Chain<B> {
                     for m in iter {
                         let e = self.orphan_pool.get(m).unwrap();
                         let block_hash = e.block_hash().unwrap();
-                        let parent_hash = e.parent_hash().unwrap();
+                        let parent_hash = e.parent_hash();
 
                         if let Some(state) = previous.get(&parent_hash) {
                             // TODO: Reduce number of state clones
@@ -1444,7 +1385,7 @@ impl<B: Block> Chain<B> {
         // Traverse parents and update inverse height
         // until we reach a missing block or the
         // canonical chain.
-        while let Some(parent) = self.orphan_pool.get(&current.parent_hash().unwrap()) {
+        while let Some(parent) = self.orphan_pool.get(&current.parent_hash()) {
             let par_height = parent.height();
             let orphans = self.heights_mapping.get_mut(&par_height).unwrap();
             let inverse_h_entry = orphans.get_mut(&parent.block_hash().unwrap()).unwrap();
@@ -1537,454 +1478,451 @@ impl<B: Block> Chain<B> {
         }
 
         let tip = &self.canonical_tip;
+        let parent_hash = block.parent_hash();
 
-        if let Some(parent_hash) = block.parent_hash() {
-            // First attempt to place the block after the
-            // tip canonical block.
-            if parent_hash == tip.block_hash().unwrap() {
-                let height = block.height();
+        // First attempt to place the block after the
+        // tip canonical block.
+        if parent_hash == tip.block_hash().unwrap() {
+            let height = block.height();
 
-                // The height must be equal to that of the parent plus one
-                if height != self.height + 1 {
-                    return Err(ChainErr::BadHeight);
-                }
+            // The height must be equal to that of the parent plus one
+            if height != self.height + 1 {
+                return Err(ChainErr::BadHeight);
+            }
 
-                let new_tip_state = B::append_condition(
-                    block.clone(),
-                    self.canonical_tip_state.clone().inner(),
-                    BranchType::Canonical,
-                )?;
+            let new_tip_state = B::append_condition(
+                block.clone(),
+                self.canonical_tip_state.clone().inner(),
+                BranchType::Canonical,
+            )?;
 
-                // Write block to the chain
-                self.write_block(block);
+            // Write block to the chain
+            self.write_block(block);
 
-                // Perform checkpoint
-                {
-                    let height = self.height;
-                    let last_checkpoint_height = self.last_checkpoint_height.unwrap_or(0);
+            // Perform checkpoint
+            {
+                let height = self.height;
+                let last_checkpoint_height = self.last_checkpoint_height.unwrap_or(0);
 
-                    // Checkpoint state if we have reached the quota
-                    if height - last_checkpoint_height == B::CHECKPOINT_INTERVAL as u64 {
-                        if let None = self.earliest_checkpoint_height {
-                            self.earliest_checkpoint_height = Some(height);
-                        }
-
-                        self.last_checkpoint_height = Some(height);
-                        self.heights_state_mapping
-                            .insert(height, UnflushedChainState::new(new_tip_state.clone()));
+                // Checkpoint state if we have reached the quota
+                if height - last_checkpoint_height == B::CHECKPOINT_INTERVAL as u64 {
+                    if let None = self.earliest_checkpoint_height {
+                        self.earliest_checkpoint_height = Some(height);
                     }
+
+                    self.last_checkpoint_height = Some(height);
+                    self.heights_state_mapping
+                        .insert(height, UnflushedChainState::new(new_tip_state.clone()));
                 }
+            }
 
-                self.canonical_tip_state = UnflushedChainState::new(new_tip_state);
+            self.canonical_tip_state = UnflushedChainState::new(new_tip_state);
 
-                // Process orphans
-                self.process_orphans(height + 1);
+            // Process orphans
+            self.process_orphans(height + 1);
 
-                Ok(())
-            } else {
-                if self.orphan_pool.len() >= B::MAX_ORPHANS {
-                    return Err(ChainErr::TooManyOrphans);
+            Ok(())
+        } else {
+            if self.orphan_pool.len() >= B::MAX_ORPHANS {
+                return Err(ChainErr::TooManyOrphans);
+            }
+
+            // If the parent exists and it is not the canonical
+            // tip this means that this block is represents a
+            // potential fork in the chain so we add it to the
+            // orphan pool.
+            match self.db.get(&parent_hash) {
+                Some(parent_block) => {
+                    let height = block.height();
+                    let parent_height = B::from_bytes(&parent_block).unwrap().height();
+
+                    // The height must be equal to that of the parent plus one
+                    if height != parent_height + 1 {
+                        return Err(ChainErr::BadHeight);
+                    }
+
+                    let parent_state: UnflushedChainState<B::ChainState> = if let (
+                        Some(earliest_checkpoint_height),
+                        Some(last_checkpoint_height),
+                    ) =
+                        (self.earliest_checkpoint_height, self.last_checkpoint_height)
+                    {
+                        if parent_height == last_checkpoint_height {
+                            // Simply retrieve checkpointed state in this case
+                            self.heights_state_mapping
+                                .get(&parent_height)
+                                .unwrap()
+                                .clone()
+                        } else if parent_height > last_checkpoint_height {
+                            self.fetch_next_state(last_checkpoint_height, parent_height)
+                        } else {
+                            self.search_fetch_next_state(parent_height)
+                        }
+                    } else {
+                        self.search_fetch_next_state(parent_height)
+                    };
+
+                    let tip_state = B::append_condition(
+                        block.clone(),
+                        parent_state.inner(),
+                        BranchType::NonCanonical,
+                    )?;
+                    let tip_state = UnflushedChainState::new(tip_state);
+
+                    // Insert new state to valid tips mapping
+                    self.valid_tips_states
+                        .insert(block.block_hash().unwrap(), tip_state.clone());
+
+                    let mut status = OrphanType::ValidChainTip;
+                    let mut tip = block.clone();
+                    let mut _inverse_height = 0;
+
+                    self.write_orphan(block, OrphanType::ValidChainTip, 0);
+                    self.attempt_attach_valid(
+                        &mut tip,
+                        tip_state,
+                        &mut _inverse_height,
+                        &mut status,
+                    );
+
+                    if let OrphanType::ValidChainTip = status {
+                        // Do nothing
+                    } else {
+                        self.attempt_switch(tip);
+                    }
+
+                    Ok(())
                 }
-
-                // If the parent exists and it is not the canonical
-                // tip this means that this block is represents a
-                // potential fork in the chain so we add it to the
-                // orphan pool.
-                match self.db.get(&parent_hash) {
-                    Some(parent_block) => {
+                None => {
+                    // The parent is an orphan
+                    if let Some(parent_block) = self.orphan_pool.get(&parent_hash) {
                         let height = block.height();
-                        let parent_height = B::from_bytes(&parent_block).unwrap().height();
 
                         // The height must be equal to that of the parent plus one
-                        if height != parent_height + 1 {
+                        if height != parent_block.height() + 1 {
                             return Err(ChainErr::BadHeight);
                         }
 
-                        let parent_state: UnflushedChainState<B::ChainState> = if let (
-                            Some(earliest_checkpoint_height),
-                            Some(last_checkpoint_height),
-                        ) =
-                            (self.earliest_checkpoint_height, self.last_checkpoint_height)
-                        {
-                            if parent_height == last_checkpoint_height {
-                                // Simply retrieve checkpointed state in this case
-                                self.heights_state_mapping
-                                    .get(&parent_height)
+                        let parent_status =
+                            self.validations_mapping.get_mut(&parent_hash).unwrap();
+
+                        match parent_status {
+                            OrphanType::DisconnectedTip => {
+                                let head = self
+                                    .disconnected_tips_mapping
+                                    .get(&parent_hash)
                                     .unwrap()
-                                    .clone()
-                            } else if parent_height > last_checkpoint_height {
-                                self.fetch_next_state(last_checkpoint_height, parent_height)
-                            } else {
-                                self.search_fetch_next_state(parent_height)
-                            }
-                        } else {
-                            self.search_fetch_next_state(parent_height)
-                        };
+                                    .clone();
+                                let tips =
+                                    self.disconnected_heads_mapping.get_mut(&head).unwrap();
+                                let (largest_height, _) =
+                                    self.disconnected_heads_heights.get(&head).unwrap();
 
-                        let tip_state = B::append_condition(
-                            block.clone(),
-                            parent_state.inner(),
-                            BranchType::NonCanonical,
-                        )?;
-                        let tip_state = UnflushedChainState::new(tip_state);
+                                // Change the status of the old tip
+                                *parent_status = OrphanType::BelongsToDisconnected;
 
-                        // Insert new state to valid tips mapping
-                        self.valid_tips_states
-                            .insert(block.block_hash().unwrap(), tip_state.clone());
+                                // Replace old tip in mappings
+                                tips.remove(&parent_hash);
+                                tips.insert(block_hash.clone());
 
-                        let mut status = OrphanType::ValidChainTip;
-                        let mut tip = block.clone();
-                        let mut _inverse_height = 0;
+                                self.disconnected_tips_mapping.remove(&parent_hash);
 
-                        self.write_orphan(block, OrphanType::ValidChainTip, 0);
-                        self.attempt_attach_valid(
-                            &mut tip,
-                            tip_state,
-                            &mut _inverse_height,
-                            &mut status,
-                        );
+                                // Replace largest height if this is the case
+                                if block.height() > *largest_height {
+                                    self.disconnected_heads_heights.insert(
+                                        head.clone(),
+                                        (block.height(), block_hash.clone()),
+                                    );
+                                }
 
-                        if let OrphanType::ValidChainTip = status {
-                            // Do nothing
-                        } else {
-                            self.attempt_switch(tip);
-                        }
+                                self.write_orphan(
+                                    block.clone(),
+                                    OrphanType::DisconnectedTip,
+                                    0,
+                                );
 
-                        Ok(())
-                    }
-                    None => {
-                        // The parent is an orphan
-                        if let Some(parent_block) = self.orphan_pool.get(&parent_hash) {
-                            let height = block.height();
+                                self.disconnected_tips_mapping
+                                    .insert(block_hash.clone(), head.clone());
+                                let status = self
+                                    .attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
 
-                            // The height must be equal to that of the parent plus one
-                            if height != parent_block.height() + 1 {
-                                return Err(ChainErr::BadHeight);
-                            }
+                                if let OrphanType::DisconnectedTip = status {
+                                    self.traverse_inverse(block, 0, false);
+                                } else {
+                                    // Write final status
+                                    self.validations_mapping.insert(block_hash.clone(), status);
 
-                            let parent_status =
-                                self.validations_mapping.get_mut(&parent_hash).unwrap();
-
-                            match parent_status {
-                                OrphanType::DisconnectedTip => {
-                                    let head = self
-                                        .disconnected_tips_mapping
-                                        .get(&parent_hash)
-                                        .unwrap()
-                                        .clone();
+                                    // Make sure head tips don't contain pushed block's hash
                                     let tips =
                                         self.disconnected_heads_mapping.get_mut(&head).unwrap();
-                                    let (largest_height, _) =
-                                        self.disconnected_heads_heights.get(&head).unwrap();
+                                    tips.remove(&block_hash);
+                                    self.disconnected_tips_mapping.remove(&block_hash);
+                                }
+                            }
+                            OrphanType::ValidChainTip => {
+                                let tip_state =
+                                    self.valid_tips_states.get_mut(&parent_hash).unwrap();
+                                let new_tip_state = B::append_condition(
+                                    block.clone(),
+                                    tip_state.clone().inner(),
+                                    BranchType::NonCanonical,
+                                )?;
+                                let new_tip_state = UnflushedChainState::new(new_tip_state);
+                                *tip_state = new_tip_state.clone();
 
-                                    // Change the status of the old tip
-                                    *parent_status = OrphanType::BelongsToDisconnected;
+                                let tip_state = new_tip_state;
 
-                                    // Replace old tip in mappings
-                                    tips.remove(&parent_hash);
-                                    tips.insert(block_hash.clone());
+                                // Change status of old tip
+                                *parent_status = OrphanType::BelongsToValidChain;
 
-                                    self.disconnected_tips_mapping.remove(&parent_hash);
+                                let mut status = OrphanType::ValidChainTip;
+                                let mut tip = block.clone();
+                                let mut inverse_height = 0;
 
-                                    // Replace largest height if this is the case
-                                    if block.height() > *largest_height {
-                                        self.disconnected_heads_heights.insert(
-                                            head.clone(),
-                                            (block.height(), block_hash.clone()),
-                                        );
+                                // Mark orphan as the new tip
+                                self.write_orphan(block.clone(), status, inverse_height);
+
+                                // Attempt to attach to disconnected chains
+                                self.attempt_attach_valid(
+                                    &mut tip,
+                                    tip_state.clone(),
+                                    &mut inverse_height,
+                                    &mut status,
+                                );
+
+                                // Traverse parents and modify their inverse heights
+                                self.traverse_inverse(
+                                    block.clone(),
+                                    inverse_height,
+                                    inverse_height == 0,
+                                );
+
+                                // Update tips set
+                                self.valid_tips.remove(&parent_hash);
+
+                                if let OrphanType::ValidChainTip = status {
+                                    self.valid_tips.insert(tip.block_hash().unwrap());
+                                    self.valid_tips_states
+                                        .insert(tip.block_hash().unwrap(), tip_state);
+                                }
+
+                                // Check if the new tip's height is greater than
+                                // the canonical chain, and if so, switch chains.
+                                self.attempt_switch(tip);
+                            }
+                            OrphanType::BelongsToDisconnected => {
+                                self.write_orphan(
+                                    block.clone(),
+                                    OrphanType::DisconnectedTip,
+                                    0,
+                                );
+
+                                let head = {
+                                    // Traverse parents until we find the head block
+                                    let mut current = parent_hash.clone();
+                                    let mut result = None;
+
+                                    loop {
+                                        if self
+                                            .disconnected_heads_mapping
+                                            .get(&current)
+                                            .is_some()
+                                        {
+                                            result = Some(current);
+                                            break;
+                                        }
+
+                                        if let Some(orphan) = self.orphan_pool.get(&current) {
+                                            current = orphan.parent_hash();
+                                        } else {
+                                            unreachable!();
+                                        }
                                     }
 
-                                    self.write_orphan(
-                                        block.clone(),
-                                        OrphanType::DisconnectedTip,
-                                        0,
-                                    );
+                                    result.unwrap()
+                                };
 
+                                // Add to disconnected mappings
+                                let tips =
+                                    self.disconnected_heads_mapping.get_mut(&head).unwrap();
+
+                                tips.insert(block_hash.clone());
+                                self.disconnected_tips_mapping
+                                    .insert(block_hash.clone(), head.clone());
+
+                                let status = self
+                                    .attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
+
+                                if let OrphanType::DisconnectedTip = status {
                                     self.disconnected_tips_mapping
-                                        .insert(block_hash.clone(), head.clone());
-                                    let status = self
-                                        .attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
+                                        .insert(block_hash.clone(), head);
+                                    self.traverse_inverse(block.clone(), 0, false);
+                                } else {
+                                    // Write final status
+                                    self.validations_mapping.insert(block_hash.clone(), status);
 
-                                    if let OrphanType::DisconnectedTip = status {
-                                        self.traverse_inverse(block, 0, false);
-                                    } else {
-                                        // Write final status
-                                        self.validations_mapping.insert(block_hash.clone(), status);
-
-                                        // Make sure head tips don't contain pushed block's hash
-                                        let tips =
-                                            self.disconnected_heads_mapping.get_mut(&head).unwrap();
-                                        tips.remove(&block_hash);
-                                        self.disconnected_tips_mapping.remove(&block_hash);
-                                    }
+                                    // Make sure head tips don't contain pushed block's hash
+                                    let tips =
+                                        self.disconnected_heads_mapping.get_mut(&head).unwrap();
+                                    tips.remove(&block_hash);
+                                    self.disconnected_tips_mapping.remove(&block_hash);
                                 }
-                                OrphanType::ValidChainTip => {
-                                    let tip_state =
-                                        self.valid_tips_states.get_mut(&parent_hash).unwrap();
-                                    let new_tip_state = B::append_condition(
-                                        block.clone(),
-                                        tip_state.clone().inner(),
-                                        BranchType::NonCanonical,
-                                    )?;
-                                    let new_tip_state = UnflushedChainState::new(new_tip_state);
-                                    *tip_state = new_tip_state.clone();
-
-                                    let tip_state = new_tip_state;
-
-                                    // Change status of old tip
-                                    *parent_status = OrphanType::BelongsToValidChain;
-
-                                    let mut status = OrphanType::ValidChainTip;
-                                    let mut tip = block.clone();
-                                    let mut inverse_height = 0;
-
-                                    // Mark orphan as the new tip
-                                    self.write_orphan(block.clone(), status, inverse_height);
-
-                                    // Attempt to attach to disconnected chains
-                                    self.attempt_attach_valid(
-                                        &mut tip,
-                                        tip_state.clone(),
-                                        &mut inverse_height,
-                                        &mut status,
-                                    );
-
-                                    // Traverse parents and modify their inverse heights
-                                    self.traverse_inverse(
-                                        block.clone(),
-                                        inverse_height,
-                                        inverse_height == 0,
-                                    );
-
-                                    // Update tips set
-                                    self.valid_tips.remove(&parent_hash);
-
-                                    if let OrphanType::ValidChainTip = status {
-                                        self.valid_tips.insert(tip.block_hash().unwrap());
-                                        self.valid_tips_states
-                                            .insert(tip.block_hash().unwrap(), tip_state);
-                                    }
-
-                                    // Check if the new tip's height is greater than
-                                    // the canonical chain, and if so, switch chains.
-                                    self.attempt_switch(tip);
-                                }
-                                OrphanType::BelongsToDisconnected => {
-                                    self.write_orphan(
-                                        block.clone(),
-                                        OrphanType::DisconnectedTip,
-                                        0,
-                                    );
-
+                            }
+                            OrphanType::BelongsToValidChain => {
+                                // TODO: Maybe cache intermediate states?
+                                let tip_state = {
+                                    let mut visited_stack = Vec::new();
                                     let head = {
-                                        // Traverse parents until we find the head block
                                         let mut current = parent_hash.clone();
-                                        let mut result = None;
 
+                                        // Traverse parents until we find a canonical block
                                         loop {
-                                            if self
-                                                .disconnected_heads_mapping
-                                                .get(&current)
-                                                .is_some()
-                                            {
-                                                result = Some(current);
+                                            let cur = self.orphan_pool.get(&current).unwrap();
+                                            let parent_hash = cur.parent_hash();
+
+                                            visited_stack.push(cur.clone());
+
+                                            if self.db.get(&parent_hash).is_some() {
+                                                current = parent_hash;
                                                 break;
                                             }
 
-                                            if let Some(orphan) = self.orphan_pool.get(&current) {
-                                                current = orphan.parent_hash().unwrap();
-                                            } else {
-                                                unreachable!();
-                                            }
+                                            current = parent_hash;
                                         }
 
-                                        result.unwrap()
+                                        B::from_bytes(&self.db.get(&current).unwrap()).unwrap()
                                     };
 
-                                    // Add to disconnected mappings
-                                    let tips =
-                                        self.disconnected_heads_mapping.get_mut(&head).unwrap();
+                                    // Retrieve state associated with the head's parent
+                                    let state = self.search_fetch_next_state(head.height() - 1);
+                                    let mut state = B::append_condition(
+                                        head.clone(),
+                                        state.inner(),
+                                        BranchType::NonCanonical,
+                                    )?;
 
-                                    tips.insert(block_hash.clone());
-                                    self.disconnected_tips_mapping
-                                        .insert(block_hash.clone(), head.clone());
-
-                                    let status = self
-                                        .attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
-
-                                    if let OrphanType::DisconnectedTip = status {
-                                        self.disconnected_tips_mapping
-                                            .insert(block_hash.clone(), head);
-                                        self.traverse_inverse(block.clone(), 0, false);
-                                    } else {
-                                        // Write final status
-                                        self.validations_mapping.insert(block_hash.clone(), status);
-
-                                        // Make sure head tips don't contain pushed block's hash
-                                        let tips =
-                                            self.disconnected_heads_mapping.get_mut(&head).unwrap();
-                                        tips.remove(&block_hash);
-                                        self.disconnected_tips_mapping.remove(&block_hash);
-                                    }
-                                }
-                                OrphanType::BelongsToValidChain => {
-                                    // TODO: Maybe cache intermediate states?
-                                    let tip_state = {
-                                        let mut visited_stack = Vec::new();
-                                        let head = {
-                                            let mut current = parent_hash.clone();
-
-                                            // Traverse parents until we find a canonical block
-                                            loop {
-                                                let cur = self.orphan_pool.get(&current).unwrap();
-                                                let parent_hash = cur.parent_hash().unwrap();
-
-                                                visited_stack.push(cur.clone());
-
-                                                if self.db.get(&parent_hash).is_some() {
-                                                    current = parent_hash;
-                                                    break;
-                                                }
-
-                                                current = parent_hash;
-                                            }
-
-                                            B::from_bytes(&self.db.get(&current).unwrap()).unwrap()
-                                        };
-
-                                        // Retrieve state associated with the head's parent
-                                        let state = self.search_fetch_next_state(head.height() - 1);
-                                        let mut state = B::append_condition(
-                                            head.clone(),
-                                            state.inner(),
-                                            BranchType::NonCanonical,
-                                        )?;
-
-                                        // Compute tip state
-                                        while let Some(b) = visited_stack.pop() {
-                                            state = B::append_condition(
-                                                b,
-                                                state,
-                                                BranchType::NonCanonical,
-                                            )?;
-                                        }
-
-                                        let state = B::append_condition(
-                                            block.clone(),
+                                    // Compute tip state
+                                    while let Some(b) = visited_stack.pop() {
+                                        state = B::append_condition(
+                                            b,
                                             state,
                                             BranchType::NonCanonical,
                                         )?;
-                                        UnflushedChainState::new(state)
-                                    };
+                                    }
 
-                                    let mut status = OrphanType::ValidChainTip;
-                                    let mut tip = block.clone();
-                                    let mut inverse_height = 0;
+                                    let state = B::append_condition(
+                                        block.clone(),
+                                        state,
+                                        BranchType::NonCanonical,
+                                    )?;
+                                    UnflushedChainState::new(state)
+                                };
 
-                                    let tip_hash = tip.block_hash().unwrap();
+                                let mut status = OrphanType::ValidChainTip;
+                                let mut tip = block.clone();
+                                let mut inverse_height = 0;
 
-                                    // Write tip to valid tips set
-                                    self.valid_tips.insert(tip_hash.clone());
-                                    self.valid_tips_states.insert(tip_hash, tip_state.clone());
+                                let tip_hash = tip.block_hash().unwrap();
 
-                                    // Attempt to attach disconnected chains
-                                    // to the new valid tip.
-                                    self.attempt_attach_valid(
-                                        &mut tip,
-                                        tip_state,
-                                        &mut inverse_height,
-                                        &mut status,
-                                    );
+                                // Write tip to valid tips set
+                                self.valid_tips.insert(tip_hash.clone());
+                                self.valid_tips_states.insert(tip_hash, tip_state.clone());
 
-                                    // Write orphan, traverse and update inverse heights,
-                                    // then attempt to switch the canonical chain.
-                                    self.write_orphan(block, status, inverse_height);
-                                    self.traverse_inverse(
-                                        tip.clone(),
-                                        inverse_height,
-                                        inverse_height == 0,
-                                    );
-                                    self.attempt_switch(tip);
-                                }
+                                // Attempt to attach disconnected chains
+                                // to the new valid tip.
+                                self.attempt_attach_valid(
+                                    &mut tip,
+                                    tip_state,
+                                    &mut inverse_height,
+                                    &mut status,
+                                );
+
+                                // Write orphan, traverse and update inverse heights,
+                                // then attempt to switch the canonical chain.
+                                self.write_orphan(block, status, inverse_height);
+                                self.traverse_inverse(
+                                    tip.clone(),
+                                    inverse_height,
+                                    inverse_height == 0,
+                                );
+                                self.attempt_switch(tip);
                             }
+                        }
+
+                        Ok(())
+                    } else {
+                        // Add first to disconnected mappings
+                        let mut set = HashSet::new();
+                        set.insert(block_hash.clone());
+
+                        // Init disconnected mappings
+                        self.disconnected_heads_mapping
+                            .insert(block_hash.clone(), set);
+                        self.disconnected_tips_mapping
+                            .insert(block_hash.clone(), block_hash.clone());
+                        self.disconnected_heads_heights
+                            .insert(block_hash.clone(), (block.height(), block_hash.clone()));
+
+                        // Init heights mappings
+                        if let Some(entry) = self.heights_mapping.get_mut(&block.height()) {
+                            entry.insert(block_hash.clone(), 0);
+                        } else {
+                            let mut hm = HashMap::new();
+                            hm.insert(block_hash.clone(), 0);
+
+                            self.heights_mapping.insert(block.height(), hm);
+                        }
+
+                        // Add block to orphan pool
+                        self.orphan_pool.insert(block_hash.clone(), block.clone());
+
+                        let status =
+                            self.attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
+                        let mut found_match = None;
+
+                        // Attempt to attach the new disconnected
+                        // chain to any valid chain.
+                        for tip_hash in self.valid_tips.iter() {
+                            let tip = self.orphan_pool.get(tip_hash).unwrap();
+
+                            if parent_hash == tip.block_hash().unwrap() {
+                                // Check block height and cleanup if it doesn't match
+                                if (tip.height() + 1) != block.height() {
+                                    self.cleanup_paths(&block_hash);
+                                    return Err(ChainErr::BadHeight);
+                                }
+                                
+                                found_match = Some(tip);
+                                break;
+                            }
+                        }
+
+                        if let Some(tip) = found_match {
+                            let tip_state = self
+                                .valid_tips_states
+                                .get(&tip.block_hash().unwrap())
+                                .unwrap()
+                                .clone();
+                            let mut _status = OrphanType::ValidChainTip;
+                            let mut _tip = tip.clone();
+                            let mut _inverse_height = 0;
+
+                            self.write_orphan(block, status, 0);
+                            self.attempt_attach_valid(
+                                &mut _tip,
+                                tip_state,
+                                &mut _inverse_height,
+                                &mut _status,
+                            );
 
                             Ok(())
                         } else {
-                            // Add first to disconnected mappings
-                            let mut set = HashSet::new();
-                            set.insert(block_hash.clone());
-
-                            // Init disconnected mappings
-                            self.disconnected_heads_mapping
-                                .insert(block_hash.clone(), set);
-                            self.disconnected_tips_mapping
-                                .insert(block_hash.clone(), block_hash.clone());
-                            self.disconnected_heads_heights
-                                .insert(block_hash.clone(), (block.height(), block_hash.clone()));
-
-                            // Init heights mappings
-                            if let Some(entry) = self.heights_mapping.get_mut(&block.height()) {
-                                entry.insert(block_hash.clone(), 0);
-                            } else {
-                                let mut hm = HashMap::new();
-                                hm.insert(block_hash.clone(), 0);
-
-                                self.heights_mapping.insert(block.height(), hm);
-                            }
-
-                            // Add block to orphan pool
-                            self.orphan_pool.insert(block_hash.clone(), block.clone());
-
-                            let status =
-                                self.attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
-                            let mut found_match = None;
-
-                            // Attempt to attach the new disconnected
-                            // chain to any valid chain.
-                            for tip_hash in self.valid_tips.iter() {
-                                let tip = self.orphan_pool.get(tip_hash).unwrap();
-
-                                if parent_hash == tip.block_hash().unwrap() {
-                                    // Check block height and cleanup if it doesn't match
-                                    if (tip.height() + 1) != block.height() {
-                                        self.cleanup_paths(&block_hash);
-                                        return Err(ChainErr::BadHeight);
-                                    }
-                                    
-                                    found_match = Some(tip);
-                                    break;
-                                }
-                            }
-
-                            if let Some(tip) = found_match {
-                                let tip_state = self
-                                    .valid_tips_states
-                                    .get(&tip.block_hash().unwrap())
-                                    .unwrap()
-                                    .clone();
-                                let mut _status = OrphanType::ValidChainTip;
-                                let mut _tip = tip.clone();
-                                let mut _inverse_height = 0;
-
-                                self.write_orphan(block, status, 0);
-                                self.attempt_attach_valid(
-                                    &mut _tip,
-                                    tip_state,
-                                    &mut _inverse_height,
-                                    &mut _status,
-                                );
-
-                                Ok(())
-                            } else {
-                                self.write_orphan(block, status, 0);
-                                Ok(())
-                            }
+                            self.write_orphan(block, status, 0);
+                            Ok(())
                         }
                     }
                 }
             }
-        } else {
-            Err(ChainErr::NoParentHash)
         }
     }
 
@@ -2108,7 +2046,7 @@ impl<B: Block> Chain<B> {
             if let Some(blocks) = self.heights_mapping.get(&height) {
                 let iter = blocks.keys().filter(|k| {
                     let block = self.orphan_pool.get(k).unwrap();
-                    let parent_hash = block.parent_hash().unwrap();
+                    let parent_hash = block.parent_hash();
                     previous_set.contains(&parent_hash)
                 });
 
@@ -2145,7 +2083,7 @@ impl<B: Block> Chain<B> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use byteorder::WriteBytesExt;
     use chrono::prelude::*;
@@ -2179,7 +2117,7 @@ mod tests {
     static NONCE: AtomicUsize = AtomicUsize::new(0);
 
     #[derive(Clone, PartialEq, Debug)]
-    struct DummyState(pub u64);
+    pub struct DummyState(pub u64);
 
     impl DummyState {
         pub fn new(height: u64) -> DummyState {
@@ -2203,7 +2141,7 @@ mod tests {
 
     #[derive(Clone, Debug)]
     /// Dummy block used for testing
-    struct DummyBlock {
+    pub struct DummyBlock {
         hash: Hash,
         parent_hash: Hash,
         height: u64,
@@ -2262,8 +2200,8 @@ mod tests {
             self.height == 0
         }
 
-        fn parent_hash(&self) -> Option<Hash> {
-            Some(self.parent_hash.clone())
+        fn parent_hash(&self) -> Hash {
+            self.parent_hash.clone()
         }
 
         fn block_hash(&self) -> Option<Hash> {
@@ -2276,10 +2214,6 @@ mod tests {
 
         fn height(&self) -> u64 {
             self.height
-        }
-
-        fn address(&self) -> Option<&SocketAddr> {
-            Some(&self.ip)
         }
 
         fn after_write() -> Option<Box<dyn FnMut(Arc<Self>)>> {
@@ -2370,21 +2304,21 @@ mod tests {
         // The root state should still be the genesis state at this point
         assert_eq!(chain.root_block, DummyBlock::genesis());
         assert_eq!(
-            chain.root_state,
-            FlushedChainState::new(DummyBlock::genesis_state())
+            chain.root_state.clone().inner(),
+            FlushedChainState::new(DummyBlock::genesis_state()).inner()
         );
 
         // Now the state should flush with each added block
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(1)));
+        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(1)).inner());
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(2)));
+        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(2)).inner());
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(3)));
+        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(3)).inner());
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(4)));
+        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(4)).inner());
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state, FlushedChainState::new(DummyState::new(5)));
+        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(5)).inner());
     }
 
     #[test]
@@ -6936,7 +6870,7 @@ mod tests {
                 .get(&C.block_hash().unwrap())
                 .unwrap(),
             (C.height(), C.block_hash().unwrap())
-        );;
+        );
 
         pow_chain.append_block(B.clone()).unwrap();
         let C_second_ih = pow_chain
@@ -8847,16 +8781,20 @@ mod tests {
             chain
                 .valid_tips_states
                 .get(&F_second.block_hash().unwrap())
-                .unwrap(),
-            &UnflushedChainState::new(DummyState::new(F_second.height()))
+                .unwrap()
+                .clone()
+                .inner(),
+            UnflushedChainState::new(DummyState::new(F_second.height())).inner()
         );
         assert!(chain.valid_tips.contains(&D_tertiary.block_hash().unwrap()));
         assert_eq!(
             chain
                 .valid_tips_states
                 .get(&D_tertiary.block_hash().unwrap())
-                .unwrap(),
-            &UnflushedChainState::new(DummyState::new(D_tertiary.height()))
+                .unwrap()
+                .clone()
+                .inner(),
+            UnflushedChainState::new(DummyState::new(D_tertiary.height())).inner()
         );
         chain.append_block(blocks.remove(0)).unwrap(); // D_prime
 
@@ -8874,22 +8812,28 @@ mod tests {
             chain
                 .valid_tips_states
                 .get(&E_prime.block_hash().unwrap())
-                .unwrap(),
-            &UnflushedChainState::new(DummyState::new(E_prime.height()))
+                .unwrap()
+                .clone()
+                .inner(),
+            UnflushedChainState::new(DummyState::new(E_prime.height())).inner()
         );
         assert_eq!(
             chain
                 .valid_tips_states
                 .get(&D_tertiary.block_hash().unwrap())
-                .unwrap(),
-            &UnflushedChainState::new(DummyState::new(D_tertiary.height()))
+                .unwrap()
+                .clone()
+                .inner(),
+            UnflushedChainState::new(DummyState::new(D_tertiary.height())).inner()
         );
         assert_eq!(
             chain
                 .valid_tips_states
                 .get(&F_second.block_hash().unwrap())
-                .unwrap(),
-            &UnflushedChainState::new(DummyState::new(F_second.height()))
+                .unwrap()
+                .clone()
+                .inner(),
+            UnflushedChainState::new(DummyState::new(F_second.height())).inner()
         );
     }
 
@@ -9022,9 +8966,9 @@ mod tests {
             assert_eq!(chain.height(), 7);
             assert_eq!(chain.canonical_tip, G);
             assert_eq!(chain.valid_tips, set![E_prime.block_hash().unwrap(), D_tertiary.block_hash().unwrap(), F_second.block_hash().unwrap()]);
-            assert_eq!(chain.valid_tips_states.get(&E_prime.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(E_prime.height())));
-            assert_eq!(chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(D_tertiary.height())));
-            assert_eq!(chain.valid_tips_states.get(&F_second.block_hash().unwrap()).unwrap(), &UnflushedChainState::new(DummyState::new(F_second.height())));
+            assert_eq!(chain.valid_tips_states.get(&E_prime.block_hash().unwrap()).unwrap().clone().inner(), UnflushedChainState::new(DummyState::new(E_prime.height())).inner());
+            assert_eq!(chain.valid_tips_states.get(&D_tertiary.block_hash().unwrap()).unwrap().clone().inner(), UnflushedChainState::new(DummyState::new(D_tertiary.height())).inner());
+            assert_eq!(chain.valid_tips_states.get(&F_second.block_hash().unwrap()).unwrap().clone().inner(), UnflushedChainState::new(DummyState::new(F_second.height())).inner());
             assert!(chain.validations_mapping.get(&A.block_hash().unwrap()).is_none());
             assert!(chain.validations_mapping.get(&B.block_hash().unwrap()).is_none());
             assert!(chain.validations_mapping.get(&C.block_hash().unwrap()).is_none());

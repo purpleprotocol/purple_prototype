@@ -19,7 +19,7 @@
 macro_rules! impl_hash {
     () => {
         /// Computes the transaction's hash.
-        pub fn hash(&mut self) {
+        pub fn compute_hash(&mut self) {
             // Assemble data
             let message = assemble_message(&self);
 

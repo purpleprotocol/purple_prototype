@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use instruction_set::Instruction;
+use crate::instruction_set::Instruction;
 
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum VmType {

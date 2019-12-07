@@ -24,7 +24,7 @@ use std::cell::RefCell;
 use std::sync::atomic::{Ordering, AtomicBool};
 use std::thread;
 use parking_lot::RwLock;
-use chain::{PowBlock, Block, PowChainRef, BlockWrapper};
+use chain::{PowBlock, CheckpointBlock, Block, PowChainRef};
 use network::{Network, NetworkInterface};
 use network::packets::ForwardBlock;
 use network::Packet;
@@ -92,6 +92,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
 
                 if let Some(miner_height) = current_height { 
                     let tip = pow_chain.canonical_tip();
+                    let tip_state = pow_chain.canonical_tip_state();
                     let current_height = tip.height();
 
                     if miner_height == current_height {
@@ -109,7 +110,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
 
                             info!("Found solution for block height {}", miner_height);
                             let solution = solutions.sols[0];
-                            let nonce = solution.nonce();
+                            let nonce = solution.nonce() as u32;
                             let sol_u64s = solution.to_u64s();
                             let proof = Proof::new(sol_u64s, nonce, solutions.edge_bits as u8);
 
@@ -118,8 +119,8 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                             let node_id = network.our_node_id().clone();
 
                             // Create block
-                            let mut block = PowBlock::new(
-                                tip.block_hash(), 
+                            let mut block = CheckpointBlock::new(
+                                tip_state.last_checkpoint.clone(), 
                                 collector_address,
                                 ip,
                                 miner_height + 1,
@@ -129,6 +130,8 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                             block.sign_miner(network.secret_key());
                             block.compute_hash();
                             let block = Arc::new(block);
+                            let block = PowBlock::Checkpoint(block);
+                            let block = Arc::new(block);
 
                             // Append block to our chain
                             let result = pow_chain.append_block(block.clone()).map_err(|err| warn!("Could not append block to pow chain! Reason: {:?}", err));
@@ -137,8 +140,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                             if let Ok(_) = result {
                                 debug!("Creating block...");
 
-                                let block_wrapper = BlockWrapper::from_pow_block(block);
-                                let packet = ForwardBlock::new(block_wrapper);
+                                let packet = ForwardBlock::new(block);
                                 let packet = packet.to_bytes();
 
                                 debug!("Pausing solvers...");

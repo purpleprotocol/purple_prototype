@@ -15,19 +15,6 @@ The Purple Assembly format, also known as `PASM` allows compilers for languages 
 
 ### Consensus
 In order to achieve a high transaction throughput, a new consensus mechanism has been devised from scratch by starting from the latest distributed systems and cryptocurrency research. The result is an extension of the Nakamoto Consensus Scheme present in Bitcoin and other cryptocurrencies.
-
-#### Rationale
-In traditional Proof of Work systems, the ledger is updated by one randomly chosen "master node" which decides the next state of the ledger. The problem is that this is limited by the current block time which cannot be less than a few seconds.
-
-SSPoW maintains the same scheme of choosing a node by it requiring to provide a valid PoW. The difference is that after a node has been chosen, it can decide more than once the next state of the ledger, without waiting for another valid proof.
-
-In fact, in SSPoW, multiple nodes can do this at the same time by forming a validation pool and executing a second consensus algorithm which is inherently **asynchronous** and is thus much faster.
-
-If too many corrupt nodes enter the validation pool, the asynchronous algorithm will blow up. The trick is that in combination with the first step, the entry rate to the pool can be adjusted by lowering or raising the block time interval.
-
-At the same time, the amount of sets a node is allowed to validate while being in the pool can also be adjusted. In this way, with the right parameters, the system can in theory achieve equilibrium and thus remain operational even in case of attacks such as the dreaded 51% attack.   
-
-For more information on the consensus mechanism, take a look at the [introduction page](https://github.com/purpleprotocol/wiki/wiki/Consensus-Introduction) on the wiki. 
   
 ### Warning 
 All of this is still highly experimental and awaiting to be stress-tested on a large network. Many things can and possibly will still change.
@@ -38,7 +25,7 @@ If you want a clear description of the progress so far you can look at the [mile
   
 
 ## Building
-Building the project requires cmake, clang/llvm and the CUDA toolkit. After all dependencies are installed, run:
+Building the project requires cmake, clang/llvm and the CUDA toolkit. Note that building the core requires Rust `>= 1.39.0`. After all dependencies are installed, run:
 
 ```
 cargo build

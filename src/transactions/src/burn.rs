@@ -43,7 +43,7 @@ impl Burn {
     pub const TX_TYPE: u8 = 7;
 
     /// Validates the transaction against the provided state.
-    pub fn validate(&mut self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
         let zero = Balance::from_bytes(b"0.0").unwrap();
 
         // You cannot burn 0 coins
@@ -259,7 +259,7 @@ impl Burn {
     /// Verifies the signature of the transaction.
     ///
     /// Returns `false` if the signature field is missing.
-    pub fn verify_sig(&mut self) -> bool {
+    pub fn verify_sig(&self) -> bool {
         let message = assemble_message(&self);
 
         match self.signature {
@@ -278,11 +278,10 @@ impl Burn {
     /// 5) Burner               - 33byte binary
     /// 6) Currency hash        - 32byte binary
     /// 7) Fee hash             - 32byte binary
-    /// 8) Hash                 - 32byte binary
-    /// 9) Signature            - 64byte binary
-    /// 10) Amount              - Binary of amount length
-    /// 11) Fee                 - Binary of fee length
-    /// 12) Signature           - Binary of signature length
+    /// 8) Signature            - 64byte binary
+    /// 9) Amount               - Binary of amount length
+    /// 10) Fee                 - Binary of fee length
+    /// 11) Signature           - Binary of signature length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -318,7 +317,6 @@ impl Burn {
         buffer.append(&mut burner.to_vec());
         buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature);
         buffer.append(&mut amount.to_vec());
         buffer.append(&mut fee.to_vec());
@@ -399,17 +397,6 @@ impl Burn {
             return Err("Incorrect packet structure");
         };
 
-        let hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
         let signature = if buf.len() > 64 as usize {
             let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
 
@@ -443,17 +430,18 @@ impl Burn {
             return Err("Incorrect packet structure");
         };
 
-        let burn = Burn {
+        let mut burn = Burn {
             burner: burner,
             fee_hash: fee_hash,
             fee: fee,
             amount: amount,
             asset_hash: asset_hash,
             nonce: nonce,
-            hash: Some(hash),
+            hash: None,
             signature: Some(signature),
         };
 
+        burn.compute_hash();
         Ok(burn)
     }
 
@@ -487,16 +475,19 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for Burn {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Burn {
-        Burn {
+        let mut tx = Burn {
             burner: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
             asset_hash: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
-            hash: Some(Arbitrary::arbitrary(g)),
+            hash: None,
             signature: Some(Arbitrary::arbitrary(g)),
-        }
+        };
+
+        tx.compute_hash();
+        tx
     }
 }
 
@@ -541,7 +532,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(tx.validate(&trie));
     }
@@ -579,7 +570,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -624,7 +615,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(tx.validate(&trie));
     }
@@ -669,7 +660,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -714,7 +705,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -752,7 +743,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -790,7 +781,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         // Apply transaction
         tx.apply(&mut trie);
@@ -835,7 +826,7 @@ mod tests {
             let mut tx = tx;
 
             for _ in 0..3 {
-                tx.hash();
+                tx.compute_hash();
             }
 
             tx.verify_hash()

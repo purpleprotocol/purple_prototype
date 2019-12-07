@@ -16,21 +16,21 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use address::Address;
+use crate::code::function::Function;
+use crate::error::VmError;
+use crate::frame::Frame;
+use crate::gas::Gas;
+use crate::instruction_set::{Instruction, COMP_OPS};
+use crate::module::Module;
+use crate::primitives::control_flow::CfOperator;
+use crate::primitives::r#type::VmType;
+use crate::primitives::value::VmValue;
+use crate::stack::Stack;
+use crate::address::Address;
 use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt};
-use code::function::Function;
-use error::VmError;
-use frame::Frame;
-use gas::Gas;
-use instruction_set::{Instruction, COMP_OPS};
-use module::Module;
 use patricia_trie::TrieDBMut;
 use persistence::{BlakeDbHasher, Codec};
-use primitives::control_flow::CfOperator;
-use primitives::r#type::VmType;
-use primitives::value::VmValue;
-use stack::Stack;
 use std::io::Cursor;
 
 const MAX_OP_ARITY: u8 = 8;

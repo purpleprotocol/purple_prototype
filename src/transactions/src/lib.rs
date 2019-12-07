@@ -28,20 +28,6 @@ extern crate serde_derive;
 #[macro_use]
 extern crate bin_tools;
 
-extern crate account;
-extern crate bitvec;
-extern crate byteorder;
-extern crate crypto;
-extern crate elastic_array;
-extern crate hashdb;
-extern crate hex;
-extern crate patricia_trie;
-extern crate persistence;
-extern crate purple_vm;
-extern crate rand;
-extern crate rust_decimal;
-extern crate serde;
-
 #[macro_use]
 mod macros;
 
@@ -56,16 +42,16 @@ mod mint;
 mod open_contract;
 mod send;
 
-pub use burn::*;
-pub use call::*;
-pub use change_minter::*;
-pub use create_currency::*;
-pub use create_mintable::*;
-pub use create_unique::*;
-pub use genesis::*;
-pub use mint::*;
-pub use open_contract::*;
-pub use send::*;
+pub use crate::burn::*;
+pub use crate::call::*;
+pub use crate::change_minter::*;
+pub use crate::create_currency::*;
+pub use crate::create_mintable::*;
+pub use crate::create_unique::*;
+pub use crate::genesis::*;
+pub use crate::mint::*;
+pub use crate::open_contract::*;
+pub use crate::send::*;
 
 use account::{Address, Balance};
 use crypto::{Hash, Identity};
@@ -88,6 +74,34 @@ pub enum Tx {
 }
 
 impl Tx {
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        match *self {
+            Tx::Call(ref tx) => tx.validate(trie),
+            Tx::OpenContract(ref tx) => tx.validate(trie),
+            Tx::Send(ref tx) => tx.validate(trie),
+            Tx::Burn(ref tx) => tx.validate(trie),
+            Tx::CreateCurrency(ref tx) => tx.validate(trie),
+            Tx::CreateMintable(ref tx) => tx.validate(trie),
+            Tx::Mint(ref tx) => tx.validate(trie),
+            Tx::CreateUnique(ref tx) => tx.validate(trie),
+            Tx::ChangeMinter(ref tx) => tx.validate(trie),
+        }
+    }
+
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        match *self {
+            Tx::Call(ref tx) => tx.apply(trie),
+            Tx::OpenContract(ref tx) => tx.apply(trie),
+            Tx::Send(ref tx) => tx.apply(trie),
+            Tx::Burn(ref tx) => tx.apply(trie),
+            Tx::CreateCurrency(ref tx) => tx.apply(trie),
+            Tx::CreateMintable(ref tx) => tx.apply(trie),
+            Tx::Mint(ref tx) => tx.apply(trie),
+            Tx::CreateUnique(ref tx) => tx.apply(trie),
+            Tx::ChangeMinter(ref tx) => tx.apply(trie),
+        }
+    }
+
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         match *self {
             Tx::Call(ref tx) => tx.to_bytes(),

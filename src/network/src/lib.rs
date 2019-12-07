@@ -28,34 +28,6 @@ extern crate log;
 extern crate bin_tools;
 
 #[cfg(test)]
-extern crate tempdir;
-
-#[cfg(test)]
-extern crate timer;
-
-#[cfg(test)]
-extern crate rayon;
-
-extern crate byteorder;
-extern crate chain;
-extern crate chrono;
-extern crate crypto;
-extern crate consensus;
-extern crate events;
-extern crate futures;
-extern crate hashbrown;
-extern crate hashdb;
-extern crate hex;
-extern crate parking_lot;
-extern crate persistence;
-extern crate rand;
-extern crate rlp;
-extern crate tokio;
-extern crate tokio_io_timeout;
-extern crate tokio_timer;
-extern crate crossbeam_channel;
-
-#[cfg(test)]
 pub mod mock;
 
 pub mod bootstrap;
@@ -72,19 +44,15 @@ mod packet;
 mod peer;
 mod protocol_flow;
 mod validation;
-mod pool_network;
-mod pool_peer;
 
-pub use bootstrap::*;
-pub use connection::*;
-pub use error::*;
-pub use handlers::*;
-pub use interface::*;
-pub use network::*;
-pub use packet::*;
-pub use peer::*;
-pub use pool_network::*;
-pub use pool_peer::*;
+pub use crate::bootstrap::*;
+pub use crate::connection::*;
+pub use crate::error::*;
+pub use crate::handlers::*;
+pub use crate::interface::*;
+pub use crate::network::*;
+pub use crate::packet::*;
+pub use crate::peer::*;
 
 #[cfg(test)]
 use tempdir::TempDir;
@@ -129,9 +97,6 @@ use hashbrown::HashMap;
 use persistence::PersistentDb;
 
 #[cfg(test)]
-use chain::ChainState;
-
-#[cfg(test)]
 use chain::*;
 
 #[cfg(test)]
@@ -163,14 +128,12 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
     for i in 0..peers {
         let (rx, tx) = unbounded();
         let (rx1, tx1) = unbounded();
-        let (rx2, tx2) = unbounded();
         address_mappings.insert(addresses[i].clone(), identities[i].0.clone());
         mailboxes.insert(identities[i].0.clone(), rx);
         let mb_clone = mailboxes.clone();
         let ids_clone = identities.clone();
         let am_clone = address_mappings.clone();
         let a_clone = addresses.clone();
-
         let (s, r) = unbounded();
 
         thread::Builder::new()
@@ -182,13 +145,12 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
                 let addresses = a_clone;
                 let temp_dir = TempDir::new("storage").unwrap();
 
-                let (db1, db2, db3) = (
-                    test_helpers::init_tempdb(),
+                let (db1, db2) = (
                     test_helpers::init_tempdb(),
                     test_helpers::init_tempdb(),
                 );
 
-                let (pow_chain, state_chain) = chain::init(db1, db2, db3, true);
+                let pow_chain = chain::init(db1, db2, true);
 
                 let network = MockNetwork::new(
                     identities[i].0.clone(),
@@ -200,9 +162,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
                     mailboxes.clone(),
                     address_mappings.clone(),
                     rx1,
-                    rx2,
                     pow_chain,
-                    state_chain,
                 );
 
                 let network = Arc::new(Mutex::new(network));
@@ -211,7 +171,6 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
                 MockNetwork::start_receive_loop(
                     network,
                     Arc::new(Mutex::new(tx1)),
-                    Arc::new(Mutex::new(tx2)),
                 )
             })
             .unwrap();

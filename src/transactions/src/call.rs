@@ -19,6 +19,8 @@
 use account::{Address, Balance, ContractAddress, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
+use patricia_trie::{TrieDBMut, TrieMut};
+use persistence::{BlakeDbHasher, Codec};
 use purple_vm::Gas;
 use std::io::Cursor;
 use std::str;
@@ -43,6 +45,15 @@ pub struct Call {
 
 impl Call {
     pub const TX_TYPE: u8 = 1;
+
+    /// Validates the transaction against the provided state.
+    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+        unimplemented!();
+    }
+
+    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+        unimplemented!();
+    }
 
     /// Signs the transaction with the given secret key.
     ///
@@ -84,12 +95,11 @@ impl Call {
     /// 9) To                   - 33byte binary
     /// 10) Currency hash       - 32byte binary
     /// 11) Fee hash            - 32byte binary
-    /// 12) Hash                - 32byte binary
-    /// 13) Signature           - 64byte binary
-    /// 14) Gas price           - Binary of gas price length
-    /// 15) Amount              - Binary of amount length
-    /// 16) Fee                 - Binary of fee length
-    /// 17) Inputs              - Binary of inputs length
+    /// 12) Signature           - 64byte binary
+    /// 13) Gas price           - Binary of gas price length
+    /// 14) Amount              - Binary of amount length
+    /// 15) Fee                 - Binary of fee length
+    /// 16) Inputs              - Binary of inputs length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -136,7 +146,6 @@ impl Call {
         buffer.append(&mut to.to_vec());
         buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature);
         buffer.append(&mut gas_limit.to_vec());
         buffer.append(&mut gas_price.to_vec());
@@ -255,17 +264,6 @@ impl Call {
             return Err("Incorrect packet structure");
         };
 
-        let hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
         let signature = if buf.len() > 64 as usize {
             let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
 
@@ -331,7 +329,7 @@ impl Call {
             return Err("Incorrect packet structure");
         };
 
-        let call = Call {
+        let mut call = Call {
             from: from,
             to: to,
             fee_hash: fee_hash,
@@ -342,10 +340,11 @@ impl Call {
             gas_price: gas_price,
             asset_hash: asset_hash,
             nonce: nonce,
-            hash: Some(hash),
+            hash: None,
             signature: Some(signature),
         };
 
+        call.compute_hash();
         Ok(call)
     }
 
@@ -382,7 +381,7 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for Call {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Call {
-        Call {
+        let mut tx = Call {
             from: Arbitrary::arbitrary(g),
             to: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
@@ -393,9 +392,12 @@ impl Arbitrary for Call {
             gas_price: Arbitrary::arbitrary(g),
             asset_hash: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
-            hash: Some(Arbitrary::arbitrary(g)),
+            hash: None,
             signature: Some(Arbitrary::arbitrary(g)),
-        }
+        };
+
+        tx.compute_hash();
+        tx
     }
 }
 
@@ -414,7 +416,7 @@ mod tests {
             let mut tx = tx;
 
             for _ in 0..3 {
-                tx.hash();
+                tx.compute_hash();
             }
 
             tx.verify_hash()

@@ -16,15 +16,14 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::pool_network::PoolNetwork;
+use crate::Peer;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
-use crate::packets::connect_pool::ConnectPool;
 use crate::bootstrap::cache::BootstrapCache;
 use crate::connection::*;
-use crate::peer::{ConnectionType, SubConnectionType};
+use crate::peer::ConnectionType;
 use crate::validation::sender::Sender as SenderTrait;
 use tokio_timer::Interval;
 use tokio::prelude::future::ok;
@@ -39,7 +38,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
-use Peer;
 
 #[cfg(test)]
 use crossbeam_channel::Sender;
@@ -61,12 +59,6 @@ pub struct Network {
     /// Reference to the `PowChain`
     pow_chain_ref: PowChainRef,
 
-    /// Reference to the `StateChain`
-    state_chain_ref: StateChainRef,
-
-    /// Sender to `StateChain` block buffer
-    state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
-
     /// Sender to `PowChain` block buffer
     pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
 
@@ -86,11 +78,6 @@ pub struct Network {
     pub(crate) accept_connections: Arc<AtomicBool>,
 
     #[cfg(feature = "miner")]
-    /// Validator pool sub-network. This field is `None` if we
-    /// are not in a validator pool.
-    pub(crate) current_pool: Arc<RwLock<Option<PoolNetwork>>>,
-
-    #[cfg(feature = "miner")]
     /// Our retrieved ip address
     pub(crate) our_ip: SocketAddr,
 }
@@ -103,9 +90,7 @@ impl Network {
         secret_key: Sk,
         max_peers: usize,
         pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
-        state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
         pow_chain_ref: PowChainRef,
-        state_chain_ref: StateChainRef,
         bootstrap_cache: BootstrapCache,
         accept_connections: Arc<AtomicBool>,
         our_ip: Option<SocketAddr>,
@@ -118,14 +103,9 @@ impl Network {
             secret_key,
             max_peers,
             pow_chain_sender,
-            state_chain_sender,
             pow_chain_ref,
-            state_chain_ref,
             bootstrap_cache,
             accept_connections,
-
-            #[cfg(feature = "miner")]
-            current_pool: Arc::new(RwLock::new(None)),
 
             #[cfg(feature = "miner")]
             our_ip: our_ip.unwrap(),
@@ -189,7 +169,6 @@ impl NetworkInterface for Network {
             self.clone(),
             self.accept_connections.clone(),
             address,
-            SubConnectionType::Normal,
         );
 
         Ok(())
@@ -220,11 +199,6 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    #[cfg(feature = "miner")]
-    fn validator_pool_network_ref(&self) -> Arc<RwLock<Option<PoolNetwork>>> {
-        self.current_pool.clone()
-    }
-
     fn port(&self) -> u16 {
         self.port
     }
@@ -239,7 +213,6 @@ impl NetworkInterface for Network {
                     &self.secret_key,
                     rx,
                     self.network_name.as_str(),
-                    false,
                 );
                 peer.send_packet(packet)
             } else {
@@ -264,7 +237,6 @@ impl NetworkInterface for Network {
                     &self.secret_key,
                     rx,
                     self.network_name.as_str(),
-                    false,
                 );
                 peer.send_packet(packet.to_vec())
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
@@ -291,7 +263,6 @@ impl NetworkInterface for Network {
                     &self.secret_key,
                     rx,
                     self.network_name.as_str(),
-                    false,
                 );
                 peer.send_packet(packet.to_vec())
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
@@ -306,7 +277,7 @@ impl NetworkInterface for Network {
         let peers = self.peers.read();
 
         if let Some(peer) = peers.get(peer) {
-            let packet = crate::common::wrap_packet(&packet, self.network_name.as_str(), false);
+            let packet = crate::common::wrap_packet(&packet, self.network_name.as_str());
             peer.send_packet(packet)
         } else {
             Err(NetworkErr::PeerNotFound)
@@ -317,16 +288,8 @@ impl NetworkInterface for Network {
         self.pow_chain_ref.clone()
     }
 
-    fn state_chain_ref(&self) -> StateChainRef {
-        self.state_chain_ref.clone()
-    }
-
     fn pow_chain_sender(&self) -> &Sender<(SocketAddr, Arc<PowBlock>)> {
         &self.pow_chain_sender
-    }
-
-    fn state_chain_sender(&self) -> &Sender<(SocketAddr, Arc<StateBlock>)> {
-        &self.state_chain_sender
     }
 
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {

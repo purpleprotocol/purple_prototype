@@ -16,13 +16,12 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::network::Network;
 use crate::connection::*;
-use crate::peer::SubConnectionType;
 use crate::interface::NetworkInterface;
 use futures::stream;
 use futures::Future;
 use futures::Stream;
-use network::Network;
 use persistence::PersistentDb;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
@@ -102,7 +101,7 @@ pub fn bootstrap(
         let network_clone = network.clone();
 
         let fut = stream::iter_ok(peers_to_connect).for_each(move |addr| {
-            connect_to_peer(network.clone(), accept_connections.clone(), &addr, SubConnectionType::Normal)
+            connect_to_peer(network.clone(), accept_connections.clone(), &addr)
         });
 
         tokio::spawn(fut.and_then(move |_| {

@@ -16,8 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use code::transition::Transition;
-use gas::Gas;
+use crate::code::transition::Transition;
+use crate::gas::Gas;
 
 #[rustfmt::skip]
 #[EnumRepr(type = "u8")]

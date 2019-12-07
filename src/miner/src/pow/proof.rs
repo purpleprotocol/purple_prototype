@@ -16,7 +16,7 @@ pub struct Proof {
     pub edge_bits: u8,
 
     /// The nonce used by the miner to find the proof
-    pub nonce: u64,
+    pub nonce: u32,
 
     /// The proof nonces
     pub nonces: Vec<u64>,
@@ -39,7 +39,7 @@ impl Eq for Proof {}
 
 impl Proof {
     /// Builds a proof with provided nonces and edge_bits
-    pub fn new(mut in_nonces: Vec<u64>, nonce: u64, edge_bits: u8) -> Proof {
+    pub fn new(mut in_nonces: Vec<u64>, nonce: u32, edge_bits: u8) -> Proof {
         in_nonces.sort_unstable();
         Proof {
             edge_bits,
@@ -95,7 +95,7 @@ impl Proof {
     pub fn hash(&self) -> Hash {
         let mut buf = Vec::with_capacity(8 * PROOF_SIZE + 1);
         buf.write_u8(self.edge_bits).unwrap();
-        buf.write_u64::<LittleEndian>(self.nonce).unwrap();
+        buf.write_u32::<LittleEndian>(self.nonce).unwrap();
 
         for n in self.nonces.iter() {
             buf.write_u64::<LittleEndian>(*n).unwrap();
@@ -140,13 +140,13 @@ impl Proof {
     ///
     /// Binary Structure:
     /// 1) Edge bits - 8bits
-    /// 2) Nonce     - 64bits
+    /// 2) Nonce     - 32bits
     /// 3) Proof     - 64bits * PROOF_SIZE
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(1 + 8 + 8 * PROOF_SIZE);
+        let mut buf = Vec::with_capacity(1 + 4 + 8 * PROOF_SIZE);
 
         buf.extend_from_slice(&[self.edge_bits]);
-        buf.write_u64::<BigEndian>(self.nonce).unwrap();
+        buf.write_u32::<BigEndian>(self.nonce).unwrap();
 
         for nonce in self.nonces.iter() {
             buf.extend_from_slice(&encode_be_u64!(*nonce));
@@ -156,14 +156,14 @@ impl Proof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Proof, &'static str> {
-        if bytes.len() != 1 + 8 + 8 * PROOF_SIZE {
+        if bytes.len() != 1 + 4 + 8 * PROOF_SIZE {
             return Err("Invalid slice length");
         }
 
         let mut cursor = Cursor::new(bytes);
         let mut nonces = Vec::with_capacity(PROOF_SIZE);
         let edge_bits = cursor.read_u8().map_err(|_| "Invalid Proof")?;
-        let nonce = cursor.read_u64::<BigEndian>().map_err(|_| "Invalid Proof")?;
+        let nonce = cursor.read_u32::<BigEndian>().map_err(|_| "Invalid Proof")?;
 
         for _ in 0..PROOF_SIZE {
             if let Ok(result) = cursor.read_u64::<BigEndian>() {

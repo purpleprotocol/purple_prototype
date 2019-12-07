@@ -405,18 +405,11 @@ impl CreateCurrency {
     /// 7) Receiver             - 33byte binary
     /// 8) Currency hash        - 32byte binary
     /// 9) Fee hash             - 32byte binary
-    /// 10) Hash                - 32byte binary
-    /// 11) Signature           - 65byte binary
-    /// 12) Fee                 - Binary of fee length
+    /// 10) Signature           - 65byte binary
+    /// 11) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
-
-        let hash = if let Some(hash) = &self.hash {
-            &hash.0
-        } else {
-            return Err("Hash field is missing");
-        };
 
         let mut signature = if let Some(signature) = &self.signature {
             signature.to_bytes()
@@ -445,7 +438,6 @@ impl CreateCurrency {
         buffer.append(&mut receiver.to_vec());
         buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature);
         buffer.append(&mut fee.to_vec());
 
@@ -544,17 +536,6 @@ impl CreateCurrency {
             return Err("Incorrect packet structure");
         };
 
-        let hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
         let signature = if buf.len() > 64 as usize {
             let sig_vec: Vec<u8> = buf.drain(..64).collect();
 
@@ -577,7 +558,7 @@ impl CreateCurrency {
             return Err("Incorrect packet structure");
         };
 
-        let create_currency = CreateCurrency {
+        let mut create_currency = CreateCurrency {
             creator: creator,
             receiver: receiver,
             coin_supply: coin_supply,
@@ -586,10 +567,11 @@ impl CreateCurrency {
             precision: precision,
             asset_hash: asset_hash,
             nonce: nonce,
-            hash: Some(hash),
+            hash: None,
             signature: Some(signature),
         };
 
+        create_currency.compute_hash();
         Ok(create_currency)
     }
 
@@ -628,7 +610,7 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for CreateCurrency {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> CreateCurrency {
-        CreateCurrency {
+        let mut tx = CreateCurrency {
             creator: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
             asset_hash: Arbitrary::arbitrary(g),
@@ -637,9 +619,12 @@ impl Arbitrary for CreateCurrency {
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
-            hash: Some(Arbitrary::arbitrary(g)),
+            hash: None,
             signature: Some(Arbitrary::arbitrary(g)),
-        }
+        };
+
+        tx.compute_hash();
+        tx
     }
 }
 
@@ -682,7 +667,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(tx.validate(&trie));
     }
@@ -719,7 +704,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -756,7 +741,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -793,7 +778,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -830,7 +815,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -863,7 +848,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -900,7 +885,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         // Apply transaction
         tx.apply(&mut trie);
@@ -993,7 +978,7 @@ mod tests {
             let mut tx = tx;
 
             for _ in 0..3 {
-                tx.hash();
+                tx.compute_hash();
             }
 
             tx.verify_hash()

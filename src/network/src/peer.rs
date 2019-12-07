@@ -16,11 +16,9 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::pool_peer::{PoolPeer, SessionState};
 use crate::error::NetworkErr;
 use crate::validation::validator::ProtocolValidator;
 use crate::bootstrap::cache::BootstrapCache;
-use crate::validation::pool_validator::PoolProtocolValidator;
 use crypto::{Hash, NodeId};
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use std::default::Default;
@@ -39,21 +37,8 @@ use timer::{Guard, Timer};
 
 #[derive(Clone, Debug, Copy)]
 pub enum ConnectionType {
-    Client(SubConnectionType),
+    Client,
     Server,
-}
-
-#[derive(Clone, Debug, Copy)]
-/// Sub-connection type used as flag for connection processing
-/// when we are connecting as `Client`. In the case of the `Server`
-/// type, this is determined at run-time.
-pub enum SubConnectionType {
-    /// Normal connection
-    Normal,
-
-    /// Validator connection with sub-field containing the hash
-    /// of the miner PoW block.
-    Validator(Hash),
 }
 
 /// Size of the outbound buffer.
@@ -135,13 +120,6 @@ impl Peer {
     ) -> Peer {
         let (pk, sk) = gen_kx_keypair();
 
-        match connection_type {
-            ConnectionType::Client(SubConnectionType::Validator(_)) => {
-                panic!("Cannot create a normal peer with the validator sub-connection type!");
-            }
-            _ => { } // Do nothing
-        }
-
         Peer {
             id: id,
             ip: ip,
@@ -184,25 +162,6 @@ impl Peer {
         sender
             .try_send(packet)
             .map_err(|err| { debug!("Packet sending error: {:?}", err); NetworkErr::CouldNotSend })
-    }
-
-    /// Consumes a `Peer` struct and returns a `PeerPool` struct
-    /// that can be appended to a validator network peer table.
-    pub fn to_validator(self) -> PoolPeer {
-        PoolPeer {
-            rx: self.rx,
-            tx: self.tx,
-            pk: self.pk,
-            sk: self.sk,
-            id: self.id,
-            ip: self.ip,
-            last_seen: self.last_seen,
-            last_ping: self.last_ping,
-            connection_type: self.connection_type,
-            outbound_buffer: self.outbound_buffer,
-            session_state: SessionState::PreValidation,
-            validator: PoolProtocolValidator::new(),
-        }
     }
 }
 

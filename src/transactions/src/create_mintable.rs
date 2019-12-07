@@ -16,9 +16,9 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::create_currency::CUR_GROUP_CAPACITY;
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use create_currency::CUR_GROUP_CAPACITY;
 use crypto::{Hash, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec};
@@ -464,17 +464,10 @@ impl CreateMintable {
     /// 9) Minter address       - 33byte binary
     /// 10) Currency hash       - 32byte binary
     /// 11) Fee hash            - 32byte binary
-    /// 12) Hash                - 32byte binary
-    /// 13) Signature           - 64byte binary
-    /// 14) Fee                 - Binary of fee length
+    /// 12) Signature           - 64byte binary
+    /// 13) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
-
-        let hash = if let Some(hash) = &self.hash {
-            &hash.0
-        } else {
-            return Err("Hash field is missing");
-        };
 
         let mut signature = if let Some(signature) = &self.signature {
             signature.to_bytes()
@@ -507,7 +500,6 @@ impl CreateMintable {
         buffer.append(&mut minter_address.to_vec());
         buffer.append(&mut asset_hash.to_vec());
         buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut hash.to_vec());
         buffer.append(&mut signature);
         buffer.append(&mut fee.to_vec());
 
@@ -625,17 +617,6 @@ impl CreateMintable {
             return Err("Incorrect packet structure");
         };
 
-        let hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
         let signature = if buf.len() > 64 as usize {
             let sig_vec: Vec<u8> = buf.drain(..64).collect();
 
@@ -658,7 +639,7 @@ impl CreateMintable {
             return Err("Incorrect packet structure");
         };
 
-        let create_mintable = CreateMintable {
+        let mut create_mintable = CreateMintable {
             creator: creator,
             receiver: receiver,
             coin_supply: coin_supply,
@@ -669,10 +650,11 @@ impl CreateMintable {
             precision: precision,
             asset_hash: asset_hash,
             nonce: nonce,
-            hash: Some(hash),
+            hash: None,
             signature: Some(signature),
         };
 
+        create_mintable.compute_hash();
         Ok(create_mintable)
     }
 
@@ -715,7 +697,7 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for CreateMintable {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> CreateMintable {
-        CreateMintable {
+        let mut tx = CreateMintable {
             creator: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
             minter_address: Arbitrary::arbitrary(g),
@@ -726,9 +708,12 @@ impl Arbitrary for CreateMintable {
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
-            hash: Some(Arbitrary::arbitrary(g)),
+            hash: None,
             signature: Some(Arbitrary::arbitrary(g)),
-        }
+        };
+
+        tx.compute_hash();
+        tx
     }
 }
 
@@ -771,7 +756,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(tx.validate(&trie));
     }
@@ -810,7 +795,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -849,7 +834,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -888,7 +873,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -927,7 +912,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -962,7 +947,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -1001,7 +986,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         assert!(!tx.validate(&trie));
     }
@@ -1042,7 +1027,7 @@ mod tests {
         };
 
         tx.sign(id.skey().clone());
-        tx.hash();
+        tx.compute_hash();
 
         // Apply transaction
         tx.apply(&mut trie);
@@ -1144,7 +1129,7 @@ mod tests {
             let mut tx = tx;
 
             for _ in 0..3 {
-                tx.hash();
+                tx.compute_hash();
             }
 
             tx.verify_hash()

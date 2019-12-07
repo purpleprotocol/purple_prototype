@@ -16,12 +16,11 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::pool_network::PoolNetwork;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::*;
-use crate::peer::{ConnectionType, SubConnectionType, Peer};
+use crate::peer::{ConnectionType, Peer};
 use crate::validation::sender::Sender as SenderTrait;
 use crate::bootstrap::cache::BootstrapCache;
 use persistence::PersistentDb;
@@ -55,14 +54,8 @@ pub struct MockNetwork {
     /// Reference to the `PowChain`
     pow_chain_ref: PowChainRef,
 
-    /// Reference to the `StateChain`
-    state_chain_ref: StateChainRef,
-
     /// Sender to `PowChain` block buffer
     pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
-
-    /// Sender to `StateChain` block buffer
-    state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
 
     /// Mapping between ips and node ids.
     pub(crate) address_mappings: HashMap<SocketAddr, NodeId>,
@@ -87,18 +80,13 @@ pub struct MockNetwork {
 
     /// Associated bootstrap cache
     bootstrap_cache: BootstrapCache,
-
-    #[cfg(feature = "miner")]
-    /// Validator pool sub-network. This field is `None` if we
-    /// are not in a validator pool.
-    current_pool: Option<PoolNetwork>,
 }
 
 impl NetworkInterface for MockNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client(SubConnectionType::Normal), None, self.bootstrap_cache.clone());
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
@@ -120,11 +108,6 @@ impl NetworkInterface for MockNetwork {
 
     fn port(&self) -> u16 {
         self.port
-    }
-
-    #[cfg(feature = "miner")]
-    fn validator_pool_network_ref(&self) -> Option<PoolNetwork> {
-        self.current_pool.clone()
     }
 
     fn is_connected_to(&self, address: &SocketAddr) -> bool {
@@ -160,7 +143,6 @@ impl NetworkInterface for MockNetwork {
                 &self.secret_key,
                 key,
                 self.network_name.as_str(),
-                false,
             );
             mailbox.send((self.ip.clone(), packet)).unwrap();
             Ok(())
@@ -229,10 +211,6 @@ impl NetworkInterface for MockNetwork {
         self.pow_chain_ref.clone()
     }
 
-    fn state_chain_ref(&self) -> StateChainRef {
-        self.state_chain_ref.clone()
-    }
-
     fn has_peer(&self, addr: &SocketAddr) -> bool {
         self.peers.read().get(addr).is_some()
     }
@@ -243,10 +221,6 @@ impl NetworkInterface for MockNetwork {
 
     fn pow_chain_sender(&self) -> &Sender<(SocketAddr, Arc<PowBlock>)> {
         &self.pow_chain_sender
-    }
-
-    fn state_chain_sender(&self) -> &Sender<(SocketAddr, Arc<StateBlock>)> {
-        &self.state_chain_sender
     }
 
     fn process_packet(&mut self, addr: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
@@ -372,18 +346,14 @@ impl MockNetwork {
         mailboxes: HashMap<NodeId, Sender<(SocketAddr, Vec<u8>)>>,
         address_mappings: HashMap<SocketAddr, NodeId>,
         pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
-        state_chain_sender: Sender<(SocketAddr, Arc<StateBlock>)>,
         pow_chain_ref: PowChainRef,
-        state_chain_ref: StateChainRef,
     ) -> MockNetwork {
         MockNetwork {
             rx,
             mailboxes,
             address_mappings,
             pow_chain_sender,
-            state_chain_sender,
             pow_chain_ref,
-            state_chain_ref,
             peers: Arc::new(RwLock::new(HashMap::new())),
             bootstrap_cache: BootstrapCache::new(PersistentDb::new_in_memory(), 100000),
             node_id,
@@ -391,9 +361,6 @@ impl MockNetwork {
             ip,
             port,
             network_name,
-
-            #[cfg(feature = "miner")]
-            current_pool: None,
         }
     }
 
@@ -402,7 +369,7 @@ impl MockNetwork {
     pub fn connect_no_ping(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client(SubConnectionType::Normal), None, self.bootstrap_cache.clone());
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
@@ -422,7 +389,6 @@ impl MockNetwork {
     pub fn start_receive_loop(
         network: Arc<Mutex<Self>>,
         pow_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<PowBlock>)>>>,
-        state_block_receiver: Arc<Mutex<Receiver<(SocketAddr, Arc<StateBlock>)>>>,
     ) {
         loop {
             let mut pings: Vec<(SocketAddr, Vec<u8>)> = Vec::new();
@@ -447,59 +413,26 @@ impl MockNetwork {
                 }
 
                 let pow_receiver = pow_block_receiver.lock();
-                let pow_iter = pow_receiver
-                    .try_iter()
-                    .map(|(a, b)| (a, BlockWrapper::PowBlock(b)));
-
-                let state_receiver = state_block_receiver.lock();
-                let state_iter = state_receiver
-                    .try_iter()
-                    .map(|(a, b)| (a, BlockWrapper::StateBlock(b)));
-                let mut iter = pow_iter.chain(state_iter);
+                let mut iter = pow_receiver.try_iter();
 
                 while let Some((addr, block)) = iter.next() {
-                    match block {
-                        BlockWrapper::PowBlock(block) => {
-                            let pow_chain = network.pow_chain_ref().chain;
-                            let mut chain = pow_chain.write();
+                    let pow_chain = network.pow_chain_ref().chain;
+                    let mut chain = pow_chain.write();
 
-                            match chain.append_block(block.clone()) {
-                                Ok(()) => {
-                                    // Forward block
-                                    let mut packet =
-                                        ForwardBlock::new(BlockWrapper::PowBlock(block));
-                                    network
-                                        .send_to_all_except(&addr, &packet.to_bytes())
-                                        .unwrap();
-                                }
-                                Err(err) => info!(
-                                    "Chain Error for block {:?}: {:?}",
-                                    block.block_hash().unwrap(),
-                                    err
-                                ),
-                            }
+                    match chain.append_block(block.clone()) {
+                        Ok(()) => {
+                            // Forward block
+                            let mut packet =
+                                ForwardBlock::new(block);
+                            network
+                                .send_to_all_except(&addr, &packet.to_bytes())
+                                .unwrap();
                         }
-
-                        BlockWrapper::StateBlock(block) => {
-                            let state_chain = network.state_chain_ref().chain;
-                            let mut chain = state_chain.write();
-
-                            match chain.append_block(block.clone()) {
-                                Ok(()) => {
-                                    // Forward block
-                                    let mut packet = ForwardBlock::new(BlockWrapper::StateBlock(block));
-
-                                    network
-                                        .send_to_all_except(&addr, &packet.to_bytes())
-                                        .unwrap();
-                                }
-                                Err(err) => info!(
-                                    "Chain Error for block {:?}: {:?}",
-                                    block.block_hash().unwrap(),
-                                    err
-                                ),
-                            }
-                        }
+                        Err(err) => info!(
+                            "Chain Error for block {:?}: {:?}",
+                            block.block_hash().unwrap(),
+                            err
+                        ),
                     }
                 }
 

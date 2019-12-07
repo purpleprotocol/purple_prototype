@@ -25,7 +25,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
-use BlakeDbHasher;
+use crate::BlakeDbHasher;
 
 pub fn cf_options() -> Options {
     let mut opts = Options::default();
@@ -75,6 +75,7 @@ pub struct PersistentDb {
 
 impl PersistentDb {
     pub const ROOT_HASH_KEY: &'static [u8] = b"root_hash";
+    pub const RELOAD_FLAG: &'static [u8] = b"reload_flag";
 
     pub fn new(db_ref: Arc<DB>, cf_name: Option<&'static str>) -> PersistentDb {
         PersistentDb {
@@ -280,6 +281,12 @@ fn matches_prefix<P: AsRef<[u8]>>(key: &[u8], prefix: P) -> bool {
 impl std::fmt::Debug for PersistentDb {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "PersistentDb {{ cf: {:?} }}", self.cf_name)
+    }
+}
+
+impl PartialEq for PersistentDb {
+    fn eq(&self, other: &PersistentDb) -> bool {
+        self.cf_name == other.cf_name
     }
 }
 

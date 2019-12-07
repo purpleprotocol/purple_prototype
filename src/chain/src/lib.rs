@@ -21,24 +21,24 @@
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate bin_tools;
+
 mod block;
 mod chain;
 mod pow_chain;
 mod init;
-mod state_chain;
 mod types;
 
 #[cfg(test)]
 mod test_helpers;
 
 pub use crate::chain::*;
-pub use block::*;
-pub use pow_chain::block::*;
-pub use pow_chain::chain::*;
-pub use init::*;
-pub use state_chain::block::*;
-pub use state_chain::chain::*;
-pub use state_chain::state::*;
+pub use crate::block::*;
+pub use crate::pow_chain::*;
+pub use crate::pow_chain::block::*;
+pub use crate::pow_chain::chain::*;
+pub use crate::init::*;
 
 #[cfg(test)]
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};

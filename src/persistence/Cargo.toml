@@ -2,6 +2,7 @@
 name = "persistence"
 version = "0.1.0"
 authors = ["octavonce <octavonce@gmail.com>"]
+edition = "2018"
 publish = false
 
 [dependencies]
@@ -10,7 +11,7 @@ patricia-trie = "0.3.0"
 elastic-array = "0.10.0"
 rlp = "0.3.0"
 parking_lot = "0.7.1"
-rocksdb = "0.12.2"
+rocksdb = "0.13.0"
 num_cpus = "1.10.1"
 lazy_static = "1.2.0"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }

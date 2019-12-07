@@ -21,9 +21,6 @@ extern crate bin_tools;
 #[macro_use]
 extern crate cfg_if;
 
-extern crate ansi_term;
-extern crate byteorder;
-
 use ansi_term::Colour::Green;
 use rocksdb::DB;
 use std::path::{Path, PathBuf};
@@ -41,16 +38,6 @@ extern crate log;
 
 #[macro_use]
 extern crate lazy_static;
-
-extern crate crypto;
-extern crate elastic_array;
-extern crate hashbrown;
-extern crate hashdb;
-extern crate num_cpus;
-extern crate parking_lot;
-extern crate patricia_trie;
-extern crate rlp;
-extern crate rocksdb;
 
 pub use hasher::*;
 pub use node_codec::*;
