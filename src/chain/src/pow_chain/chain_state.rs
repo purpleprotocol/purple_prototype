@@ -174,6 +174,13 @@ impl Flushable for PowChainState {
             self.db.put(Self::TXS_BLOCKS_LEFT_KEY, &encode_be_u32!(*txs_blocks_left));
         }
 
+        // Write reload flag which tells us if the underlying
+        // db instance is fresh or not i.e. the reload flag 
+        // would be missing.
+        if self.db.retrieve(PersistentDb::RELOAD_FLAG).is_none() {
+            self.db.put(PersistentDb::RELOAD_FLAG, &[])
+        }
+
         // Flush to disk
         self.db.flush();
 
@@ -200,6 +207,7 @@ mod tests {
 
         // Flush values
         chain_state.flush();
+        assert!(chain_state.db.retrieve(PersistentDb::RELOAD_FLAG).is_some());
 
         let reloaded_state = PowChainState::reload(chain_state.db.clone()).unwrap();
         assert_eq!(reloaded_state, chain_state);
@@ -224,6 +232,7 @@ mod tests {
 
         // Flush values
         chain_state.flush();
+        assert!(chain_state.db.retrieve(PersistentDb::RELOAD_FLAG).is_some());
 
         let reloaded_state = PowChainState::reload(chain_state.db.clone()).unwrap();
         assert_eq!(reloaded_state, chain_state);

@@ -75,6 +75,7 @@ pub struct PersistentDb {
 
 impl PersistentDb {
     pub const ROOT_HASH_KEY: &'static [u8] = b"root_hash";
+    pub const RELOAD_FLAG: &'static [u8] = b"reload_flag";
 
     pub fn new(db_ref: Arc<DB>, cf_name: Option<&'static str>) -> PersistentDb {
         PersistentDb {

@@ -48,9 +48,15 @@ pub fn init(
     state_db: PersistentDb,
     archival_mode: bool,
 ) -> PowChainRef {
+    let root_state = if state_db.retrieve(PersistentDb::RELOAD_FLAG).is_some() {
+        PowChainState::reload(state_db.clone()).unwrap()
+    } else {
+        PowChainState::genesis(state_db.clone())
+    };
+
     let pow_chain = Arc::new(RwLock::new(PowChain::new(
         pow_chain_db,
-        PowChainState::genesis(state_db.clone()),
+        root_state,
         archival_mode,
     )));
 
@@ -75,9 +81,15 @@ pub fn init(
     state_db: PersistentDb,
     archival_mode: bool,
 ) -> PowChainRef {
+    let root_state = if state_db.retrieve(PersistentDb::RELOAD_FLAG).is_some() {
+        PowChainState::reload(state_db.clone()).unwrap()
+    } else {
+        PowChainState::genesis(state_db.clone())
+    };
+
     let pow_chain = Arc::new(RwLock::new(PowChain::new(
         pow_chain_db,
-        PowChainState::genesis(state_db.clone()),
+        root_state,
         archival_mode,
     )));
 
