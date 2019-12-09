@@ -19,6 +19,7 @@
 use crypto::{FromBase58, Hash, ToBase58};
 use quickcheck::Arbitrary;
 use rand::Rng;
+use std::fmt;
 
 #[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, PartialOrd, Ord)]
 pub struct ContractAddress(Hash);
@@ -70,6 +71,12 @@ impl ContractAddress {
         }
 
         result
+    }
+}
+
+impl fmt::Display for ContractAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", hex::encode(self.to_bytes()))
     }
 }
 

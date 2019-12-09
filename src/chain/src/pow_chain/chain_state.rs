@@ -19,7 +19,9 @@
 use crate::chain::ChainErr;
 use crate::types::*;
 use crate::pow_chain::block::GENESIS_HASH_KEY;
-use persistence::PersistentDb;
+use patricia_trie::{TrieDB, Trie};
+use persistence::{PersistentDb, BlakeDbHasher, Codec};
+use account::Address;
 use crypto::{Hash, NodeId};
 use hashbrown::{HashMap, HashSet};
 use std::collections::VecDeque;
@@ -152,6 +154,22 @@ impl PowChainState {
 
     pub fn accepts_tx(&self) -> bool {
         self.accepts == BlockType::Transaction
+    }
+
+    /// Attempts to retrieve the current nonce of the account with 
+    /// the given address, returning `None` if it is non-existent.
+    pub fn get_account_nonce(&self, address: &Address) -> Option<u64> {
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&self.db, &self.state_root).unwrap();
+
+        // Calculate nonce key
+        //
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let nonce_key = format!("{}.n", address);
+        let nonce_key = nonce_key.as_bytes();
+
+        let encoded_nonce = trie.get(&nonce_key).ok()??;
+        Some(decode_be_u64!(encoded_nonce).unwrap())
     }
 }
 

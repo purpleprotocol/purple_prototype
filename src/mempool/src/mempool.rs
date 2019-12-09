@@ -144,11 +144,6 @@ impl Mempool {
         let fee = tx.fee();
         let fee_hash = tx.fee_hash();
         let mut remove_fee_map = false;
-
-        // Clean up
-        self.orphan_set.remove(tx_hash);
-        self.dependency_graph.remove(&vertex_id);
-
         let mut remove_nonces_mapping = false;
 
         // Clean up from address mappings 
@@ -158,8 +153,41 @@ impl Mempool {
 
             if nonces_mapping.is_empty() {
                 remove_nonces_mapping = true;
+            } else {
+                // If the removed transaction is not an orphan, we have
+                // check if there are any subsequent transactions that 
+                // should be orphaned.
+                if !self.orphan_set.contains(tx_hash) {
+                    // TODO: Avoid this as it clones the whole state. A better
+                    // option would be to lock on read position on the chain
+                    // and query the state without cloning.
+                    let chain_state = self.chain_ref.canonical_tip_state(); 
+                    let (highest_nonce, _) = nonces_mapping.iter().next_back().unwrap();
+
+                    // Orphan subsequent transactions if there are any
+                    // and they do not directly follow the nonce listed 
+                    // in the state.
+                    if let Some(account_nonce) = chain_state.get_account_nonce(&address) {
+                        if account_nonce > nonce {
+                            // Remove any old transactions i.e. 
+                            // lower or equal to the account's nonce
+                            unimplemented!();
+                        } else if account_nonce < nonce {
+                            // Orphan transactions that follow the removed nonce
+                            unimplemented!();
+                        } else {
+                            // Nonces are equal, do nothing
+                            unimplemented!();
+                        }
+                    } else {
+                        unimplemented!();
+                    }
+                }
             }
         }
+
+        self.orphan_set.remove(tx_hash);
+        self.dependency_graph.remove(&vertex_id);
 
         if remove_nonces_mapping {
             self.address_mappings.remove(&address).unwrap();

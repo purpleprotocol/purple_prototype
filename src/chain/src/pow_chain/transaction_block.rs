@@ -169,7 +169,7 @@ impl Block for TransactionBlock {
         // Apply transactions to state
         if let Some(transaction_set) = &block.transactions {
             let transaction_set = transaction_set.read();
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut chain_state.db, &mut chain_state.state_root);
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::from_existing(&mut chain_state.db, &mut chain_state.state_root).unwrap();
 
             for tx in transaction_set.iter() {
                 if tx.validate(&trie) {

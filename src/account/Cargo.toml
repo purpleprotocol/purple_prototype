@@ -9,6 +9,7 @@ serde = "1.0.59"
 serde_derive = "1.0.59"
 rlp = "0.3.0"
 regex = "1"
+hex = "0.3.2"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde"] }
 lazy_static = "1.2.0"
 byteorder = "1.2.7"

@@ -30,6 +30,7 @@ extern crate rand;
 extern crate regex;
 extern crate rlp;
 extern crate rust_decimal;
+extern crate hex;
 
 pub mod addresses;
 pub mod balance;

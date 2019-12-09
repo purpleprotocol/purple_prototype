@@ -19,6 +19,7 @@
 use crypto::{FromBase58, PublicKey, ToBase58};
 use quickcheck::Arbitrary;
 use rand::Rng;
+use std::fmt;
 
 #[derive(Hash, Copy, PartialEq, Eq, Serialize, Deserialize, Clone, Debug, PartialOrd, Ord)]
 pub struct NormalAddress(PublicKey);
@@ -79,6 +80,12 @@ impl NormalAddress {
         }
 
         result
+    }
+}
+
+impl fmt::Display for NormalAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", hex::encode(self.to_bytes()))
     }
 }
 
