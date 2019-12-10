@@ -13,3 +13,6 @@ transactions = { path = "../transactions" }
 account = { path = "../account" }
 crypto = { path = "../crypto" }
 chain = { path = "../chain" }
+
+[dev-dependencies]
+quickcheck = "0.7.2"

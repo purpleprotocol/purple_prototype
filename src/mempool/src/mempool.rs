@@ -148,8 +148,12 @@ impl Mempool {
 
         // Clean up from address mappings 
         {
-            let nonces_mapping = self.address_mappings.get_mut(&address).unwrap(); 
-            nonces_mapping.remove(&nonce).unwrap();
+            {
+                let nonces_mapping = self.address_mappings.get_mut(&address).unwrap(); 
+                nonces_mapping.remove(&nonce).unwrap();
+            }
+
+            let nonces_mapping = self.address_mappings.get(&address).unwrap(); 
 
             if nonces_mapping.is_empty() {
                 remove_nonces_mapping = true;
@@ -158,29 +162,29 @@ impl Mempool {
                 // check if there are any subsequent transactions that 
                 // should be orphaned.
                 if !self.orphan_set.contains(tx_hash) {
-                    // TODO: Avoid this as it clones the whole state. A better
-                    // option would be to lock on read position on the chain
-                    // and query the state without cloning.
-                    let chain_state = self.chain_ref.canonical_tip_state(); 
-                    let (highest_nonce, _) = nonces_mapping.iter().next_back().unwrap();
-
                     // Orphan subsequent transactions if there are any
                     // and they do not directly follow the nonce listed 
                     // in the state.
-                    if let Some(account_nonce) = chain_state.get_account_nonce(&address) {
+                    if let Some(account_nonce) = self.get_account_nonce(&address) {
                         if account_nonce > nonce {
                             // Remove any old transactions i.e. 
                             // lower or equal to the account's nonce
-                            unimplemented!();
+                            for (_, tx_hash) in nonces_mapping.range(..nonce) {
+                                self.orphan_set.insert(tx_hash.clone());
+                            }
                         } else if account_nonce < nonce {
                             // Orphan transactions that follow the removed nonce
-                            unimplemented!();
+                            for (_, tx_hash) in nonces_mapping.range(nonce..) {
+                                self.orphan_set.insert(tx_hash.clone());
+                            }
                         } else {
                             // Nonces are equal, do nothing
-                            unimplemented!();
                         }
                     } else {
-                        unimplemented!();
+                        // Orphan transactions that follow the removed nonce
+                        for (_, tx_hash) in nonces_mapping.range(nonce..) {
+                            self.orphan_set.insert(tx_hash.clone());
+                        }
                     }
                 }
             }
@@ -300,7 +304,9 @@ impl Mempool {
     /// Attempts to perform a prune on the transactions stored 
     /// in the memory pool, removing the oldest transactions 
     /// that have the lowest fees. The prune will be performed
-    /// only if the mempool is more than 80% full.
+    /// only if the mempool is more than 80% full or if there
+    /// are any past transactions found i.e. transactions with
+    /// nonces that are lower than the current creator's nonce.
     /// 
     /// This operation is idempotent.
     pub fn prune(&mut self) {
@@ -318,9 +324,32 @@ impl Mempool {
 
         unimplemented!();
     }
+
+    fn get_account_nonce(&self, address: &Address) -> Option<u64> {
+        // TODO: Avoid this as it clones the whole state. A better
+        // option would be to lock on read position on the chain
+        // and query the state without cloning.
+        let chain_state = self.chain_ref.canonical_tip_state(); 
+        chain_state.get_account_nonce(&address)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck::*;
+
+    quickcheck! {
+        fn append_stress_test() -> bool {
+            unimplemented!();
+        }
+
+        fn remove_stress_test() -> bool {
+            unimplemented!();
+        }
+
+        fn prune_stress_test() -> bool {
+            unimplemented!();
+        }
+    }
 }
