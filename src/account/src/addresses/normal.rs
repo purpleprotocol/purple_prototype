@@ -28,8 +28,7 @@ impl NormalAddress {
     pub const ADDR_TYPE: u8 = 1;
 
     pub fn to_base58(&self) -> String {
-        let bin_addr = &self.to_bytes();
-        bin_addr.to_base58()
+        self.to_bytes().to_base58()
     }
 
     pub fn from_base58(input: &str) -> Result<NormalAddress, &'static str> {
@@ -69,8 +68,8 @@ impl NormalAddress {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::new();
-        let bytes = (&&self.0).0;
+        let mut result: Vec<u8> = Vec::with_capacity(33);
+        let bytes = (self.0).0;
 
         // Push address type
         result.push(Self::ADDR_TYPE);
