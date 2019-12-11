@@ -339,17 +339,17 @@ mod tests {
     use super::*;
     use quickcheck::*;
 
-    quickcheck! {
-        fn append_stress_test() -> bool {
-            unimplemented!();
-        }
+    // quickcheck! {
+    //     fn append_stress_test() -> bool {
+    //         unimplemented!();
+    //     }
 
-        fn remove_stress_test() -> bool {
-            unimplemented!();
-        }
+    //     fn remove_stress_test() -> bool {
+    //         unimplemented!();
+    //     }
 
-        fn prune_stress_test() -> bool {
-            unimplemented!();
-        }
-    }
+    //     fn prune_stress_test() -> bool {
+    //         unimplemented!();
+    //     }
+    // }
 }

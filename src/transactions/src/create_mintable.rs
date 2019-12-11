@@ -240,21 +240,6 @@ impl CreateMintable {
         let creator_fee_key = format!("{}.{}", creator, fee_hash);
         let receiver_cur_key = format!("{}.{}", receiver, asset_hash);
 
-        // Retrieve current index
-        let bin_cur_idx = trie.get(b"ci").unwrap().unwrap();
-        let mut ci_reader = Cursor::new(bin_cur_idx);
-        let mut cur_idx = ci_reader.read_u64::<BigEndian>().unwrap();
-
-        // Calculate current currencies key
-        let current_curs_key = format!("c.{}", cur_idx);
-        let current_curs_key = current_curs_key.as_bytes();
-        let next_curs_key = format!("c.{}", cur_idx + 1);
-        let next_curs_key = next_curs_key.as_bytes();
-
-        // Get currencies stored at the current index
-        let currencies: Vec<u8> = trie.get(current_curs_key).unwrap().unwrap().to_vec();
-        let mut currencies: Vec<Vec<u8>> = rlp::decode_list(&currencies);
-
         // The creator is the same as the receiver, so we
         // just add all the new currency to it's address.
         if bin_creator == bin_receiver {
@@ -272,27 +257,6 @@ impl CreateMintable {
             // Calculate creator balance
             let creator_cur_balance = format!("{}.0", self.coin_supply);
             let creator_cur_balance = Balance::from_bytes(creator_cur_balance.as_bytes()).unwrap();
-
-            // If the current group is maxed out, create a new entry at the next index
-            if currencies.len() == CUR_GROUP_CAPACITY {
-                let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_asset_hash]);
-                let mut encoded_idx: Vec<u8> = Vec::new();
-
-                // Increment current index
-                cur_idx += 1;
-
-                // Write new index to buffer
-                encoded_idx.write_u64::<BigEndian>(cur_idx).unwrap();
-
-                trie.insert(b"ci", &encoded_idx).unwrap();
-                trie.insert(next_curs_key, &encoded).unwrap();
-            } else {
-                // Push new currency
-                currencies.push(bin_asset_hash.to_vec());
-
-                let encoded = rlp::encode_list::<Vec<u8>, _>(&currencies);
-                trie.insert(current_curs_key, &encoded).unwrap();
-            }
 
             // Update trie
             trie.insert(asset_hash_supply_key, &coin_supply_buf)
@@ -328,27 +292,6 @@ impl CreateMintable {
                     let receiver_balance =
                         Balance::from_bytes(receiver_balance.as_bytes()).unwrap();
 
-                    // If the current group is maxed out, create a new entry at the next index
-                    if currencies.len() == CUR_GROUP_CAPACITY {
-                        let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_asset_hash]);
-                        let mut encoded_idx: Vec<u8> = Vec::new();
-
-                        // Increment current index
-                        cur_idx += 1;
-
-                        // Write new index to buffer
-                        encoded_idx.write_u64::<BigEndian>(cur_idx).unwrap();
-
-                        trie.insert(b"ci", &encoded_idx).unwrap();
-                        trie.insert(next_curs_key, &encoded).unwrap();
-                    } else {
-                        // Push new currency
-                        currencies.push(bin_asset_hash.to_vec());
-
-                        let encoded = rlp::encode_list::<Vec<u8>, _>(&currencies);
-                        trie.insert(current_curs_key, &encoded).unwrap();
-                    }
-
                     // Update trie
                     trie.insert(asset_hash_supply_key, &coin_supply_buf)
                         .unwrap();
@@ -380,27 +323,6 @@ impl CreateMintable {
                     let receiver_balance = format!("{}.0", self.coin_supply);
                     let receiver_balance =
                         Balance::from_bytes(receiver_balance.as_bytes()).unwrap();
-
-                    // If the current group is maxed out, create a new entry at the next index
-                    if currencies.len() == CUR_GROUP_CAPACITY {
-                        let encoded = rlp::encode_list::<Vec<u8>, _>(&[bin_asset_hash]);
-                        let mut encoded_idx: Vec<u8> = Vec::new();
-
-                        // Increment current index
-                        cur_idx += 1;
-
-                        // Write new index to buffer
-                        encoded_idx.write_u64::<BigEndian>(cur_idx).unwrap();
-
-                        trie.insert(b"ci", &encoded_idx).unwrap();
-                        trie.insert(next_curs_key, &encoded).unwrap();
-                    } else {
-                        // Push new currency
-                        currencies.push(bin_asset_hash.to_vec());
-
-                        let encoded = rlp::encode_list::<Vec<u8>, _>(&currencies);
-                        trie.insert(current_curs_key, &encoded).unwrap();
-                    }
 
                     // Update trie
                     trie.insert(asset_hash_supply_key, &coin_supply_buf)
@@ -1054,8 +976,6 @@ mod tests {
         let asset_hash_max_supply_key = asset_hash_max_supply_key.as_bytes();
         let asset_hash_minter_key = format!("{}.m", hex_asset_hash);
         let asset_hash_minter_key = asset_hash_minter_key.as_bytes();
-        let current_index_key = b"ci".to_vec();
-        let currencies_idx_key = b"c.0".to_vec(); // Currency group 0
 
         let creator_cur_balance_key = format!(
             "{}.{}",
@@ -1072,17 +992,6 @@ mod tests {
         let creator_cur_balance =
             Balance::from_bytes(&trie.get(&creator_cur_balance_key).unwrap().unwrap()).unwrap();
 
-        let current_index = &trie.get(&current_index_key).unwrap().unwrap();
-        let mut ci_rdr = Cursor::new(current_index);
-        let current_index = ci_rdr.read_u64::<BigEndian>().unwrap();
-
-        let cur_listing = &trie.get(&currencies_idx_key).unwrap().unwrap();
-        let mut cur_listing: Vec<Vec<u8>> = rlp::decode_list(&cur_listing);
-        let mut oracle_listing = [bin_asset_hash, bin_fee_hash].to_vec();
-
-        test_helpers::qs(&mut cur_listing);
-        test_helpers::qs(&mut oracle_listing);
-
         // Check nonce
         assert_eq!(bin_creator_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
 
@@ -1092,12 +1001,6 @@ mod tests {
             Balance::from_bytes(b"10000.0").unwrap() - fee.clone()
         );
         assert_eq!(creator_cur_balance, amount.clone());
-
-        // Check current index
-        assert_eq!(current_index, 0);
-
-        // Check that the currency has been created correctly
-        assert_eq!(cur_listing, oracle_listing);
 
         // Check currencies precisions
         assert_eq!(&trie.get(&asset_hash_prec_key).unwrap().unwrap(), &vec![18]);

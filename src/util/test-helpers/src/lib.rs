@@ -58,15 +58,6 @@ pub fn init_balance(
     // Re-serialize balance to validate with regex
     let balance = Balance::from_bytes(amount).unwrap().to_bytes();
 
-    if let Ok(None) = trie.get(b"ci") {
-        trie.insert(b"ci", &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
-        trie.insert(
-            b"c.0",
-            &rlp::encode_list::<Vec<u8>, _>(&vec![bin_asset_hash]),
-        )
-        .unwrap();
-    }
-
     if let Ok(None) = trie.get(&precision_key.as_bytes()) {
         trie.insert(&precision_key.as_bytes(), &[18]).unwrap();
     }

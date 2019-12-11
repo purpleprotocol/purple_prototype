@@ -62,7 +62,7 @@ impl Genesis {
     ///
     /// This function will panic if the treasury account already exists.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
-       let bin_asset_hash = &self.asset_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.to_vec();
         let asset_hash = hex::encode(&bin_asset_hash);
         let coin_supply = format!("{}.0", &self.coin_supply);
         let coin_supply = coin_supply.as_bytes();
@@ -98,9 +98,5 @@ impl Genesis {
         let balance = balance.as_bytes();
 
         trie.insert(coinbase_cur_key, &balance).unwrap();
-
-        // Init currencies index and list main currency
-        trie.insert(b"ci", &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
-        trie.insert(b"c.0", &currencies).unwrap();
     }
 }
