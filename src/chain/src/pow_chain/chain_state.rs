@@ -19,7 +19,8 @@
 use crate::chain::ChainErr;
 use crate::types::*;
 use crate::pow_chain::block::GENESIS_HASH_KEY;
-use patricia_trie::{TrieDB, Trie};
+use transactions::Genesis;
+use patricia_trie::{TrieDB, TrieDBMut, Trie, TrieMut};
 use persistence::{PersistentDb, BlakeDbHasher, Codec};
 use account::Address;
 use crypto::{Hash, NodeId};
@@ -74,7 +75,22 @@ impl PowChainState {
     const CURRENT_VALIDATOR_KEY: &'static [u8] = b"CHAIN_CURRENT_VALIDATOR";
     const TXS_BLOCKS_LEFT_KEY: &'static [u8] = b"CHAIN_REMAINING_BLOCKS";
 
-    pub fn genesis(db: PersistentDb) -> Self {
+    pub fn genesis(mut db: PersistentDb) -> Self {
+        // Apply genesis transactions to the state
+        debug!("Applying genesis transaction...");
+
+        let genesis = Genesis::default();
+        let mut state_root = Hash::NULL_RLP;
+
+        {
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut state_root);
+
+            // Apply the genesis transaction to the state
+            genesis.apply(&mut trie);
+        }
+
+        debug!("The genesis state has been initialized!");
+
         PowChainState {
             db,
             height: 0,
@@ -83,7 +99,7 @@ impl PowChainState {
             accepts: BlockType::Checkpoint, 
             current_validator: None,
             txs_blocks_left: None,
-            state_root: Hash::NULL_RLP,
+            state_root,
             last_checkpoint: crypto::hash_slice(GENESIS_HASH_KEY),
         }
     }
