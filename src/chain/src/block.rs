@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::types::{BranchType, Flushable};
+use crate::types::*;
 use crate::{ChainErr, PowBlock};
 use chrono::prelude::*;
 use crypto::Hash;
@@ -29,7 +29,7 @@ use std::sync::Arc;
 /// Generic block interface
 pub trait Block: Debug + PartialEq + Eq + HashTrait + Sized {
     /// Per tip validation state
-    type ChainState: Clone + Debug + Flushable;
+    type ChainState: Clone + Debug + Flushable + StateInterface;
 
     /// Size of the block cache.
     const BLOCK_CACHE_SIZE: usize = 20;

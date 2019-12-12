@@ -18,7 +18,7 @@
 
 use account::{Balance, NormalAddress};
 use crypto::Hash;
-use patricia_trie::{TrieDBMut, TrieMut};
+use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use std::default::Default;
 

@@ -18,14 +18,21 @@
 
 use crate::error::MempoolErr;
 use chain::PowChainRef;
-use graphlib::{Graph, VertexId};
 use account::{Address, Balance};
 use chrono::{DateTime, Utc};
 use hashbrown::{HashSet, HashMap};
 use transactions::Tx;
 use std::collections::{VecDeque, BTreeMap};
+use patricia_trie::{TrieDB, Trie};
+use persistence::{BlakeDbHasher, Codec};
 use crypto::Hash;
 use std::sync::Arc;
+
+/// How far into the future a transaction can be 
+/// in order to be accepted. If the tx's nonce is
+/// greater than the current account's nonce + NONCE_LIMIT
+/// it will be rejected.
+const NONCE_LIMIT: u64 = 10;
 
 /// Memory pool used to store valid yet not processed
 /// transactions.
@@ -33,10 +40,6 @@ pub struct Mempool {
     /// Lookup table between transaction hashes
     /// and transaction data.
     tx_lookup: HashMap<Hash, Arc<Tx>>,
-
-    /// Mapping between transaction hashes and their 
-    /// vertex ids in the dependency graph.
-    vertex_id_lookup: HashMap<Hash, VertexId>,
 
     /// Mapping between transaction hashes and a timestamp
     /// denoting the moment they have been added to the mempool.
@@ -58,9 +61,6 @@ pub struct Mempool {
     /// Each entry in the map is an ordered binary tree 
     /// map between transaction fees and transaction hashes.
     fee_map: HashMap<Hash, BTreeMap<Balance, VecDeque<Hash>>>,
-
-    /// Transaction dependency graph.
-    dependency_graph: Graph<Hash>,
 
     /// Mapping between addresses that have issued transactions
     /// which are currently stored in the mempool and the sub-mapping
@@ -109,12 +109,10 @@ impl Mempool {
 
         Mempool {
             tx_lookup: HashMap::new(),
-            vertex_id_lookup: HashMap::new(),
             timestamp_lookup: HashMap::new(),
             fee_map: HashMap::new(),
             address_mappings: HashMap::new(),
             orphan_set: HashSet::new(),
-            dependency_graph: Graph::new(),
             timestamp_reverse_lookup: BTreeMap::new(),
             max_size,
             preferred_currencies,
@@ -140,7 +138,6 @@ impl Mempool {
         let tx = self.tx_lookup.remove(tx_hash)?;
         let address = tx.creator_address();
         let nonce = tx.nonce();
-        let vertex_id = self.vertex_id_lookup.remove(tx_hash).unwrap();
         let fee = tx.fee();
         let fee_hash = tx.fee_hash();
         let mut remove_fee_map = false;
@@ -191,7 +188,6 @@ impl Mempool {
         }
 
         self.orphan_set.remove(tx_hash);
-        self.dependency_graph.remove(&vertex_id);
 
         if remove_nonces_mapping {
             self.address_mappings.remove(&address).unwrap();
@@ -254,6 +250,38 @@ impl Mempool {
             return Err(MempoolErr::DoubleSpend);
         }
 
+        let account_nonce = self.get_account_nonce(&tx_addr);
+
+        // Validate transaction against the current state if 
+        // it directly follows the nonce listed in the state.
+        if let Some(account_nonce) = account_nonce {
+            if tx_nonce > account_nonce + NONCE_LIMIT {
+                return Err(MempoolErr::TooFarIntoFuture);
+            }
+
+            if tx_nonce == account_nonce + 1 {
+                let (db, state_root) = self.chain_ref.get_db_and_state_root();
+                let trie = TrieDB::new(&db, &state_root).unwrap();
+                
+                if !tx.validate(&trie) {
+                   return Err(MempoolErr::BadTx); 
+                }
+            }
+        } else {
+            if tx_nonce > NONCE_LIMIT {
+                return Err(MempoolErr::TooFarIntoFuture);
+            }
+
+            if tx_nonce == 1 {
+                let (db, state_root) = self.chain_ref.get_db_and_state_root();
+                let trie = TrieDB::new(&db, &state_root).unwrap();
+                
+                if !tx.validate(&trie) {
+                   return Err(MempoolErr::BadTx); 
+                }
+            }
+        }
+
         let tx_fee = tx.fee();
         let tx_fee_cur = tx.fee_hash();
         let timestamp = Utc::now();
@@ -293,11 +321,6 @@ impl Mempool {
             self.address_mappings.insert(tx_addr, addr_entry);
         }
 
-        // Place transaction in the dependency graph
-        // TODO: Construct dependency graph structure
-        let vertex_id = self.dependency_graph.add_vertex(tx_hash.clone());
-        self.vertex_id_lookup.insert(tx_hash, vertex_id);
-
         Ok(())
     }
 
@@ -326,11 +349,11 @@ impl Mempool {
     }
 
     fn get_account_nonce(&self, address: &Address) -> Option<u64> {
-        // TODO: Avoid this as it clones the whole state. A better
-        // option would be to lock on read position on the chain
-        // and query the state without cloning.
-        let chain_state = self.chain_ref.canonical_tip_state(); 
-        chain_state.get_account_nonce(&address)
+        self.chain_ref.get_account_nonce(&address)
+    }
+
+    fn validate_tx_on_chain_state(&self, tx: Arc<Tx>) -> bool {
+        self.chain_ref.validate_tx(tx)
     }
 }
 

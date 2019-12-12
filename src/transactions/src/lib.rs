@@ -55,7 +55,7 @@ pub use crate::send::*;
 
 use account::{Address, Balance};
 use crypto::{Hash, Identity};
-use patricia_trie::{TrieDBMut, TrieMut};
+use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use quickcheck::Arbitrary;
 use rand::Rng;
@@ -74,7 +74,7 @@ pub enum Tx {
 }
 
 impl Tx {
-    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
         match *self {
             Tx::Call(ref tx) => tx.validate(trie),
             Tx::OpenContract(ref tx) => tx.validate(trie),

@@ -25,6 +25,8 @@ use persistence::{PersistentDb, BlakeDbHasher, Codec};
 use account::Address;
 use crypto::{Hash, NodeId};
 use hashbrown::{HashMap, HashSet};
+use transactions::Tx;
+use std::sync::Arc;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 
@@ -171,22 +173,6 @@ impl PowChainState {
     pub fn accepts_tx(&self) -> bool {
         self.accepts == BlockType::Transaction
     }
-
-    /// Attempts to retrieve the current nonce of the account with 
-    /// the given address, returning `None` if it is non-existent.
-    pub fn get_account_nonce(&self, address: &Address) -> Option<u64> {
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&self.db, &self.state_root).unwrap();
-
-        // Calculate nonce key
-        //
-        // The key of a nonce has the following format:
-        // `<account-address>.n`
-        let nonce_key = format!("{}.n", address);
-        let nonce_key = nonce_key.as_bytes();
-
-        let encoded_nonce = trie.get(&nonce_key).ok()??;
-        Some(decode_be_u64!(encoded_nonce).unwrap())
-    }
 }
 
 impl Flushable for PowChainState {
@@ -219,6 +205,31 @@ impl Flushable for PowChainState {
         self.db.flush();
 
         Ok(())
+    }
+}
+
+impl StateInterface for PowChainState {
+    fn state_root(&self) -> Hash {
+        self.state_root.clone()
+    }
+
+    fn get_account_nonce(&self, address: &Address) -> Option<u64> {
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&self.db, &self.state_root).unwrap();
+
+        // Calculate nonce key
+        //
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let nonce_key = format!("{}.n", address);
+        let nonce_key = nonce_key.as_bytes();
+
+        let encoded_nonce = trie.get(&nonce_key).ok()??;
+        Some(decode_be_u64!(encoded_nonce).unwrap())
+    }
+
+    fn validate_tx(&self, tx: Arc<Tx>) -> bool {
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&self.db, &self.state_root).unwrap();
+        tx.validate(&trie)
     }
 }
 
