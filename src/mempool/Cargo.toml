@@ -18,3 +18,13 @@ persistence = { path = "../persistence" }
 
 [dev-dependencies]
 quickcheck = "0.7.2"
+rand = "0.6.0"
+test-helpers = { path = "../util/test-helpers" }
+
+[dev-dependencies.transactions]
+features = ["test"]
+path = "../transactions" 
+
+[dev-dependencies.chain]
+features = ["test"]
+path = "../chain"

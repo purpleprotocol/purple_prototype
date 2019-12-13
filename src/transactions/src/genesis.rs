@@ -23,21 +23,28 @@ use persistence::{BlakeDbHasher, Codec};
 use std::default::Default;
 
 /// The name of the main currency
-const MAIN_CUR_NAME: &'static [u8] = b"purple";
+pub const MAIN_CUR_NAME: &'static [u8] = b"purple";
 
 /// The main currency coin supply
-const COIN_SUPPLY: u64 = 500000000;
+pub(crate) const COIN_SUPPLY: u64 = 500000000;
 
 #[cfg(not(feature = "test"))]
 /// Balances that will be initialized with the genesis transaction
-const INIT_BALANCES: &'static [(&'static str, u64)] = &[];
+pub(crate) const INIT_ACCOUNTS: &'static [(&'static str, u64)] = &[];
 
 #[cfg(feature = "test")]
 /// Test addresses
-const INIT_BALANCES: &'static [(&'static str, u64)] = &[
-    ("a4ragiMrgZB9kEzRi6M5qJMqb8FtLqwLGWBS2W3HRVaF", 10000), // Secret key: 26w7zqjXyJhYCJaRkcGutq1HEe6AGbwZooR9Age4frqjh96aurdPNC3QLGPYMGehudUpnTn26VdXYZ2CfVcQFT1H
-    ("SCFLivFR6GZyvg7pvX9UJnE88QtgT22FkWvGhhoc4uJL", 10000), // Secret key: 2YKpy4YEuesnYTNnGagSx8ADLVdhR6FtuSb19sUiWFGHLSmchHDaJjGNxVUy9q9gffaRiEwf8mmiwccDPT7HFnNY
-    ("abyBb1834xmkZ7LH5piiXWqU8wrStDM5Lh8UUtaYrrEX", 10000), // Secret key: 4geYSpNGM3uwAmfoM8HAfuM4HvGmLvZND2eyZ95bRxJaqgXGbaA8SuMxxrHynU6tEk8Kat3K8ZhyygsekitUzGmZ
+pub(crate) const INIT_ACCOUNTS: &'static [(&'static str, u64)] = &[
+    ("a4ragiMrgZB9kEzRi6M5qJMqb8FtLqwLGWBS2W3HRVaF", 1000000), // Secret key: 26w7zqjXyJhYCJaRkcGutq1HEe6AGbwZooR9Age4frqjh96aurdPNC3QLGPYMGehudUpnTn26VdXYZ2CfVcQFT1H
+    ("SCFLivFR6GZyvg7pvX9UJnE88QtgT22FkWvGhhoc4uJL", 1000000), // Secret key: 2YKpy4YEuesnYTNnGagSx8ADLVdhR6FtuSb19sUiWFGHLSmchHDaJjGNxVUy9q9gffaRiEwf8mmiwccDPT7HFnNY
+    ("abyBb1834xmkZ7LH5piiXWqU8wrStDM5Lh8UUtaYrrEX", 1000000), // Secret key: 4geYSpNGM3uwAmfoM8HAfuM4HvGmLvZND2eyZ95bRxJaqgXGbaA8SuMxxrHynU6tEk8Kat3K8ZhyygsekitUzGmZ
+];
+
+#[cfg(feature = "test")]
+pub(crate) const INIT_ACCOUNTS_SKEYS: &'static [&'static str] = &[
+    "26w7zqjXyJhYCJaRkcGutq1HEe6AGbwZooR9Age4frqjh96aurdPNC3QLGPYMGehudUpnTn26VdXYZ2CfVcQFT1H",
+    "2YKpy4YEuesnYTNnGagSx8ADLVdhR6FtuSb19sUiWFGHLSmchHDaJjGNxVUy9q9gffaRiEwf8mmiwccDPT7HFnNY",
+    "4geYSpNGM3uwAmfoM8HAfuM4HvGmLvZND2eyZ95bRxJaqgXGbaA8SuMxxrHynU6tEk8Kat3K8ZhyygsekitUzGmZ",
 ];
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -70,7 +77,7 @@ impl Genesis {
         let mut coinbase_supply = COIN_SUPPLY;
 
         // Write initial balances
-        for (addr, balance) in INIT_BALANCES.iter() {
+        for (addr, balance) in INIT_ACCOUNTS.iter() {
             if *balance > coinbase_supply {
                 panic!("We are assigning more coins than there are in the coinbase! This shouldn't ever happen...");
             }

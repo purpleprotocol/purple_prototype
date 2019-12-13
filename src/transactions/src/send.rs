@@ -953,38 +953,39 @@ mod tests {
         let from_addr2 = Address::normal_from_pkey(*id.pkey());
         let to_addr = Address::normal_from_pkey(*to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
-
-        let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
-
-        // Manually initialize sender and receiver balances
-        test_helpers::init_balance(&mut trie, from_addr2, asset_hash, b"10000.0");
-        test_helpers::init_balance(&mut trie, to_addr.clone(), asset_hash, b"10.0");
-
         let amount = Balance::from_bytes(b"100.123").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
-        let mut tx = Send {
-            from: from_addr.clone(),
-            to: to_addr.clone(),
-            amount: amount.clone(),
-            fee: fee.clone(),
-            asset_hash: asset_hash,
-            fee_hash: asset_hash,
-            nonce: 1,
-            signature: None,
-            hash: None,
-        };
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
 
-        tx.sign(id.skey().clone());
-        tx.compute_hash();
+        {
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Apply transaction
-        tx.apply(&mut trie);
+            // Manually initialize sender and receiver balances
+            test_helpers::init_balance(&mut trie, from_addr2, asset_hash, b"10000.0");
+            test_helpers::init_balance(&mut trie, to_addr.clone(), asset_hash, b"10.0");
 
-        // Commit changes
-        trie.commit();
+            let mut tx = Send {
+                from: from_addr.clone(),
+                to: to_addr.clone(),
+                amount: amount.clone(),
+                fee: fee.clone(),
+                asset_hash: asset_hash,
+                fee_hash: asset_hash,
+                nonce: 1,
+                signature: None,
+                hash: None,
+            };
+
+            tx.sign(id.skey().clone());
+            tx.compute_hash();
+
+            // Apply transaction
+            tx.apply(&mut trie);
+        }
+
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
 
         let from_nonce_key = format!("{}.n", hex::encode(&from_addr.to_bytes()));
         let to_nonce_key = format!("{}.n", hex::encode(&to_addr.to_bytes()));

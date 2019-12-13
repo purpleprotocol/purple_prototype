@@ -21,7 +21,7 @@ pub mod normal;
 
 use addresses::contract::*;
 use addresses::normal::*;
-use crypto::PublicKey;
+use crypto::{PublicKey, FromBase58};
 use std::fmt;
 
 #[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug)]
@@ -64,6 +64,13 @@ impl Address {
                 Err(err) => Err(err),
             },
             _ => Err("Bad address type!"),
+        }
+    }
+
+    pub fn from_base58(bin: &str) -> Result<Address, &'static str> {
+        match bin.from_base58() {
+            Ok(bin) => Self::from_bytes(&bin),
+            _ => Err("Invalid base58 string!"),
         }
     }
 }

@@ -97,6 +97,10 @@ impl Balance {
             Err(_) => Err("Invalid utf8 string given"),
         }
     }
+
+    pub fn from_u64(num: u64) -> Balance {
+        Balance(Decimal::from_str(&format!("{}", num)).unwrap())
+    }
 }
 
 impl fmt::Display for Balance {
