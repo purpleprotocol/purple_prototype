@@ -19,7 +19,7 @@
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
-use patricia_trie::{TrieDBMut, TrieMut};
+use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
 
@@ -42,7 +42,7 @@ impl Mint {
     pub const TX_TYPE: u8 = 6;
 
     /// Validates the transaction against the provided state.
-    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
         let zero = Balance::from_bytes(b"0.0").unwrap();
 
         // You cannot mint 0 tokens
@@ -601,31 +601,34 @@ mod tests {
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Manually initialize creator and minter balances
-        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
-        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+        {
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Create mintable token
-        let mut create_mintable = CreateMintable {
-            creator: creator_norm_address,
-            receiver: creator_addr,
-            minter_address: minter_addr,
-            asset_hash: asset_hash,
-            fee_hash: fee_hash,
-            coin_supply: 10000,
-            max_supply: 100000000,
-            precision: 18,
-            fee: Balance::from_bytes(b"30.0").unwrap(),
-            nonce: 1,
-            signature: None,
-            hash: None,
-        };
+            // Manually initialize creator and minter balances
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+            test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
 
-        create_mintable.sign(id2.skey().clone());
-        create_mintable.compute_hash();
-        create_mintable.apply(&mut trie);
+            // Create mintable token
+            let mut create_mintable = CreateMintable {
+                creator: creator_norm_address,
+                receiver: creator_addr,
+                minter_address: minter_addr,
+                asset_hash: asset_hash,
+                fee_hash: fee_hash,
+                coin_supply: 10000,
+                max_supply: 100000000,
+                precision: 18,
+                fee: Balance::from_bytes(b"30.0").unwrap(),
+                nonce: 1,
+                signature: None,
+                hash: None,
+            };
+
+            create_mintable.sign(id2.skey().clone());
+            create_mintable.compute_hash();
+            create_mintable.apply(&mut trie);
+        }
 
         let mut tx = Mint {
             minter: minter_norm_addr,
@@ -642,6 +645,7 @@ mod tests {
         tx.sign(id2.skey().clone());
         tx.compute_hash();
 
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
         assert!(tx.validate(&trie));
     }
 
@@ -658,31 +662,34 @@ mod tests {
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Manually initialize creator and minter balances
-        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
-        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+        {
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Create mintable token
-        let mut create_mintable = CreateMintable {
-            creator: creator_norm_address,
-            receiver: creator_addr,
-            minter_address: minter_addr,
-            asset_hash: asset_hash,
-            fee_hash: fee_hash,
-            coin_supply: 9999,
-            max_supply: 10000,
-            precision: 18,
-            fee: Balance::from_bytes(b"30.0").unwrap(),
-            nonce: 1,
-            signature: None,
-            hash: None,
-        };
+            // Manually initialize creator and minter balances
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+            test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
 
-        create_mintable.sign(id2.skey().clone());
-        create_mintable.compute_hash();
-        create_mintable.apply(&mut trie);
+            // Create mintable token
+            let mut create_mintable = CreateMintable {
+                creator: creator_norm_address,
+                receiver: creator_addr,
+                minter_address: minter_addr,
+                asset_hash: asset_hash,
+                fee_hash: fee_hash,
+                coin_supply: 9999,
+                max_supply: 10000,
+                precision: 18,
+                fee: Balance::from_bytes(b"30.0").unwrap(),
+                nonce: 1,
+                signature: None,
+                hash: None,
+            };
+
+            create_mintable.sign(id2.skey().clone());
+            create_mintable.compute_hash();
+            create_mintable.apply(&mut trie);
+        }
 
         let mut tx = Mint {
             minter: minter_norm_addr,
@@ -699,6 +706,7 @@ mod tests {
         tx.sign(id2.skey().clone());
         tx.compute_hash();
 
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
         assert!(!tx.validate(&trie));
     }
 
@@ -715,31 +723,34 @@ mod tests {
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Manually initialize creator and minter balances
-        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
-        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+        {
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Create mintable token
-        let mut create_mintable = CreateMintable {
-            creator: creator_norm_address,
-            receiver: creator_addr,
-            minter_address: minter_addr,
-            asset_hash: asset_hash,
-            fee_hash: fee_hash,
-            coin_supply: 100,
-            max_supply: 10000,
-            precision: 18,
-            fee: Balance::from_bytes(b"30.0").unwrap(),
-            nonce: 1,
-            signature: None,
-            hash: None,
-        };
+            // Manually initialize creator and minter balances
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+            test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
 
-        create_mintable.sign(id2.skey().clone());
-        create_mintable.compute_hash();
-        create_mintable.apply(&mut trie);
+            // Create mintable token
+            let mut create_mintable = CreateMintable {
+                creator: creator_norm_address,
+                receiver: creator_addr,
+                minter_address: minter_addr,
+                asset_hash: asset_hash,
+                fee_hash: fee_hash,
+                coin_supply: 100,
+                max_supply: 10000,
+                precision: 18,
+                fee: Balance::from_bytes(b"30.0").unwrap(),
+                nonce: 1,
+                signature: None,
+                hash: None,
+            };
+
+            create_mintable.sign(id2.skey().clone());
+            create_mintable.compute_hash();
+            create_mintable.apply(&mut trie);
+        }
 
         let mut tx = Mint {
             minter: minter_norm_addr,
@@ -756,6 +767,7 @@ mod tests {
         tx.sign(id2.skey().clone());
         tx.compute_hash();
 
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
         assert!(!tx.validate(&trie));
     }
 
@@ -772,11 +784,14 @@ mod tests {
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Manually initialize creator and minter balances
-        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
-        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+        {
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+            // Manually initialize creator and minter balances
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+            test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+        }
 
         let mut tx = Mint {
             minter: minter_norm_addr,
@@ -793,6 +808,7 @@ mod tests {
         tx.sign(id2.skey().clone());
         tx.compute_hash();
 
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
         assert!(!tx.validate(&trie));
     }
 
@@ -809,29 +825,32 @@ mod tests {
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        
+        {
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Manually initialize creator and minter balances
-        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
-        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+            // Manually initialize creator and minter balances
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+            test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
 
-        // Create mintable token
-        let mut create_mintable = CreateCurrency {
-            creator: creator_norm_address,
-            receiver: creator_addr,
-            asset_hash: asset_hash,
-            fee_hash: fee_hash,
-            coin_supply: 100,
-            precision: 18,
-            fee: Balance::from_bytes(b"30.0").unwrap(),
-            nonce: 1,
-            signature: None,
-            hash: None,
-        };
+            // Create mintable token
+            let mut create_mintable = CreateCurrency {
+                creator: creator_norm_address,
+                receiver: creator_addr,
+                asset_hash: asset_hash,
+                fee_hash: fee_hash,
+                coin_supply: 100,
+                precision: 18,
+                fee: Balance::from_bytes(b"30.0").unwrap(),
+                nonce: 1,
+                signature: None,
+                hash: None,
+            };
 
-        create_mintable.sign(id2.skey().clone());
-        create_mintable.compute_hash();
-        create_mintable.apply(&mut trie);
+            create_mintable.sign(id2.skey().clone());
+            create_mintable.compute_hash();
+            create_mintable.apply(&mut trie);
+        }
 
         let mut tx = Mint {
             minter: minter_norm_addr,
@@ -848,6 +867,7 @@ mod tests {
         tx.sign(id2.skey().clone());
         tx.compute_hash();
 
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
         assert!(!tx.validate(&trie));
     }
 
@@ -1056,50 +1076,53 @@ mod tests {
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Manually initialize creator and minter balances
-        test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
-        test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+        {
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Create mintable token
-        let mut create_mintable = CreateMintable {
-            creator: creator_norm_address,
-            receiver: minter_addr,
-            minter_address: minter_addr,
-            asset_hash: asset_hash,
-            fee_hash: fee_hash,
-            coin_supply: 10000,
-            max_supply: 100000000,
-            precision: 18,
-            fee: Balance::from_bytes(b"30.0").unwrap(),
-            nonce: 1,
-            signature: None,
-            hash: None,
-        };
+            // Manually initialize creator and minter balances
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
+            test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
 
-        create_mintable.sign(id2.skey().clone());
-        create_mintable.compute_hash();
-        create_mintable.apply(&mut trie);
+            // Create mintable token
+            let mut create_mintable = CreateMintable {
+                creator: creator_norm_address,
+                receiver: minter_addr,
+                minter_address: minter_addr,
+                asset_hash: asset_hash,
+                fee_hash: fee_hash,
+                coin_supply: 10000,
+                max_supply: 100000000,
+                precision: 18,
+                fee: Balance::from_bytes(b"30.0").unwrap(),
+                nonce: 1,
+                signature: None,
+                hash: None,
+            };
 
-        let mut tx = Mint {
-            minter: minter_norm_addr,
-            receiver: minter_addr,
-            amount: Balance::from_bytes(b"100.0").unwrap(),
-            fee: Balance::from_bytes(b"10.0").unwrap(),
-            asset_hash: asset_hash,
-            fee_hash: asset_hash,
-            nonce: 1,
-            signature: None,
-            hash: None,
-        };
+            create_mintable.sign(id2.skey().clone());
+            create_mintable.compute_hash();
+            create_mintable.apply(&mut trie);
+        
 
-        tx.sign(id2.skey().clone());
-        tx.compute_hash();
-        tx.apply(&mut trie);
+            let mut tx = Mint {
+                minter: minter_norm_addr,
+                receiver: minter_addr,
+                amount: Balance::from_bytes(b"100.0").unwrap(),
+                fee: Balance::from_bytes(b"10.0").unwrap(),
+                asset_hash: asset_hash,
+                fee_hash: asset_hash,
+                nonce: 1,
+                signature: None,
+                hash: None,
+            };
 
-        // Commit changes
-        trie.commit();
+            tx.sign(id2.skey().clone());
+            tx.compute_hash();
+            tx.apply(&mut trie);
+        }
+
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
 
         let asset_hash = hex::encode(asset_hash.to_vec());
         let fee_hash = hex::encode(fee_hash.to_vec());

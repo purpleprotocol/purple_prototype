@@ -25,5 +25,15 @@ pub enum MempoolErr {
     DoubleSpend,
 
     /// The given transaction already exists in the mempool.
-    AlreadyInMempool
+    AlreadyInMempool,
+
+    /// The received transaction cannot be appended now as it is
+    /// too far into the future according to the current state.
+    TooFarIntoFuture,
+
+    /// The transaction has failed validation on the current state.
+    BadTx,
+
+    /// The appended tx's nonce is less or equal than the current account nonce.
+    NonceLeq,
 }

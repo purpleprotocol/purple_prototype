@@ -8,8 +8,23 @@ edition = "2018"
 parking_lot = "0.7.1"
 chrono = "0.4.6"
 graphlib = "0.5.3"
+patricia-trie = "0.3.0"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
 transactions = { path = "../transactions" }
 account = { path = "../account" }
 crypto = { path = "../crypto" }
 chain = { path = "../chain" }
+persistence = { path = "../persistence" }
+
+[dev-dependencies]
+quickcheck = "0.7.2"
+rand = "0.6.0"
+test-helpers = { path = "../util/test-helpers" }
+
+[dev-dependencies.transactions]
+features = ["test"]
+path = "../transactions" 
+
+[dev-dependencies.chain]
+features = ["test"]
+path = "../chain"

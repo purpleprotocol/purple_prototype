@@ -19,6 +19,7 @@
 use crypto::{FromBase58, PublicKey, ToBase58};
 use quickcheck::Arbitrary;
 use rand::Rng;
+use std::fmt;
 
 #[derive(Hash, Copy, PartialEq, Eq, Serialize, Deserialize, Clone, Debug, PartialOrd, Ord)]
 pub struct NormalAddress(PublicKey);
@@ -27,8 +28,7 @@ impl NormalAddress {
     pub const ADDR_TYPE: u8 = 1;
 
     pub fn to_base58(&self) -> String {
-        let bin_addr = &self.to_bytes();
-        bin_addr.to_base58()
+        self.to_bytes().to_base58()
     }
 
     pub fn from_base58(input: &str) -> Result<NormalAddress, &'static str> {
@@ -68,8 +68,8 @@ impl NormalAddress {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::new();
-        let bytes = (&&self.0).0;
+        let mut result: Vec<u8> = Vec::with_capacity(33);
+        let bytes = (self.0).0;
 
         // Push address type
         result.push(Self::ADDR_TYPE);
@@ -79,6 +79,12 @@ impl NormalAddress {
         }
 
         result
+    }
+}
+
+impl fmt::Display for NormalAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", hex::encode(self.to_bytes()))
     }
 }
 

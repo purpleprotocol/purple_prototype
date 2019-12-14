@@ -20,9 +20,11 @@ use crate::block::*;
 use crate::types::*;
 use bin_tools::*;
 use crypto::Hash;
+use account::Address;
 use elastic_array::ElasticArray128;
 use hashbrown::{HashMap, HashSet};
 use hashdb::HashDB;
+use transactions::Tx;
 use lazy_static::*;
 use lru::LruCache;
 use parking_lot::{Mutex, RwLock};
@@ -242,6 +244,21 @@ impl<B: Block> ChainRef<B> {
                 None
             }
         }
+    }
+
+    pub fn validate_tx(&self, tx: Arc<Tx>) -> bool {
+        let chain = self.chain.read();
+        chain.canonical_tip_state.inner_ref().validate_tx(tx)
+    }
+
+    pub fn get_account_nonce(&self, address: &Address) -> Option<u64> {
+        let chain = self.chain.read();
+        chain.canonical_tip_state.inner_ref().get_account_nonce(address)
+    }
+
+    pub fn get_db_and_state_root(&self) -> (PersistentDb, Hash) {
+        let chain = self.chain.read();
+        (chain.db.clone(), chain.canonical_tip_state.inner_ref().state_root().clone())
     }
 }
 
@@ -2136,6 +2153,20 @@ pub mod tests {
     impl Flushable for DummyState {
         fn flush(&mut self) -> Result<(), ChainErr> {
             Ok(())
+        }
+    }
+
+    impl StateInterface for DummyState {
+        fn state_root(&self) -> Hash {
+            unimplemented!();
+        }
+
+        fn get_account_nonce(&self, address: &Address) -> Option<u64> {
+            unimplemented!();
+        }
+
+        fn validate_tx(&self, tx: Arc<Tx>) -> bool {
+            unimplemented!();
         }
     }
 

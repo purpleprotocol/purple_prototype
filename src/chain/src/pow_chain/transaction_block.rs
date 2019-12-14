@@ -32,7 +32,7 @@ use chrono::prelude::*;
 use crypto::Hash;
 use crypto::PublicKey;
 use lazy_static::*;
-use patricia_trie::{TrieDBMut, TrieMut};
+use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{PersistentDb, BlakeDbHasher, Codec};
 use miner::{Proof, PROOF_SIZE};
 use std::boxed::Box;
@@ -169,10 +169,15 @@ impl Block for TransactionBlock {
         // Apply transactions to state
         if let Some(transaction_set) = &block.transactions {
             let transaction_set = transaction_set.read();
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut chain_state.db, &mut chain_state.state_root);
 
             for tx in transaction_set.iter() {
-                if tx.validate(&trie) {
+                let validation_result = {
+                    let trie = TrieDB::<BlakeDbHasher, Codec>::new(&chain_state.db, &chain_state.state_root).unwrap();
+                    tx.validate(&trie)
+                };
+
+                if validation_result {
+                    let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::from_existing(&mut chain_state.db, &mut chain_state.state_root).unwrap();
                     tx.apply(&mut trie);
                 } else {
                     return Err(ChainErr::BadAppendCondition(AppendCondErr::BadTx));

@@ -35,5 +35,9 @@ test-helpers = { path = "../util/test-helpers" }
 features = ["test"]
 path = "../miner" 
 
+[dev-dependencies.transactions]
+features = ["test"]
+path = "../transactions" 
+
 [features]
 test = []

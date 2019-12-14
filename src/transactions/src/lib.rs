@@ -54,8 +54,8 @@ pub use crate::open_contract::*;
 pub use crate::send::*;
 
 use account::{Address, Balance};
-use crypto::{Hash, Identity};
-use patricia_trie::{TrieDBMut, TrieMut};
+use crypto::{Hash, SecretKey, FromBase58, Identity};
+use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use quickcheck::Arbitrary;
 use rand::Rng;
@@ -74,7 +74,7 @@ pub enum Tx {
 }
 
 impl Tx {
-    pub fn validate(&self, trie: &TrieDBMut<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
         match *self {
             Tx::Call(ref tx) => tx.validate(trie),
             Tx::OpenContract(ref tx) => tx.validate(trie),
@@ -252,4 +252,49 @@ impl Arbitrary for Tx {
             _ => panic!(),
         }
     }
+}
+
+#[cfg(any(test, feature = "test"))]
+#[derive(Clone, Debug, PartialEq, Copy)]
+pub enum TestAccount {
+    A = 0,
+    B = 1,
+    C = 2,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl TestAccount {
+    pub fn to_address(&self) -> Address {
+        Address::from_base58(crate::genesis::INIT_ACCOUNTS[*self as usize].0).unwrap()
+    }
+
+    pub fn to_skey(&self) -> SecretKey {
+        let key = crate::genesis::INIT_ACCOUNTS_SKEYS[*self as usize].from_base58().unwrap();
+        let mut key_arr = [0; 64];
+        key_arr.copy_from_slice(&key);
+        SecretKey(key_arr)
+    }
+}
+
+#[cfg(any(test, feature = "test"))]
+/// Helper to create test `Send` transactions between the
+/// genesis test accounts. 
+pub fn send_coins(sender: TestAccount, receiver: TestAccount, amount: u64, fee: u64, nonce: u64) -> Tx {
+    assert_ne!(sender, receiver);
+    
+    let mut tx = Send {
+        from: sender.to_address().unwrap_normal(),
+        to: receiver.to_address(),
+        amount: Balance::from_u64(amount),
+        fee: Balance::from_u64(fee),
+        asset_hash: crypto::hash_slice(crate::genesis::MAIN_CUR_NAME),
+        fee_hash: crypto::hash_slice(crate::genesis::MAIN_CUR_NAME),
+        nonce,
+        signature: None,
+        hash: None,
+    };
+
+    tx.sign(sender.to_skey());
+    tx.compute_hash();
+    Tx::Send(tx)
 }

@@ -17,6 +17,10 @@
 */
 
 use crate::chain::ChainErr;
+use account::Address;
+use crypto::Hash;
+use transactions::Tx;
+use std::sync::Arc;
 use std::fmt::Debug;
 
 #[derive(Clone, Debug, PartialEq, Copy)]
@@ -77,6 +81,10 @@ where
         self.state.clone()
     }
 
+    pub fn inner_ref(&self) -> &S {
+        &self.state
+    }
+
     pub fn flush(mut self) -> Result<FlushedChainState<S>, ChainErr> {
         self.state.flush()?;
         Ok(FlushedChainState { state: self.state })
@@ -109,4 +117,18 @@ where
     pub fn modify(self) -> UnflushedChainState<S> {
         UnflushedChainState { state: self.state }
     }
+}
+
+/// Trait for method delegation on the chain state. TODO: Remove this
+/// once generics are removed in the `Chain`.
+pub trait StateInterface {
+    /// Returns the current state root that is stored in the state
+    fn state_root(&self) -> Hash;
+
+    /// Returns the nonce of the account with the given address
+    /// if it exists.
+    fn get_account_nonce(&self, address: &Address) -> Option<u64>;
+
+    /// Validates the provided transaction against the stored chain state.
+    fn validate_tx(&self, tx: Arc<Tx>) -> bool;
 }
