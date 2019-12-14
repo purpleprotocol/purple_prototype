@@ -327,14 +327,93 @@ impl Mempool {
             self.fee_map.insert(tx_fee_cur, cur_entry);
         }
 
-        // Place transaction in address mappings
+        // Place transaction in address mappings, also updating the orphans set
         if let Some(addr_entry) = self.address_mappings.get_mut(&tx_addr) {
+            // Check if the transaction is an orphan
+            if let Some(account_nonce) = account_nonce {
+                if tx_nonce > account_nonce + 1 && addr_entry.get(&(account_nonce + 1)).is_none() {
+                    self.orphan_set.insert(tx_hash.clone());
+                } else if tx_nonce == account_nonce + 1 {
+                    let mut idx = account_nonce + 2;
+
+                    // Un-orphan transactions that directly follow the appended one
+                    while let Some(tx) = addr_entry.get(&idx) {
+                        self.orphan_set.remove(&tx);
+                        idx += 1;
+                    }
+                } else if tx_nonce > account_nonce + 1 {
+                    // We have a transaction with the previous nonce, if it
+                    // is an orphan then this transaction is also an orphan.
+                    //
+                    // If there isn't a transaction with the previous nonce,
+                    // then it is definitely an orphan
+                    if let Some(hash) = addr_entry.get(&(tx_nonce - 1)) {
+                        if self.orphan_set.contains(&hash) {
+                            self.orphan_set.insert(tx_hash.clone());
+                        } else {
+                            let mut idx = tx_nonce + 1;
+
+                            // Un-orphan transactions that directly follow the appended one
+                            while let Some(tx) = addr_entry.get(&idx) {
+                                self.orphan_set.remove(&tx);
+                                idx += 1;
+                            }
+                        }
+                    } else {
+                        self.orphan_set.insert(tx_hash.clone());
+                    }
+                } else {
+                    unreachable!();
+                }
+            } else {
+                if tx_nonce > 1 && addr_entry.get(&1).is_none() {
+                    self.orphan_set.insert(tx_hash.clone());
+                } else if tx_nonce == 1 {
+                    let mut idx = 2;
+
+                    // Un-orphan transactions that directly follow the appended one
+                    while let Some(tx) = addr_entry.get(&idx) {
+                        self.orphan_set.remove(&tx);
+                        idx += 1;
+                    }
+                } else if tx_nonce > 1 {
+                    if let Some(hash) = addr_entry.get(&(tx_nonce - 1)) {
+                        if self.orphan_set.contains(&hash) {
+                            self.orphan_set.insert(tx_hash.clone());
+                        } else {
+                            let mut idx = tx_nonce + 1;
+
+                            // Un-orphan transactions that directly follow the appended one
+                            while let Some(tx) = addr_entry.get(&idx) {
+                                self.orphan_set.remove(&tx);
+                                idx += 1;
+                            }
+                        }
+                    } else {
+                        self.orphan_set.insert(tx_hash.clone());
+                    }
+                } else {
+                    unreachable!();
+                }
+            }  
+
             addr_entry.insert(tx_nonce, tx_hash.clone());
         } else {
             let mut addr_entry = BTreeMap::new();
             
             addr_entry.insert(tx_nonce, tx_hash.clone());
             self.address_mappings.insert(tx_addr, addr_entry);
+
+            // Check if the transaction is an orphan
+            if let Some(account_nonce) = account_nonce {
+                if tx_nonce > account_nonce + 1 {
+                    self.orphan_set.insert(tx_hash.clone());
+                }
+            } else {
+                if tx_nonce > 1 {
+                    self.orphan_set.insert(tx_hash.clone());
+                }
+            }        
         }
 
         Ok(())
