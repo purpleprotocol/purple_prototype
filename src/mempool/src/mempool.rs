@@ -471,6 +471,7 @@ mod tests {
     }
 
     quickcheck! {
+        #[cfg(not(windows))]
         /// Append a set of transactions in 3 stages, checking
         /// the state of the mempool after each stage. Each stage's
         /// transactions are shuffled such that regardless of the 
