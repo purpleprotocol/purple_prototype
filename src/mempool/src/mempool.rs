@@ -265,6 +265,11 @@ impl Mempool {
                 return Err(MempoolErr::TooFarIntoFuture);
             }
 
+            // Check that the tx's nonce is greater than the account nonce
+            if tx_nonce <= account_nonce {
+                return Err(MempoolErr::NonceLeq);
+            }
+
             if tx_nonce == account_nonce + 1 {
                 if !self.validate_tx_on_chain_state(tx.clone()) {
                     if cfg!(test) {
@@ -276,6 +281,11 @@ impl Mempool {
         } else {
             if tx_nonce > NONCE_LIMIT {
                 return Err(MempoolErr::TooFarIntoFuture);
+            }
+
+            // A transaction nonce can never be 0
+            if tx_nonce == 0 {
+                return Err(MempoolErr::NonceLeq);
             }
 
             if tx_nonce == 1 {
@@ -369,6 +379,17 @@ mod tests {
     use quickcheck::*;
     use transactions::TestAccount;
     use rand::prelude::*;
+
+    #[test]
+    fn append_fails_on_tx_nonce_that_is_less_or_equal_to_account_nonce() {
+        let chain_db = test_helpers::init_tempdb();
+        let state_db = test_helpers::init_tempdb();
+        let chain = chain::init(chain_db, state_db, true);
+        let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+        let tx = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 0));
+
+        assert_eq!(mempool.append_tx(tx), Err(MempoolErr::NonceLeq));
+    }
 
     quickcheck! {
         /// Append a set of transactions in 3 stages, checking

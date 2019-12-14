@@ -33,4 +33,7 @@ pub enum MempoolErr {
 
     /// The transaction has failed validation on the current state.
     BadTx,
+
+    /// The appended tx's nonce is less or equal than the current account nonce.
+    NonceLeq,
 }
