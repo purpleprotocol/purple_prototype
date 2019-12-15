@@ -26,7 +26,8 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Send {
-    pub(crate) from: NormalAddress,
+    pub(crate) from: Pk,
+    pub(crate) next_address: NormalAddress,
     pub(crate) to: Address,
     pub(crate) amount: Balance,
     pub(crate) fee: Balance,
@@ -44,41 +45,63 @@ impl Send {
 
     /// Validates the transaction against the provided state.
     pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
-        let zero = Balance::from_bytes(b"0.0").unwrap();
+        let zero = Balance::zero();
 
         // You cannot send 0 coins
         if self.amount == zero {
             return false;
         }
 
+        // TODO: Signature verification should be done in batches 
+        // and happen before validation.
         if !self.verify_sig() {
             return false;
         }
 
-        let bin_sender = &self.from.to_bytes();
+        let bin_sender = &self.from.0;
         let bin_asset_hash = &self.asset_hash.0;
         let bin_fee_hash = &self.fee_hash.0;
 
-        // Convert address to strings
-        let sender = hex::encode(bin_sender);
+        let sender_signing_addr = NormalAddress::from_pkey(&self.from);
 
-        // Convert hashes to strings
-        let asset_hash = hex::encode(bin_asset_hash);
-        let fee_hash = hex::encode(bin_fee_hash);
+        // Do not allow address re-usage
+        if self.next_address == sender_signing_addr {
+            return false;
+        }
+
+        // TODO: Validate against sending to an unexisting contract address
+        // which will result in a panic with the current implementation.
+        unimplemented!();
+
+        // Calculate address mapping key
+        //
+        // An address mapping is a mapping between
+        // the account's signing address and an 
+        // account's receiving address.
+        //
+        // They key of the address mapping has the following format:
+        // `<signing-address>.am`
+        let addr_mapping_key = [sender_signing_addr.as_bytes(), &b".am"[..]].concat();
+
+        // Retrieve sender account permanent address
+        let permanent_addr = match trie.get(&addr_mapping_key) {
+            Ok(Some(perm_addr)) => NormalAddress::from_bytes(&perm_addr).unwrap(),
+            Ok(None) => return false,
+            Err(err) => panic!(err),
+        };
 
         // Calculate nonce key
         //
         // The key of a nonce has the following format:
-        // `<account-address>.n`
-        let nonce_key = format!("{}.n", sender);
-        let nonce_key = nonce_key.as_bytes();
+        // `<permanent-addr>.n`
+        let nonce_key = [permanent_addr.as_bytes(), &b".n"[..]].concat();
 
         // Calculate currency keys
         //
         // The key of a currency entry has the following format:
-        // `<account-address>.<currency-hash>`
-        let cur_key = format!("{}.{}", sender, asset_hash);
-        let fee_key = format!("{}.{}", sender, fee_hash);
+        // `<permanent-addr>.<currency-hash>`
+        let cur_key = [permanent_addr.as_bytes(), &bin_asset_hash[..]].concat();
+        let fee_key = [permanent_addr.as_bytes(), &bin_fee_hash[..]].concat();
 
         // Retrieve serialized nonce
         let bin_nonce = match trie.get(&nonce_key) {
@@ -92,10 +115,10 @@ impl Send {
             return false;
         }
 
-        if fee_hash == asset_hash {
+        if bin_fee_hash == bin_asset_hash {
             // The transaction's fee is paid in the same currency
             // that is being sent, so we only retrieve one balance.
-            let mut balance = match trie.get(&cur_key.as_bytes()) {
+            let mut balance = match trie.get(&cur_key) {
                 Ok(Some(balance)) => match Balance::from_bytes(&balance) {
                     Ok(balance) => balance,
                     Err(err) => panic!(err),
@@ -114,7 +137,7 @@ impl Send {
         } else {
             // The transaction's fee is paid in a different currency
             // than the one being transferred so we retrieve both balances.
-            let mut cur_balance = match trie.get(&cur_key.as_bytes()) {
+            let mut cur_balance = match trie.get(&cur_key) {
                 Ok(Some(balance)) => match Balance::from_bytes(&balance) {
                     Ok(balance) => balance,
                     Err(err) => panic!(err),
@@ -123,7 +146,7 @@ impl Send {
                 Err(err) => panic!(err),
             };
 
-            let mut fee_balance = match trie.get(&fee_key.as_bytes()) {
+            let mut fee_balance = match trie.get(&fee_key) {
                 Ok(Some(balance)) => match Balance::from_bytes(&balance) {
                     Ok(balance) => balance,
                     Err(err) => panic!(err),
@@ -146,27 +169,33 @@ impl Send {
     ///
     /// This function will panic if the `from` account does not exist.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
-        let bin_from = &self.from.to_bytes();
+        let bin_from = &self.from.0;
         let bin_to = &self.to.to_bytes();
-        let bin_asset_hash = &self.asset_hash.to_vec();
-        let bin_fee_hash = &self.fee_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.0;
+        let bin_fee_hash = &self.fee_hash.0;
+        let sender_signing_addr = NormalAddress::from_pkey(&self.from);
 
-        // Convert addresses to strings
-        let from = hex::encode(bin_from);
-        let to = hex::encode(bin_to);
+        // Calculate address mapping key
+        //
+        // An address mapping is a mapping between
+        // the account's signing address and an 
+        // account's receiving address.
+        //
+        // They key of the address mapping has the following format:
+        // `<signing-address>.am`
+        let from_addr_mapping_key = [sender_signing_addr.as_bytes(), &b".am"[..]].concat();
+        let next_addr_mapping_key = [self.next_address.as_bytes(), &b".am"[..]].concat();
 
-        // Convert hashes to strings
-        let asset_hash = hex::encode(bin_asset_hash);
-        let fee_hash = hex::encode(bin_fee_hash);
+        // Retrieve sender account permanent address
+        let from_perm_addr = trie.get(&from_addr_mapping_key).unwrap().unwrap();
+        let from_perm_addr = NormalAddress::from_bytes(&from_perm_addr).unwrap();
 
         // Calculate nonce keys
         //
         // The key of a nonce has the following format:
-        // `<account-address>.n`
-        let from_nonce_key = format!("{}.n", from);
-        let to_nonce_key = format!("{}.n", to);
-        let from_nonce_key = from_nonce_key.as_bytes();
-        let to_nonce_key = to_nonce_key.as_bytes();
+        // `<permanent-addr>.n`
+        let from_nonce_key = [from_perm_addr.as_bytes(), &b".n"[..]].concat();
+        let to_nonce_key = [self.to.as_bytes(), &b".n"[..]].concat();
 
         // Retrieve serialized nonces
         let bin_from_nonce = &trie.get(&from_nonce_key).unwrap().unwrap();
@@ -184,20 +213,20 @@ impl Send {
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let from_cur_key = format!("{}.{}", from, asset_hash);
-        let from_fee_key = format!("{}.{}", from, fee_hash);
-        let to_cur_key = format!("{}.{}", to, asset_hash);
+        let from_cur_key = &[from_perm_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
+        let from_fee_key = &[self.to.as_bytes(), &b"."[..], &bin_fee_hash[..]].concat();
+        let to_cur_key = &[self.to.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
 
         match bin_to_nonce {
             // The receiver account exists.
             Ok(Some(_)) => {
-                if fee_hash == asset_hash {
+                if bin_fee_hash == bin_asset_hash {
                     // The transaction's fee is paid in the same currency
                     // that is being transferred, so we only retrieve one
                     // balance.
                     let mut sender_balance = unwrap!(
                         Balance::from_bytes(&unwrap!(
-                            trie.get(&from_cur_key.as_bytes()).unwrap(),
+                            trie.get(&from_cur_key).unwrap(),
                             "The sender does not have an entry for the given currency"
                         )),
                         "Invalid stored balance format"
@@ -210,7 +239,7 @@ impl Send {
                     sender_balance -= self.amount.clone();
 
                     // The receiver account exists so we try to retrieve his balance
-                    let receiver_balance: Balance = match trie.get(&to_cur_key.as_bytes()) {
+                    let receiver_balance: Balance = match trie.get(&to_cur_key) {
                         Ok(Some(balance)) => {
                             Balance::from_bytes(&balance).unwrap() + self.amount.clone()
                         }
@@ -219,17 +248,17 @@ impl Send {
                     };
 
                     // Update trie
-                    trie.insert(from_cur_key.as_bytes(), &sender_balance.to_bytes())
+                    trie.insert(from_cur_key, &sender_balance.to_bytes())
                         .unwrap();
-                    trie.insert(to_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                    trie.insert(to_cur_key, &receiver_balance.to_bytes())
                         .unwrap();
-                    trie.insert(from_nonce_key, &from_nonce).unwrap();
+                    trie.insert(&from_nonce_key, &from_nonce).unwrap();
                 } else {
                     // The transaction's fee is paid in a different currency
                     // than the one being transferred so we retrieve both balances.
                     let mut sender_cur_balance = unwrap!(
                         Balance::from_bytes(&unwrap!(
-                            trie.get(&from_cur_key.as_bytes()).unwrap(),
+                            trie.get(&from_cur_key).unwrap(),
                             "The sender does not have an entry for the given currency"
                         )),
                         "Invalid stored balance format"
@@ -237,7 +266,7 @@ impl Send {
 
                     let mut sender_fee_balance = unwrap!(
                         Balance::from_bytes(&unwrap!(
-                            trie.get(&from_fee_key.as_bytes()).unwrap(),
+                            trie.get(&from_fee_key).unwrap(),
                             "The sender does not have an entry for the given currency"
                         )),
                         "Invalid stored balance format"
@@ -250,7 +279,7 @@ impl Send {
                     sender_cur_balance -= self.amount.clone();
 
                     // The receiver account exists so we try to retrieve his balance
-                    let receiver_balance: Balance = match trie.get(&to_cur_key.as_bytes()) {
+                    let receiver_balance: Balance = match trie.get(&to_cur_key) {
                         Ok(Some(balance)) => {
                             Balance::from_bytes(&balance).unwrap() + self.amount.clone()
                         }
@@ -259,13 +288,13 @@ impl Send {
                     };
 
                     // Update trie
-                    trie.insert(from_cur_key.as_bytes(), &sender_cur_balance.to_bytes())
+                    trie.insert(from_cur_key, &sender_cur_balance.to_bytes())
                         .unwrap();
-                    trie.insert(from_fee_key.as_bytes(), &sender_fee_balance.to_bytes())
+                    trie.insert(from_fee_key, &sender_fee_balance.to_bytes())
                         .unwrap();
-                    trie.insert(to_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                    trie.insert(to_cur_key, &receiver_balance.to_bytes())
                         .unwrap();
-                    trie.insert(from_nonce_key, &from_nonce).unwrap();
+                    trie.insert(&from_nonce_key, &from_nonce).unwrap();
                 }
             }
             Ok(None) => {
@@ -273,13 +302,15 @@ impl Send {
                 //
                 // This can only happen if the receiver address is a normal address.
                 if let Address::Normal(_) = &self.to {
-                    if fee_hash == asset_hash {
+                    let to_addr_mapping_key = [self.to.as_bytes(), &b".am"[..]].concat();
+
+                    if bin_fee_hash == bin_asset_hash {
                         // The transaction's fee is paid in the same currency
                         // that is being transferred, so we only retrieve one
                         // balance.
                         let mut sender_balance = unwrap!(
                             Balance::from_bytes(&unwrap!(
-                                trie.get(&from_cur_key.as_bytes()).unwrap(),
+                                trie.get(&from_cur_key).unwrap(),
                                 "The sender does not have an entry for the given currency"
                             )),
                             "Invalid stored balance format"
@@ -298,17 +329,18 @@ impl Send {
                             .unwrap();
 
                         // Update balances
-                        trie.insert(from_cur_key.as_bytes(), &sender_balance.to_bytes())
+                        trie.insert(from_cur_key, &sender_balance.to_bytes())
                             .unwrap();
-                        trie.insert(to_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                        trie.insert(to_cur_key, &receiver_balance.to_bytes())
                             .unwrap();
-                        trie.insert(from_nonce_key, &from_nonce).unwrap();
+                        trie.insert(&from_nonce_key, &from_nonce).unwrap();
+                        trie.insert(&to_addr_mapping_key, self.to.as_bytes()).unwrap();
                     } else {
                         // The transaction's fee is paid in a different currency
                         // than the one being transferred so we retrieve both balances.
                         let mut sender_cur_balance = unwrap!(
                             Balance::from_bytes(&unwrap!(
-                                trie.get(&from_cur_key.as_bytes()).unwrap(),
+                                trie.get(&from_cur_key).unwrap(),
                                 "The sender does not have an entry for the given currency"
                             )),
                             "Invalid stored balance format"
@@ -316,7 +348,7 @@ impl Send {
 
                         let mut sender_fee_balance = unwrap!(
                             Balance::from_bytes(&unwrap!(
-                                trie.get(&from_fee_key.as_bytes()).unwrap(),
+                                trie.get(&from_fee_key).unwrap(),
                                 "The sender does not have an entry for the given currency"
                             )),
                             "Invalid stored balance format"
@@ -335,13 +367,14 @@ impl Send {
                             .unwrap();
 
                         // Update balances
-                        trie.insert(from_cur_key.as_bytes(), &sender_cur_balance.to_bytes())
+                        trie.insert(from_cur_key, &sender_cur_balance.to_bytes())
                             .unwrap();
-                        trie.insert(from_fee_key.as_bytes(), &sender_fee_balance.to_bytes())
+                        trie.insert(from_fee_key, &sender_fee_balance.to_bytes())
                             .unwrap();
-                        trie.insert(to_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                        trie.insert(to_cur_key, &receiver_balance.to_bytes())
                             .unwrap();
-                        trie.insert(from_nonce_key, &from_nonce).unwrap();
+                        trie.insert(&from_nonce_key, &from_nonce).unwrap();
+                        trie.insert(&to_addr_mapping_key, self.to.as_bytes()).unwrap();
                     }
                 } else {
                     panic!("The receiving account does not exist and it's address is not a normal one!")
@@ -369,7 +402,7 @@ impl Send {
         let message = assemble_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.from.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.from),
             None => false,
         }
     }
@@ -590,8 +623,11 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for Send {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Send {
+        let (pk, _) = crypto::gen_keypair();
+
         let mut tx = Send {
-            from: Arbitrary::arbitrary(g),
+            from: pk,
+            next_address: Arbitrary::arbitrary(g),
             to: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
@@ -619,9 +655,8 @@ mod tests {
     fn validate() {
         let from_id = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(*from_id.pkey());
-        let from_norm_addr = NormalAddress::from_pkey(*from_id.pkey());
-        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -638,7 +673,7 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Send {
-            from: from_norm_addr,
+            from: from_id.pkey(),
             to: to_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
@@ -660,9 +695,8 @@ mod tests {
     fn validate_no_funds() {
         let from_id = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(*from_id.pkey());
-        let from_norm_addr = NormalAddress::from_pkey(*from_id.pkey());
-        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -679,7 +713,7 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Send {
-            from: from_norm_addr,
+            from: from_id.pkey(),
             to: to_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
@@ -701,9 +735,8 @@ mod tests {
     fn validate_different_currencies() {
         let from_id = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(*from_id.pkey());
-        let from_norm_addr = NormalAddress::from_pkey(*from_id.pkey());
-        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -722,7 +755,7 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Send {
-            from: from_norm_addr,
+            from: from_id.pkey(),
             to: to_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
@@ -744,9 +777,8 @@ mod tests {
     fn validate_no_funds_different_currencies() {
         let from_id = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(*from_id.pkey());
-        let from_norm_addr = NormalAddress::from_pkey(*from_id.pkey());
-        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -765,7 +797,7 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Send {
-            from: from_norm_addr,
+            from: from_id.pkey(),
             to: to_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
@@ -787,9 +819,8 @@ mod tests {
     fn validate_no_funds_for_fee_different_currencies() {
         let from_id = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(*from_id.pkey());
-        let from_norm_addr = NormalAddress::from_pkey(*from_id.pkey());
-        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -808,7 +839,7 @@ mod tests {
         let fee = Balance::from_bytes(b"20.0").unwrap();
 
         let mut tx = Send {
-            from: from_norm_addr,
+            from: from_id.pkey(),
             to: to_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
@@ -830,9 +861,8 @@ mod tests {
     fn validate_zero() {
         let from_id = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(*from_id.pkey());
-        let from_norm_addr = NormalAddress::from_pkey(*from_id.pkey());
-        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -845,11 +875,11 @@ mod tests {
             test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
         }
 
-        let amount = Balance::from_bytes(b"0.0").unwrap();
+        let amount = Balance::zero();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Send {
-            from: from_norm_addr,
+            from: from_id.pkey(),
             to: to_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
@@ -873,7 +903,7 @@ mod tests {
         let to_id = Identity::new();
         let from_addr = NormalAddress::from_pkey(*id.pkey());
         let from_addr2 = Address::normal_from_pkey(*id.pkey());
-        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
         let amount = Balance::from_bytes(b"100.123").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -951,7 +981,7 @@ mod tests {
         let to_id = Identity::new();
         let from_addr = NormalAddress::from_pkey(*id.pkey());
         let from_addr2 = Address::normal_from_pkey(*id.pkey());
-        let to_addr = Address::normal_from_pkey(*to_id.pkey());
+        let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
         let amount = Balance::from_bytes(b"100.123").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();

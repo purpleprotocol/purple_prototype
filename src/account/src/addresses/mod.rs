@@ -47,8 +47,15 @@ impl Address {
             Address::Contract(ref addr) => addr.to_bytes(),
         }
     }
-    pub fn normal_from_pkey(pkey: PublicKey) -> Address {
+    pub fn normal_from_pkey(pkey: &PublicKey) -> Address {
         Address::Normal(NormalAddress::from_pkey(pkey))
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        match *self {
+            Address::Normal(ref addr) => addr.as_bytes(),
+            Address::Contract(ref addr) => addr.as_bytes(),
+        }
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<Address, &'static str> {

@@ -43,7 +43,7 @@ impl Mint {
 
     /// Validates the transaction against the provided state.
     pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
-        let zero = Balance::from_bytes(b"0.0").unwrap();
+        let zero = Balance::zero();
 
         // You cannot mint 0 tokens
         if self.amount == zero {

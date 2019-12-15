@@ -31,6 +31,10 @@ impl ContractAddress {
         ContractAddress(addr)
     }
 
+    pub fn as_bytes(&self) -> &[u8] {
+        &(self.0).0
+    }
+
     pub fn to_base58(&self) -> String {
         let bin_addr = &self.to_bytes();
         bin_addr.to_base58()

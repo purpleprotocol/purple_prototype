@@ -26,6 +26,7 @@ use std::str;
 use std::str::FromStr;
 
 lazy_static! {
+    static ref ZERO: Balance = Balance::from_bytes(b"0.0").unwrap();
     static ref PREC0: Regex = Regex::new(r"^[0-9]*$").unwrap();
     static ref PREC2: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,2})?$").unwrap();
     static ref PREC3: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,3})?$").unwrap();
@@ -75,6 +76,10 @@ impl Balance {
                 "Invalid precision! The value must either be 0 or a number between 2 and 18!"
             ),
         }
+    }
+
+    pub fn zero() -> Balance {
+        ZERO.clone()
     }
 
     pub fn to_inner(&self) -> Decimal {

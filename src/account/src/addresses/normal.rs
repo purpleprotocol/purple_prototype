@@ -16,13 +16,13 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::{FromBase58, PublicKey, ToBase58};
+use crypto::{FromBase58, PublicKey, Hash, ToBase58};
 use quickcheck::Arbitrary;
 use rand::Rng;
 use std::fmt;
 
 #[derive(Hash, Copy, PartialEq, Eq, Serialize, Deserialize, Clone, Debug, PartialOrd, Ord)]
-pub struct NormalAddress(PublicKey);
+pub struct NormalAddress(Hash);
 
 impl NormalAddress {
     pub const ADDR_TYPE: u8 = 1;
@@ -40,15 +40,17 @@ impl NormalAddress {
 
     pub fn random() -> NormalAddress {
         let (pk, _) = crypto::gen_keypair();
-        NormalAddress::from_pkey(pk)
+        NormalAddress::from_pkey(&pk)
     }
 
-    pub fn from_pkey(pkey: PublicKey) -> NormalAddress {
-        NormalAddress(pkey)
+    pub fn from_pkey(pkey: &PublicKey) -> NormalAddress {
+        let pk_bytes = &pkey.0;
+        let pkey_hash = crypto::hash_slice(pk_bytes);
+        NormalAddress(pkey_hash)
     }
 
-    pub fn pkey(&self) -> PublicKey {
-        self.0.clone()
+    pub fn as_bytes(&self) -> &[u8] {
+        &(self.0).0
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<NormalAddress, &'static str> {
@@ -56,10 +58,10 @@ impl NormalAddress {
 
         if bin.len() == 33 && addr_type == Self::ADDR_TYPE {
             let (_, tail) = bin.split_at(1);
-            let mut pkey = [0; 32];
-            pkey.copy_from_slice(&tail);
+            let mut hash = [0; 32];
+            hash.copy_from_slice(&tail);
 
-            Ok(NormalAddress(PublicKey(pkey)))
+            Ok(NormalAddress(Hash(hash)))
         } else if addr_type != Self::ADDR_TYPE {
             Err("Bad address type")
         } else {
@@ -96,7 +98,7 @@ impl Arbitrary for NormalAddress {
         let mut result = [0; 32];
         result.copy_from_slice(&bytes);
 
-        NormalAddress(PublicKey(result))
+        NormalAddress(Hash(result))
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
@@ -104,7 +106,7 @@ impl Arbitrary for NormalAddress {
             let mut result = [0; 32];
             result.copy_from_slice(&p);
 
-            NormalAddress(PublicKey(result))
+            NormalAddress(Hash(result))
         }))
     }
 }

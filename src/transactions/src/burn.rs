@@ -44,7 +44,7 @@ impl Burn {
 
     /// Validates the transaction against the provided state.
     pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
-        let zero = Balance::from_bytes(b"0.0").unwrap();
+        let zero = Balance::zero();
 
         // You cannot burn 0 coins
         if self.amount == zero {
@@ -751,7 +751,7 @@ mod tests {
             )
         };
 
-        let amount = Balance::from_bytes(b"0.0").unwrap();
+        let amount = Balance::zero();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Burn {
