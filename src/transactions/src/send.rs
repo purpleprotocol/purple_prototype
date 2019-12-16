@@ -253,6 +253,10 @@ impl Send {
                     trie.insert(to_cur_key, &receiver_balance.to_bytes())
                         .unwrap();
                     trie.insert(&from_nonce_key, &from_nonce).unwrap();
+
+                    // Update sender address mapping
+                    trie.remove(&from_addr_mapping_key).unwrap().unwrap();
+                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap().unwrap();
                 } else {
                     // The transaction's fee is paid in a different currency
                     // than the one being transferred so we retrieve both balances.
@@ -295,6 +299,10 @@ impl Send {
                     trie.insert(to_cur_key, &receiver_balance.to_bytes())
                         .unwrap();
                     trie.insert(&from_nonce_key, &from_nonce).unwrap();
+
+                    // Update sender address mapping
+                    trie.remove(&from_addr_mapping_key).unwrap().unwrap();
+                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap().unwrap();
                 }
             }
             Ok(None) => {
@@ -335,6 +343,10 @@ impl Send {
                             .unwrap();
                         trie.insert(&from_nonce_key, &from_nonce).unwrap();
                         trie.insert(&to_addr_mapping_key, self.to.as_bytes()).unwrap();
+
+                        // Update sender address mapping
+                    trie.remove(&from_addr_mapping_key).unwrap().unwrap();
+                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap().unwrap();
                     } else {
                         // The transaction's fee is paid in a different currency
                         // than the one being transferred so we retrieve both balances.
@@ -375,6 +387,10 @@ impl Send {
                             .unwrap();
                         trie.insert(&from_nonce_key, &from_nonce).unwrap();
                         trie.insert(&to_addr_mapping_key, self.to.as_bytes()).unwrap();
+
+                        // Update sender address mapping
+                        trie.remove(&from_addr_mapping_key).unwrap().unwrap();
+                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap().unwrap();
                     }
                 } else {
                     panic!("The receiving account does not exist and it's address is not a normal one!")
@@ -414,8 +430,9 @@ impl Send {
     /// 2) Amount length            - 8bits
     /// 3) Fee length               - 8bits
     /// 4) Nonce                    - 64bits
-    /// 5) From                     - 33byte binary
+    /// 5) From                     - 32byte binary
     /// 6) To                       - 33byte binary
+    /// 7) Next address             - 33byte binary
     /// 7) Currency hash            - 32byte binary
     /// 8) Fee hash                 - 32byte binary
     /// 9) Signature                - 64byte binary
@@ -431,12 +448,10 @@ impl Send {
             return Err("Signature field is missing");
         };
 
-        let from = &self.from.to_bytes();
-        let to = &self.to.to_bytes();
-        let fee_hash = &&self.fee_hash.0;
-        let asset_hash = &&self.asset_hash.0;
-        let amount = &self.amount.to_bytes();
-        let fee = &self.fee.to_bytes();
+        let to = self.to.as_bytes();
+        let next_address = self.next_address.as_bytes();
+        let amount = self.amount.to_bytes();
+        let fee = self.fee.to_bytes();
         let nonce = &self.nonce;
 
         let fee_len = fee.len();
@@ -447,13 +462,14 @@ impl Send {
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
-        buffer.append(&mut from.to_vec());
-        buffer.append(&mut to.to_vec());
-        buffer.append(&mut asset_hash.to_vec());
-        buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut signature.to_vec());
-        buffer.append(&mut amount.to_vec());
-        buffer.append(&mut fee.to_vec());
+        buffer.extend_from_slice(&self.from.0);
+        buffer.extend_from_slice(to);
+        buffer.extend_from_slice(next_address);
+        buffer.extend_from_slice(&self.asset_hash.0);
+        buffer.extend_from_slice(&self.fee_hash.0);
+        buffer.extend_from_slice(&signature);
+        buffer.extend_from_slice(&amount);
+        buffer.extend_from_slice(&fee);
 
         Ok(buffer)
     }
@@ -498,13 +514,12 @@ impl Send {
         let mut buf = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..11).collect();
 
-        let from = if buf.len() > 33 as usize {
-            let from_vec: Vec<u8> = buf.drain(..33).collect();
+        let from = if buf.len() > 32 as usize {
+            let from_vec: Vec<u8> = buf.drain(..32).collect();
+            let mut from = [0; 32];
+            from.copy_from_slice(&from_vec);
 
-            match NormalAddress::from_bytes(&from_vec) {
-                Ok(addr) => addr,
-                Err(err) => return Err(err),
-            }
+            Pk(from)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -513,6 +528,17 @@ impl Send {
             let to_vec: Vec<u8> = buf.drain(..33).collect();
 
             match Address::from_bytes(&to_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let next_address = if buf.len() > 33 as usize {
+            let next_address_vec: Vec<u8> = buf.drain(..33).collect();
+
+            match NormalAddress::from_bytes(&next_address_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -576,13 +602,14 @@ impl Send {
         };
 
         let mut send = Send {
-            from: from,
-            to: to,
-            fee_hash: fee_hash,
-            fee: fee,
-            amount: amount,
-            nonce: nonce,
-            asset_hash: asset_hash,
+            from,
+            to,
+            next_address,
+            fee_hash,
+            fee,
+            amount,
+            nonce,
+            asset_hash,
             hash: None,
             signature: Some(signature),
         };
@@ -601,20 +628,21 @@ impl Send {
 
 fn assemble_message(obj: &Send) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
-    let mut from = obj.from.to_bytes();
-    let mut to = obj.to.to_bytes();
-    let mut amount = obj.amount.to_bytes();
-    let mut fee = obj.fee.to_bytes();
+    let to = obj.to.as_bytes();
+    let next_address = obj.next_address.as_bytes();
+    let amount = obj.amount.to_bytes();
+    let fee = obj.fee.to_bytes();
     let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
 
     // Compose data to sign
-    buf.append(&mut from);
-    buf.append(&mut to);
-    buf.append(&mut asset_hash.to_vec());
-    buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut amount);
-    buf.append(&mut fee);
+    buf.extend_from_slice(&obj.from.0);
+    buf.extend_from_slice(to);
+    buf.extend_from_slice(next_address);
+    buf.extend_from_slice(&obj.asset_hash.0);
+    buf.extend_from_slice(&obj.fee_hash.0);
+    buf.extend_from_slice(&amount);
+    buf.extend_from_slice(&fee);
 
     buf
 }
@@ -654,8 +682,10 @@ mod tests {
     #[test]
     fn validate() {
         let from_id = Identity::new();
+        let from_id2 = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let from_addr = NormalAddress::from_pkey(&from_id.pkey());
+        let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
@@ -673,8 +703,9 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Send {
-            from: from_id.pkey(),
+            from: *from_id.pkey(),
             to: to_addr.clone(),
+            next_address: from_next_addr,
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
@@ -694,8 +725,10 @@ mod tests {
     #[test]
     fn validate_no_funds() {
         let from_id = Identity::new();
+        let from_id2 = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let from_addr = NormalAddress::from_pkey(&from_id.pkey());
+        let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
@@ -713,8 +746,9 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Send {
-            from: from_id.pkey(),
+            from: *from_id.pkey(),
             to: to_addr.clone(),
+            next_address: from_next_addr,
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
@@ -735,7 +769,10 @@ mod tests {
     fn validate_different_currencies() {
         let from_id = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let from_id2 = Identity::new();
+        let to_id = Identity::new();
+        let from_addr = NormalAddress::from_pkey(&from_id.pkey());
+        let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
@@ -755,8 +792,9 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Send {
-            from: from_id.pkey(),
+            from: *from_id.pkey(),
             to: to_addr.clone(),
+            next_address: from_next_addr,
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
@@ -776,8 +814,10 @@ mod tests {
     #[test]
     fn validate_no_funds_different_currencies() {
         let from_id = Identity::new();
+        let from_id2 = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let from_addr = NormalAddress::from_pkey(&from_id.pkey());
+        let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
@@ -797,8 +837,9 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Send {
-            from: from_id.pkey(),
+            from: *from_id.pkey(),
             to: to_addr.clone(),
+            next_address: from_next_addr,
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
@@ -818,8 +859,10 @@ mod tests {
     #[test]
     fn validate_no_funds_for_fee_different_currencies() {
         let from_id = Identity::new();
+        let from_id2 = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let from_addr = NormalAddress::from_pkey(&from_id.pkey());
+        let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
@@ -839,8 +882,9 @@ mod tests {
         let fee = Balance::from_bytes(b"20.0").unwrap();
 
         let mut tx = Send {
-            from: from_id.pkey(),
+            from: *from_id.pkey(),
             to: to_addr.clone(),
+            next_address: from_next_addr,
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
@@ -860,8 +904,10 @@ mod tests {
     #[test]
     fn validate_zero() {
         let from_id = Identity::new();
+        let from_id2 = Identity::new();
         let to_id = Identity::new();
-        let from_addr = Address::normal_from_pkey(&from_id.pkey());
+        let from_addr = NormalAddress::from_pkey(&from_id.pkey());
+        let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
@@ -879,7 +925,8 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Send {
-            from: from_id.pkey(),
+            from: *from_id.pkey(),
+            next_address: from_next_addr,
             to: to_addr.clone(),
             amount: amount.clone(),
             fee: fee.clone(),
@@ -899,10 +946,11 @@ mod tests {
 
     #[test]
     fn apply_it_creates_a_new_account() {
-        let id = Identity::new();
+        let from_id = Identity::new();
+        let from_id2 = Identity::new();
         let to_id = Identity::new();
-        let from_addr = NormalAddress::from_pkey(*id.pkey());
-        let from_addr2 = Address::normal_from_pkey(*id.pkey());
+        let from_addr = NormalAddress::from_pkey(&from_id.pkey());
+        let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
         let amount = Balance::from_bytes(b"100.123").unwrap();
@@ -915,10 +963,11 @@ mod tests {
             let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize sender balance
-            test_helpers::init_balance(&mut trie, from_addr2, asset_hash, b"10000.0");
+            test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
 
             let mut tx = Send {
-                from: from_addr.clone(),
+                from: *from_id.pkey(),
+                next_address: from_next_addr,
                 to: to_addr.clone(),
                 amount: amount.clone(),
                 fee: fee.clone(),
@@ -929,7 +978,7 @@ mod tests {
                 hash: None,
             };
 
-            tx.sign(id.skey().clone());
+            tx.sign(from_id.skey().clone());
             tx.compute_hash();
 
             // Apply transaction
@@ -938,32 +987,33 @@ mod tests {
 
         let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
 
-        let from_nonce_key = format!("{}.n", hex::encode(&from_addr.to_bytes()));
-        let to_nonce_key = format!("{}.n", hex::encode(&to_addr.to_bytes()));
-        let from_nonce_key = from_nonce_key.as_bytes();
-        let to_nonce_key = to_nonce_key.as_bytes();
+        let from_nonce_key = [from_addr.as_bytes(), &b".n"[..]].concat();
+        let to_nonce_key = [to_addr.as_bytes(), &b".n"[..]].concat();
+        let from_addr_mapping_key = [from_addr.as_bytes(), &b".am"[..]].concat();
+        let to_addr_mapping_key = [to_addr.as_bytes(), &b".am"[..]].concat();
 
         let bin_from_nonce = &trie.get(&from_nonce_key).unwrap().unwrap();
         let bin_to_nonce = &trie.get(&to_nonce_key).unwrap().unwrap();
 
         let bin_asset_hash = asset_hash.to_vec();
-        let hex_asset_hash = hex::encode(&bin_asset_hash);
-
-        let sender_balance_key =
-            format!("{}.{}", hex::encode(&from_addr.to_bytes()), hex_asset_hash);
-        let receiver_balance_key =
-            format!("{}.{}", hex::encode(&to_addr.to_bytes()), hex_asset_hash);
-        let sender_balance_key = sender_balance_key.as_bytes();
-        let receiver_balance_key = receiver_balance_key.as_bytes();
+        let sender_balance_key = [from_addr.as_bytes(), &b"."[..], &bin_asset_hash].concat();
+        let receiver_balance_key = [to_addr.as_bytes(), &b"."[..], &bin_asset_hash].concat();
 
         let sender_balance =
             Balance::from_bytes(&trie.get(&sender_balance_key).unwrap().unwrap()).unwrap();
         let receiver_balance =
             Balance::from_bytes(&trie.get(&receiver_balance_key).unwrap().unwrap()).unwrap();
 
+        let from_addr_mapping = trie.get(&from_addr_mapping_key).unwrap().unwrap();
+        let to_addr_mapping = trie.get(&to_addr_mapping_key).unwrap().unwrap();
+
         // Check nonces
         assert_eq!(bin_from_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
         assert_eq!(bin_to_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 0]);
+
+        // Check address mappings
+        assert_eq!(from_addr_mapping, from_next_addr.as_bytes());
+        assert_eq!(to_addr_mapping, to_addr.as_bytes());
 
         // Verify that the correct amount of funds have been subtracted from the sender
         assert_eq!(
@@ -977,11 +1027,12 @@ mod tests {
 
     #[test]
     fn apply_it_sends_to_an_existing_account() {
-        let id = Identity::new();
+        let from_id = Identity::new();
+        let from_id2 = Identity::new();
         let to_id = Identity::new();
-        let from_addr = NormalAddress::from_pkey(*id.pkey());
-        let from_addr2 = Address::normal_from_pkey(*id.pkey());
-        let to_addr = Address::normal_from_pkey(&to_id.pkey());
+        let from_addr = NormalAddress::from_pkey(&from_id.pkey());
+        let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
+        let to_addr = NormalAddress::from_pkey(&to_id.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
         let amount = Balance::from_bytes(b"100.123").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -993,12 +1044,13 @@ mod tests {
             let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize sender and receiver balances
-            test_helpers::init_balance(&mut trie, from_addr2, asset_hash, b"10000.0");
+            test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
             test_helpers::init_balance(&mut trie, to_addr.clone(), asset_hash, b"10.0");
 
             let mut tx = Send {
-                from: from_addr.clone(),
-                to: to_addr.clone(),
+                from: *from_id.pkey(),
+                next_address: from_next_addr,
+                to: Address::Normal(to_addr.clone()),
                 amount: amount.clone(),
                 fee: fee.clone(),
                 asset_hash: asset_hash,
@@ -1008,7 +1060,7 @@ mod tests {
                 hash: None,
             };
 
-            tx.sign(id.skey().clone());
+            tx.sign(from_id.skey().clone());
             tx.compute_hash();
 
             // Apply transaction
@@ -1017,23 +1069,15 @@ mod tests {
 
         let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
 
-        let from_nonce_key = format!("{}.n", hex::encode(&from_addr.to_bytes()));
-        let to_nonce_key = format!("{}.n", hex::encode(&to_addr.to_bytes()));
-        let from_nonce_key = from_nonce_key.as_bytes();
-        let to_nonce_key = to_nonce_key.as_bytes();
+        let from_nonce_key = [from_next_addr.as_bytes(), &b".n"[..]].concat();
+        let to_nonce_key = [to_addr.as_bytes(), &b".n"[..]].concat();
 
         let bin_from_nonce = &trie.get(&from_nonce_key).unwrap().unwrap();
         let bin_to_nonce = &trie.get(&to_nonce_key).unwrap().unwrap();
 
         let bin_asset_hash = asset_hash.to_vec();
-        let hex_asset_hash = hex::encode(&bin_asset_hash);
-
-        let sender_balance_key =
-            format!("{}.{}", hex::encode(&from_addr.to_bytes()), hex_asset_hash);
-        let receiver_balance_key =
-            format!("{}.{}", hex::encode(&to_addr.to_bytes()), hex_asset_hash);
-        let sender_balance_key = sender_balance_key.as_bytes();
-        let receiver_balance_key = receiver_balance_key.as_bytes();
+        let sender_balance_key = [from_next_addr.as_bytes(), &b"."[..], &bin_asset_hash].concat();
+        let receiver_balance_key = [to_addr.as_bytes(), &b"."[..], &bin_asset_hash].concat();
 
         let sender_balance =
             Balance::from_bytes(&trie.get(&sender_balance_key).unwrap().unwrap()).unwrap();
@@ -1074,6 +1118,7 @@ mod tests {
 
         fn verify_signature(
             to: Address,
+            next_address: NormalAddress,
             amount: Balance,
             fee: Balance,
             asset_hash: Hash,
@@ -1082,12 +1127,13 @@ mod tests {
             let id = Identity::new();
 
             let mut tx = Send {
-                from: NormalAddress::from_pkey(*id.pkey()),
-                to: to,
-                amount: amount,
-                fee: fee,
-                asset_hash: asset_hash,
-                fee_hash: fee_hash,
+                from: *id.pkey(),
+                next_address,
+                to,
+                amount,
+                fee,
+                asset_hash,
+                fee_hash,
                 nonce: 1,
                 signature: None,
                 hash: None

@@ -25,7 +25,7 @@ extern crate quicksort;
 extern crate rlp;
 extern crate tempdir;
 
-use account::{Address, Balance};
+use account::{NormalAddress, Balance};
 use crypto::Hash;
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec, PersistentDb};
@@ -41,29 +41,27 @@ pub fn init_tempdb() -> PersistentDb {
 
 pub fn init_balance(
     trie: &mut TrieDBMut<BlakeDbHasher, Codec>,
-    address: Address,
+    address: NormalAddress,
     asset_hash: Hash,
     amount: &[u8],
 ) {
-    let bin_address = address.to_bytes();
     let bin_asset_hash = asset_hash.to_vec();
 
-    let hex_address = hex::encode(&bin_address);
-    let hex_asset_hash = hex::encode(&bin_asset_hash);
-
-    let cur_key = format!("{}.{}", hex_address, hex_asset_hash);
-    let nonce_key = format!("{}.n", hex_address);
-    let precision_key = format!("{}.p", hex_asset_hash);
+    let cur_key = [address.as_bytes(), &b"."[..], &bin_asset_hash].concat();
+    let nonce_key = [address.as_bytes(), &b".n"[..]].concat();
+    let precision_key = [&bin_asset_hash, &b".p"[..]].concat();
+    let address_mapping_key = [address.as_bytes(), &b".am"[..]].concat();
 
     // Re-serialize balance to validate with regex
     let balance = Balance::from_bytes(amount).unwrap().to_bytes();
 
-    if let Ok(None) = trie.get(&precision_key.as_bytes()) {
-        trie.insert(&precision_key.as_bytes(), &[18]).unwrap();
+    if let Ok(None) = trie.get(&precision_key) {
+        trie.insert(&precision_key, &[18]).unwrap();
     }
 
-    trie.insert(&cur_key.as_bytes(), &balance).unwrap();
-    trie.insert(&nonce_key.as_bytes(), &[0, 0, 0, 0, 0, 0, 0, 0])
+    trie.insert(&address_mapping_key, address.as_bytes()).unwrap();
+    trie.insert(&cur_key, &balance).unwrap();
+    trie.insert(&nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
         .unwrap();
     trie.commit();
 }
