@@ -69,7 +69,7 @@ impl Send {
             return false;
         }
 
-        // TODO: Validate against sending to an unexisting contract address
+        // TODO: Validate against sending to an un-existing contract address
         // which will result in a panic with the current implementation.
         unimplemented!();
 
@@ -461,7 +461,6 @@ impl Send {
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
-
         buffer.extend_from_slice(&self.from.0);
         buffer.extend_from_slice(to);
         buffer.extend_from_slice(next_address);
@@ -990,6 +989,7 @@ mod tests {
         let from_nonce_key = [from_addr.as_bytes(), &b".n"[..]].concat();
         let to_nonce_key = [to_addr.as_bytes(), &b".n"[..]].concat();
         let from_addr_mapping_key = [from_addr.as_bytes(), &b".am"[..]].concat();
+        let from_next_addr_mapping_key = [from_next_addr.as_bytes(), &b".am"[..]].concat();
         let to_addr_mapping_key = [to_addr.as_bytes(), &b".am"[..]].concat();
 
         let bin_from_nonce = &trie.get(&from_nonce_key).unwrap().unwrap();
@@ -1004,7 +1004,8 @@ mod tests {
         let receiver_balance =
             Balance::from_bytes(&trie.get(&receiver_balance_key).unwrap().unwrap()).unwrap();
 
-        let from_addr_mapping = trie.get(&from_addr_mapping_key).unwrap().unwrap();
+        assert_eq!(trie.get(&from_addr_mapping_key).unwrap(), None);
+        let from_next_addr_mapping = trie.get(&from_next_addr_mapping_key).unwrap().unwrap();
         let to_addr_mapping = trie.get(&to_addr_mapping_key).unwrap().unwrap();
 
         // Check nonces
@@ -1012,7 +1013,7 @@ mod tests {
         assert_eq!(bin_to_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 0]);
 
         // Check address mappings
-        assert_eq!(from_addr_mapping, from_next_addr.as_bytes());
+        assert_eq!(from_next_addr_mapping, from_addr.as_bytes());
         assert_eq!(to_addr_mapping, to_addr.as_bytes());
 
         // Verify that the correct amount of funds have been subtracted from the sender
@@ -1071,6 +1072,8 @@ mod tests {
 
         let from_nonce_key = [from_next_addr.as_bytes(), &b".n"[..]].concat();
         let to_nonce_key = [to_addr.as_bytes(), &b".n"[..]].concat();
+        let from_addr_mapping_key = [from_addr.as_bytes(), &b".am"[..]].concat();
+        let from_next_addr_mapping_key = [from_next_addr.as_bytes(), &b".am"[..]].concat();
 
         let bin_from_nonce = &trie.get(&from_nonce_key).unwrap().unwrap();
         let bin_to_nonce = &trie.get(&to_nonce_key).unwrap().unwrap();
@@ -1083,6 +1086,12 @@ mod tests {
             Balance::from_bytes(&trie.get(&sender_balance_key).unwrap().unwrap()).unwrap();
         let receiver_balance =
             Balance::from_bytes(&trie.get(&receiver_balance_key).unwrap().unwrap()).unwrap();
+
+        assert_eq!(trie.get(&from_addr_mapping_key).unwrap(), None);
+        let from_next_addr_mapping = trie.get(&from_next_addr_mapping_key).unwrap().unwrap();
+
+        // Check address mappings
+        assert_eq!(from_next_addr_mapping, from_addr.as_bytes());
 
         // Check nonces
         assert_eq!(bin_from_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
