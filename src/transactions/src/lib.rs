@@ -53,7 +53,7 @@ pub use crate::mint::*;
 pub use crate::open_contract::*;
 pub use crate::send::*;
 
-use account::{Address, Balance};
+use account::{Address, NormalAddress, Balance};
 use crypto::{Hash, SecretKey, FromBase58, Identity};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
@@ -200,12 +200,12 @@ impl Tx {
         }
     }
 
-    /// Returns the address of the transaction creator.
-    pub fn creator_address(&self) -> Address {
+    /// Returns the signing address of the transaction creator.
+    pub fn creator_signing_address(&self) -> Address {
         match *self {
             Tx::Call(ref tx) => Address::Normal(tx.from),
-            Tx::OpenContract(ref tx) => Address::Normal(tx.owner),
-            Tx::Send(ref tx) => Address::Normal(tx.from),
+            Tx::OpenContract(ref tx) => Address::Normal(NormalAddress::from_pkey(&tx.creator)),
+            Tx::Send(ref tx) => Address::Normal(NormalAddress::from_pkey(&tx.from)),
             Tx::Burn(ref tx) => Address::Normal(tx.burner),
             Tx::CreateCurrency(ref tx) => Address::Normal(tx.creator),
             Tx::CreateMintable(ref tx) => Address::Normal(tx.creator),

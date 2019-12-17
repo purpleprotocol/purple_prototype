@@ -23,9 +23,6 @@ use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
 
-// Currency hashes per key
-pub const CUR_GROUP_CAPACITY: usize = 50;
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateCurrency {
     pub(crate) creator: NormalAddress,

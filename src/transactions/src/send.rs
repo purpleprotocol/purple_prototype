@@ -345,8 +345,8 @@ impl Send {
                         trie.insert(&to_addr_mapping_key, self.to.as_bytes()).unwrap();
 
                         // Update sender address mapping
-                    trie.remove(&from_addr_mapping_key).unwrap().unwrap();
-                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap().unwrap();
+                        trie.remove(&from_addr_mapping_key).unwrap().unwrap();
+                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap().unwrap();
                     } else {
                         // The transaction's fee is paid in a different currency
                         // than the one being transferred so we retrieve both balances.

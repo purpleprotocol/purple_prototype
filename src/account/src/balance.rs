@@ -244,5 +244,9 @@ mod tests {
         fn serialize_deserialize(b: Balance) -> bool {
             b == Balance::from_bytes(&Balance::to_bytes(&b)).unwrap()
         }
+
+        fn from_u64(n: u64) -> bool {
+            Balance::from_u64(n)
+        }
     }
 }
