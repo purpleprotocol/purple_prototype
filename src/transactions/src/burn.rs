@@ -27,7 +27,8 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Burn {
-    pub(crate) burner: NormalAddress,
+    pub(crate) burner: Pk,
+    pub(crate) next_address: NormalAddress,
     pub(crate) amount: Balance,
     pub(crate) fee: Balance,
     pub(crate) asset_hash: Hash,
@@ -46,39 +47,62 @@ impl Burn {
     pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
         let zero = Balance::zero();
 
-        // You cannot burn 0 coins
+        // You cannot send 0 coins
         if self.amount == zero {
             return false;
         }
 
+        // TODO: Signature verification should be done in batches 
+        // and happen before validation.
         if !self.verify_sig() {
             return false;
         }
 
-        let bin_burner = &self.burner.to_bytes();
+        let bin_burner = &self.burner.0;
         let bin_asset_hash = &self.asset_hash.0;
         let bin_fee_hash = &self.fee_hash.0;
 
-        // Convert address to strings
-        let burner = hex::encode(bin_burner);
+        let burner_signing_addr = NormalAddress::from_pkey(&self.burner);
 
-        // Convert hashes to strings
-        let asset_hash = hex::encode(bin_asset_hash);
-        let fee_hash = hex::encode(bin_fee_hash);
+        // Do not allow address re-usage
+        if self.next_address == burner_signing_addr {
+            return false;
+        }
+
+        // Calculate address mapping key
+        //
+        // An address mapping is a mapping between
+        // the account's signing address and an 
+        // account's receiving address.
+        //
+        // They key of the address mapping has the following format:
+        // `<signing-address>.am`
+        let addr_mapping_key = [burner_signing_addr.as_bytes(), &b".am"[..]].concat();
+
+        // Retrieve burner account permanent address
+        let permanent_addr = match trie.get(&addr_mapping_key) {
+            Ok(Some(perm_addr)) => NormalAddress::from_bytes(&perm_addr).unwrap(),
+            Ok(None) => return false,
+            Err(err) => panic!(err),
+        };
+
+        // Do not allow address re-usage 
+        if self.next_address == permanent_addr {
+            return false
+        }
 
         // Calculate nonce key
         //
         // The key of a nonce has the following format:
-        // `<account-address>.n`
-        let nonce_key = format!("{}.n", burner);
-        let nonce_key = nonce_key.as_bytes();
+        // `<permanent-addr>.n`
+        let nonce_key = [permanent_addr.as_bytes(), &b".n"[..]].concat();
 
         // Calculate currency keys
         //
         // The key of a currency entry has the following format:
-        // `<account-address>.<currency-hash>`
-        let cur_key = format!("{}.{}", burner, asset_hash);
-        let fee_key = format!("{}.{}", burner, fee_hash);
+        // `<permanent-addr>.<currency-hash>`
+        let cur_key = [permanent_addr.as_bytes(), &bin_asset_hash[..]].concat();
+        let fee_key = [permanent_addr.as_bytes(), &bin_fee_hash[..]].concat();
 
         // Retrieve serialized nonce
         let bin_nonce = match trie.get(&nonce_key) {
@@ -87,15 +111,15 @@ impl Burn {
             Err(err) => panic!(err),
         };
 
-        let stored_nonce = decode_be_u64!(bin_nonce).unwrap();
+        let mut stored_nonce = decode_be_u64!(bin_nonce).unwrap();
         if stored_nonce + 1 != self.nonce {
             return false;
         }
 
-        if fee_hash == asset_hash {
+        if bin_fee_hash == bin_asset_hash {
             // The transaction's fee is paid in the same currency
-            // that is being burned, so we only retrieve one balance.
-            let mut balance = match trie.get(&cur_key.as_bytes()) {
+            // that is being sent, so we only retrieve one balance.
+            let mut balance = match trie.get(&cur_key) {
                 Ok(Some(balance)) => match Balance::from_bytes(&balance) {
                     Ok(balance) => balance,
                     Err(err) => panic!(err),
@@ -114,7 +138,7 @@ impl Burn {
         } else {
             // The transaction's fee is paid in a different currency
             // than the one being transferred so we retrieve both balances.
-            let mut cur_balance = match trie.get(&cur_key.as_bytes()) {
+            let mut cur_balance = match trie.get(&cur_key) {
                 Ok(Some(balance)) => match Balance::from_bytes(&balance) {
                     Ok(balance) => balance,
                     Err(err) => panic!(err),
@@ -123,7 +147,7 @@ impl Burn {
                 Err(err) => panic!(err),
             };
 
-            let mut fee_balance = match trie.get(&fee_key.as_bytes()) {
+            let mut fee_balance = match trie.get(&fee_key) {
                 Ok(Some(balance)) => match Balance::from_bytes(&balance) {
                     Ok(balance) => balance,
                     Err(err) => panic!(err),
@@ -146,23 +170,31 @@ impl Burn {
     ///
     /// This function will panic if the `burner` account does not exist.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
-        let bin_burner = &self.burner.to_bytes();
-        let bin_asset_hash = &self.asset_hash.to_vec();
-        let bin_fee_hash = &self.fee_hash.to_vec();
+        let bin_burner = &self.burner.0;
+        let bin_asset_hash = &self.asset_hash.0;
+        let bin_fee_hash = &self.fee_hash.0;
+        let sender_signing_addr = NormalAddress::from_pkey(&self.burner);
 
-        // Convert address to strings
-        let burner = hex::encode(bin_burner);
+        // Calculate address mapping key
+        //
+        // An address mapping is a mapping between
+        // the account's signing address and an 
+        // account's receiving address.
+        //
+        // They key of the address mapping has the following format:
+        // `<signing-address>.am`
+        let burner_addr_mapping_key = [sender_signing_addr.as_bytes(), &b".am"[..]].concat();
+        let next_addr_mapping_key = [self.next_address.as_bytes(), &b".am"[..]].concat();
 
-        // Convert hashes to strings
-        let asset_hash = hex::encode(bin_asset_hash);
-        let fee_hash = hex::encode(bin_fee_hash);
+        // Retrieve sender account permanent address
+        let burner_perm_addr = trie.get(&burner_addr_mapping_key).unwrap().unwrap();
+        let burner_perm_addr = NormalAddress::from_bytes(&burner_perm_addr).unwrap();
 
         // Calculate nonce key
         //
         // The key of a nonce has the following format:
         // `<account-address>.n`
-        let nonce_key = format!("{}.n", burner);
-        let nonce_key = nonce_key.as_bytes();
+        let nonce_key = [burner_perm_addr.as_bytes(), &b".n"[..]].concat();
 
         // Retrieve serialized nonce
         let bin_nonce = &trie.get(&nonce_key).unwrap().unwrap();
@@ -184,15 +216,15 @@ impl Burn {
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let cur_key = format!("{}.{}", burner, asset_hash);
-        let fee_key = format!("{}.{}", burner, fee_hash);
+        let cur_key = &[burner_perm_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
+        let fee_key = &[burner_perm_addr.as_bytes(), &b"."[..], &bin_fee_hash[..]].concat();
 
-        if fee_hash == asset_hash {
+        if bin_fee_hash == bin_asset_hash {
             // The transaction's fee is paid in the same currency
             // that is being burned, so we only retrieve one balance.
             let mut balance = unwrap!(
                 Balance::from_bytes(&unwrap!(
-                    trie.get(&cur_key.as_bytes()).unwrap(),
+                    trie.get(&cur_key).unwrap(),
                     "The burner does not have an entry for the given currency"
                 )),
                 "Invalid stored balance format"
@@ -205,15 +237,19 @@ impl Burn {
             balance -= self.amount.clone();
 
             // Update trie
-            trie.insert(cur_key.as_bytes(), &balance.to_bytes())
+            trie.insert(&cur_key, &balance.to_bytes())
                 .unwrap();
-            trie.insert(nonce_key, &nonce_buf).unwrap();
+            trie.insert(&nonce_key, &nonce_buf).unwrap();
+
+            // Update burner address mapping
+            trie.remove(&burner_addr_mapping_key).unwrap().unwrap();
+            trie.insert(&next_addr_mapping_key, burner_perm_addr.as_bytes()).unwrap().unwrap();
         } else {
             // The transaction's fee is paid in a different currency
             // than the one being transferred so we retrieve both balances.
             let mut cur_balance = unwrap!(
                 Balance::from_bytes(&unwrap!(
-                    trie.get(&cur_key.as_bytes()).unwrap(),
+                    trie.get(&cur_key).unwrap(),
                     "The burner does not have an entry for the given currency"
                 )),
                 "Invalid stored balance format"
@@ -221,7 +257,7 @@ impl Burn {
 
             let mut fee_balance = unwrap!(
                 Balance::from_bytes(&unwrap!(
-                    trie.get(&fee_key.as_bytes()).unwrap(),
+                    trie.get(&fee_key).unwrap(),
                     "The burner does not have an entry for the given currency"
                 )),
                 "Invalid stored balance format"
@@ -234,11 +270,15 @@ impl Burn {
             cur_balance -= self.amount.clone();
 
             // Update trie
-            trie.insert(cur_key.as_bytes(), &cur_balance.to_bytes())
+            trie.insert(&cur_key, &cur_balance.to_bytes())
                 .unwrap();
-            trie.insert(fee_key.as_bytes(), &fee_balance.to_bytes())
+            trie.insert(&fee_key, &fee_balance.to_bytes())
                 .unwrap();
-            trie.insert(nonce_key, &nonce_buf).unwrap();
+            trie.insert(&nonce_key, &nonce_buf).unwrap();
+
+            // Update burner address mapping
+            trie.remove(&burner_addr_mapping_key).unwrap().unwrap();
+            trie.insert(&next_addr_mapping_key, burner_perm_addr.as_bytes()).unwrap().unwrap();
         }
     }
 
@@ -263,7 +303,7 @@ impl Burn {
         let message = assemble_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.burner.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.burner),
             None => false,
         }
     }
@@ -276,12 +316,13 @@ impl Burn {
     /// 3) Amount length        - 8bits
     /// 4) Nonce                - 64bits
     /// 5) Burner               - 33byte binary
-    /// 6) Currency hash        - 32byte binary
-    /// 7) Fee hash             - 32byte binary
-    /// 8) Signature            - 64byte binary
-    /// 9) Amount               - Binary of amount length
-    /// 10) Fee                 - Binary of fee length
-    /// 11) Signature           - Binary of signature length
+    /// 6) Next address         - 33byte binary
+    /// 7) Currency hash        - 32byte binary
+    /// 8) Fee hash             - 32byte binary
+    /// 9) Signature            - 64byte binary
+    /// 10) Amount              - Binary of amount length
+    /// 11) Fee                 - Binary of fee length
+    /// 12) Signature           - Binary of signature length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -298,11 +339,11 @@ impl Burn {
             return Err("Signature field is missing");
         };
 
-        let burner = &self.burner.to_bytes();
-        let asset_hash = &&self.asset_hash.0;
-        let fee_hash = &&self.fee_hash.0;
-        let amount = &self.amount.to_bytes();
-        let fee = &self.fee.to_bytes();
+        let next_address = self.next_address.to_bytes();
+        let asset_hash = &self.asset_hash.0;
+        let fee_hash = &self.fee_hash.0;
+        let amount = self.amount.to_bytes();
+        let fee = self.fee.to_bytes();
 
         let amount_len = amount.len();
         let fee_len = fee.len();
@@ -314,12 +355,13 @@ impl Burn {
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
-        buffer.append(&mut burner.to_vec());
-        buffer.append(&mut asset_hash.to_vec());
-        buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut signature);
-        buffer.append(&mut amount.to_vec());
-        buffer.append(&mut fee.to_vec());
+        buffer.extend_from_slice(&self.burner.0);
+        buffer.extend_from_slice(&next_address);
+        buffer.extend_from_slice(asset_hash);
+        buffer.extend_from_slice(fee_hash);
+        buffer.extend_from_slice(&signature);
+        buffer.extend_from_slice(&amount);
+        buffer.extend_from_slice(&fee);
 
         Ok(buffer)
     }
@@ -364,10 +406,20 @@ impl Burn {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..11).collect();
 
-        let burner = if buf.len() > 33 as usize {
-            let burner_vec: Vec<u8> = buf.drain(..33).collect();
+        let burner = if buf.len() > 32 as usize {
+            let burner_vec: Vec<u8> = buf.drain(..32).collect();
+            let mut burner = [0; 32];
+            burner.copy_from_slice(&burner_vec);
 
-            match NormalAddress::from_bytes(&burner_vec) {
+            Pk(burner)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let next_address = if buf.len() > 33 as usize {
+            let next_address_vec: Vec<u8> = buf.drain(..33).collect();
+
+            match NormalAddress::from_bytes(&next_address_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -431,12 +483,13 @@ impl Burn {
         };
 
         let mut burn = Burn {
-            burner: burner,
-            fee_hash: fee_hash,
-            fee: fee,
-            amount: amount,
-            asset_hash: asset_hash,
-            nonce: nonce,
+            burner,
+            next_address,
+            fee_hash,
+            fee,
+            amount,
+            asset_hash,
+            nonce,
             hash: None,
             signature: Some(signature),
         };
@@ -455,19 +508,19 @@ impl Burn {
 
 fn assemble_message(obj: &Burn) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
-    let mut burner = obj.burner.to_bytes();
-    let mut amount = obj.amount.to_bytes();
-    let mut fee = obj.fee.to_bytes();
-    let asset_hash = obj.asset_hash.0;
-    let fee_hash = obj.fee_hash.0;
+    let next_address = obj.next_address.to_bytes();
+    let amount = obj.amount.to_bytes();
+    let fee = obj.fee.to_bytes();
+    let asset_hash = &obj.asset_hash.0;
+    let fee_hash = &obj.fee_hash.0;
 
-    // Compose data to sign
-    buf.append(&mut burner);
-    buf.append(&mut asset_hash.to_vec());
-    buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut amount);
-    buf.append(&mut fee);
-
+    buf.write_u64::<BigEndian>(obj.nonce);
+    buf.extend_from_slice(&obj.burner.0);
+    buf.extend_from_slice(&next_address);
+    buf.extend_from_slice(asset_hash);
+    buf.extend_from_slice(fee_hash);
+    buf.extend_from_slice(&amount);
+    buf.extend_from_slice(&fee);
     buf
 }
 
@@ -475,8 +528,10 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for Burn {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Burn {
+        let (pk, _) = crypto::gen_keypair();
         let mut tx = Burn {
-            burner: Arbitrary::arbitrary(g),
+            burner: pk,
+            next_address: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
@@ -502,7 +557,9 @@ mod tests {
     #[test]
     fn validate() {
         let id = Identity::new();
-        let burner_addr = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let burner_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -514,7 +571,7 @@ mod tests {
             // Manually initialize burner balance
             test_helpers::init_balance(
                 &mut trie,
-                Address::Normal(burner_addr.clone()),
+                burner_addr.clone(),
                 asset_hash,
                 b"10000.0",
             );
@@ -524,7 +581,8 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Burn {
-            burner: burner_addr.clone(),
+            burner: id.pkey().clone(),
+            next_address,
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
@@ -544,7 +602,9 @@ mod tests {
     #[test]
     fn validate_no_funds() {
         let id = Identity::new();
-        let burner_addr = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let burner_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -556,7 +616,7 @@ mod tests {
             // Manually initialize burner balance
             test_helpers::init_balance(
                 &mut trie,
-                Address::Normal(burner_addr.clone()),
+                burner_addr.clone(),
                 asset_hash,
                 b"10.0",
             );
@@ -566,7 +626,8 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Burn {
-            burner: burner_addr.clone(),
+            burner: id.pkey().clone(),
+            next_address,
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
@@ -586,7 +647,9 @@ mod tests {
     #[test]
     fn validate_different_currencies() {
         let id = Identity::new();
-        let burner_addr = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let burner_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -599,13 +662,13 @@ mod tests {
             // Manually initialize burner balance
             test_helpers::init_balance(
                 &mut trie,
-                Address::Normal(burner_addr.clone()),
+                burner_addr.clone(),
                 asset_hash,
                 b"10000.0",
             );
             test_helpers::init_balance(
                 &mut trie,
-                Address::Normal(burner_addr.clone()),
+                burner_addr.clone(),
                 fee_hash,
                 b"10.0",
             );
@@ -615,7 +678,8 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Burn {
-            burner: burner_addr.clone(),
+            burner: id.pkey().clone(),
+            next_address,
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
@@ -635,7 +699,9 @@ mod tests {
     #[test]
     fn validate_no_funds_different_currencies() {
         let id = Identity::new();
-        let burner_addr = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let burner_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -648,13 +714,13 @@ mod tests {
             // Manually initialize burner balance
             test_helpers::init_balance(
                 &mut trie,
-                Address::Normal(burner_addr.clone()),
+                burner_addr.clone(),
                 asset_hash,
                 b"10.0",
             );
             test_helpers::init_balance(
                 &mut trie,
-                Address::Normal(burner_addr.clone()),
+                burner_addr.clone(),
                 fee_hash,
                 b"10.0",
             );
@@ -664,7 +730,8 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Burn {
-            burner: burner_addr.clone(),
+            burner: id.pkey().clone(),
+            next_address,
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
@@ -684,7 +751,9 @@ mod tests {
     #[test]
     fn validate_no_funds_for_fee_different_currencies() {
         let id = Identity::new();
-        let burner_addr = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let burner_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -697,13 +766,13 @@ mod tests {
             // Manually initialize burner balance
             test_helpers::init_balance(
                 &mut trie,
-                Address::Normal(burner_addr.clone()),
+                burner_addr.clone(),
                 asset_hash,
                 b"10.0",
             );
             test_helpers::init_balance(
                 &mut trie,
-                Address::Normal(burner_addr.clone()),
+                burner_addr.clone(),
                 fee_hash,
                 b"10.0",
             );
@@ -713,7 +782,8 @@ mod tests {
         let fee = Balance::from_bytes(b"20.0").unwrap();
 
         let mut tx = Burn {
-            burner: burner_addr.clone(),
+            burner: id.pkey().clone(),
+            next_address,
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
@@ -733,7 +803,9 @@ mod tests {
     #[test]
     fn validate_zero() {
         let id = Identity::new();
-        let burner_addr = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let burner_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
@@ -745,7 +817,7 @@ mod tests {
             // Manually initialize burner balance
             test_helpers::init_balance(
                 &mut trie,
-                Address::Normal(burner_addr.clone()),
+                burner_addr.clone(),
                 asset_hash,
                 b"10000.0",
             )
@@ -755,7 +827,8 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = Burn {
-            burner: burner_addr.clone(),
+            burner: id.pkey().clone(),
+            next_address,
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
@@ -775,7 +848,9 @@ mod tests {
     #[test]
     fn apply_it_burns_coins() {
         let id = Identity::new();
-        let burner_addr = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let burner_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency");
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -789,13 +864,14 @@ mod tests {
             // Manually initialize burner balance
             test_helpers::init_balance(
                 &mut trie,
-                Address::Normal(burner_addr.clone()),
+                burner_addr.clone(),
                 asset_hash,
                 b"10000.0",
             );
 
             let mut tx = Burn {
-                burner: burner_addr.clone(),
+                burner: id.pkey().clone(),
+                next_address,
                 amount: amount.clone(),
                 fee: fee.clone(),
                 asset_hash: asset_hash,
@@ -814,20 +890,12 @@ mod tests {
 
         let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
 
-        let burner_nonce_key = format!("{}.n", hex::encode(&burner_addr.to_bytes()));
-        let burner_nonce_key = burner_nonce_key.as_bytes();
-
+        let burner_nonce_key = [burner_addr.as_bytes(), &b".n"[..]].concat();
         let bin_burner_nonce = &trie.get(&burner_nonce_key).unwrap().unwrap();
 
-        let bin_asset_hash = asset_hash.to_vec();
-        let hex_asset_hash = hex::encode(&bin_asset_hash);
+        let bin_asset_hash = &asset_hash.0;
 
-        let burner_balance_key = format!(
-            "{}.{}",
-            hex::encode(&burner_addr.to_bytes()),
-            hex_asset_hash
-        );
-        let burner_balance_key = burner_balance_key.as_bytes();
+        let burner_balance_key = [burner_addr.as_bytes(), &b"."[..], bin_asset_hash].concat();
 
         let balance =
             Balance::from_bytes(&trie.get(&burner_balance_key).unwrap().unwrap()).unwrap();
@@ -857,9 +925,10 @@ mod tests {
             tx.verify_hash()
         }
 
-        fn verify_signature(id: Identity, amount: Balance, fee: Balance, asset_hash: Hash, fee_hash: Hash) -> bool {
+        fn verify_signature(id: Identity, next_address: NormalAddress, amount: Balance, fee: Balance, asset_hash: Hash, fee_hash: Hash) -> bool {
             let mut tx = Burn {
-                burner: NormalAddress::from_pkey(*id.pkey()),
+                burner: id.pkey().clone(),
+                next_address,
                 amount: amount,
                 fee: fee,
                 asset_hash: asset_hash,

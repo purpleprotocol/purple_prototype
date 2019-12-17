@@ -219,7 +219,7 @@ impl Send {
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
         let from_cur_key = &[from_perm_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
-        let from_fee_key = &[self.to.as_bytes(), &b"."[..], &bin_fee_hash[..]].concat();
+        let from_fee_key = &[from_perm_addr.as_bytes(), &b"."[..], &bin_fee_hash[..]].concat();
         let to_cur_key = &[self.to.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
 
         match bin_to_nonce {

@@ -203,15 +203,15 @@ impl Tx {
     /// Returns the signing address of the transaction creator.
     pub fn creator_signing_address(&self) -> Address {
         match *self {
-            Tx::Call(ref tx) => Address::Normal(tx.from),
+            Tx::Call(ref tx) => Address::Normal(NormalAddress::from_pkey(&tx.from)),
             Tx::OpenContract(ref tx) => Address::Normal(NormalAddress::from_pkey(&tx.creator)),
             Tx::Send(ref tx) => Address::Normal(NormalAddress::from_pkey(&tx.from)),
-            Tx::Burn(ref tx) => Address::Normal(tx.burner),
-            Tx::CreateCurrency(ref tx) => Address::Normal(tx.creator),
-            Tx::CreateMintable(ref tx) => Address::Normal(tx.creator),
-            Tx::Mint(ref tx) => Address::Normal(tx.minter),
-            Tx::CreateUnique(ref tx) => Address::Normal(tx.creator),
-            Tx::ChangeMinter(ref tx) => Address::Normal(tx.minter),
+            Tx::Burn(ref tx) => Address::Normal(NormalAddress::from_pkey(&tx.burner)),
+            Tx::CreateCurrency(ref tx) => Address::Normal(NormalAddress::from_pkey(&tx.creator)),
+            Tx::CreateMintable(ref tx) => Address::Normal(NormalAddress::from_pkey(&tx.creator)),
+            Tx::Mint(ref tx) => Address::Normal(NormalAddress::from_pkey(&tx.minter)),
+            Tx::CreateUnique(ref tx) => Address::Normal(NormalAddress::from_pkey(&tx.creator)),
+            Tx::ChangeMinter(ref tx) => Address::Normal(NormalAddress::from_pkey(&tx.minter)),
         }
     }
 
