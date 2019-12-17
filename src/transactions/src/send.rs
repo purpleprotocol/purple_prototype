@@ -90,6 +90,11 @@ impl Send {
             Err(err) => panic!(err),
         };
 
+        // Do not allow address re-usage 
+        if self.next_address == permanent_addr {
+            return false
+        }
+
         // Calculate nonce key
         //
         // The key of a nonce has the following format:
@@ -635,6 +640,7 @@ fn assemble_message(obj: &Send) -> Vec<u8> {
     let fee_hash = obj.fee_hash.0;
 
     // Compose data to sign
+    buf.write_u64::<BigEndian>(obj.nonce).unwrap();
     buf.extend_from_slice(&obj.from.0);
     buf.extend_from_slice(to);
     buf.extend_from_slice(next_address);
@@ -642,7 +648,6 @@ fn assemble_message(obj: &Send) -> Vec<u8> {
     buf.extend_from_slice(&obj.fee_hash.0);
     buf.extend_from_slice(&amount);
     buf.extend_from_slice(&fee);
-
     buf
 }
 

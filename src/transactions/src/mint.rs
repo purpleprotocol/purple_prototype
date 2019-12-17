@@ -82,6 +82,11 @@ impl Mint {
             Err(err) => panic!(err),
         };
 
+        // Do not allow address re-usage 
+        if self.next_address == permanent_addr {
+            return false
+        }
+
         // Calculate coin supply key
         //
         // The key of a currency's coin supply entry has the following format:

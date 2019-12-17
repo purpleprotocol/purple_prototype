@@ -94,6 +94,11 @@ impl CreateCurrency {
             Err(err) => panic!(err),
         };
 
+        // Do not allow address re-usage 
+        if self.next_address == creator_perm_addr {
+            return false
+        }
+
         // Calculate precision key
         //
         // The key of a currency's precision has the following format:

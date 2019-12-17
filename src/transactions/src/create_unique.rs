@@ -434,6 +434,7 @@ fn assemble_message(obj: &CreateUnique) -> Vec<u8> {
     let fee_hash = obj.fee_hash.0;
 
     // Compose data to hash
+    buf.write_u64::<BigEndian>(obj.nonce).unwrap();
     buf.extend_from_slice(&obj.creator.0);
     buf.extend_from_slice(&receiver);
     buf.extend_from_slice(&next_address);
