@@ -27,7 +27,8 @@ use std::str;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Call {
-    pub(crate) from: NormalAddress,
+    pub(crate) from: Pk,
+    pub(crate) next_address: NormalAddress,
     pub(crate) to: ContractAddress,
     pub(crate) inputs: String, // TODO: Change to contract inputs type
     pub(crate) amount: Balance,
@@ -76,7 +77,7 @@ impl Call {
         let message = assemble_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.from.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.from),
             None => false,
         }
     }
@@ -93,22 +94,17 @@ impl Call {
     /// 7) Nonce                - 64bits
     /// 8) From                 - 33byte binary
     /// 9) To                   - 33byte binary
-    /// 10) Currency hash       - 32byte binary
-    /// 11) Fee hash            - 32byte binary
-    /// 12) Signature           - 64byte binary
-    /// 13) Gas price           - Binary of gas price length
-    /// 14) Amount              - Binary of amount length
-    /// 15) Fee                 - Binary of fee length
-    /// 16) Inputs              - Binary of inputs length
+    /// 10) Next address        - 33byte binary
+    /// 11) Currency hash       - 32byte binary
+    /// 12) Fee hash            - 32byte binary
+    /// 13) Signature           - 64byte binary
+    /// 14) Gas price           - Binary of gas price length
+    /// 15) Amount              - Binary of amount length
+    /// 16) Fee                 - Binary of fee length
+    /// 17) Inputs              - Binary of inputs length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
-
-        let hash = if let Some(hash) = &self.hash {
-            &hash.0
-        } else {
-            return Err("Hash field is missing");
-        };
 
         let mut signature = if let Some(signature) = &self.signature {
             signature.to_bytes()
@@ -116,15 +112,16 @@ impl Call {
             return Err("Signature field is missing");
         };
 
-        let from = &self.from.to_bytes();
-        let to = &self.to.to_bytes();
-        let asset_hash = &&self.asset_hash.0;
-        let fee_hash = &&self.fee_hash.0;
-        let amount = &self.amount.to_bytes();
-        let gas_price = &self.gas_price.to_bytes();
-        let gas_limit = &self.gas_limit.to_bytes();
-        let fee = &self.fee.to_bytes();
-        let inputs = &self.inputs.as_bytes();
+        let from = &self.from.0;
+        let to = self.to.to_bytes();
+        let next_address = self.next_address.to_bytes();
+        let asset_hash = &self.asset_hash.0;
+        let fee_hash = &self.fee_hash.0;
+        let amount = self.amount.to_bytes();
+        let gas_price = self.gas_price.to_bytes();
+        let gas_limit = self.gas_limit.to_bytes();
+        let fee = self.fee.to_bytes();
+        let inputs = self.inputs.as_bytes();
         let nonce = &self.nonce;
 
         let gas_limit_len = gas_limit.len();
@@ -142,16 +139,17 @@ impl Call {
         buffer.write_u16::<BigEndian>(inputs_len as u16).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
-        buffer.append(&mut from.to_vec());
-        buffer.append(&mut to.to_vec());
-        buffer.append(&mut asset_hash.to_vec());
-        buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut signature);
-        buffer.append(&mut gas_limit.to_vec());
-        buffer.append(&mut gas_price.to_vec());
-        buffer.append(&mut amount.to_vec());
-        buffer.append(&mut fee.to_vec());
-        buffer.append(&mut inputs.to_vec());
+        buffer.extend_from_slice(&self.from.0);
+        buffer.extend_from_slice(&to);
+        buffer.extend_from_slice(&next_address);
+        buffer.extend_from_slice(asset_hash);
+        buffer.extend_from_slice(fee_hash);
+        buffer.extend_from_slice(&signature);
+        buffer.extend_from_slice(&gas_limit);
+        buffer.extend_from_slice(&gas_price);
+        buffer.extend_from_slice(&amount);
+        buffer.extend_from_slice(&fee);
+        buffer.extend_from_slice(inputs);
 
         Ok(buffer)
     }
@@ -220,13 +218,12 @@ impl Call {
         let mut buf = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..15).collect();
 
-        let from = if buf.len() > 33 as usize {
-            let from_vec: Vec<u8> = buf.drain(..33).collect();
+        let from = if buf.len() > 32 as usize {
+            let from_vec: Vec<u8> = buf.drain(..32).collect();
+            let mut from = [0; 32];
+            from.copy_from_slice(&from_vec);
 
-            match NormalAddress::from_bytes(&from_vec) {
-                Ok(addr) => addr,
-                Err(err) => return Err(err),
-            }
+            Pk(from)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -235,6 +232,17 @@ impl Call {
             let to_vec: Vec<u8> = buf.drain(..33).collect();
 
             match ContractAddress::from_bytes(&to_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let next_address = if buf.len() > 33 as usize {
+            let next_address_vec: Vec<u8> = buf.drain(..33).collect();
+
+            match NormalAddress::from_bytes(&next_address_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -330,16 +338,17 @@ impl Call {
         };
 
         let mut call = Call {
-            from: from,
-            to: to,
-            fee_hash: fee_hash,
-            fee: fee,
-            amount: amount,
-            gas_limit: gas_limit,
+            from,
+            next_address,
+            to,
+            fee_hash,
+            fee,
+            amount,
+            gas_limit,
             inputs: inputs.to_string(),
-            gas_price: gas_price,
-            asset_hash: asset_hash,
-            nonce: nonce,
+            gas_price,
+            asset_hash,
+            nonce,
             hash: None,
             signature: Some(signature),
         };
@@ -353,27 +362,27 @@ impl Call {
 
 fn assemble_message(obj: &Call) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
-    let mut from = obj.from.to_bytes();
-    let mut to = obj.to.to_bytes();
-    let mut amount = obj.amount.to_bytes();
-    let mut fee = obj.fee.to_bytes();
-    let mut gas_limit = obj.gas_limit.to_bytes();
-    let mut gas_price = obj.gas_price.to_bytes();
+    let to = obj.to.to_bytes();
+    let next_address = obj.next_address.to_bytes();
+    let amount = obj.amount.to_bytes();
+    let fee = obj.fee.to_bytes();
+    let gas_limit = obj.gas_limit.to_bytes();
+    let gas_price = obj.gas_price.to_bytes();
     let inputs = obj.inputs.as_bytes();
-    let asset_hash = obj.asset_hash.0;
-    let fee_hash = obj.fee_hash.0;
+    let asset_hash = &obj.asset_hash.0;
+    let fee_hash = &obj.fee_hash.0;
 
-    // Compose data to sign
-    buf.append(&mut from);
-    buf.append(&mut to);
-    buf.append(&mut asset_hash.to_vec());
-    buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut amount);
-    buf.append(&mut fee);
-    buf.append(&mut gas_limit);
-    buf.append(&mut gas_price);
-    buf.append(&mut inputs.to_vec());
-
+    buf.write_u64::<BigEndian>(obj.nonce).unwrap();
+    buf.extend_from_slice(&obj.from.0);
+    buf.extend_from_slice(&to);
+    buf.extend_from_slice(&next_address);
+    buf.extend_from_slice(asset_hash);
+    buf.extend_from_slice(fee_hash);
+    buf.extend_from_slice(&amount);
+    buf.extend_from_slice(&fee);
+    buf.extend_from_slice(&gas_limit);
+    buf.extend_from_slice(&gas_price);
+    buf.extend_from_slice(&inputs);
     buf
 }
 
@@ -381,8 +390,10 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for Call {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Call {
+        let (pk, _) = crypto::gen_keypair();
         let mut tx = Call {
-            from: Arbitrary::arbitrary(g),
+            from: pk,
+            next_address: Arbitrary::arbitrary(g),
             to: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
@@ -433,9 +444,12 @@ mod tests {
             fee_hash: Hash
         ) -> bool {
             let id = Identity::new();
+            let id2 = Identity::new();
+            let next_address = NormalAddress::from_pkey(id2.pkey());
 
             let mut tx = Call {
-                from: NormalAddress::from_pkey(*id.pkey()),
+                from: id.pkey().clone(),
+                next_address,
                 to: to,
                 amount: amount,
                 fee: fee,
