@@ -895,7 +895,6 @@ mod tests {
             let mut create_currency = CreateCurrency {
                 creator: id.pkey().clone(),
                 receiver: Address::Normal(creator_addr),
-                minter_address: Address::Normal(minter_addr),
                 next_address,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,
