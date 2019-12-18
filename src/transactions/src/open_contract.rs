@@ -57,12 +57,11 @@ impl OpenContract {
     /// This function will panic if the `creator` account does not exist
     /// or if the account address already exists in the ledger.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
-        let bin_creator = &self.creator.0;
-        let bin_address = &self.address.as_ref().unwrap().to_bytes();
+        let bin_address = self.address.as_ref().unwrap().as_bytes();
         let bin_asset_hash = &self.asset_hash.0;
         let bin_fee_hash = &self.fee_hash.0;
         let self_payable: Vec<u8> = if self.self_payable { vec![1] } else { vec![0] };
-
+        let creator_addr = NormalAddress::from_pkey(&self.creator);
         let code = &self.code;
         let default_state = &self.default_state;
 
@@ -74,7 +73,7 @@ impl OpenContract {
         //
         // They key of the address mapping has the following format:
         // `<signing-address>.am`
-        let creator_addr_mapping_key = [&bin_creator[..], &b".am"[..]].concat();
+        let creator_addr_mapping_key = [creator_addr.as_bytes(), &b".am"[..]].concat();
         let next_addr_mapping_key = [self.next_address.as_bytes(), &b".am"[..]].concat();
 
         // Retrieve creator account permanent address
@@ -86,7 +85,7 @@ impl OpenContract {
         // The key of a nonce has the following format:
         // `<account-address>.n`
         let creator_nonce_key = [creator_perm_addr.as_bytes(), &b".n"[..]].concat();
-        let address_nonce_key = [&bin_address, &b".n"[..]].concat();
+        let address_nonce_key = [bin_address, &b".n"[..]].concat();
 
         #[cfg(test)]
         {
@@ -99,19 +98,19 @@ impl OpenContract {
         //
         // The key of a contract's code has the following format:
         // `<contract-address>.c`
-        let code_key = [&bin_address, &b".c"[..]].concat();
+        let code_key = [bin_address, &b".c"[..]].concat();
 
         // Calculate state key
         //
         // The key of a contract's state has the following format:
         // `<contract-address>.q`
-        let state_key = [&bin_address, &b".q"[..]].concat();
+        let state_key = [bin_address, &b".q"[..]].concat();
 
         // Calculate self payable key
         //
         // The key of a contract's self payable entry has the following format:
         // `<contract-address>.y`
-        let self_payable_key = [&bin_address, &b".y"[..]].concat();
+        let self_payable_key = [bin_address, &b".y"[..]].concat();
 
         // Retrieve serialized nonce
         let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
@@ -135,7 +134,7 @@ impl OpenContract {
         // `<account-address>.<currency-hash>`
         let creator_cur_key = [creator_perm_addr.as_bytes(), &b"."[..], bin_asset_hash].concat();
         let creator_fee_key = [creator_perm_addr.as_bytes(), &b"."[..], bin_fee_hash].concat();
-        let address_cur_key = [&bin_address, &b"."[..], bin_asset_hash].concat();
+        let address_cur_key = [bin_address, &b"."[..], bin_asset_hash].concat();
 
         if bin_fee_hash == bin_asset_hash {
             // The transaction's fee is paid in the same currency
@@ -649,7 +648,7 @@ mod tests {
         let bin_receiver_nonce = &trie.get(&receiver_nonce_key).unwrap().unwrap();
 
         let bin_asset_hash = asset_hash.to_vec();
-        let creator_balance_key = [creator_addr.as_bytes(), &bin_asset_hash[..]].concat();
+        let creator_balance_key = [creator_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
 
         let balance = Balance::from_bytes(&trie.get(&creator_balance_key).unwrap().unwrap()).unwrap();
         let written_code = trie.get(&code_key).unwrap().unwrap();

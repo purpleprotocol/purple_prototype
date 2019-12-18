@@ -58,7 +58,6 @@ impl Burn {
             return false;
         }
 
-        let bin_burner = &self.burner.0;
         let bin_asset_hash = &self.asset_hash.0;
         let bin_fee_hash = &self.fee_hash.0;
 
@@ -101,8 +100,8 @@ impl Burn {
         //
         // The key of a currency entry has the following format:
         // `<permanent-addr>.<currency-hash>`
-        let cur_key = [permanent_addr.as_bytes(), &bin_asset_hash[..]].concat();
-        let fee_key = [permanent_addr.as_bytes(), &bin_fee_hash[..]].concat();
+        let cur_key = [permanent_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
+        let fee_key = [permanent_addr.as_bytes(), &b"."[..], &bin_fee_hash[..]].concat();
 
         // Retrieve serialized nonce
         let bin_nonce = match trie.get(&nonce_key) {
@@ -111,7 +110,7 @@ impl Burn {
             Err(err) => panic!(err),
         };
 
-        let mut stored_nonce = decode_be_u64!(bin_nonce).unwrap();
+        let stored_nonce = decode_be_u64!(bin_nonce).unwrap();
         if stored_nonce + 1 != self.nonce {
             return false;
         }
@@ -242,8 +241,8 @@ impl Burn {
             trie.insert(&nonce_key, &nonce_buf).unwrap();
 
             // Update burner address mapping
-            trie.remove(&burner_addr_mapping_key).unwrap().unwrap();
-            trie.insert(&next_addr_mapping_key, burner_perm_addr.as_bytes()).unwrap().unwrap();
+            trie.remove(&burner_addr_mapping_key).unwrap();
+            trie.insert(&next_addr_mapping_key, burner_perm_addr.as_bytes()).unwrap();
         } else {
             // The transaction's fee is paid in a different currency
             // than the one being transferred so we retrieve both balances.
@@ -277,8 +276,8 @@ impl Burn {
             trie.insert(&nonce_key, &nonce_buf).unwrap();
 
             // Update burner address mapping
-            trie.remove(&burner_addr_mapping_key).unwrap().unwrap();
-            trie.insert(&next_addr_mapping_key, burner_perm_addr.as_bytes()).unwrap().unwrap();
+            trie.remove(&burner_addr_mapping_key).unwrap();
+            trie.insert(&next_addr_mapping_key, burner_perm_addr.as_bytes()).unwrap();
         }
     }
 
