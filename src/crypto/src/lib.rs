@@ -33,6 +33,8 @@ pub use rust_sodium::crypto::kx::{
 };
 pub use rust_sodium::crypto::sign::{gen_keypair, PublicKey, SecretKey};
 pub use signature::*;
+use rust_sodium::crypto::sign::{keypair_from_seed, Seed};
+
 
 mod blake_hasher;
 mod hash;
@@ -65,6 +67,12 @@ pub fn open(ciphertext: &[u8], key: &SessionKey, nonce: &Nonce) -> Result<Vec<u8
         Ok(result) => Ok(result),
         _ => Err(()),
     }
+}
+
+pub fn gen_keypair_from_seed(seed: &[u8]) -> (PublicKey, SecretKey) {
+    let hashed_seed = hash_slice(seed);
+    let seed = Seed(hashed_seed.0);
+    keypair_from_seed(&seed)
 }
 
 /// Generates a random array of bytes of the given length.

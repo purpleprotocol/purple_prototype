@@ -22,32 +22,19 @@ use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use std::default::Default;
 
+#[cfg(any(test, feature = "test"))]
+use crate::TestAccount;
+
 /// The name of the main currency
 pub const MAIN_CUR_NAME: &'static [u8] = b"purple";
 
 /// The main currency coin supply
 pub(crate) const COIN_SUPPLY: u64 = 500000000;
 
-#[cfg(not(feature = "test"))]
 /// Balances that will be initialized with the genesis transaction
 pub(crate) const INIT_ACCOUNTS: &'static [(&'static str, u64)] = &[];
 
-#[cfg(feature = "test")]
-/// Test addresses
-pub(crate) const INIT_ACCOUNTS: &'static [(&'static str, u64)] = &[
-    ("a4ragiMrgZB9kEzRi6M5qJMqb8FtLqwLGWBS2W3HRVaF", 1000000), // Secret key: 26w7zqjXyJhYCJaRkcGutq1HEe6AGbwZooR9Age4frqjh96aurdPNC3QLGPYMGehudUpnTn26VdXYZ2CfVcQFT1H
-    ("SCFLivFR6GZyvg7pvX9UJnE88QtgT22FkWvGhhoc4uJL", 1000000), // Secret key: 2YKpy4YEuesnYTNnGagSx8ADLVdhR6FtuSb19sUiWFGHLSmchHDaJjGNxVUy9q9gffaRiEwf8mmiwccDPT7HFnNY
-    ("abyBb1834xmkZ7LH5piiXWqU8wrStDM5Lh8UUtaYrrEX", 1000000), // Secret key: 4geYSpNGM3uwAmfoM8HAfuM4HvGmLvZND2eyZ95bRxJaqgXGbaA8SuMxxrHynU6tEk8Kat3K8ZhyygsekitUzGmZ
-];
-
-#[cfg(feature = "test")]
-pub(crate) const INIT_ACCOUNTS_SKEYS: &'static [&'static str] = &[
-    "26w7zqjXyJhYCJaRkcGutq1HEe6AGbwZooR9Age4frqjh96aurdPNC3QLGPYMGehudUpnTn26VdXYZ2CfVcQFT1H",
-    "2YKpy4YEuesnYTNnGagSx8ADLVdhR6FtuSb19sUiWFGHLSmchHDaJjGNxVUy9q9gffaRiEwf8mmiwccDPT7HFnNY",
-    "4geYSpNGM3uwAmfoM8HAfuM4HvGmLvZND2eyZ95bRxJaqgXGbaA8SuMxxrHynU6tEk8Kat3K8ZhyygsekitUzGmZ",
-];
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Genesis {
     asset_hash: Hash,
     coin_supply: u64,
@@ -69,41 +56,47 @@ impl Genesis {
     ///
     /// This function will panic if the treasury account already exists.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
-        let bin_asset_hash = &self.asset_hash.to_vec();
-        let asset_hash = hex::encode(&bin_asset_hash);
-        let coin_supply = format!("{}.0", &self.coin_supply);
-        let coin_supply = coin_supply.as_bytes();
-        let currencies = rlp::encode_list::<Vec<u8>, _>(&vec![bin_asset_hash]);
+        let bin_asset_hash = &self.asset_hash.0;
+        let coin_supply = Balance::from_u64(self.coin_supply).to_bytes();
         let mut coinbase_supply = COIN_SUPPLY;
 
+        #[cfg(any(test, feature = "test"))]
+        let iterable_vec: Vec<(NormalAddress, u64)> = vec![
+            (TestAccount::A.to_perm_address(), 100000), 
+            (TestAccount::B.to_perm_address(), 100000),
+            (TestAccount::C.to_perm_address(), 100000),
+        ];
+
+        #[cfg(any(test, feature = "test"))]
+        let iterable = iterable_vec.iter();
+
+        #[cfg(not(any(test, feature = "test")))]
+        let iterable = INIT_ACCOUNTS
+            .iter()
+            .map(|(a, b)| (NormalAddress::from_base58(a).unwrap(), b));
+
         // Write initial balances
-        for (addr, balance) in INIT_ACCOUNTS.iter() {
+        for (addr, balance) in iterable {
             if *balance > coinbase_supply {
                 panic!("We are assigning more coins than there are in the coinbase! This shouldn't ever happen...");
             }
 
             coinbase_supply -= balance;
 
-            let addr = NormalAddress::from_base58(addr).unwrap();
-            let bin_addr = addr.to_bytes();
-            let addr = hex::encode(&bin_addr);
-            let nonce_key = format!("{}.n", addr);
-            let nonce_key = nonce_key.as_bytes();
-            let cur_key = format!("{}.{}", addr, asset_hash);
-            let cur_key = cur_key.as_bytes();
-            let balance = format!("{}.0", balance);
-            let balance = balance.as_bytes();
+            let nonce_key = [addr.as_bytes(), &b".n"[..]].concat();
+            let addr_mapping_key = [addr.as_bytes(), &b".am"[..]].concat();
+            let cur_key = [addr.as_bytes(), &b"."[..], bin_asset_hash].concat();
+            let balance = Balance::from_u64(*balance).to_bytes();
 
-            trie.insert(nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
-            trie.insert(cur_key, &balance).unwrap();
+            trie.insert(&nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+            trie.insert(&cur_key, &balance).unwrap();
+            trie.insert(&addr_mapping_key, addr.as_bytes()).unwrap();
         }
 
         // Insert coinbase supply
-        let coinbase_cur_key = format!("coinbase.{}", asset_hash);
-        let coinbase_cur_key = coinbase_cur_key.as_bytes();
-        let balance = format!("{}.0", coinbase_supply);
-        let balance = balance.as_bytes();
+        let coinbase_cur_key = [&b"coinbase."[..], bin_asset_hash].concat();
+        let balance = Balance::from_u64(coinbase_supply).to_bytes();
 
-        trie.insert(coinbase_cur_key, &balance).unwrap();
+        trie.insert(&coinbase_cur_key, &balance).unwrap();
     }
 }

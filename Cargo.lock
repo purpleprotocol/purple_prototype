@@ -2674,6 +2674,7 @@ dependencies = [
  "elastic-array 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "persistence 0.1.0",
  "purple_vm 0.1.0",

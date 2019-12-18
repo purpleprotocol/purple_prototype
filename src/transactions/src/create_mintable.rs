@@ -16,17 +16,17 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::create_currency::CUR_GROUP_CAPACITY;
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, SecretKey as Sk, Signature};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateMintable {
-    pub(crate) creator: NormalAddress,
+    pub(crate) creator: Pk,
+    pub(crate) next_address: NormalAddress,
     pub(crate) receiver: Address,
     pub(crate) minter_address: Address,
     pub(crate) asset_hash: Hash,
@@ -36,9 +36,7 @@ pub struct CreateMintable {
     pub(crate) fee_hash: Hash,
     pub(crate) fee: Balance,
     pub(crate) nonce: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) signature: Option<Signature>,
 }
 
@@ -73,40 +71,61 @@ impl CreateMintable {
             return false;
         }
 
-        let bin_creator = &self.creator.to_bytes();
         let bin_receiver = &self.receiver.to_bytes();
-        let bin_asset_hash = &self.asset_hash.to_vec();
-        let bin_fee_hash = &self.fee_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.0;
+        let bin_fee_hash = &self.fee_hash.0;
         let coin_supply = &self.coin_supply;
+        let creator_signing_addr = NormalAddress::from_pkey(&self.creator);
 
-        // Convert addresses to strings
-        let creator = hex::encode(bin_creator);
-        let receiver = hex::encode(bin_receiver);
+        // Do not allow address re-usage
+        if self.next_address == creator_signing_addr {
+            return false;
+        }
 
-        // Convert hashes to strings
-        let asset_hash = hex::encode(bin_asset_hash);
-        let fee_hash = hex::encode(bin_fee_hash);
+        // Calculate address mapping key
+        //
+        // An address mapping is a mapping between
+        // the account's signing address and an 
+        // account's receiving address.
+        //
+        // They key of the address mapping has the following format:
+        // `<signing-address>.am`
+        let addr_mapping_key = [creator_signing_addr.as_bytes(), &b".am"[..]].concat();
+
+        // Retrieve creator account permanent address
+        let creator_perm_addr = match trie.get(&addr_mapping_key) {
+            Ok(Some(perm_addr)) => NormalAddress::from_bytes(&perm_addr).unwrap(),
+            Ok(None) => return false,
+            Err(err) => panic!(err),
+        };
+
+        // Do not allow address re-usage 
+        if self.next_address == creator_perm_addr {
+            return false
+        }
 
         // Calculate precision key
         //
         // The key of a currency's precision has the following format:
         // `<currency-hash>.p`
-        let asset_hash_prec_key = format!("{}.p", asset_hash);
-        let asset_hash_prec_key = asset_hash_prec_key.as_bytes();
+        let asset_hash_prec_key = [bin_asset_hash, &b".p"[..]].concat();
 
         // Calculate nonce key
         //
         // The key of a nonce has the following format:
         // `<account-address>.n`
-        let creator_nonce_key = format!("{}.n", creator);
-        let creator_nonce_key = creator_nonce_key.as_bytes();
+        let creator_nonce_key = [creator_perm_addr.as_bytes(), &b".n"[..]].concat();
 
         // Calculate fee key
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let creator_fee_key = format!("{}.{}", creator, fee_hash);
-        let creator_fee_key = creator_fee_key.as_bytes();
+        let creator_fee_key = [creator_perm_addr.as_bytes(), &b"."[..], bin_fee_hash].concat();
+
+        // Check if the currency already exists
+        if let Ok(Some(_)) | Err(_) = trie.get(&asset_hash_prec_key) {
+            return false;
+        }
 
         // Retrieve serialized nonce
         let bin_creator_nonce = match trie.get(&creator_nonce_key) {
@@ -134,11 +153,6 @@ impl CreateMintable {
             return false;
         }
 
-        // Check if the currency already exists
-        if let Ok(Some(_)) = trie.get(asset_hash_prec_key) {
-            return false;
-        }
-
         balance >= Balance::from_bytes(b"0.0").unwrap()
     }
 
@@ -146,62 +160,64 @@ impl CreateMintable {
     ///
     /// This function will panic if the `creator` account does not exist.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
-        let bin_creator = &self.creator.to_bytes();
-        let bin_receiver = &self.receiver.to_bytes();
+        let bin_receiver = self.receiver.as_bytes();
         let bin_minter_addr = &self.minter_address.to_bytes();
-        let bin_asset_hash = &self.asset_hash.to_vec();
-        let bin_fee_hash = &self.fee_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.0;
+        let bin_fee_hash = &self.fee_hash.0;
         let coin_supply = &self.coin_supply;
         let max_supply = &self.max_supply;
 
-        // Convert addresses to strings
-        let creator = hex::encode(bin_creator);
-        let receiver = hex::encode(bin_receiver);
-
-        // Convert hashes to strings
-        let asset_hash = hex::encode(bin_asset_hash);
-        let fee_hash = hex::encode(bin_fee_hash);
-
-        if asset_hash == fee_hash {
+        if bin_asset_hash == bin_fee_hash {
             panic!("The created currency hash cannot be the same as the fee hash!");
         }
+
+        let creator_signing_addr = NormalAddress::from_pkey(&self.creator);
+
+        // Calculate address mapping key
+        //
+        // An address mapping is a mapping between
+        // the account's signing address and an 
+        // account's receiving address.
+        //
+        // They key of the address mapping has the following format:
+        // `<signing-address>.am`
+        let creator_addr_mapping_key = [creator_signing_addr.as_bytes(), &b".am"[..]].concat();
+        let next_addr_mapping_key = [self.next_address.as_bytes(), &b".am"[..]].concat();
+
+        // Retrieve creator account permanent address
+        let creator_perm_addr = trie.get(&creator_addr_mapping_key).unwrap().unwrap();
+        let creator_perm_addr = NormalAddress::from_bytes(&creator_perm_addr).unwrap();
 
         // Calculate precision key
         //
         // The key of a currency's precision has the following format:
         // `<currency-hash>.p`
-        let asset_hash_prec_key = format!("{}.p", asset_hash);
-        let asset_hash_prec_key = asset_hash_prec_key.as_bytes();
+        let asset_hash_prec_key = [bin_asset_hash, &b".p"[..]].concat();
 
         // Calculate coin supply key
         //
         // The key of a currency's coin supply entry has the following format:
         // `<currency-hash>.s`
-        let asset_hash_supply_key = format!("{}.s", asset_hash);
-        let asset_hash_supply_key = asset_hash_supply_key.as_bytes();
+        let asset_hash_supply_key = [bin_asset_hash, &b".s"[..]].concat();
 
         // Calculate max supply key
         //
         // The key of a currency's max supply entry has the following format:
         // `<currency-hash>.s`
-        let asset_hash_max_supply_key = format!("{}.x", asset_hash);
-        let asset_hash_max_supply_key = asset_hash_max_supply_key.as_bytes();
+        let asset_hash_max_supply_key = [bin_asset_hash, &b".x"[..]].concat();
 
         // Calculate minter address key
         //
         // The key of a currency's minter address has the following format:
         // `<currency-hash>.m`
-        let asset_hash_minter_key = format!("{}.m", asset_hash);
-        let asset_hash_minter_key = asset_hash_minter_key.as_bytes();
+        let asset_hash_minter_key = [bin_asset_hash, &b".m"[..]].concat();
 
         // Calculate nonce keys
         //
         // The key of a nonce has the following format:
         // `<account-address>.n`
-        let creator_nonce_key = format!("{}.n", creator);
-        let creator_nonce_key = creator_nonce_key.as_bytes();
-        let receiver_nonce_key = format!("{}.n", receiver);
-        let receiver_nonce_key = receiver_nonce_key.as_bytes();
+        let creator_nonce_key = [creator_perm_addr.as_bytes(), &b".n"[..]].concat();
+        let receiver_nonce_key = [bin_receiver, &b".n"[..]].concat();
 
         // Retrieve serialized nonce
         let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
@@ -236,16 +252,16 @@ impl CreateMintable {
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let creator_cur_key = format!("{}.{}", creator, asset_hash);
-        let creator_fee_key = format!("{}.{}", creator, fee_hash);
-        let receiver_cur_key = format!("{}.{}", receiver, asset_hash);
+        let creator_cur_key = [creator_perm_addr.as_bytes(), &b"."[..], bin_asset_hash].concat();
+        let creator_fee_key = [creator_perm_addr.as_bytes(), &b"."[..], bin_fee_hash].concat();
+        let receiver_cur_key = [bin_receiver, &b"."[..], bin_asset_hash].concat();
 
         // The creator is the same as the receiver, so we
         // just add all the new currency to it's address.
-        if bin_creator == bin_receiver {
+        if creator_perm_addr.as_bytes() == bin_receiver {
             let mut creator_fee_balance = unwrap!(
                 Balance::from_bytes(&unwrap!(
-                    trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                    trie.get(&creator_fee_key).unwrap(),
                     "The creator does not have an entry for the given currency"
                 )),
                 "Invalid stored balance format"
@@ -255,22 +271,25 @@ impl CreateMintable {
             creator_fee_balance -= self.fee.clone();
 
             // Calculate creator balance
-            let creator_cur_balance = format!("{}.0", self.coin_supply);
-            let creator_cur_balance = Balance::from_bytes(creator_cur_balance.as_bytes()).unwrap();
+            let creator_cur_balance = Balance::from_u64(self.coin_supply);
 
             // Update trie
-            trie.insert(asset_hash_supply_key, &coin_supply_buf)
+            trie.insert(&asset_hash_supply_key, &coin_supply_buf)
                 .unwrap();
-            trie.insert(asset_hash_minter_key, &bin_minter_addr)
+            trie.insert(&asset_hash_minter_key, &bin_minter_addr)
                 .unwrap();
-            trie.insert(asset_hash_max_supply_key, &max_supply_buf)
+            trie.insert(&asset_hash_max_supply_key, &max_supply_buf)
                 .unwrap();
-            trie.insert(asset_hash_prec_key, &[self.precision]).unwrap();
-            trie.insert(creator_cur_key.as_bytes(), &creator_cur_balance.to_bytes())
+            trie.insert(&asset_hash_prec_key, &[self.precision]).unwrap();
+            trie.insert(&creator_cur_key, &creator_cur_balance.to_bytes())
                 .unwrap();
-            trie.insert(creator_fee_key.as_bytes(), &creator_fee_balance.to_bytes())
+            trie.insert(&creator_fee_key, &creator_fee_balance.to_bytes())
                 .unwrap();
-            trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+            trie.insert(&creator_nonce_key, &nonce_buf).unwrap();
+
+            // Update address mappings
+            trie.remove(&creator_addr_mapping_key).unwrap();
+            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
         } else {
             // The receiver is another account
             match bin_receiver_nonce {
@@ -278,7 +297,7 @@ impl CreateMintable {
                 Ok(Some(_)) => {
                     let mut creator_balance = unwrap!(
                         Balance::from_bytes(&unwrap!(
-                            trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                            trie.get(&creator_fee_key).unwrap(),
                             "The creator does not have an entry for the given currency"
                         )),
                         "Invalid stored balance format"
@@ -288,29 +307,32 @@ impl CreateMintable {
                     creator_balance -= self.fee.clone();
 
                     // Calculate receiver balance
-                    let receiver_balance = format!("{}.0", self.coin_supply);
-                    let receiver_balance =
-                        Balance::from_bytes(receiver_balance.as_bytes()).unwrap();
+                    let receiver_balance = Balance::from_u64(self.coin_supply);
 
                     // Update trie
-                    trie.insert(asset_hash_supply_key, &coin_supply_buf)
+                    trie.insert(&asset_hash_supply_key, &coin_supply_buf)
                         .unwrap();
-                    trie.insert(asset_hash_minter_key, &bin_minter_addr)
+                    trie.insert(&asset_hash_minter_key, &bin_minter_addr)
                         .unwrap();
-                    trie.insert(asset_hash_max_supply_key, &max_supply_buf)
+                    trie.insert(&asset_hash_max_supply_key, &max_supply_buf)
                         .unwrap();
-                    trie.insert(asset_hash_prec_key, &[self.precision]).unwrap();
-                    trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes())
+                    trie.insert(&asset_hash_prec_key, &[self.precision]).unwrap();
+                    trie.insert(&creator_fee_key, &creator_balance.to_bytes())
                         .unwrap();
-                    trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                    trie.insert(&receiver_cur_key, &receiver_balance.to_bytes())
                         .unwrap();
-                    trie.insert(creator_nonce_key, &nonce_buf).unwrap();
+                    trie.insert(&creator_nonce_key, &nonce_buf).unwrap();
+
+                    // Update address mappings
+                    trie.remove(&creator_addr_mapping_key).unwrap();
+                    trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
                 }
                 // The receiver account does not exist so we create it
                 Ok(None) => {
+                    let receiver_addr_mapping_key = [self.receiver.as_bytes(), &b".am"[..]].concat();
                     let mut creator_balance = unwrap!(
                         Balance::from_bytes(&unwrap!(
-                            trie.get(&creator_fee_key.as_bytes()).unwrap(),
+                            trie.get(&creator_fee_key).unwrap(),
                             "The creator does not have an entry for the given currency"
                         )),
                         "Invalid stored balance format"
@@ -320,25 +342,28 @@ impl CreateMintable {
                     creator_balance -= self.fee.clone();
 
                     // Calculate receiver balance
-                    let receiver_balance = format!("{}.0", self.coin_supply);
-                    let receiver_balance =
-                        Balance::from_bytes(receiver_balance.as_bytes()).unwrap();
+                    let receiver_balance = Balance::from_u64(self.coin_supply);
 
                     // Update trie
-                    trie.insert(asset_hash_supply_key, &coin_supply_buf)
+                    trie.insert(&asset_hash_supply_key, &coin_supply_buf)
                         .unwrap();
-                    trie.insert(asset_hash_minter_key, &bin_minter_addr)
+                    trie.insert(&asset_hash_minter_key, &bin_minter_addr)
                         .unwrap();
-                    trie.insert(asset_hash_max_supply_key, &max_supply_buf)
+                    trie.insert(&asset_hash_max_supply_key, &max_supply_buf)
                         .unwrap();
-                    trie.insert(asset_hash_prec_key, &[self.precision]).unwrap();
-                    trie.insert(creator_fee_key.as_bytes(), &creator_balance.to_bytes())
+                    trie.insert(&asset_hash_prec_key, &[self.precision]).unwrap();
+                    trie.insert(&creator_fee_key, &creator_balance.to_bytes())
                         .unwrap();
-                    trie.insert(receiver_cur_key.as_bytes(), &receiver_balance.to_bytes())
+                    trie.insert(&receiver_cur_key, &receiver_balance.to_bytes())
                         .unwrap();
-                    trie.insert(creator_nonce_key, &nonce_buf).unwrap();
-                    trie.insert(receiver_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
+                    trie.insert(&creator_nonce_key, &nonce_buf).unwrap();
+                    trie.insert(&receiver_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
                         .unwrap();
+
+                    // Update address mappings
+                    trie.insert(&receiver_addr_mapping_key, self.receiver.as_bytes()).unwrap();
+                    trie.remove(&creator_addr_mapping_key).unwrap();
+                    trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
                 }
                 Err(err) => panic!(err),
             }
@@ -367,7 +392,7 @@ impl CreateMintable {
         let message = assemble_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.creator.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.creator),
             None => false,
         }
     }
@@ -383,11 +408,12 @@ impl CreateMintable {
     /// 6) Nonce                - 64bits
     /// 7) Creator              - 33byte binary
     /// 8) Receiver             - 33byte binary
-    /// 9) Minter address       - 33byte binary
-    /// 10) Currency hash       - 32byte binary
-    /// 11) Fee hash            - 32byte binary
-    /// 12) Signature           - 64byte binary
-    /// 13) Fee                 - Binary of fee length
+    /// 9) Next address         - 33byte binary
+    /// 10) Minter address      - 33byte binary
+    /// 11) Currency hash       - 32byte binary
+    /// 12) Fee hash            - 32byte binary
+    /// 13) Signature           - 64byte binary
+    /// 14) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
 
@@ -397,11 +423,11 @@ impl CreateMintable {
             return Err("Signature field is missing");
         };
 
-        let creator = &self.creator.to_bytes();
-        let receiver = &self.receiver.to_bytes();
-        let minter_address = &self.minter_address.to_bytes();
-        let asset_hash = &&self.asset_hash.0;
-        let fee_hash = &&self.fee_hash.0;
+        let receiver = self.receiver.to_bytes();
+        let next_address = self.next_address.to_bytes();
+        let minter_address = self.minter_address.to_bytes();
+        let asset_hash = &self.asset_hash.0;
+        let fee_hash = &self.fee_hash.0;
         let coin_supply = &self.coin_supply;
         let max_supply = &self.max_supply;
         let precision = &self.precision;
@@ -417,13 +443,14 @@ impl CreateMintable {
         buffer.write_u64::<BigEndian>(*max_supply).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
-        buffer.append(&mut creator.to_vec());
-        buffer.append(&mut receiver.to_vec());
-        buffer.append(&mut minter_address.to_vec());
-        buffer.append(&mut asset_hash.to_vec());
-        buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut signature);
-        buffer.append(&mut fee.to_vec());
+        buffer.extend_from_slice(&self.creator.0);
+        buffer.extend_from_slice(&receiver);
+        buffer.extend_from_slice(&next_address);
+        buffer.extend_from_slice(&minter_address);
+        buffer.extend_from_slice(asset_hash);
+        buffer.extend_from_slice(fee_hash);
+        buffer.extend_from_slice(&signature);
+        buffer.extend_from_slice(fee);
 
         Ok(buffer)
     }
@@ -484,13 +511,12 @@ impl CreateMintable {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..27).collect();
 
-        let creator = if buf.len() > 33 as usize {
-            let creator_vec: Vec<u8> = buf.drain(..33).collect();
+        let creator = if buf.len() > 32 as usize {
+            let creator_vec: Vec<u8> = buf.drain(..32).collect();
+            let mut creator_bytes = [0; 32];
 
-            match NormalAddress::from_bytes(&creator_vec) {
-                Ok(addr) => addr,
-                Err(err) => return Err(err),
-            }
+            creator_bytes.copy_from_slice(&creator_vec);
+            Pk(creator_bytes)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -502,6 +528,13 @@ impl CreateMintable {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let next_address = if buf.len() > 33 as usize {
+            let next_address_vec: Vec<u8> = buf.drain(..33).collect();
+            NormalAddress::from_bytes(&next_address_vec)?
         } else {
             return Err("Incorrect packet structure");
         };
@@ -562,16 +595,17 @@ impl CreateMintable {
         };
 
         let mut create_mintable = CreateMintable {
-            creator: creator,
-            receiver: receiver,
-            coin_supply: coin_supply,
-            fee_hash: fee_hash,
-            minter_address: minter_address,
-            max_supply: max_supply,
-            fee: fee,
-            precision: precision,
-            asset_hash: asset_hash,
-            nonce: nonce,
+            creator,
+            receiver,
+            next_address,
+            coin_supply,
+            fee_hash,
+            minter_address,
+            max_supply,
+            fee,
+            precision,
+            asset_hash,
+            nonce,
             hash: None,
             signature: Some(signature),
         };
@@ -590,28 +624,29 @@ impl CreateMintable {
 
 fn assemble_message(obj: &CreateMintable) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
-    let mut creator = obj.creator.to_bytes();
-    let mut receiver = obj.receiver.to_bytes();
-    let mut minter_address = obj.minter_address.to_bytes();
-    let mut fee = obj.fee.to_bytes();
+    let receiver = obj.receiver.to_bytes();
+    let next_address = obj.next_address.to_bytes();
+    let minter_address = obj.minter_address.to_bytes();
+    let fee = obj.fee.to_bytes();
     let coin_supply = obj.coin_supply;
     let max_supply = obj.max_supply;
     let precision = obj.precision;
-    let asset_hash = obj.asset_hash.0;
-    let fee_hash = obj.fee_hash.0;
+    let asset_hash = &obj.asset_hash.0;
+    let fee_hash = &obj.fee_hash.0;
 
     buf.write_u8(precision).unwrap();
     buf.write_u64::<BigEndian>(coin_supply).unwrap();
     buf.write_u64::<BigEndian>(max_supply).unwrap();
+    buf.write_u64::<BigEndian>(obj.nonce).unwrap();
 
     // Compose data to sign
-    buf.append(&mut creator);
-    buf.append(&mut receiver);
-    buf.append(&mut minter_address);
-    buf.append(&mut asset_hash.to_vec());
-    buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut fee);
-
+    buf.extend_from_slice(&obj.creator.0);
+    buf.extend_from_slice(&receiver);
+    buf.extend_from_slice(&next_address);
+    buf.extend_from_slice(&minter_address);
+    buf.extend_from_slice(asset_hash);
+    buf.extend_from_slice(fee_hash);
+    buf.extend_from_slice(&fee);
     buf
 }
 
@@ -619,8 +654,10 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for CreateMintable {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> CreateMintable {
+        let (pk, _) = crypto::gen_keypair();
         let mut tx = CreateMintable {
-            creator: Arbitrary::arbitrary(g),
+            creator: pk,
+            next_address: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
             minter_address: Arbitrary::arbitrary(g),
             asset_hash: Arbitrary::arbitrary(g),
@@ -647,8 +684,9 @@ mod tests {
     #[test]
     fn validate() {
         let id = Identity::new();
-        let creator_addr = Address::normal_from_pkey(*id.pkey());
-        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -666,15 +704,16 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
-            creator: creator_norm_address.clone(),
-            receiver: creator_addr.clone(),
-            minter_address: creator_addr.clone(),
+            creator: id.pkey().clone(),
+            next_address,
+            receiver: Address::Normal(creator_addr.clone()),
+            minter_address: Address::Normal(creator_addr.clone()),
             coin_supply: 100,
             max_supply: 200,
             precision: 18,
             fee: fee.clone(),
-            asset_hash: asset_hash,
-            fee_hash: fee_hash,
+            asset_hash,
+            fee_hash,
             nonce: 1,
             signature: None,
             hash: None,
@@ -690,8 +729,9 @@ mod tests {
     #[test]
     fn validate_bad_prec_1() {
         let id = Identity::new();
-        let creator_addr = Address::normal_from_pkey(*id.pkey());
-        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -709,9 +749,10 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
-            creator: creator_norm_address.clone(),
-            receiver: creator_addr.clone(),
-            minter_address: creator_addr.clone(),
+            creator: id.pkey().clone(),
+            next_address,
+            receiver: Address::Normal(creator_addr.clone()),
+            minter_address: Address::Normal(creator_addr.clone()),
             coin_supply: 100,
             max_supply: 200,
             precision: 19,
@@ -733,8 +774,9 @@ mod tests {
     #[test]
     fn validate_bad_coin_supply() {
         let id = Identity::new();
-        let creator_addr = Address::normal_from_pkey(*id.pkey());
-        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -752,9 +794,10 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
-            creator: creator_norm_address.clone(),
-            receiver: creator_addr.clone(),
-            minter_address: creator_addr.clone(),
+            creator: id.pkey().clone(),
+            next_address,
+            receiver: Address::Normal(creator_addr.clone()),
+            minter_address: Address::Normal(creator_addr.clone()),
             coin_supply: 0,
             max_supply: 10,
             precision: 15,
@@ -776,8 +819,9 @@ mod tests {
     #[test]
     fn validate_bad_prec_2() {
         let id = Identity::new();
-        let creator_addr = Address::normal_from_pkey(*id.pkey());
-        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -795,9 +839,10 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
-            creator: creator_norm_address.clone(),
-            receiver: creator_addr.clone(),
-            minter_address: creator_addr.clone(),
+            creator: id.pkey().clone(),
+            next_address,
+            receiver: Address::Normal(creator_addr.clone()),
+            minter_address: Address::Normal(creator_addr.clone()),
             coin_supply: 100,
             max_supply: 200,
             precision: 1,
@@ -819,8 +864,9 @@ mod tests {
     #[test]
     fn validate_same_currencies() {
         let id = Identity::new();
-        let creator_addr = Address::normal_from_pkey(*id.pkey());
-        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -838,9 +884,10 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
-            creator: creator_norm_address.clone(),
-            receiver: creator_addr.clone(),
-            minter_address: creator_addr.clone(),
+            creator: id.pkey().clone(),
+            next_address,
+            receiver: Address::Normal(creator_addr.clone()),
+            minter_address: Address::Normal(creator_addr.clone()),
             coin_supply: 100,
             max_supply: 200,
             precision: 18,
@@ -862,8 +909,9 @@ mod tests {
     #[test]
     fn validate_no_creator() {
         let id = Identity::new();
-        let creator_addr = Address::normal_from_pkey(*id.pkey());
-        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -874,9 +922,10 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
-            creator: creator_norm_address.clone(),
-            receiver: creator_addr.clone(),
-            minter_address: creator_addr.clone(),
+            creator: id.pkey().clone(),
+            next_address,
+            receiver: Address::Normal(creator_addr.clone()),
+            minter_address: Address::Normal(creator_addr.clone()),
             coin_supply: 100,
             max_supply: 200,
             precision: 18,
@@ -897,8 +946,9 @@ mod tests {
     #[test]
     fn validate_greater_supply() {
         let id = Identity::new();
-        let creator_addr = Address::normal_from_pkey(*id.pkey());
-        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -916,9 +966,10 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = CreateMintable {
-            creator: creator_norm_address.clone(),
-            receiver: creator_addr.clone(),
-            minter_address: creator_addr.clone(),
+            creator: id.pkey().clone(),
+            next_address,
+            receiver: Address::Normal(creator_addr.clone()),
+            minter_address: Address::Normal(creator_addr.clone()),
             coin_supply: 200,
             max_supply: 200,
             precision: 18,
@@ -941,9 +992,10 @@ mod tests {
     fn apply_it_creates_currencies_and_adds_them_to_the_creator() {
         let id = Identity::new();
         let id2 = Identity::new();
-        let creator_addr = Address::normal_from_pkey(*id.pkey());
-        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let id3 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
+        let minter_addr = Address::normal_from_pkey(id3.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
         let amount = Balance::from_bytes(b"100.0").unwrap();
@@ -959,8 +1011,9 @@ mod tests {
             test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
 
             let mut tx = CreateMintable {
-                creator: creator_norm_address.clone(),
-                receiver: creator_addr.clone(),
+                creator: id.pkey().clone(),
+                next_address,
+                receiver: Address::Normal(creator_addr.clone()),
                 minter_address: minter_addr.clone(),
                 coin_supply: 100,
                 max_supply: 200,
@@ -982,35 +1035,19 @@ mod tests {
 
         let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
 
-        let creator_nonce_key = format!("{}.n", hex::encode(&creator_addr.to_bytes()));
-        let creator_nonce_key = creator_nonce_key.as_bytes();
-
+        let creator_nonce_key = [creator_addr.as_bytes(), &b".n"[..]].concat();
         let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
 
-        let bin_asset_hash = asset_hash.to_vec();
-        let bin_fee_hash = fee_hash.to_vec();
-        let hex_asset_hash = hex::encode(&bin_asset_hash);
-        let hex_fee_hash = hex::encode(&bin_fee_hash);
-        let asset_hash_prec_key = format!("{}.p", hex_asset_hash);
-        let asset_hash_prec_key = asset_hash_prec_key.as_bytes();
-        let fee_hash_prec_key = format!("{}.p", hex_fee_hash);
-        let fee_hash_prec_key = fee_hash_prec_key.as_bytes();
-        let asset_hash_supply_key = format!("{}.s", hex_asset_hash);
-        let asset_hash_supply_key = asset_hash_supply_key.as_bytes();
-        let asset_hash_max_supply_key = format!("{}.x", hex_asset_hash);
-        let asset_hash_max_supply_key = asset_hash_max_supply_key.as_bytes();
-        let asset_hash_minter_key = format!("{}.m", hex_asset_hash);
-        let asset_hash_minter_key = asset_hash_minter_key.as_bytes();
+        let bin_asset_hash = &asset_hash.0;
+        let bin_fee_hash = &fee_hash.0;
+        let asset_hash_prec_key = [bin_asset_hash, &b".p"[..]].concat();
+        let fee_hash_prec_key = [bin_fee_hash, &b".p"[..]].concat();
+        let asset_hash_supply_key = [bin_asset_hash, &b".s"[..]].concat();
+        let asset_hash_max_supply_key = [bin_asset_hash, &b".x"[..]].concat();
+        let asset_hash_minter_key = [bin_asset_hash, &b".m"[..]].concat();
 
-        let creator_cur_balance_key = format!(
-            "{}.{}",
-            hex::encode(&creator_addr.to_bytes()),
-            hex_asset_hash
-        );
-        let creator_cur_balance_key = creator_cur_balance_key.as_bytes();
-        let creator_fee_balance_key =
-            format!("{}.{}", hex::encode(&creator_addr.to_bytes()), hex_fee_hash);
-        let creator_fee_balance_key = creator_fee_balance_key.as_bytes();
+        let creator_cur_balance_key = [creator_addr.as_bytes(), &b"."[..], bin_asset_hash].concat();
+        let creator_fee_balance_key = [creator_addr.as_bytes(), &b"."[..], bin_fee_hash].concat();
 
         let creator_fee_balance =
             Balance::from_bytes(&trie.get(&creator_fee_balance_key).unwrap().unwrap()).unwrap();
@@ -1074,9 +1111,11 @@ mod tests {
             fee_hash: Hash
         ) -> bool {
             let id = Identity::new();
+            let id2 = Identity::new();
 
             let mut tx = CreateMintable {
-                creator: NormalAddress::from_pkey(*id.pkey()),
+                creator: id.pkey().clone(),
+                next_address: NormalAddress::from_pkey(id2.pkey()),
                 receiver: receiver,
                 minter_address: minter_address,
                 coin_supply: coin_supply,

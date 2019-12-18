@@ -26,6 +26,7 @@ use std::str;
 use std::str::FromStr;
 
 lazy_static! {
+    static ref ZERO: Balance = Balance::from_bytes(b"0.0").unwrap();
     static ref PREC0: Regex = Regex::new(r"^[0-9]*$").unwrap();
     static ref PREC2: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,2})?$").unwrap();
     static ref PREC3: Regex = Regex::new(r"^[0-9]{1,18}([.][0-9]{1,3})?$").unwrap();
@@ -77,6 +78,10 @@ impl Balance {
         }
     }
 
+    pub fn zero() -> Balance {
+        ZERO.clone()
+    }
+
     pub fn to_inner(&self) -> Decimal {
         self.0.clone()
     }
@@ -99,7 +104,7 @@ impl Balance {
     }
 
     pub fn from_u64(num: u64) -> Balance {
-        Balance(Decimal::from_str(&format!("{}", num)).unwrap())
+        Balance(Decimal::from_str(&format!("{}.0", num)).unwrap())
     }
 }
 
@@ -238,6 +243,11 @@ mod tests {
     quickcheck! {
         fn serialize_deserialize(b: Balance) -> bool {
             b == Balance::from_bytes(&Balance::to_bytes(&b)).unwrap()
+        }
+
+        fn from_u64(n: u64) -> bool {
+            Balance::from_u64(n);
+            true
         }
     }
 }

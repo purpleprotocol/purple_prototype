@@ -24,7 +24,7 @@ use addresses::normal::*;
 use crypto::{PublicKey, FromBase58};
 use std::fmt;
 
-#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Address {
     Normal(NormalAddress),
     Contract(ContractAddress),
@@ -47,19 +47,30 @@ impl Address {
             Address::Contract(ref addr) => addr.to_bytes(),
         }
     }
-    pub fn normal_from_pkey(pkey: PublicKey) -> Address {
+    pub fn normal_from_pkey(pkey: &PublicKey) -> Address {
         Address::Normal(NormalAddress::from_pkey(pkey))
     }
 
+    pub fn as_bytes(&self) -> &[u8] {
+        match *self {
+            Address::Normal(ref addr) => addr.as_bytes(),
+            Address::Contract(ref addr) => addr.as_bytes(),
+        }
+    }
+
     pub fn from_bytes(bin: &[u8]) -> Result<Address, &'static str> {
+        if bin.len() != 33 {
+            return Err("Invalid address length! Expected 33 bytes!");
+        }
+
         let addr_type = bin[0];
 
         match addr_type {
-            1 => match NormalAddress::from_bytes(bin) {
+            NormalAddress::ADDR_TYPE => match NormalAddress::from_bytes(bin) {
                 Ok(result) => Ok(Address::Normal(result)),
                 Err(err) => Err(err),
             },
-            2 => match ContractAddress::from_bytes(bin) {
+            ContractAddress::ADDR_TYPE => match ContractAddress::from_bytes(bin) {
                 Ok(result) => Ok(Address::Contract(result)),
                 Err(err) => Err(err),
             },

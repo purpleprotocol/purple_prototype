@@ -22,12 +22,14 @@ use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
-use crate::CreateMintable;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChangeMinter {
     /// The current minter
-    pub(crate) minter: NormalAddress,
+    pub(crate) minter: Pk,
+
+    /// The minter's next address
+    pub(crate) next_address: NormalAddress,
 
     /// The address of the new minter
     pub(crate) new_minter: Address,
@@ -45,9 +47,10 @@ pub struct ChangeMinter {
     /// Nonce
     pub(crate) nonce: u64,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Transaction hash
     pub(crate) hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
+    /// Transaction signature
     pub(crate) signature: Option<Signature>,
 }
 
@@ -56,33 +59,72 @@ impl ChangeMinter {
 
     /// Validates the transaction against the provided state.
     pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
-        let zero = Balance::from_bytes(b"0.0").unwrap();
+        let zero = Balance::zero();
 
         if !self.verify_sig() {
             return false;
         }
 
-        let bin_minter = &self.minter.to_bytes();
-        let bin_fee_hash = &self.fee_hash.to_vec();
+        let bin_asset_hash = &self.asset_hash.0;
+        let bin_fee_hash = &self.fee_hash.0;
+        let minter_signing_addr = NormalAddress::from_pkey(&self.minter);
 
-        // Convert address to strings
-        let minter = hex::encode(bin_minter);
+        // Do not allow address re-usage
+        if self.next_address == minter_signing_addr {
+            return false;
+        }
 
-        // Convert hashes to strings
-        let fee_hash = hex::encode(bin_fee_hash);
-
-        // Calculate nonce keys
+        // Calculate address mapping key
         //
-        // The key of a nonce has the following format:
-        // `<account-address>.n`
-        let minter_nonce_key = format!("{}.n", minter);
-        let minter_nonce_key = minter_nonce_key.as_bytes();
+        // An address mapping is a mapping between
+        // the account's signing address and an 
+        // account's receiving address.
+        //
+        // They key of the address mapping has the following format:
+        // `<signing-address>.am`
+        let addr_mapping_key = [minter_signing_addr.as_bytes(), &b".am"[..]].concat();
+
+        // Retrieve minter account permanent address
+        let permanent_addr = match trie.get(&addr_mapping_key) {
+            Ok(Some(perm_addr)) => NormalAddress::from_bytes(&perm_addr).unwrap(),
+            Ok(None) => return false,
+            Err(err) => panic!(err),
+        };
+
+        // Do not allow address re-usage 
+        if self.next_address == permanent_addr {
+            return false
+        }
+
+        // Check nonce
+        let minter_nonce_key = [permanent_addr.as_bytes(), &b".n"[..]].concat();
 
         // Calculate currency keys
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let fee_key = format!("{}.{}", minter, fee_hash);
+        let fee_key = [permanent_addr.as_bytes(), &b"."[..], bin_fee_hash].concat();
+
+        // Calculate minter address key
+        //
+        // The key of a currency's minter address has the following format:
+        // `<currency-hash>.m`
+        let asset_hash_minter_key = [bin_asset_hash, &b".m"[..]].concat();
+
+        let minter_addr = match trie.get(&asset_hash_minter_key) {
+            Ok(Some(minter)) => Address::from_bytes(&minter).unwrap(),
+            Ok(None) => return false,
+            Err(err) => panic!(err),
+        };
+
+        // Validate current minter
+        if minter_addr != Address::Normal(permanent_addr) {
+            return false;
+        }
+
+        if self.new_minter == minter_addr {
+            return false;
+        }
 
         // Retrieve serialized nonce
         let bin_nonce = match trie.get(&minter_nonce_key) {
@@ -98,7 +140,7 @@ impl ChangeMinter {
 
         let mut minter_fee_balance = unwrap!(
             Balance::from_bytes(&unwrap!(
-                trie.get(&fee_key.as_bytes()).unwrap(),
+                trie.get(&fee_key).unwrap(),
                 "The minter does not have an entry for the given currency"
             )),
             "Invalid stored balance format"
@@ -106,41 +148,37 @@ impl ChangeMinter {
 
         // Subtract fee from minter balance
         minter_fee_balance -= self.fee.clone();
-
         minter_fee_balance >= zero
     }
 
     /// Applies the change minter transaction to the provided database.
-    ///
-    /// # Remarks
-    ///
-    /// It panics if the minter address doesn't exist
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
-        let bin_minter = &self.minter.to_bytes();
-        let bin_new_minter = &self.new_minter.to_bytes();
-        let bin_asset_hash = &self.asset_hash.to_vec();
-        let bin_fee_hash = &self.fee_hash.to_vec();
+        let bin_new_minter = self.new_minter.as_bytes();
+        let bin_asset_hash = &self.asset_hash.0;
+        let bin_fee_hash = &self.fee_hash.0;
+        let minter_signing_addr = NormalAddress::from_pkey(&self.minter);
 
-        if bin_minter == bin_new_minter {
-            panic!("The new address of the minter should be different from the current!");
-        }
+        // Calculate address mapping key
+        //
+        // An address mapping is a mapping between
+        // the account's signing address and an 
+        // account's receiving address.
+        //
+        // They key of the address mapping has the following format:
+        // `<signing-address>.am`
+        let minter_addr_mapping_key = [minter_signing_addr.as_bytes(), &b".am"[..]].concat();
+        let next_addr_mapping_key = [self.next_address.as_bytes(), &b".am"[..]].concat();
 
-        // Convert addresses to strings
-        let minter = hex::encode(bin_minter);
-        let new_minter = hex::encode(bin_new_minter);
-
-        // Convert hashes to strings
-        let asset_hash = hex::encode(bin_asset_hash);
-        let fee_hash = hex::encode(bin_fee_hash);
+        // Retrieve minter account permanent address
+        let minter_perm_addr = trie.get(&minter_addr_mapping_key).unwrap().unwrap();
+        let minter_perm_addr = NormalAddress::from_bytes(&minter_perm_addr).unwrap();
 
         // Calculate nonce keys
         //
         // The key of a nonce has the following format:
         // `<account-address>.n`
-        let minter_nonce_key = format!("{}.n", minter);
-        let minter_nonce_key = minter_nonce_key.as_bytes();
-        let new_minter_nonce_key = format!("{}.n", new_minter);
-        let new_minter_nonce_key = new_minter_nonce_key.as_bytes();
+        let minter_nonce_key = [minter_perm_addr.as_bytes(), &b".n"[..]].concat();
+        let new_minter_nonce_key = [bin_new_minter, &b".n"[..]].concat();
 
         // Handle nonce
         // Retrieve serialized nonce
@@ -165,15 +203,13 @@ impl ChangeMinter {
         //
         // The key of a currency's minter address has the following format:
         // `<currency-hash>.m`
-        let asset_hash_minter_key = format!("{}.m", asset_hash);
-        let asset_hash_minter_key = asset_hash_minter_key.as_bytes();
+        let asset_hash_minter_key = [bin_asset_hash, &b".m"[..]].concat();
 
         // Calculate currency keys
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let minter_fee_key = format!("{}.{}", minter, fee_hash);
-        let minter_fee_key = minter_fee_key.as_bytes();
+        let minter_fee_key = [minter_perm_addr.as_bytes(), &b"."[..], bin_fee_hash].concat();
 
         match bin_new_minter_nonce {
             // The new minter account exists
@@ -190,13 +226,18 @@ impl ChangeMinter {
                 minter_fee_balance -= self.fee.clone();
 
                 // Update trie
-                trie.insert(asset_hash_minter_key, &bin_new_minter).unwrap();
+                trie.insert(&asset_hash_minter_key, &bin_new_minter).unwrap();
                 trie.insert(&minter_nonce_key, &nonce_buf).unwrap();
                 trie.insert(&minter_fee_key, &minter_fee_balance.to_bytes())
                     .unwrap();
+
+                // Update address mappings
+                trie.remove(&minter_addr_mapping_key).unwrap();
+                trie.insert(&next_addr_mapping_key, minter_perm_addr.as_bytes()).unwrap();
             }
             // The new minter account doesn't exist, so we create it
             Ok(None) => {
+                let new_minter_addr_mapping_key = [self.new_minter.as_bytes(), &b".am"[..]].concat();
                 let mut minter_fee_balance = unwrap!(
                     Balance::from_bytes(&unwrap!(
                         trie.get(&minter_fee_key).unwrap(),
@@ -212,9 +253,14 @@ impl ChangeMinter {
                 trie.insert(&minter_nonce_key, &nonce_buf).unwrap();
                 trie.insert(&new_minter_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
                     .unwrap();
-                trie.insert(asset_hash_minter_key, &bin_new_minter).unwrap();
+                trie.insert(&asset_hash_minter_key, &bin_new_minter).unwrap();
                 trie.insert(&minter_fee_key, &minter_fee_balance.to_bytes())
                     .unwrap();
+
+                // Update address mappings
+                trie.insert(&new_minter_addr_mapping_key, self.new_minter.as_bytes()).unwrap();
+                trie.remove(&minter_addr_mapping_key).unwrap();
+                trie.insert(&next_addr_mapping_key, minter_perm_addr.as_bytes()).unwrap();
             }
             Err(err) => panic!(err),
         }
@@ -237,7 +283,7 @@ impl ChangeMinter {
         let message = assemble_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.minter.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.minter),
             None => false,
         }
     }
@@ -248,12 +294,13 @@ impl ChangeMinter {
     /// 1) Transaction type(8)  - 8bits
     /// 2) Fee length           - 8bits
     /// 3) Nonce                - 64bits
-    /// 4) Minter               - 33byte binary
+    /// 4) Minter               - 32byte binary
     /// 5) New Minter           - 33byte binary
-    /// 6) Asset hash           - 32byte binary
-    /// 7) Fee hash             - 32byte binary
-    /// 8) Signature            - 64byte binary
-    /// 9) Fee                  - Binary of fee length
+    /// 6) Next address         - 33byte binary
+    /// 7) Asset hash           - 32byte binary
+    /// 8) Fee hash             - 32byte binary
+    /// 9) Signature            - 64byte binary
+    /// 10) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buf: Vec<u8> = Vec::new();
 
@@ -264,10 +311,10 @@ impl ChangeMinter {
         };
 
         let tx_type: u8 = Self::TX_TYPE;
-        let minter = &self.minter.to_bytes();
         let new_minter = &self.new_minter.to_bytes();
-        let asset_hash = &&self.asset_hash.0;
-        let fee_hash = &&self.fee_hash.0;
+        let next_address = &self.next_address.to_bytes();
+        let asset_hash = &self.asset_hash.0;
+        let fee_hash = &self.fee_hash.0;
         let fee = &self.fee.to_bytes();
         let fee_len = fee.len();
         let nonce = &self.nonce;
@@ -277,12 +324,13 @@ impl ChangeMinter {
         buf.write_u8(fee_len as u8).unwrap();
         buf.write_u64::<BigEndian>(*nonce).unwrap();
 
-        buf.append(&mut minter.to_vec());
-        buf.append(&mut new_minter.to_vec());
-        buf.append(&mut asset_hash.to_vec());
-        buf.append(&mut fee_hash.to_vec());
-        buf.append(&mut signature);
-        buf.append(&mut fee.to_vec());
+        buf.extend_from_slice(&self.minter.0);
+        buf.extend_from_slice(new_minter);
+        buf.extend_from_slice(next_address);
+        buf.extend_from_slice(asset_hash);
+        buf.extend_from_slice(fee_hash);
+        buf.extend_from_slice(&signature);
+        buf.extend_from_slice(&fee);
 
         Ok(buf)
     }
@@ -318,13 +366,12 @@ impl ChangeMinter {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..10).collect();
 
-        let minter = if buf.len() > 33 as usize {
-            let minter_vec: Vec<u8> = buf.drain(..33).collect();
+        let minter = if buf.len() > 32 as usize {
+            let minter_vec: Vec<u8> = buf.drain(..32).collect();
+            let mut minter_bytes = [0; 32];
 
-            match NormalAddress::from_bytes(&minter_vec) {
-                Ok(addr) => addr,
-                Err(err) => return Err(err),
-            }
+            minter_bytes.copy_from_slice(&minter_vec);
+            Pk(minter_bytes)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -333,6 +380,17 @@ impl ChangeMinter {
             let new_minter_vec: Vec<u8> = buf.drain(..33).collect();
 
             match Address::from_bytes(&new_minter_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let next_address = if buf.len() > 33 as usize {
+            let next_address_vec: Vec<u8> = buf.drain(..33).collect();
+
+            match NormalAddress::from_bytes(&next_address_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -385,12 +443,13 @@ impl ChangeMinter {
         };
 
         let mut change_minter = ChangeMinter {
-            minter: minter,
-            new_minter: new_minter,
-            asset_hash: asset_hash,
-            fee_hash: fee_hash,
-            fee: fee,
-            nonce: nonce,
+            minter,
+            new_minter,
+            next_address,
+            asset_hash,
+            fee_hash,
+            fee,
+            nonce,
             hash: None,
             signature: Some(signature),
         };
@@ -409,19 +468,20 @@ impl ChangeMinter {
 
 fn assemble_message(obj: &ChangeMinter) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
-    let mut minter = obj.minter.to_bytes();
-    let mut new_minter = obj.new_minter.to_bytes();
-    let mut fee = obj.fee.to_bytes();
-    let asset_hash = obj.asset_hash.0;
-    let fee_hash = obj.fee_hash.0;
+    let new_minter = obj.new_minter.to_bytes();
+    let next_address = obj.next_address.to_bytes();
+    let fee = obj.fee.to_bytes();
+    let asset_hash = &obj.asset_hash.0;
+    let fee_hash = &obj.fee_hash.0;
 
     // Compose data to hash
-    buf.append(&mut minter);
-    buf.append(&mut new_minter);
-    buf.append(&mut asset_hash.to_vec());
-    buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut fee);
-
+    buf.write_u64::<BigEndian>(obj.nonce).unwrap();
+    buf.extend_from_slice(&obj.minter.0);
+    buf.extend_from_slice(&new_minter);
+    buf.extend_from_slice(&next_address);
+    buf.extend_from_slice(asset_hash);
+    buf.extend_from_slice(fee_hash);
+    buf.extend_from_slice(&fee);
     buf
 }
 
@@ -429,8 +489,10 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for ChangeMinter {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> ChangeMinter {
+        let (pk, _) = crypto::gen_keypair();
         let mut tx = ChangeMinter {
-            minter: Arbitrary::arbitrary(g),
+            minter: pk,
+            next_address: Arbitrary::arbitrary(g),
             new_minter: Arbitrary::arbitrary(g),
             asset_hash: Arbitrary::arbitrary(g),
             fee_hash: Arbitrary::arbitrary(g),
@@ -448,6 +510,7 @@ impl Arbitrary for ChangeMinter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CreateMintable;
     use account::NormalAddress;
     use crypto::Identity;
 
@@ -455,9 +518,12 @@ mod tests {
     fn validate() {
         let id = Identity::new();
         let id2 = Identity::new();
-        let minter_addr = Address::normal_from_pkey(*id.pkey());
-        let minter_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let new_minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let id3 = Identity::new();
+        let id4 = Identity::new();
+        let minter_address = NormalAddress::from_pkey(id.pkey());
+        let new_minter_addr = Address::normal_from_pkey(id2.pkey());
+        let next_address1 = NormalAddress::from_pkey(id3.pkey());
+        let next_address2 = NormalAddress::from_pkey(id4.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -468,23 +534,45 @@ mod tests {
             let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize minter balance
-            test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+            test_helpers::init_balance(&mut trie, minter_address.clone(), fee_hash, b"100.0");
+        
+            // Create mintable token
+            let mut create_mintable = CreateMintable {
+                creator: id.pkey().clone(),
+                receiver: Address::Normal(minter_address),
+                minter_address: Address::Normal(minter_address),
+                next_address: next_address1,
+                asset_hash: asset_hash,
+                fee_hash: fee_hash,
+                coin_supply: 9999,
+                max_supply: 10000,
+                precision: 18,
+                fee: Balance::from_bytes(b"30.0").unwrap(),
+                nonce: 1,
+                signature: None,
+                hash: None,
+            };
+
+            create_mintable.sign(id.skey().clone());
+            create_mintable.compute_hash();
+            create_mintable.apply(&mut trie);
         }
 
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = ChangeMinter {
-            minter: minter_norm_address.clone(),
+            minter: id3.pkey().clone(),
             new_minter: new_minter_addr.clone(),
+            next_address: next_address2,
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             fee: fee.clone(),
-            nonce: 1,
+            nonce: 2,
             signature: None,
             hash: None,
         };
 
-        tx.sign(id.skey().clone());
+        tx.sign(id3.skey().clone());
         tx.compute_hash();
 
         let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
@@ -492,12 +580,15 @@ mod tests {
     }
 
     #[test]
-    fn validate_cannot_pay_fee() {
+    fn validate_fails_on_same_minter() {
         let id = Identity::new();
         let id2 = Identity::new();
-        let minter_addr = Address::normal_from_pkey(*id.pkey());
-        let minter_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let new_minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let id3 = Identity::new();
+        let id4 = Identity::new();
+        let minter_address = NormalAddress::from_pkey(id.pkey());
+        let new_minter_addr = Address::normal_from_pkey(id2.pkey());
+        let next_address1 = NormalAddress::from_pkey(id3.pkey());
+        let next_address2 = NormalAddress::from_pkey(id4.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
 
@@ -508,14 +599,36 @@ mod tests {
             let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize minter balance
-            test_helpers::init_balance(&mut trie, minter_addr.clone(), fee_hash, b"100.0");
+            test_helpers::init_balance(&mut trie, minter_address.clone(), fee_hash, b"100.0");
+        
+            // Create mintable token
+            let mut create_mintable = CreateMintable {
+                creator: id.pkey().clone(),
+                receiver: Address::Normal(minter_address),
+                minter_address: Address::Normal(minter_address),
+                next_address: next_address1,
+                asset_hash: asset_hash,
+                fee_hash: fee_hash,
+                coin_supply: 9999,
+                max_supply: 10000,
+                precision: 18,
+                fee: Balance::from_bytes(b"30.0").unwrap(),
+                nonce: 1,
+                signature: None,
+                hash: None,
+            };
+
+            create_mintable.sign(id.skey().clone());
+            create_mintable.compute_hash();
+            create_mintable.apply(&mut trie);
         }
 
-        let fee = Balance::from_bytes(b"1000.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = ChangeMinter {
-            minter: minter_norm_address.clone(),
+            minter: id.pkey().clone(),
             new_minter: new_minter_addr.clone(),
+            next_address: next_address2,
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             fee: fee.clone(),
@@ -524,7 +637,72 @@ mod tests {
             hash: None,
         };
 
-        tx.sign(id.skey().clone());
+        tx.sign(id3.skey().clone());
+        tx.compute_hash();
+
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn validate_cannot_pay_fee() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let id3 = Identity::new();
+        let id4 = Identity::new();
+        let minter_address = NormalAddress::from_pkey(id.pkey());
+        let new_minter_addr = Address::normal_from_pkey(id2.pkey());
+        let next_address1 = NormalAddress::from_pkey(id3.pkey());
+        let next_address2 = NormalAddress::from_pkey(id4.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency 1");
+        let fee_hash = crypto::hash_slice(b"Test currency 2");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+
+        {
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+            // Manually initialize minter balance
+            test_helpers::init_balance(&mut trie, minter_address.clone(), fee_hash, b"100.0");
+        
+            // Create mintable token
+            let mut create_mintable = CreateMintable {
+                creator: id.pkey().clone(),
+                receiver: Address::Normal(minter_address),
+                minter_address: Address::Normal(minter_address),
+                next_address: next_address1,
+                asset_hash: asset_hash,
+                fee_hash: fee_hash,
+                coin_supply: 9999,
+                max_supply: 10000,
+                precision: 18,
+                fee: Balance::from_bytes(b"30.0").unwrap(),
+                nonce: 1,
+                signature: None,
+                hash: None,
+            };
+
+            create_mintable.sign(id.skey().clone());
+            create_mintable.compute_hash();
+            create_mintable.apply(&mut trie);
+        }
+
+        let fee = Balance::from_bytes(b"1000.0").unwrap();
+
+        let mut tx = ChangeMinter {
+            minter: id.pkey().clone(),
+            new_minter: new_minter_addr.clone(),
+            next_address: next_address2,
+            asset_hash: asset_hash,
+            fee_hash: fee_hash,
+            fee: fee.clone(),
+            nonce: 1,
+            signature: None,
+            hash: None,
+        };
+
+        tx.sign(id3.skey().clone());
         tx.compute_hash();
 
         let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
@@ -535,8 +713,10 @@ mod tests {
     fn validate_no_minter() {
         let id = Identity::new();
         let id2 = Identity::new();
-        let minter_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let new_minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let id3 = Identity::new();
+        let minter_address = NormalAddress::from_pkey(id.pkey());
+        let new_minter_addr = Address::normal_from_pkey(id2.pkey());
+        let next_address = NormalAddress::from_pkey(id3.pkey());
 
         let db = test_helpers::init_tempdb();
         let root = Hash::NULL_RLP;
@@ -544,12 +724,12 @@ mod tests {
 
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
-
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = ChangeMinter {
-            minter: minter_norm_address.clone(),
+            minter: id.pkey().clone(),
             new_minter: new_minter_addr.clone(),
+            next_address,
             asset_hash: asset_hash,
             fee_hash: fee_hash,
             fee: fee.clone(),
@@ -569,9 +749,12 @@ mod tests {
         // Create Mintable first
         let id = Identity::new();
         let id2 = Identity::new();
-        let creator_addr = Address::normal_from_pkey(*id.pkey());
-        let creator_norm_address = NormalAddress::from_pkey(*id.pkey());
-        let minter_addr = Address::normal_from_pkey(*id2.pkey());
+        let id3 = Identity::new();
+        let id4 = Identity::new();
+        let minter_address = NormalAddress::from_pkey(id.pkey());
+        let new_minter_addr = Address::normal_from_pkey(id2.pkey());
+        let next_address1 = NormalAddress::from_pkey(id3.pkey());
+        let next_address2 = NormalAddress::from_pkey(id4.pkey());
         let asset_hash = crypto::hash_slice(b"Test currency 1");
         let fee_hash = crypto::hash_slice(b"Test currency 2");
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -583,12 +766,13 @@ mod tests {
             let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize creator balance
-            test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"100.0");
+            test_helpers::init_balance(&mut trie, minter_address.clone(), fee_hash, b"100.0");
 
             let mut tx = CreateMintable {
-                creator: creator_norm_address.clone(),
-                receiver: creator_addr.clone(),
-                minter_address: minter_addr.clone(),
+                creator: id.pkey().clone(),
+                receiver: Address::Normal(minter_address.clone()),
+                minter_address: Address::Normal(minter_address.clone()),
+                next_address: next_address1,
                 coin_supply: 100,
                 max_supply: 200,
                 precision: 18,
@@ -607,12 +791,10 @@ mod tests {
             tx.apply(&mut trie);
         }
 
-        let bin_asset_hash = asset_hash.to_vec();
-        let hex_asset_hash = hex::encode(&bin_asset_hash);
-        let asset_hash_minter_key = format!("{}.m", hex_asset_hash);
-        let asset_hash_minter_key = asset_hash_minter_key.as_bytes();
-        let id3 = Identity::new();
-        let new_minter_addr = Address::normal_from_pkey(*id3.pkey());
+        let bin_asset_hash = &asset_hash.0;
+        let asset_hash_minter_key = [bin_asset_hash, &b".m"[..]].concat();
+        let id5 = Identity::new();
+        let new_minter_addr = Address::normal_from_pkey(id5.pkey());
 
         {
             let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
@@ -620,7 +802,7 @@ mod tests {
             // Check minter address
             assert_eq!(
                 &trie.get(&asset_hash_minter_key).unwrap().unwrap(),
-                &minter_addr.to_bytes()
+                &minter_address.to_bytes()
             );
 
             assert_ne!(
@@ -632,8 +814,9 @@ mod tests {
         {
             let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::from_existing(&mut db, &mut root).unwrap();
             let mut tx = ChangeMinter {
-                minter: creator_norm_address.clone(),
+                minter: id3.pkey().clone(),
                 new_minter: new_minter_addr.clone(),
+                next_address: next_address2,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,
                 fee: fee.clone(),
@@ -642,7 +825,7 @@ mod tests {
                 hash: None,
             };
 
-            tx.sign(id.skey().clone());
+            tx.sign(id3.skey().clone());
             tx.compute_hash();
 
             // Apply transaction
@@ -654,7 +837,7 @@ mod tests {
         // Check minter address
         assert_ne!(
             &trie.get(&asset_hash_minter_key).unwrap().unwrap(),
-            &minter_addr.to_bytes()
+            &minter_address.to_bytes()
         );
 
         assert_eq!(
@@ -685,9 +868,11 @@ mod tests {
             fee_hash: Hash
         ) -> bool {
             let id = Identity::new();
+            let id2 = Identity::new();
 
             let mut tx = ChangeMinter {
-                minter: NormalAddress::from_pkey(*id.pkey()),
+                minter: id.pkey().clone(),
+                next_address: NormalAddress::from_pkey(id2.pkey()),
                 new_minter: new_minter,
                 fee: fee,
                 asset_hash: asset_hash,

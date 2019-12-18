@@ -53,14 +53,14 @@ pub use crate::mint::*;
 pub use crate::open_contract::*;
 pub use crate::send::*;
 
-use account::{Address, Balance};
-use crypto::{Hash, SecretKey, FromBase58, Identity};
+use account::{Address, NormalAddress, Balance};
+use crypto::{Hash, SecretKey, PublicKey, FromBase58, Identity};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use quickcheck::Arbitrary;
 use rand::Rng;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Tx {
     Call(Call),
     OpenContract(OpenContract),
@@ -200,18 +200,32 @@ impl Tx {
         }
     }
 
-    /// Returns the address of the transaction creator.
-    pub fn creator_address(&self) -> Address {
+    /// Returns the signing address of the transaction creator.
+    pub fn creator_signing_address(&self) -> NormalAddress {
         match *self {
-            Tx::Call(ref tx) => Address::Normal(tx.from),
-            Tx::OpenContract(ref tx) => Address::Normal(tx.owner),
-            Tx::Send(ref tx) => Address::Normal(tx.from),
-            Tx::Burn(ref tx) => Address::Normal(tx.burner),
-            Tx::CreateCurrency(ref tx) => Address::Normal(tx.creator),
-            Tx::CreateMintable(ref tx) => Address::Normal(tx.creator),
-            Tx::Mint(ref tx) => Address::Normal(tx.minter),
-            Tx::CreateUnique(ref tx) => Address::Normal(tx.creator),
-            Tx::ChangeMinter(ref tx) => Address::Normal(tx.minter),
+            Tx::Call(ref tx) => NormalAddress::from_pkey(&tx.from),
+            Tx::OpenContract(ref tx) => NormalAddress::from_pkey(&tx.creator),
+            Tx::Send(ref tx) => NormalAddress::from_pkey(&tx.from),
+            Tx::Burn(ref tx) => NormalAddress::from_pkey(&tx.burner),
+            Tx::CreateCurrency(ref tx) => NormalAddress::from_pkey(&tx.creator),
+            Tx::CreateMintable(ref tx) => NormalAddress::from_pkey(&tx.creator),
+            Tx::Mint(ref tx) => NormalAddress::from_pkey(&tx.minter),
+            Tx::CreateUnique(ref tx) => NormalAddress::from_pkey(&tx.creator),
+            Tx::ChangeMinter(ref tx) => NormalAddress::from_pkey(&tx.minter),
+        }
+    }
+
+    pub fn next_address(&self) -> NormalAddress {
+        match *self {
+            Tx::Call(ref tx) => tx.next_address.clone(),
+            Tx::OpenContract(ref tx) => tx.next_address.clone(),
+            Tx::Send(ref tx) => tx.next_address.clone(),
+            Tx::Burn(ref tx) => tx.next_address.clone(),
+            Tx::CreateCurrency(ref tx) => tx.next_address.clone(),
+            Tx::CreateMintable(ref tx) => tx.next_address.clone(),
+            Tx::Mint(ref tx) => tx.next_address.clone(),
+            Tx::CreateUnique(ref tx) => tx.next_address.clone(),
+            Tx::ChangeMinter(ref tx) => tx.next_address.clone(),
         }
     }
 
@@ -255,6 +269,10 @@ impl Arbitrary for Tx {
 }
 
 #[cfg(any(test, feature = "test"))]
+use std::sync::atomic::{AtomicU64, Ordering};
+
+#[cfg(any(test, feature = "test"))]
+#[repr(u8)]
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub enum TestAccount {
     A = 0,
@@ -264,37 +282,69 @@ pub enum TestAccount {
 
 #[cfg(any(test, feature = "test"))]
 impl TestAccount {
-    pub fn to_address(&self) -> Address {
-        Address::from_base58(crate::genesis::INIT_ACCOUNTS[*self as usize].0).unwrap()
+    pub fn to_perm_address(&self) -> NormalAddress {
+        let id: u8 = match *self {
+            TestAccount::A => 1,
+            TestAccount::B => 2,
+            TestAccount::C => 3,
+        };
+        let (pk, _) = crypto::gen_keypair_from_seed(&[&[id][..], &encode_be_u64!(1)].concat());
+        NormalAddress::from_pkey(&pk)
     }
 
-    pub fn to_skey(&self) -> SecretKey {
-        let key = crate::genesis::INIT_ACCOUNTS_SKEYS[*self as usize].from_base58().unwrap();
-        let mut key_arr = [0; 64];
-        key_arr.copy_from_slice(&key);
-        SecretKey(key_arr)
+    pub fn to_signing_addr(&self, nonce: u64) -> NormalAddress {
+        let id: u8 = match *self {
+            TestAccount::A => 1,
+            TestAccount::B => 2,
+            TestAccount::C => 3,
+        };
+        let (pk, _) = crypto::gen_keypair_from_seed(&[&[id][..], &encode_be_u64!(nonce)].concat());
+        NormalAddress::from_pkey(&pk)
+    }
+
+    pub fn to_pkey(&self, nonce: u64) -> PublicKey {
+        let id: u8 = match *self {
+            TestAccount::A => 1,
+            TestAccount::B => 2,
+            TestAccount::C => 3,
+        };
+        let (pk, _) = crypto::gen_keypair_from_seed(&[&[id][..], &encode_be_u64!(nonce)].concat());
+        pk
+    }
+
+    pub fn to_skey(&self, nonce: u64) -> SecretKey {
+        let id: u8 = match *self {
+            TestAccount::A => 1,
+            TestAccount::B => 2,
+            TestAccount::C => 3,
+        };
+        let (_, sk) = crypto::gen_keypair_from_seed(&[&[id][..], &encode_be_u64!(nonce)].concat());
+        sk
     }
 }
 
 #[cfg(any(test, feature = "test"))]
 /// Helper to create test `Send` transactions between the
 /// genesis test accounts. 
-pub fn send_coins(sender: TestAccount, receiver: TestAccount, amount: u64, fee: u64, nonce: u64) -> Tx {
+pub fn send_coins(sender: TestAccount, receiver: TestAccount, amount: u64, fee: u64, sender_nonce: u64) -> Tx {
     assert_ne!(sender, receiver);
+
+    let sender_pkey = sender.to_pkey(sender_nonce);
     
     let mut tx = Send {
-        from: sender.to_address().unwrap_normal(),
-        to: receiver.to_address(),
+        from: sender_pkey,
+        next_address: sender.to_signing_addr(sender_nonce + 1),
+        to: Address::Normal(receiver.to_perm_address()),
         amount: Balance::from_u64(amount),
         fee: Balance::from_u64(fee),
         asset_hash: crypto::hash_slice(crate::genesis::MAIN_CUR_NAME),
         fee_hash: crypto::hash_slice(crate::genesis::MAIN_CUR_NAME),
-        nonce,
+        nonce: sender_nonce,
         signature: None,
         hash: None,
     };
 
-    tx.sign(sender.to_skey());
+    tx.sign(sender.to_skey(sender_nonce));
     tx.compute_hash();
     Tx::Send(tx)
 }

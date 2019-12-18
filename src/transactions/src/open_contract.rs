@@ -24,9 +24,10 @@ use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
 use std::str;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OpenContract {
-    pub(crate) owner: NormalAddress,
+    pub(crate) creator: Pk,
+    pub(crate) next_address: NormalAddress,
     pub(crate) code: Vec<u8>,
     pub(crate) default_state: Vec<u8>,
     pub(crate) amount: Balance,
@@ -35,11 +36,11 @@ pub struct OpenContract {
     pub(crate) fee_hash: Hash,
     pub(crate) self_payable: bool,
     pub(crate) nonce: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) address: Option<ContractAddress>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) signature: Option<Signature>,
 }
 
@@ -53,69 +54,73 @@ impl OpenContract {
 
     /// Applies the open contract transaction to the provided database.
     ///
-    /// This function will panic if the `owner` account does not exist
+    /// This function will panic if the `creator` account does not exist
     /// or if the account address already exists in the ledger.
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
-        let bin_owner = &self.owner.to_bytes();
-        let bin_address = &self.address.clone().unwrap().to_bytes();
-        let bin_currency_hash = &self.asset_hash.0;
+        let bin_address = self.address.as_ref().unwrap().as_bytes();
+        let bin_asset_hash = &self.asset_hash.0;
         let bin_fee_hash = &self.fee_hash.0;
         let self_payable: Vec<u8> = if self.self_payable { vec![1] } else { vec![0] };
-
+        let creator_addr = NormalAddress::from_pkey(&self.creator);
         let code = &self.code;
         let default_state = &self.default_state;
 
-        // Convert addresses to strings
-        let owner = hex::encode(bin_owner);
-        let address = hex::encode(bin_address);
+        // Calculate address mapping key
+        //
+        // An address mapping is a mapping between
+        // the account's signing address and an 
+        // account's receiving address.
+        //
+        // They key of the address mapping has the following format:
+        // `<signing-address>.am`
+        let creator_addr_mapping_key = [creator_addr.as_bytes(), &b".am"[..]].concat();
+        let next_addr_mapping_key = [self.next_address.as_bytes(), &b".am"[..]].concat();
 
-        // Convert hashes to strings
-        let asset_hash = hex::encode(bin_currency_hash);
-        let fee_hash = hex::encode(bin_fee_hash);
+        // Retrieve creator account permanent address
+        let creator_perm_addr = trie.get(&creator_addr_mapping_key).unwrap().unwrap();
+        let creator_perm_addr = NormalAddress::from_bytes(&creator_perm_addr).unwrap();
 
         // Calculate nonce keys
         //
         // The key of a nonce has the following format:
         // `<account-address>.n`
-        let owner_nonce_key = format!("{}.n", owner);
-        let address_nonce_key = format!("{}.n", address);
-        let owner_nonce_key = owner_nonce_key.as_bytes();
-        let address_nonce_key = address_nonce_key.as_bytes();
+        let creator_nonce_key = [creator_perm_addr.as_bytes(), &b".n"[..]].concat();
+        let address_nonce_key = [bin_address, &b".n"[..]].concat();
 
-        if let Ok(Some(_)) = trie.get(&address_nonce_key) {
-            panic!("The created address already exists in the ledger!");
+        #[cfg(test)]
+        {
+            if let Ok(Some(_)) = trie.get(&address_nonce_key) {
+                panic!("The created address already exists in the ledger!");
+            }
         }
 
         // Calculate code key
         //
         // The key of a contract's code has the following format:
         // `<contract-address>.c`
-        let code_key = format!("{}.c", address);
-        let code_key = code_key.as_bytes();
+        let code_key = [bin_address, &b".c"[..]].concat();
 
         // Calculate state key
         //
         // The key of a contract's state has the following format:
         // `<contract-address>.q`
-        let state_key = format!("{}.q", address);
-        let state_key = state_key.as_bytes();
+        let state_key = [bin_address, &b".q"[..]].concat();
 
         // Calculate self payable key
         //
         // The key of a contract's self payable entry has the following format:
         // `<contract-address>.y`
-        let self_payable_key = format!("{}.y", address);
-        let self_payable_key = self_payable_key.as_bytes();
+        let self_payable_key = [bin_address, &b".y"[..]].concat();
 
         // Retrieve serialized nonce
-        let bin_owner_nonce = &trie.get(&owner_nonce_key).unwrap().unwrap();
+        let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
 
-        let mut nonce_rdr = Cursor::new(bin_owner_nonce);
+        let mut nonce_rdr = Cursor::new(bin_creator_nonce);
 
-        // Read the nonce of the owner
+        // Read the nonce of the creator
         let mut nonce = nonce_rdr.read_u64::<BigEndian>().unwrap();
 
-        // Increment owner nonce
+        // Increment creator nonce
         nonce += 1;
 
         let mut nonce_buf: Vec<u8> = Vec::with_capacity(8);
@@ -127,101 +132,108 @@ impl OpenContract {
         //
         // The key of a currency entry has the following format:
         // `<account-address>.<currency-hash>`
-        let owner_cur_key = format!("{}.{}", owner, asset_hash);
-        let owner_fee_key = format!("{}.{}", owner, fee_hash);
-        let address_cur_key = format!("{}.{}", address, asset_hash);
+        let creator_cur_key = [creator_perm_addr.as_bytes(), &b"."[..], bin_asset_hash].concat();
+        let creator_fee_key = [creator_perm_addr.as_bytes(), &b"."[..], bin_fee_hash].concat();
+        let address_cur_key = [bin_address, &b"."[..], bin_asset_hash].concat();
 
-        if fee_hash == asset_hash {
+        if bin_fee_hash == bin_asset_hash {
             // The transaction's fee is paid in the same currency
             // that is being transferred, so we only retrieve one
             // balance.
-            let mut owner_balance = unwrap!(
+            let mut creator_balance = unwrap!(
                 Balance::from_bytes(&unwrap!(
-                    trie.get(&owner_cur_key.as_bytes()).unwrap(),
-                    "The owner does not have an entry for the given currency"
+                    trie.get(&creator_cur_key).unwrap(),
+                    "The creator does not have an entry for the given currency"
                 )),
                 "Invalid stored balance format"
             );
 
-            // Subtract fee from owner balance
-            owner_balance -= self.fee.clone();
+            // Subtract fee from creator balance
+            creator_balance -= self.fee.clone();
 
-            // Subtract amount transferred from owner balance
-            owner_balance -= self.amount.clone();
+            // Subtract amount transferred from creator balance
+            creator_balance -= self.amount.clone();
 
             let receiver_balance = self.amount.clone();
 
             // Update trie
-            trie.insert(self_payable_key, &self_payable).unwrap();
-            trie.insert(state_key, default_state).unwrap();
-            trie.insert(code_key, code).unwrap();
-            trie.insert(owner_cur_key.as_bytes(), &owner_balance.to_bytes())
+            trie.insert(&self_payable_key, &self_payable).unwrap();
+            trie.insert(&state_key, default_state).unwrap();
+            trie.insert(&code_key, code).unwrap();
+            trie.insert(&creator_cur_key, &creator_balance.to_bytes())
                 .unwrap();
-            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes())
+            trie.insert(&address_cur_key, &receiver_balance.to_bytes())
                 .unwrap();
-            trie.insert(owner_nonce_key, &nonce_buf).unwrap();
-            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
+            trie.insert(&creator_nonce_key, &nonce_buf).unwrap();
+            trie.insert(&address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
                 .unwrap();
+
+            // Update creator address mapping
+            trie.remove(&creator_addr_mapping_key).unwrap();
+            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
         } else {
             // The transaction's fee is paid in a different currency
             // than the one being transferred so we retrieve both balances.
-            let mut owner_cur_balance = unwrap!(
+            let mut creator_cur_balance = unwrap!(
                 Balance::from_bytes(&unwrap!(
-                    trie.get(&owner_cur_key.as_bytes()).unwrap(),
-                    "The owner does not have an entry for the given currency"
+                    trie.get(&creator_cur_key).unwrap(),
+                    "The creator does not have an entry for the given currency"
                 )),
                 "Invalid stored balance format"
             );
 
-            let mut owner_fee_balance = unwrap!(
+            let mut creator_fee_balance = unwrap!(
                 Balance::from_bytes(&unwrap!(
-                    trie.get(&owner_fee_key.as_bytes()).unwrap(),
-                    "The owner does not have an entry for the given currency"
+                    trie.get(&creator_fee_key).unwrap(),
+                    "The creator does not have an entry for the given currency"
                 )),
                 "Invalid stored balance format"
             );
 
-            // Subtract fee from owner
-            owner_fee_balance -= self.fee.clone();
+            // Subtract fee from creator
+            creator_fee_balance -= self.fee.clone();
 
-            // Subtract amount transferred from owner
-            owner_cur_balance -= self.amount.clone();
+            // Subtract amount transferred from creator
+            creator_cur_balance -= self.amount.clone();
 
             let receiver_balance = self.amount.clone();
 
             // Update trie
-            trie.insert(self_payable_key, &self_payable).unwrap();
-            trie.insert(state_key, default_state).unwrap();
-            trie.insert(code_key, code).unwrap();
-            trie.insert(owner_cur_key.as_bytes(), &owner_cur_balance.to_bytes())
+            trie.insert(&self_payable_key, &self_payable).unwrap();
+            trie.insert(&state_key, default_state).unwrap();
+            trie.insert(&code_key, code).unwrap();
+            trie.insert(&creator_cur_key, &creator_cur_balance.to_bytes())
                 .unwrap();
-            trie.insert(owner_fee_key.as_bytes(), &owner_fee_balance.to_bytes())
+            trie.insert(&creator_fee_key, &creator_fee_balance.to_bytes())
                 .unwrap();
-            trie.insert(address_cur_key.as_bytes(), &receiver_balance.to_bytes())
+            trie.insert(&address_cur_key, &receiver_balance.to_bytes())
                 .unwrap();
-            trie.insert(owner_nonce_key, &nonce_buf).unwrap();
-            trie.insert(address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
+            trie.insert(&creator_nonce_key, &nonce_buf).unwrap();
+            trie.insert(&address_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
                 .unwrap();
+
+            // Update creator address mapping
+            trie.remove(&creator_addr_mapping_key).unwrap();
+            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
         }
     }
 
     /// Computes the address of the opened contract.
     ///
-    /// A contract's address is computed by appending the owner's
+    /// A contract's address is computed by appending the creator's
     /// address together with the code and the default state to
-    /// the owner's nonce. The address is the hash of the result.
+    /// the creator's nonce. The address is the hash of the result.
     pub fn compute_address(&mut self) {
         let mut buf: Vec<u8> = Vec::new();
 
-        let owner = &self.owner.to_bytes();
         let code = &self.code;
         let state = &self.default_state;
         let nonce = &self.nonce;
 
         buf.write_u64::<BigEndian>(*nonce).unwrap();
-        buf.append(&mut owner.to_vec());
-        buf.append(&mut code.to_vec());
-        buf.append(&mut state.to_vec());
+        buf.extend_from_slice(&self.creator.0);
+        buf.extend_from_slice(&code);
+        buf.extend_from_slice(&state);
 
         let result = crypto::hash_slice(&buf);
         self.address = Some(ContractAddress::new(result));
@@ -245,7 +257,7 @@ impl OpenContract {
         let message = assemble_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.owner.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.creator),
             None => false,
         }
     }
@@ -260,15 +272,16 @@ impl OpenContract {
     /// 5) State length             - 16bits
     /// 6) Code length              - 16bits
     /// 7) Nonce                    - 64bits
-    /// 8) Owner                    - 33byte binary
+    /// 8) Owner                    - 32byte binary
     /// 9) Address                  - 33byte binary
-    /// 10) Currency hash           - 32byte binary
-    /// 11) Fee hash                - 32byte binary
-    /// 12) Signature               - 64byte binary
-    /// 13) Amount                  - Binary of amount length
-    /// 14) Fee                     - Binary of fee length
-    /// 15) Default state           - Binary of state length
-    /// 16) Code                    - Binary of code length
+    /// 10) Next address            - 33byte binary
+    /// 11) Currency hash           - 32byte binary
+    /// 12) Fee hash                - 32byte binary
+    /// 13) Signature               - 64byte binary
+    /// 14) Amount                  - Binary of amount length
+    /// 15) Fee                     - Binary of fee length
+    /// 16) Default state           - Binary of state length
+    /// 17) Code                    - Binary of code length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -286,13 +299,10 @@ impl OpenContract {
         };
 
         let self_payable: u8 = if self.self_payable { 1 } else { 0 };
-        let owner = &self.owner.to_bytes();
-        let asset_hash = &&self.asset_hash.0;
-        let fee_hash = &&self.fee_hash.0;
         let code = &self.code;
         let default_state = &self.default_state;
-        let amount = &self.amount.to_bytes();
-        let fee = &self.fee.to_bytes();
+        let amount = self.amount.to_bytes();
+        let fee = self.fee.to_bytes();
         let nonce = &self.nonce;
 
         let amount_len = amount.len();
@@ -308,15 +318,16 @@ impl OpenContract {
         buffer.write_u16::<BigEndian>(code_len as u16).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
 
-        buffer.append(&mut owner.to_vec());
-        buffer.append(&mut address.to_vec());
-        buffer.append(&mut asset_hash.to_vec());
-        buffer.append(&mut fee_hash.to_vec());
-        buffer.append(&mut signature.to_vec());
-        buffer.append(&mut amount.to_vec());
-        buffer.append(&mut fee.to_vec());
-        buffer.append(&mut default_state.to_vec());
-        buffer.append(&mut code.to_vec());
+        buffer.extend_from_slice(&self.creator.0);
+        buffer.extend_from_slice(&address);
+        buffer.extend_from_slice(self.next_address.as_bytes());
+        buffer.extend_from_slice(&self.asset_hash.0);
+        buffer.extend_from_slice(&self.fee_hash.0);
+        buffer.extend_from_slice(&signature);
+        buffer.extend_from_slice(&amount);
+        buffer.extend_from_slice(&fee);
+        buffer.extend_from_slice(&default_state);
+        buffer.extend_from_slice(&code);
 
         Ok(buffer)
     }
@@ -389,15 +400,14 @@ impl OpenContract {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..16).collect();
 
-        let owner = if buf.len() > 33 as usize {
-            let owner_vec: Vec<u8> = buf.drain(..33).collect();
+        let creator = if buf.len() > 32 as usize {
+            let creator_vec: Vec<u8> = buf.drain(..32).collect();
+            let mut creator_bytes = [0; 32];
+            creator_bytes.copy_from_slice(&creator_vec);
 
-            match NormalAddress::from_bytes(&owner_vec) {
-                Ok(addr) => addr,
-                Err(err) => return Err(err),
-            }
+            Pk(creator_bytes)
         } else {
-            return Err("Incorrect packet structure! Buffer size is smaller than the size for the owner field");
+            return Err("Incorrect packet structure! Buffer size is smaller than the size for the creator field");
         };
 
         let address = if buf.len() > 33 as usize {
@@ -408,7 +418,18 @@ impl OpenContract {
                 Err(err) => return Err(err),
             }
         } else {
-            return Err("Incorrect packet structure! Buffer size is smaller than the size for the owner field");
+            return Err("Incorrect packet structure! Buffer size is smaller than the size for the creator field");
+        };
+
+        let next_address = if buf.len() > 33 as usize {
+            let next_address_vec: Vec<u8> = buf.drain(..33).collect();
+
+            match NormalAddress::from_bytes(&next_address_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err),
+            }
+        } else {
+            return Err("Incorrect packet structure! Buffer size is smaller than the size for the next address field");
         };
 
         let asset_hash = if buf.len() > 32 as usize {
@@ -479,15 +500,16 @@ impl OpenContract {
         };
 
         let mut open_contract = OpenContract {
-            owner: owner,
-            amount: amount,
-            asset_hash: asset_hash,
-            fee_hash: fee_hash,
-            fee: fee,
-            default_state: default_state,
-            self_payable: self_payable,
-            nonce: nonce,
-            code: code,
+            creator,
+            next_address,
+            amount,
+            asset_hash,
+            fee_hash,
+            fee,
+            default_state,
+            self_payable,
+            nonce,
+            code,
             address: Some(address),
             hash: None,
             signature: Some(signature),
@@ -507,22 +529,26 @@ impl OpenContract {
 
 fn assemble_message(obj: &OpenContract) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
-    let mut owner = obj.owner.to_bytes();
     let self_payable: u8 = if obj.self_payable { 1 } else { 0 };
-    let fee_hash = &obj.fee_hash.0;
+    let contract_address = obj.address.as_ref().unwrap().to_bytes();
     let code = &obj.code;
     let default_state = &obj.default_state;
-    let mut fee = obj.fee.to_bytes();
+    let amount = obj.amount.to_bytes();
+    let fee = obj.fee.to_bytes();
 
     buf.write_u8(self_payable).unwrap();
+    buf.write_u64::<BigEndian>(obj.nonce).unwrap();
 
     // Compose data to hash
-    buf.append(&mut owner);
-    buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut code.to_vec());
-    buf.append(&mut default_state.to_vec());
-    buf.append(&mut fee);
-
+    buf.extend_from_slice(&obj.creator.0);
+    buf.extend_from_slice(&obj.next_address.to_bytes());
+    buf.extend_from_slice(&contract_address);
+    buf.extend_from_slice(&obj.asset_hash.0);
+    buf.extend_from_slice(&obj.fee_hash.0);
+    buf.extend_from_slice(&code);
+    buf.extend_from_slice(&default_state);
+    buf.extend_from_slice(&amount);
+    buf.extend_from_slice(&fee);
     buf
 }
 
@@ -530,8 +556,10 @@ use quickcheck::Arbitrary;
 
 impl Arbitrary for OpenContract {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> OpenContract {
+        let (pk, _) = crypto::gen_keypair();
         let mut tx = OpenContract {
-            owner: Arbitrary::arbitrary(g),
+            creator: pk,
+            next_address: Arbitrary::arbitrary(g),
             code: Arbitrary::arbitrary(g),
             default_state: Arbitrary::arbitrary(g),
             self_payable: Arbitrary::arbitrary(g),
@@ -561,17 +589,20 @@ mod tests {
     #[test]
     fn apply_it_opens_a_contract() {
         let id = Identity::new();
-        let owner_addr = NormalAddress::from_pkey(*id.pkey());
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
+        let creator_next_addr = next_address.clone();
         let asset_hash = crypto::hash_slice(b"Test currency");
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
         let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
 
-        // Manually initialize owner balance
+        // Manually initialize creator balance
         test_helpers::init_balance(
             &mut trie,
-            Address::Normal(owner_addr.clone()),
+            creator_addr.clone(),
             asset_hash,
             b"10000.0",
         );
@@ -582,7 +613,8 @@ mod tests {
         let default_state: Vec<u8> = vec![0x1a, 0xff, 0x22, 0x2a];
 
         let mut tx = OpenContract {
-            owner: owner_addr,
+            creator: id.pkey().clone(),
+            next_address,
             fee: fee.clone(),
             code: code.clone(),
             default_state: default_state.clone(),
@@ -603,39 +635,34 @@ mod tests {
         // Apply transaction
         tx.apply(&mut trie);
 
-        // Commit changes
-        trie.commit();
+        let creator_nonce_key = [creator_addr.as_bytes(), &b".n"[..]].concat();
+        let receiver_nonce_key = [tx.address.as_ref().unwrap().as_bytes(), &b".n"[..]].concat();
+        let creator_addr_mapping_key = [creator_addr.as_bytes(), &b".am"[..]].concat();
+        let creator_next_addr_mapping_key = [creator_next_addr.as_bytes(), &b".am"[..]].concat();
 
-        let owner_nonce_key = format!("{}.n", hex::encode(&owner_addr.to_bytes()));
-        let owner_nonce_key = owner_nonce_key.as_bytes();
-        let receiver_nonce_key =
-            format!("{}.n", hex::encode(tx.address.clone().unwrap().to_bytes()));
-        let receiver_nonce_key = receiver_nonce_key.as_bytes();
+        let code_key = [tx.address.as_ref().unwrap().as_bytes(), &b".c"[..]].concat();
+        let state_key = [tx.address.as_ref().unwrap().as_bytes(), &b".q"[..]].concat();
+        let self_payable_key = [tx.address.as_ref().unwrap().as_bytes(), &b".y"[..]].concat();
 
-        let code_key = format!("{}.c", hex::encode(tx.address.clone().unwrap().to_bytes()));
-        let code_key = code_key.as_bytes();
-        let state_key = format!("{}.q", hex::encode(tx.address.clone().unwrap().to_bytes()));
-        let state_key = state_key.as_bytes();
-        let self_payable_key = format!("{}.y", hex::encode(tx.address.unwrap().to_bytes()));
-        let self_payable_key = self_payable_key.as_bytes();
-
-        let bin_owner_nonce = &trie.get(&owner_nonce_key).unwrap().unwrap();
+        let bin_creator_nonce = &trie.get(&creator_nonce_key).unwrap().unwrap();
         let bin_receiver_nonce = &trie.get(&receiver_nonce_key).unwrap().unwrap();
 
         let bin_asset_hash = asset_hash.to_vec();
-        let hex_asset_hash = hex::encode(&bin_asset_hash);
+        let creator_balance_key = [creator_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
 
-        let owner_balance_key =
-            format!("{}.{}", hex::encode(&owner_addr.to_bytes()), hex_asset_hash);
-        let owner_balance_key = owner_balance_key.as_bytes();
-
-        let balance = Balance::from_bytes(&trie.get(&owner_balance_key).unwrap().unwrap()).unwrap();
+        let balance = Balance::from_bytes(&trie.get(&creator_balance_key).unwrap().unwrap()).unwrap();
         let written_code = trie.get(&code_key).unwrap().unwrap();
         let written_state = trie.get(&state_key).unwrap().unwrap();
         let written_self_payable = trie.get(&self_payable_key).unwrap().unwrap();
 
+        assert_eq!(trie.get(&creator_addr_mapping_key).unwrap(), None);
+        let creator_next_addr_mapping = trie.get(&creator_next_addr_mapping_key).unwrap().unwrap();
+
+        // Check address mappings
+        assert_eq!(creator_next_addr_mapping, creator_addr.as_bytes());
+
         // Check nonces
-        assert_eq!(bin_owner_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
+        assert_eq!(bin_creator_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 1]);
         assert_eq!(bin_receiver_nonce.to_vec(), vec![0, 0, 0, 0, 0, 0, 0, 0]);
 
         // Verify that the correct amount of funds have been subtracted from the sender
@@ -675,9 +702,11 @@ mod tests {
             self_payable: bool
         ) -> bool {
             let id = Identity::new();
+            let id2 = Identity::new();
 
             let mut tx = OpenContract {
-                owner: NormalAddress::from_pkey(*id.pkey()),
+                creator: id.pkey().clone(),
+                next_address: NormalAddress::from_pkey(id2.pkey()),
                 amount: amount,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,

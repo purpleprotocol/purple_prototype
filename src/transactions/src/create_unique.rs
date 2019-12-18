@@ -27,10 +27,13 @@ use std::io::Cursor;
 pub const ASSET_NAME_SIZE: usize = 32;
 pub const META_FIELD_SIZE: usize = 32;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateUnique {
     /// The asset creator's address
-    pub(crate) creator: NormalAddress,
+    pub(crate) creator: Pk,
+
+    /// The next address of the creator
+    pub(crate) next_address: NormalAddress, 
 
     /// The receiver of the asset
     pub(crate) receiver: Address,
@@ -57,9 +60,9 @@ pub struct CreateUnique {
     // Nonce
     pub(crate) nonce: u64,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) signature: Option<Signature>,
 }
 
@@ -94,7 +97,7 @@ impl CreateUnique {
         let message = assemble_message(&self);
 
         match self.signature {
-            Some(ref sig) => crypto::verify(&message, sig, &self.creator.pkey()),
+            Some(ref sig) => crypto::verify(&message, sig, &self.creator),
             None => false,
         }
     }
@@ -108,26 +111,20 @@ impl CreateUnique {
     /// 4) Nonce                - 64bits
     /// 5) Creator              - 33byte binary
     /// 6) Receiver             - 33byte binary
-    /// 7) Asset hash           - 32byte binary
-    /// 8) Fee hash             - 32byte binary
-    /// 9) Name                 - 32byte binary
-    /// 10) Signature           - 64byte binary
-    /// 11) Fee                 - Binary of fee length
-    /// 12) Meta1 (Optional)    - 32byte binary
-    /// 13) Meta2 (Optional)    - 32byte binary
-    /// 14) Meta3 (Optional)    - 32byte binary
-    /// 15) Meta4 (Optional)    - 32byte binary
-    /// 16) Meta5 (Optional)    - 32byte binary
+    /// 7) Next address         - 33byte binary
+    /// 8) Asset hash           - 32byte binary
+    /// 9) Fee hash             - 32byte binary
+    /// 10) Name                - 32byte binary
+    /// 11) Signature           - 64byte binary
+    /// 12) Fee                 - Binary of fee length
+    /// 13) Meta1 (Optional)    - 32byte binary
+    /// 14) Meta2 (Optional)    - 32byte binary
+    /// 15) Meta3 (Optional)    - 32byte binary
+    /// 16) Meta4 (Optional)    - 32byte binary
+    /// 17) Meta5 (Optional)    - 32byte binary
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buf: Vec<u8> = Vec::new();
         let mut bitmask: u8 = 0;
-
-        // Prepare the fields
-        let hash = if let Some(hash) = &self.hash {
-            &hash.0
-        } else {
-            return Err("Hash field is missing");
-        };
 
         let mut signature = if let Some(signature) = &self.signature {
             signature.to_bytes()
@@ -152,12 +149,12 @@ impl CreateUnique {
         };
 
         let tx_type: u8 = Self::TX_TYPE;
-        let creator = &self.creator.to_bytes();
-        let receiver = &self.receiver.to_bytes();
-        let asset_hash = &&self.asset_hash.0;
-        let fee_hash = &&self.fee_hash.0;
+        let receiver = self.receiver.to_bytes();
+        let next_address = self.next_address.to_bytes();
+        let asset_hash = &self.asset_hash.0;
+        let fee_hash = &self.fee_hash.0;
         let name = &self.name;
-        let fee = &self.fee.to_bytes();
+        let fee = self.fee.to_bytes();
         let fee_len = fee.len();
         let nonce = &self.nonce;
 
@@ -166,34 +163,35 @@ impl CreateUnique {
         buf.write_u8(fee_len as u8).unwrap();
         buf.write_u8(bitmask).unwrap();
         buf.write_u64::<BigEndian>(*nonce).unwrap();
-        buf.append(&mut creator.to_vec());
-        buf.append(&mut receiver.to_vec());
 
-        buf.append(&mut asset_hash.to_vec());
-        buf.append(&mut fee_hash.to_vec());
-        buf.append(&mut name.to_vec());
-        buf.append(&mut signature);
-        buf.append(&mut fee.to_vec());
+        buf.extend_from_slice(&self.creator.0);
+        buf.extend_from_slice(&receiver);
+        buf.extend_from_slice(&next_address);
+        buf.extend_from_slice(asset_hash);
+        buf.extend_from_slice(fee_hash);
+        buf.extend_from_slice(name);
+        buf.extend_from_slice(&signature);
+        buf.extend_from_slice(&fee);
 
         if bitmask.get(0) {
             let meta1 = &self.meta1.unwrap();
-            buf.append(&mut meta1.to_vec());
+            buf.extend_from_slice(&meta1[..]);
         };
         if bitmask.get(1) {
             let meta2 = &self.meta2.unwrap();
-            buf.append(&mut meta2.to_vec());
+            buf.extend_from_slice(&meta2[..]);
         };
         if bitmask.get(2) {
             let meta3 = &self.meta3.unwrap();
-            buf.append(&mut meta3.to_vec());
+            buf.extend_from_slice(&meta3[..]);
         };
         if bitmask.get(3) {
             let meta4 = &self.meta4.unwrap();
-            buf.append(&mut meta4.to_vec());
+            buf.extend_from_slice(&meta4[..]);
         };
         if bitmask.get(4) {
             let meta5 = &self.meta5.unwrap();
-            buf.append(&mut meta5.to_vec());
+            buf.extend_from_slice(&meta5[..]);
         };
 
         Ok(buf)
@@ -238,13 +236,12 @@ impl CreateUnique {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..11).collect();
 
-        let creator = if buf.len() > 33 as usize {
-            let creator_vec: Vec<u8> = buf.drain(..33).collect();
+        let creator = if buf.len() > 32 as usize {
+            let creator_vec: Vec<u8> = buf.drain(..32).collect();
+            let mut creator_bytes = [0; 32];
 
-            match NormalAddress::from_bytes(&creator_vec) {
-                Ok(addr) => addr,
-                Err(err) => return Err(err),
-            }
+            creator_bytes.copy_from_slice(&creator_vec);
+            Pk(creator_bytes)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -253,6 +250,17 @@ impl CreateUnique {
             let receiver_vec: Vec<u8> = buf.drain(..33).collect();
 
             match Address::from_bytes(&receiver_vec) {
+                Ok(addr) => addr,
+                Err(err) => return Err(err),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let next_address = if buf.len() > 33 as usize {
+            let next_address_vec: Vec<u8> = buf.drain(..33).collect();
+
+            match NormalAddress::from_bytes(&next_address_vec) {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
@@ -387,18 +395,19 @@ impl CreateUnique {
         };
 
         let mut create_unique = CreateUnique {
-            creator: creator,
-            receiver: receiver,
-            asset_hash: asset_hash,
-            fee_hash: fee_hash,
-            name: name,
-            meta1: meta1,
-            meta2: meta2,
-            meta3: meta3,
-            meta4: meta4,
-            meta5: meta5,
-            fee: fee,
-            nonce: nonce,
+            creator,
+            receiver,
+            next_address,
+            asset_hash,
+            fee_hash,
+            name,
+            meta1,
+            meta2,
+            meta3,
+            meta4,
+            meta5,
+            fee,
+            nonce,
             hash: None,
             signature: Some(signature),
         };
@@ -417,42 +426,44 @@ impl CreateUnique {
 
 fn assemble_message(obj: &CreateUnique) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
-    let mut creator = obj.creator.to_bytes();
-    let mut receiver = obj.receiver.to_bytes();
-    let mut name = obj.name;
-    let mut fee = obj.fee.to_bytes();
+    let next_address = obj.next_address.to_bytes();
+    let receiver = obj.receiver.to_bytes();
+    let name = obj.name;
+    let fee = obj.fee.to_bytes();
     let asset_hash = obj.asset_hash.0;
     let fee_hash = obj.fee_hash.0;
 
     // Compose data to hash
-    buf.append(&mut creator);
-    buf.append(&mut receiver);
-    buf.append(&mut name.to_vec());
+    buf.write_u64::<BigEndian>(obj.nonce).unwrap();
+    buf.extend_from_slice(&obj.creator.0);
+    buf.extend_from_slice(&receiver);
+    buf.extend_from_slice(&next_address);
+    buf.extend_from_slice(&name);
 
     // Write meta if present
     if let Some(meta) = obj.meta1 {
-        buf.append(&mut meta.to_vec());
+        buf.extend_from_slice(&meta);
     }
 
     if let Some(meta) = obj.meta2 {
-        buf.append(&mut meta.to_vec());
+        buf.extend_from_slice(&meta);
     }
 
     if let Some(meta) = obj.meta3 {
-        buf.append(&mut meta.to_vec());
+        buf.extend_from_slice(&meta);
     }
 
     if let Some(meta) = obj.meta4 {
-        buf.append(&mut meta.to_vec());
+        buf.extend_from_slice(&meta);
     }
 
     if let Some(meta) = obj.meta5 {
-        buf.append(&mut meta.to_vec());
+        buf.extend_from_slice(&meta);
     }
 
-    buf.append(&mut asset_hash.to_vec());
-    buf.append(&mut fee_hash.to_vec());
-    buf.append(&mut fee);
+    buf.extend_from_slice(&asset_hash);
+    buf.extend_from_slice(&fee_hash);
+    buf.extend_from_slice(&fee);
 
     buf
 }
@@ -508,16 +519,18 @@ impl Arbitrary for CreateUnique {
             None
         };
 
+        let (pk, _) = crypto::gen_keypair();
         let mut tx = CreateUnique {
-            creator: Arbitrary::arbitrary(g),
+            creator: pk,
+            next_address: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
             asset_hash: Arbitrary::arbitrary(g),
             name: name.0,
-            meta1: meta1,
-            meta2: meta2,
-            meta3: meta3,
-            meta4: meta4,
-            meta5: meta5,
+            meta1,
+            meta2,
+            meta3,
+            meta4,
+            meta5,
             fee_hash: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
@@ -560,6 +573,7 @@ mod tests {
             fee_hash: Hash
         ) -> bool {
             let id = Identity::new();
+            let id2 = Identity::new();
             let (
                 meta1,
                 meta2,
@@ -599,14 +613,15 @@ mod tests {
             };
 
             let mut tx = CreateUnique {
-                creator: NormalAddress::from_pkey(*id.pkey()),
+                creator: id.pkey().clone(),
+                next_address: NormalAddress::from_pkey(id2.pkey()),
                 receiver: receiver,
                 name: name.0,
-                meta1: meta1,
-                meta2: meta2,
-                meta3: meta3,
-                meta4: meta4,
-                meta5: meta5,
+                meta1,
+                meta2,
+                meta3,
+                meta4,
+                meta5,
                 fee: fee,
                 asset_hash: asset_hash,
                 fee_hash: fee_hash,

@@ -16,19 +16,20 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::{FromBase58, PublicKey, ToBase58};
+use crypto::{FromBase58, PublicKey, Hash, ToBase58};
 use quickcheck::Arbitrary;
 use rand::Rng;
 use std::fmt;
+use std::hash::{Hash as HashTrait, Hasher};
 
-#[derive(Hash, Copy, PartialEq, Eq, Serialize, Deserialize, Clone, Debug, PartialOrd, Ord)]
-pub struct NormalAddress(PublicKey);
+#[derive(Copy, Clone)]
+pub struct NormalAddress([u8; 33]);
 
 impl NormalAddress {
     pub const ADDR_TYPE: u8 = 1;
 
     pub fn to_base58(&self) -> String {
-        self.to_bytes().to_base58()
+        self.0.to_base58()
     }
 
     pub fn from_base58(input: &str) -> Result<NormalAddress, &'static str> {
@@ -40,26 +41,37 @@ impl NormalAddress {
 
     pub fn random() -> NormalAddress {
         let (pk, _) = crypto::gen_keypair();
-        NormalAddress::from_pkey(pk)
+        NormalAddress::from_pkey(&pk)
     }
 
-    pub fn from_pkey(pkey: PublicKey) -> NormalAddress {
-        NormalAddress(pkey)
+    pub fn from_pkey(pkey: &PublicKey) -> NormalAddress {
+        let pk_bytes = &pkey.0;
+        let pkey_hash = crypto::hash_slice(pk_bytes);
+        let mut addr_bytes = [0; 33];
+        let mut idx = 1;
+        
+        addr_bytes[0] = Self::ADDR_TYPE;
+
+        for byte in &pkey_hash.0 {
+            addr_bytes[idx] = *byte;
+            idx += 1;
+        }
+
+        NormalAddress(addr_bytes)
     }
 
-    pub fn pkey(&self) -> PublicKey {
-        self.0.clone()
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
     }
 
     pub fn from_bytes(bin: &[u8]) -> Result<NormalAddress, &'static str> {
         let addr_type = bin[0];
 
         if bin.len() == 33 && addr_type == Self::ADDR_TYPE {
-            let (_, tail) = bin.split_at(1);
-            let mut pkey = [0; 32];
-            pkey.copy_from_slice(&tail);
+            let mut bytes = [0; 33];
+            bytes.copy_from_slice(&bin);
 
-            Ok(NormalAddress(PublicKey(pkey)))
+            Ok(NormalAddress(bytes))
         } else if addr_type != Self::ADDR_TYPE {
             Err("Bad address type")
         } else {
@@ -68,23 +80,35 @@ impl NormalAddress {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::with_capacity(33);
-        let bytes = (self.0).0;
+        self.0.to_vec()
+    }
+}
 
-        // Push address type
-        result.push(Self::ADDR_TYPE);
+fn unsize<T>(x: &[T]) -> &[T] { x }
 
-        for byte in bytes.iter() {
-            result.push(*byte);
-        }
+impl PartialEq for NormalAddress {
+    fn eq(&self, other: &NormalAddress) -> bool {
+        unsize(&self.0) == unsize(&other.0)
+    }
+}
 
-        result
+impl Eq for NormalAddress { }
+
+impl HashTrait for NormalAddress {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl fmt::Debug for NormalAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", hex::encode(self.to_bytes()))
     }
 }
 
 impl fmt::Display for NormalAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(self.to_bytes()))
+        write!(f, "{}", self.to_base58())
     }
 }
 
@@ -93,19 +117,17 @@ impl Arbitrary for NormalAddress {
         let mut rng = rand::thread_rng();
         let bytes: Vec<u8> = (0..32).map(|_| rng.gen_range(1, 255)).collect();
 
-        let mut result = [0; 32];
-        result.copy_from_slice(&bytes);
+        let mut addr_bytes = [0; 33];
+        let mut idx = 1;
+        
+        addr_bytes[0] = Self::ADDR_TYPE;
 
-        NormalAddress(PublicKey(result))
-    }
+        for byte in &bytes {
+            addr_bytes[idx] = *byte;
+            idx += 1;
+        }
 
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        Box::new((&(&self.0).0).to_vec().shrink().map(|p| {
-            let mut result = [0; 32];
-            result.copy_from_slice(&p);
-
-            NormalAddress(PublicKey(result))
-        }))
+        NormalAddress(addr_bytes)
     }
 }
 
