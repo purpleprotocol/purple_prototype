@@ -58,7 +58,6 @@ impl Send {
             return false;
         }
 
-        let bin_sender = &self.from.0;
         let bin_asset_hash = &self.asset_hash.0;
         let bin_fee_hash = &self.fee_hash.0;
 
@@ -69,9 +68,14 @@ impl Send {
             return false;
         }
 
-        // TODO: Validate against sending to an un-existing contract address
-        // which will result in a panic with the current implementation.
-        unimplemented!();
+        // Validate against sending to a non-existing contract address
+        if let Address::Contract(ref addr) = self.to {
+            let to_nonce_key = [addr.as_bytes(), &b".n"[..]].concat();
+
+            if trie.get(&to_nonce_key).unwrap().is_none() {
+                return false;
+            }
+        }
 
         // Calculate address mapping key
         //
@@ -105,8 +109,8 @@ impl Send {
         //
         // The key of a currency entry has the following format:
         // `<permanent-addr>.<currency-hash>`
-        let cur_key = [permanent_addr.as_bytes(), &bin_asset_hash[..]].concat();
-        let fee_key = [permanent_addr.as_bytes(), &bin_fee_hash[..]].concat();
+        let cur_key = [permanent_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
+        let fee_key = [permanent_addr.as_bytes(), &b"."[..], &bin_fee_hash[..]].concat();
 
         // Retrieve serialized nonce
         let bin_nonce = match trie.get(&nonce_key) {
@@ -115,7 +119,7 @@ impl Send {
             Err(err) => panic!(err),
         };
 
-        let mut stored_nonce = decode_be_u64!(bin_nonce).unwrap();
+        let stored_nonce = decode_be_u64!(bin_nonce).unwrap();
         if stored_nonce + 1 != self.nonce {
             return false;
         }
@@ -260,8 +264,8 @@ impl Send {
                     trie.insert(&from_nonce_key, &from_nonce).unwrap();
 
                     // Update sender address mapping
-                    trie.remove(&from_addr_mapping_key).unwrap().unwrap();
-                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap().unwrap();
+                    trie.remove(&from_addr_mapping_key).unwrap();
+                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap();
                 } else {
                     // The transaction's fee is paid in a different currency
                     // than the one being transferred so we retrieve both balances.
@@ -306,8 +310,8 @@ impl Send {
                     trie.insert(&from_nonce_key, &from_nonce).unwrap();
 
                     // Update sender address mapping
-                    trie.remove(&from_addr_mapping_key).unwrap().unwrap();
-                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap().unwrap();
+                    trie.remove(&from_addr_mapping_key).unwrap();
+                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap();
                 }
             }
             Ok(None) => {
@@ -350,8 +354,8 @@ impl Send {
                         trie.insert(&to_addr_mapping_key, self.to.as_bytes()).unwrap();
 
                         // Update sender address mapping
-                        trie.remove(&from_addr_mapping_key).unwrap().unwrap();
-                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap().unwrap();
+                        trie.remove(&from_addr_mapping_key).unwrap();
+                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap();
                     } else {
                         // The transaction's fee is paid in a different currency
                         // than the one being transferred so we retrieve both balances.
@@ -394,8 +398,8 @@ impl Send {
                         trie.insert(&to_addr_mapping_key, self.to.as_bytes()).unwrap();
 
                         // Update sender address mapping
-                        trie.remove(&from_addr_mapping_key).unwrap().unwrap();
-                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap().unwrap();
+                        trie.remove(&from_addr_mapping_key).unwrap();
+                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap();
                     }
                 } else {
                     panic!("The receiving account does not exist and it's address is not a normal one!")
@@ -680,7 +684,7 @@ mod tests {
     extern crate test_helpers;
 
     use super::*;
-    use account::NormalAddress;
+    use account::{ContractAddress, NormalAddress};
     use crypto::Identity;
 
     #[test]
@@ -772,7 +776,6 @@ mod tests {
     #[test]
     fn validate_different_currencies() {
         let from_id = Identity::new();
-        let to_id = Identity::new();
         let from_id2 = Identity::new();
         let to_id = Identity::new();
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
@@ -802,7 +805,7 @@ mod tests {
             amount: amount.clone(),
             fee: fee.clone(),
             asset_hash: asset_hash,
-            fee_hash: asset_hash,
+            fee_hash: fee_hash,
             nonce: 1,
             signature: None,
             hash: None,
@@ -949,6 +952,49 @@ mod tests {
     }
 
     #[test]
+    fn validate_fails_on_sending_to_non_existing_contract() {
+        let from_id = Identity::new();
+        let from_id2 = Identity::new();
+        let from_addr = NormalAddress::from_pkey(&from_id.pkey());
+        let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
+        let addr_hash = crypto::hash_slice(b"test_contract");
+        let to_addr = ContractAddress::new(addr_hash);
+        let asset_hash = crypto::hash_slice(b"Test currency");
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = Hash::NULL_RLP;
+
+        {
+            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+
+            // Manually initialize sender balance
+            test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
+        }
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+
+        let mut tx = Send {
+            from: *from_id.pkey(),
+            next_address: from_next_addr,
+            to: Address::Contract(to_addr.clone()),
+            amount: amount.clone(),
+            fee: fee.clone(),
+            asset_hash: asset_hash,
+            fee_hash: asset_hash,
+            nonce: 1,
+            signature: None,
+            hash: None,
+        };
+
+        tx.sign(from_id.skey().clone());
+        tx.compute_hash();
+
+        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
     fn apply_it_creates_a_new_account() {
         let from_id = Identity::new();
         let from_id2 = Identity::new();
@@ -1075,7 +1121,7 @@ mod tests {
 
         let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
 
-        let from_nonce_key = [from_next_addr.as_bytes(), &b".n"[..]].concat();
+        let from_nonce_key = [from_addr.as_bytes(), &b".n"[..]].concat();
         let to_nonce_key = [to_addr.as_bytes(), &b".n"[..]].concat();
         let from_addr_mapping_key = [from_addr.as_bytes(), &b".am"[..]].concat();
         let from_next_addr_mapping_key = [from_next_addr.as_bytes(), &b".am"[..]].concat();
@@ -1084,7 +1130,7 @@ mod tests {
         let bin_to_nonce = &trie.get(&to_nonce_key).unwrap().unwrap();
 
         let bin_asset_hash = asset_hash.to_vec();
-        let sender_balance_key = [from_next_addr.as_bytes(), &b"."[..], &bin_asset_hash].concat();
+        let sender_balance_key = [from_addr.as_bytes(), &b"."[..], &bin_asset_hash].concat();
         let receiver_balance_key = [to_addr.as_bytes(), &b"."[..], &bin_asset_hash].concat();
 
         let sender_balance =

@@ -63,5 +63,4 @@ pub fn init_balance(
     trie.insert(&cur_key, &balance).unwrap();
     trie.insert(&nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
         .unwrap();
-    trie.commit();
 }
