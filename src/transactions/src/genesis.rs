@@ -22,6 +22,9 @@ use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use std::default::Default;
 
+#[cfg(any(test, feature = "test"))]
+use crate::TestAccount;
+
 /// The name of the main currency
 pub const MAIN_CUR_NAME: &'static [u8] = b"purple";
 
@@ -57,15 +60,29 @@ impl Genesis {
         let coin_supply = Balance::from_u64(self.coin_supply).to_bytes();
         let mut coinbase_supply = COIN_SUPPLY;
 
+        #[cfg(any(test, feature = "test"))]
+        let iterable_vec: Vec<(NormalAddress, u64)> = vec![
+            (TestAccount::A.to_perm_address(), 100000), 
+            (TestAccount::B.to_perm_address(), 100000),
+            (TestAccount::C.to_perm_address(), 100000),
+        ];
+
+        #[cfg(any(test, feature = "test"))]
+        let iterable = iterable_vec.iter();
+
+        #[cfg(not(any(test, feature = "test")))]
+        let iterable = INIT_ACCOUNTS
+            .iter()
+            .map(|(a, b)| (NormalAddress::from_base58(a).unwrap(), b));
+
         // Write initial balances
-        for (addr, balance) in INIT_ACCOUNTS.iter() {
+        for (addr, balance) in iterable {
             if *balance > coinbase_supply {
                 panic!("We are assigning more coins than there are in the coinbase! This shouldn't ever happen...");
             }
 
             coinbase_supply -= balance;
 
-            let addr = NormalAddress::from_base58(addr).unwrap();
             let nonce_key = [addr.as_bytes(), &b".n"[..]].concat();
             let addr_mapping_key = [addr.as_bytes(), &b".am"[..]].concat();
             let cur_key = [addr.as_bytes(), &b"."[..], bin_asset_hash].concat();

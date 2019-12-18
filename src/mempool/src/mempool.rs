@@ -20,7 +20,7 @@
 
 use crate::error::MempoolErr;
 use chain::PowChainRef;
-use account::{Address, Balance};
+use account::{NormalAddress, Address, Balance};
 use chrono::{DateTime, Utc};
 use hashbrown::{HashSet, HashMap};
 use transactions::Tx;
@@ -31,10 +31,8 @@ use crypto::Hash;
 use std::sync::Arc;
 
 /// How far into the future a transaction can be 
-/// in order to be accepted. If the tx's nonce is
-/// greater than the current account's nonce + NONCE_LIMIT
-/// it will be rejected.
-const NONCE_LIMIT: u64 = 10;
+/// in order to be accepted. 
+const FUTURE_LIMIT: u64 = 10;
 
 /// Memory pool used to store valid yet not processed
 /// transactions.
@@ -64,10 +62,18 @@ pub struct Mempool {
     /// map between transaction fees and transaction hashes.
     fee_map: HashMap<Hash, BTreeMap<Balance, VecDeque<Hash>>>,
 
-    /// Mapping between addresses that have issued transactions
-    /// which are currently stored in the mempool and the sub-mapping
-    /// of transaction nonces and their hashes.
-    address_mappings: HashMap<Address, BTreeMap<u64, Hash>>,
+    /// Mapping between signing addresses that have issued 
+    /// transactions which are currently stored in the mempool 
+    /// and their next addresses.
+    address_mappings: HashMap<NormalAddress, NormalAddress>,
+
+    /// Mapping between signing addresses and their previous
+    /// signing addresses. Note that this does not contain orphan
+    /// entries.
+    address_reverse_mappings: HashMap<NormalAddress, NormalAddress>,
+
+    /// Mapping between signing addresses and their transaction hashes.
+    address_hash_mappings: HashMap<NormalAddress, Hash>,
 
     /// Vector of preferred currencies. The element at
     /// index 0 in the vector is the first preferred,
@@ -114,6 +120,8 @@ impl Mempool {
             timestamp_lookup: HashMap::new(),
             fee_map: HashMap::new(),
             address_mappings: HashMap::new(),
+            address_reverse_mappings: HashMap::new(),
+            address_hash_mappings: HashMap::new(),
             orphan_set: HashSet::new(),
             timestamp_reverse_lookup: BTreeMap::new(),
             max_size,
@@ -138,62 +146,25 @@ impl Mempool {
     /// to remove any dependent transactions as well.
     pub fn remove(&mut self, tx_hash: &Hash) -> Option<Arc<Tx>> {
         let tx = self.tx_lookup.remove(tx_hash)?;
-        let address = tx.creator_address();
-        let nonce = tx.nonce();
+        let signing_address = tx.creator_signing_address();
         let fee = tx.fee();
         let fee_hash = tx.fee_hash();
         let mut remove_fee_map = false;
-        let mut remove_nonces_mapping = false;
 
         // Clean up from address mappings 
-        {
-            {
-                let nonces_mapping = self.address_mappings.get_mut(&address).unwrap(); 
-                nonces_mapping.remove(&nonce).unwrap();
-            }
+        let mut next_address = self.address_mappings.remove(&signing_address)?;
 
-            let nonces_mapping = self.address_mappings.get(&address).unwrap(); 
-
-            if nonces_mapping.is_empty() {
-                remove_nonces_mapping = true;
-            } else {
-                // If the removed transaction is not an orphan, we have
-                // check if there are any subsequent transactions that 
-                // should be orphaned.
-                if !self.orphan_set.contains(tx_hash) {
-                    // Orphan subsequent transactions if there are any
-                    // and they do not directly follow the nonce listed 
-                    // in the state.
-                    if let Some(account_nonce) = self.get_account_nonce(&address) {
-                        if account_nonce > nonce {
-                            // Remove any old transactions i.e. 
-                            // lower or equal to the account's nonce
-                            for (_, tx_hash) in nonces_mapping.range(..nonce) {
-                                self.orphan_set.insert(tx_hash.clone());
-                            }
-                        } else if account_nonce < nonce {
-                            // Orphan transactions that follow the removed nonce
-                            for (_, tx_hash) in nonces_mapping.range(nonce..) {
-                                self.orphan_set.insert(tx_hash.clone());
-                            }
-                        } else {
-                            // Nonces are equal, do nothing
-                        }
-                    } else {
-                        // Orphan transactions that follow the removed nonce
-                        for (_, tx_hash) in nonces_mapping.range(nonce..) {
-                            self.orphan_set.insert(tx_hash.clone());
-                        }
-                    }
-                }
-            }
+        // Orphan any subsequent transactions
+        while let Some(next_signing_address) = self.address_mappings.get(&next_address) {
+            let tx_hash = self.address_hash_mappings.get(&next_signing_address).unwrap(); 
+            self.address_reverse_mappings.remove(&next_signing_address);
+            if !self.orphan_set.remove(&tx_hash) {
+                break;
+            };
+            next_address = next_signing_address.clone();
         }
 
         self.orphan_set.remove(tx_hash);
-
-        if remove_nonces_mapping {
-            self.address_mappings.remove(&address).unwrap();
-        }
 
         // Clean entry from timestamp lookups
         if let Some(timestamp) = self.timestamp_lookup.remove(tx_hash) {
@@ -234,9 +205,11 @@ impl Mempool {
             return Err(MempoolErr::Full);
         }
 
-        let tx_addr = tx.creator_address();
+        let tx_signing_addr = tx.creator_signing_address();
+        let tx_next_addr = tx.next_address();
         let tx_nonce = tx.nonce();
         let tx_hash = tx.tx_hash().unwrap();
+        let mut is_orphan = true;
 
         // Check for existence
         if self.exists(&tx_hash) {
@@ -244,24 +217,16 @@ impl Mempool {
         }
 
         // Check for double spends
-        let double_spend = {
-            if let Some(nonce_mapping) = self.address_mappings.get(&tx_addr) {
-                nonce_mapping.get(&tx_nonce).is_some()
-            } else {
-                false
-            }
-        };
-
-        if double_spend {
+        if self.address_mappings.get(&tx_signing_addr).is_some() {
             return Err(MempoolErr::DoubleSpend);
         }
 
-        let account_nonce = self.get_account_nonce(&tx_addr);
+        let account_nonce = self.get_account_nonce(&Address::Normal(tx_signing_addr));
 
         // Validate transaction against the current state if 
         // it directly follows the nonce listed in the state.
         if let Some(account_nonce) = account_nonce {
-            if tx_nonce > account_nonce + NONCE_LIMIT {
+            if tx_nonce > account_nonce + FUTURE_LIMIT {
                 return Err(MempoolErr::TooFarIntoFuture);
             }
 
@@ -276,10 +241,12 @@ impl Mempool {
                         println!("DEBUG CHAIN STATE VALIDATION FAILED WITH EXISTING ACCOUNT");
                     }
                     return Err(MempoolErr::BadTx); 
-                }
+                } 
+
+                is_orphan = false;
             }
         } else {
-            if tx_nonce > NONCE_LIMIT {
+            if tx_nonce > FUTURE_LIMIT {
                 return Err(MempoolErr::TooFarIntoFuture);
             }
 
@@ -295,6 +262,8 @@ impl Mempool {
                     }
                    return Err(MempoolErr::BadTx); 
                 }
+
+                is_orphan = false;
             }
         }
 
@@ -327,93 +296,19 @@ impl Mempool {
             self.fee_map.insert(tx_fee_cur, cur_entry);
         }
 
-        // Place transaction in address mappings, also updating the orphans set
-        if let Some(addr_entry) = self.address_mappings.get_mut(&tx_addr) {
-            // Check if the transaction is an orphan
-            if let Some(account_nonce) = account_nonce {
-                if tx_nonce > account_nonce + 1 && addr_entry.get(&(account_nonce + 1)).is_none() {
-                    self.orphan_set.insert(tx_hash.clone());
-                } else if tx_nonce == account_nonce + 1 {
-                    let mut idx = account_nonce + 2;
+        // Place transaction in address mappings
+        self.address_mappings.insert(tx_signing_addr.clone(), tx_next_addr.clone());
+        self.address_hash_mappings.insert(tx_signing_addr, tx_hash.clone());
 
-                    // Un-orphan transactions that directly follow the appended one
-                    while let Some(tx) = addr_entry.get(&idx) {
-                        self.orphan_set.remove(&tx);
-                        idx += 1;
-                    }
-                } else if tx_nonce > account_nonce + 1 {
-                    // We have a transaction with the previous nonce, if it
-                    // is an orphan then this transaction is also an orphan.
-                    //
-                    // If there isn't a transaction with the previous nonce,
-                    // then it is definitely an orphan
-                    if let Some(hash) = addr_entry.get(&(tx_nonce - 1)) {
-                        if self.orphan_set.contains(&hash) {
-                            self.orphan_set.insert(tx_hash.clone());
-                        } else {
-                            let mut idx = tx_nonce + 1;
-
-                            // Un-orphan transactions that directly follow the appended one
-                            while let Some(tx) = addr_entry.get(&idx) {
-                                self.orphan_set.remove(&tx);
-                                idx += 1;
-                            }
-                        }
-                    } else {
-                        self.orphan_set.insert(tx_hash.clone());
-                    }
-                } else {
-                    unreachable!();
-                }
-            } else {
-                if tx_nonce > 1 && addr_entry.get(&1).is_none() {
-                    self.orphan_set.insert(tx_hash.clone());
-                } else if tx_nonce == 1 {
-                    let mut idx = 2;
-
-                    // Un-orphan transactions that directly follow the appended one
-                    while let Some(tx) = addr_entry.get(&idx) {
-                        self.orphan_set.remove(&tx);
-                        idx += 1;
-                    }
-                } else if tx_nonce > 1 {
-                    if let Some(hash) = addr_entry.get(&(tx_nonce - 1)) {
-                        if self.orphan_set.contains(&hash) {
-                            self.orphan_set.insert(tx_hash.clone());
-                        } else {
-                            let mut idx = tx_nonce + 1;
-
-                            // Un-orphan transactions that directly follow the appended one
-                            while let Some(tx) = addr_entry.get(&idx) {
-                                self.orphan_set.remove(&tx);
-                                idx += 1;
-                            }
-                        }
-                    } else {
-                        self.orphan_set.insert(tx_hash.clone());
-                    }
-                } else {
-                    unreachable!();
-                }
-            }  
-
-            addr_entry.insert(tx_nonce, tx_hash.clone());
+        // Update orphans
+        if !is_orphan {
+            self.update_orphans(&tx_next_addr, tx_signing_addr.clone());
         } else {
-            let mut addr_entry = BTreeMap::new();
-            
-            addr_entry.insert(tx_nonce, tx_hash.clone());
-            self.address_mappings.insert(tx_addr, addr_entry);
-
-            // Check if the transaction is an orphan
-            if let Some(account_nonce) = account_nonce {
-                if tx_nonce > account_nonce + 1 {
-                    self.orphan_set.insert(tx_hash.clone());
-                }
+            if self.address_reverse_mappings.get(&tx_signing_addr).is_some() {
+                self.update_orphans(&tx_next_addr, tx_signing_addr.clone());
             } else {
-                if tx_nonce > 1 {
-                    self.orphan_set.insert(tx_hash.clone());
-                }
-            }        
+                self.orphan_set.insert(tx_hash);
+            };
         }
 
         Ok(())
@@ -450,6 +345,23 @@ impl Mempool {
     fn validate_tx_on_chain_state(&self, tx: Arc<Tx>) -> bool {
         self.chain_ref.validate_tx(tx)
     }
+
+    fn update_orphans<'a>(&'a mut self, mut cur_addr: &'a NormalAddress, tx_signing_addr: NormalAddress) {
+        self.address_reverse_mappings.insert(cur_addr.clone(), tx_signing_addr);
+
+        while let Some(next_addr) = self.address_mappings.get(cur_addr) {
+            let cur_hash = self.address_hash_mappings.get(cur_addr).unwrap();
+            self.orphan_set.remove(cur_hash);
+            self.address_reverse_mappings.insert(next_addr.clone(), cur_addr.clone());
+            
+            if let Some(tx_hash) = self.address_hash_mappings.get(&next_addr) {
+                self.orphan_set.remove(tx_hash);
+                cur_addr = next_addr;
+            } else {
+                break;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -485,10 +397,6 @@ mod tests {
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
             let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
-
-            let A_addr = TestAccount::A.to_address();
-            let B_addr = TestAccount::B.to_address();
-            let C_addr = TestAccount::C.to_address();
             let cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME);
 
             // Transactions from account A
@@ -581,20 +489,6 @@ mod tests {
 
             assert!(is_valid);
 
-            // Check address mappings
-            {
-                let A_mappings = mempool.address_mappings.get(&A_addr).unwrap();
-                let B_mappings = mempool.address_mappings.get(&B_addr).unwrap();
-                let C_mappings = mempool.address_mappings.get(&C_addr).unwrap();
-
-                assert_eq!(A_mappings.get(&A_1.nonce()).unwrap(), &A_1.tx_hash().unwrap());
-                assert_eq!(A_mappings.get(&A_2.nonce()).unwrap(), &A_2.tx_hash().unwrap());
-                assert_eq!(A_mappings.get(&A_5.nonce()).unwrap(), &A_5.tx_hash().unwrap());
-                assert_eq!(B_mappings.get(&B_2.nonce()).unwrap(), &B_2.tx_hash().unwrap());
-                assert_eq!(C_mappings.get(&C_1.nonce()).unwrap(), &C_1.tx_hash().unwrap());
-                assert_eq!(C_mappings.get(&C_3.nonce()).unwrap(), &C_3.tx_hash().unwrap());
-            }
-
             // Check fee map
             {
                 let fee_map = mempool.fee_map.get(&cur_hash).unwrap();
@@ -676,20 +570,6 @@ mod tests {
 
             assert!(is_valid);
 
-            // Check address mappings
-            {
-                let A_mappings = mempool.address_mappings.get(&A_addr).unwrap();
-                let B_mappings = mempool.address_mappings.get(&B_addr).unwrap();
-                let C_mappings = mempool.address_mappings.get(&C_addr).unwrap();
-
-                assert_eq!(A_mappings.get(&A_4.nonce()).unwrap(), &A_4.tx_hash().unwrap());
-                assert_eq!(B_mappings.get(&B_1.nonce()).unwrap(), &B_1.tx_hash().unwrap());
-                assert_eq!(B_mappings.get(&B_5.nonce()).unwrap(), &B_5.tx_hash().unwrap());
-                assert_eq!(C_mappings.get(&C_5.nonce()).unwrap(), &C_5.tx_hash().unwrap());
-                assert_eq!(C_mappings.get(&C_4.nonce()).unwrap(), &C_4.tx_hash().unwrap());
-                assert_eq!(B_mappings.get(&B_4.nonce()).unwrap(), &B_4.tx_hash().unwrap());
-            }
-
             // Check fee map
             {
                 let fee_map = mempool.fee_map.get(&cur_hash).unwrap();
@@ -764,17 +644,6 @@ mod tests {
                 });
 
             assert!(is_valid);
-
-            // Check address mappings
-            {
-                let A_mappings = mempool.address_mappings.get(&A_addr).unwrap();
-                let B_mappings = mempool.address_mappings.get(&B_addr).unwrap();
-                let C_mappings = mempool.address_mappings.get(&C_addr).unwrap();
-
-                assert_eq!(A_mappings.get(&A_3.nonce()).unwrap(), &A_3.tx_hash().unwrap());
-                assert_eq!(B_mappings.get(&B_2.nonce()).unwrap(), &B_2.tx_hash().unwrap());
-                assert_eq!(C_mappings.get(&C_3.nonce()).unwrap(), &C_3.tx_hash().unwrap());
-            }
 
             // Check fee map
             {
