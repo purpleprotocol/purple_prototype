@@ -27,7 +27,7 @@ use std::io::Cursor;
 pub const ASSET_NAME_SIZE: usize = 32;
 pub const META_FIELD_SIZE: usize = 32;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateUnique {
     /// The asset creator's address
     pub(crate) creator: Pk,
@@ -60,9 +60,9 @@ pub struct CreateUnique {
     // Nonce
     pub(crate) nonce: u64,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) signature: Option<Signature>,
 }
 

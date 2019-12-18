@@ -23,7 +23,7 @@ use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Mint {
     pub(crate) minter: Pk,
     pub(crate) next_address: NormalAddress,
@@ -33,9 +33,9 @@ pub struct Mint {
     pub(crate) fee_hash: Hash,
     pub(crate) fee: Balance,
     pub(crate) nonce: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) signature: Option<Signature>,
 }
 

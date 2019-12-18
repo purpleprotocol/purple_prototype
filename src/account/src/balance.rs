@@ -246,7 +246,8 @@ mod tests {
         }
 
         fn from_u64(n: u64) -> bool {
-            Balance::from_u64(n)
+            Balance::from_u64(n);
+            true
         }
     }
 }

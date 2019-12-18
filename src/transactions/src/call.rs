@@ -25,7 +25,7 @@ use purple_vm::Gas;
 use std::io::Cursor;
 use std::str;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Call {
     pub(crate) from: Pk,
     pub(crate) next_address: NormalAddress,
@@ -38,9 +38,9 @@ pub struct Call {
     pub(crate) asset_hash: Hash,
     pub(crate) fee_hash: Hash,
     pub(crate) nonce: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) signature: Option<Signature>,
 }
 

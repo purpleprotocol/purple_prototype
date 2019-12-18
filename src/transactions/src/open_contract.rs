@@ -24,7 +24,7 @@ use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
 use std::str;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OpenContract {
     pub(crate) creator: Pk,
     pub(crate) next_address: NormalAddress,
@@ -36,11 +36,11 @@ pub struct OpenContract {
     pub(crate) fee_hash: Hash,
     pub(crate) self_payable: bool,
     pub(crate) nonce: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) address: Option<ContractAddress>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) signature: Option<Signature>,
 }
 
@@ -170,8 +170,8 @@ impl OpenContract {
                 .unwrap();
 
             // Update creator address mapping
-            trie.remove(&creator_addr_mapping_key).unwrap().unwrap();
-            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap().unwrap();
+            trie.remove(&creator_addr_mapping_key).unwrap();
+            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
         } else {
             // The transaction's fee is paid in a different currency
             // than the one being transferred so we retrieve both balances.
@@ -214,8 +214,8 @@ impl OpenContract {
                 .unwrap();
 
             // Update creator address mapping
-            trie.remove(&creator_addr_mapping_key).unwrap().unwrap();
-            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap().unwrap();
+            trie.remove(&creator_addr_mapping_key).unwrap();
+            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
         }
     }
 
@@ -276,13 +276,13 @@ impl OpenContract {
     /// 8) Owner                    - 32byte binary
     /// 9) Address                  - 33byte binary
     /// 10) Next address            - 33byte binary
-    /// 10) Currency hash           - 32byte binary
-    /// 11) Fee hash                - 32byte binary
-    /// 12) Signature               - 64byte binary
-    /// 13) Amount                  - Binary of amount length
-    /// 14) Fee                     - Binary of fee length
-    /// 15) Default state           - Binary of state length
-    /// 16) Code                    - Binary of code length
+    /// 11) Currency hash           - 32byte binary
+    /// 12) Fee hash                - 32byte binary
+    /// 13) Signature               - 64byte binary
+    /// 14) Amount                  - Binary of amount length
+    /// 15) Fee                     - Binary of fee length
+    /// 16) Default state           - Binary of state length
+    /// 17) Code                    - Binary of code length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -300,8 +300,6 @@ impl OpenContract {
         };
 
         let self_payable: u8 = if self.self_payable { 1 } else { 0 };
-        let asset_hash = &self.asset_hash.0;
-        let fee_hash = &self.fee_hash.0;
         let code = &self.code;
         let default_state = &self.default_state;
         let amount = self.amount.to_bytes();
@@ -323,6 +321,7 @@ impl OpenContract {
 
         buffer.extend_from_slice(&self.creator.0);
         buffer.extend_from_slice(&address);
+        buffer.extend_from_slice(self.next_address.as_bytes());
         buffer.extend_from_slice(&self.asset_hash.0);
         buffer.extend_from_slice(&self.fee_hash.0);
         buffer.extend_from_slice(&signature);

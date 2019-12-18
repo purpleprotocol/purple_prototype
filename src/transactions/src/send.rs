@@ -24,7 +24,7 @@ use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
 use std::str;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Send {
     pub(crate) from: Pk,
     pub(crate) next_address: NormalAddress,
@@ -34,9 +34,9 @@ pub struct Send {
     pub(crate) asset_hash: Hash,
     pub(crate) fee_hash: Hash,
     pub(crate) nonce: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) signature: Option<Signature>,
 }
 

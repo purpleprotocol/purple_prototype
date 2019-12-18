@@ -31,7 +31,7 @@ pub(crate) const COIN_SUPPLY: u64 = 500000000;
 /// Balances that will be initialized with the genesis transaction
 pub(crate) const INIT_ACCOUNTS: &'static [(&'static str, u64)] = &[];
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Genesis {
     asset_hash: Hash,
     coin_supply: u64,

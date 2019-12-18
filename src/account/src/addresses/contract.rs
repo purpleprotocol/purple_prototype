@@ -20,19 +20,30 @@ use crypto::{FromBase58, Hash, ToBase58};
 use quickcheck::Arbitrary;
 use rand::Rng;
 use std::fmt;
+use std::hash::{Hash as HashTrait, Hasher};
 
-#[derive(Hash, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, Debug, PartialOrd, Ord)]
-pub struct ContractAddress(Hash);
+#[derive(Clone, Copy)]
+pub struct ContractAddress([u8; 33]);
 
 impl ContractAddress {
     pub const ADDR_TYPE: u8 = 2;
 
     pub fn new(addr: Hash) -> ContractAddress {
-        ContractAddress(addr)
+        let mut addr_bytes = [0; 33];
+        let mut idx = 1;
+        
+        addr_bytes[0] = Self::ADDR_TYPE;
+
+        for byte in &addr.0 {
+            addr_bytes[idx] = *byte;
+            idx += 1;
+        }
+
+        ContractAddress(addr_bytes)
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        &(self.0).0
+        &self.0
     }
 
     pub fn to_base58(&self) -> String {
@@ -51,30 +62,42 @@ impl ContractAddress {
         let addr_type = bin[0];
 
         if bin.len() == 33 && addr_type == Self::ADDR_TYPE {
-            let (_, tail) = bin.split_at(1);
-            let mut pkey = [0; 32];
-            pkey.copy_from_slice(&tail);
+            let mut bytes = [0; 33];
+            bytes.copy_from_slice(&bin);
 
-            Ok(ContractAddress(Hash(pkey)))
+            Ok(ContractAddress(bytes))
         } else if addr_type != Self::ADDR_TYPE {
-            Err("Bad address type")
+            Err("Bad contract address type")
         } else {
-            Err("Bad address length")
+            Err("Bad contract address length")
         }
     }
 
+
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::new();
-        let bytes = (&&self.0).0;
+        self.0.to_vec()
+    }
+}
 
-        // Push address type
-        result.push(Self::ADDR_TYPE);
+fn unsize<T>(x: &[T]) -> &[T] { x }
 
-        for byte in bytes.iter() {
-            result.push(*byte);
-        }
+impl PartialEq for ContractAddress {
+    fn eq(&self, other: &ContractAddress) -> bool {
+        unsize(&self.0) == unsize(&other.0)
+    }
+}
 
-        result
+impl Eq for ContractAddress { }
+
+impl HashTrait for ContractAddress {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl fmt::Debug for ContractAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", hex::encode(self.to_bytes()))
     }
 }
 
@@ -89,19 +112,17 @@ impl Arbitrary for ContractAddress {
         let mut rng = rand::thread_rng();
         let bytes: Vec<u8> = (0..32).map(|_| rng.gen_range(1, 255)).collect();
 
-        let mut result = [0; 32];
-        result.copy_from_slice(&bytes);
+        let mut addr_bytes = [0; 33];
+        let mut idx = 1;
+        
+        addr_bytes[0] = Self::ADDR_TYPE;
 
-        ContractAddress(Hash(result))
-    }
+        for byte in &bytes {
+            addr_bytes[idx] = *byte;
+            idx += 1;
+        }
 
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        Box::new((&(&self.0).0).to_vec().shrink().map(|p| {
-            let mut result = [0; 32];
-            result.copy_from_slice(&p);
-
-            ContractAddress(Hash(result))
-        }))
+        ContractAddress(addr_bytes)
     }
 }
 

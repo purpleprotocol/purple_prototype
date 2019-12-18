@@ -25,7 +25,7 @@ use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
 use std::str;
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Burn {
     pub(crate) burner: Pk,
     pub(crate) next_address: NormalAddress,
@@ -34,9 +34,9 @@ pub struct Burn {
     pub(crate) asset_hash: Hash,
     pub(crate) fee_hash: Hash,
     pub(crate) nonce: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) signature: Option<Signature>,
 }
 

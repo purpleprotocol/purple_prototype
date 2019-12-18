@@ -23,7 +23,7 @@ use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use std::io::Cursor;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateCurrency {
     pub(crate) creator: Pk,
     pub(crate) next_address: NormalAddress,
@@ -34,9 +34,9 @@ pub struct CreateCurrency {
     pub(crate) fee_hash: Hash,
     pub(crate) fee: Balance,
     pub(crate) nonce: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) hash: Option<Hash>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     pub(crate) signature: Option<Signature>,
 }
 
@@ -260,8 +260,8 @@ impl CreateCurrency {
             trie.insert(&creator_nonce_key, &nonce_buf).unwrap();
 
             // Update address mappings
-            trie.remove(&creator_addr_mapping_key).unwrap().unwrap();
-            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap().unwrap();
+            trie.remove(&creator_addr_mapping_key).unwrap();
+            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
         } else {
             // The receiver is another account
             match bin_receiver_nonce {
@@ -292,8 +292,8 @@ impl CreateCurrency {
                     trie.insert(&creator_nonce_key, &nonce_buf).unwrap();
 
                     // Update address mappings
-                    trie.remove(&creator_addr_mapping_key).unwrap().unwrap();
-                    trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap().unwrap();
+                    trie.remove(&creator_addr_mapping_key).unwrap();
+                    trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
                 }
                 // The receiver account does not exist so we create it
                 Ok(None) => {
@@ -326,8 +326,8 @@ impl CreateCurrency {
 
                     // Update address mappings
                     trie.insert(&receiver_addr_mapping_key, self.receiver.as_bytes()).unwrap();
-                    trie.remove(&creator_addr_mapping_key).unwrap().unwrap();
-                    trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap().unwrap();
+                    trie.remove(&creator_addr_mapping_key).unwrap();
+                    trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
                 }
                 Err(err) => panic!(err),
             }
