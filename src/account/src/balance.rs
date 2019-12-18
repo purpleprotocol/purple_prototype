@@ -104,7 +104,7 @@ impl Balance {
     }
 
     pub fn from_u64(num: u64) -> Balance {
-        Balance(Decimal::from_str(&format!("{}", num)).unwrap())
+        Balance(Decimal::from_str(&format!("{}.0", num)).unwrap())
     }
 }
 
