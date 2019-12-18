@@ -514,7 +514,7 @@ fn assemble_message(obj: &Burn) -> Vec<u8> {
     let asset_hash = &obj.asset_hash.0;
     let fee_hash = &obj.fee_hash.0;
 
-    buf.write_u64::<BigEndian>(obj.nonce);
+    buf.write_u64::<BigEndian>(obj.nonce).unwrap();
     buf.extend_from_slice(&obj.burner.0);
     buf.extend_from_slice(&next_address);
     buf.extend_from_slice(asset_hash);

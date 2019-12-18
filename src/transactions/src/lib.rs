@@ -54,7 +54,7 @@ pub use crate::open_contract::*;
 pub use crate::send::*;
 
 use account::{Address, NormalAddress, Balance};
-use crypto::{Hash, SecretKey, FromBase58, Identity};
+use crypto::{Hash, SecretKey, PublicKey, FromBase58, Identity};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use quickcheck::Arbitrary;
@@ -255,6 +255,22 @@ impl Arbitrary for Tx {
 }
 
 #[cfg(any(test, feature = "test"))]
+use std::sync::atomic::{AtomicU64, Ordering};
+
+#[cfg(any(test, feature = "test"))]
+use std::sync::Arc;
+
+#[cfg(any(test, feature = "test"))]
+use lazy_static::*;
+
+#[cfg(any(test, feature = "test"))]
+lazy_static! {
+    static ref AccountANonce: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
+    static ref AccountBNonce: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
+    static ref AccountCNonce: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
+}
+
+#[cfg(any(test, feature = "test"))]
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub enum TestAccount {
     A = 0,
@@ -264,15 +280,68 @@ pub enum TestAccount {
 
 #[cfg(any(test, feature = "test"))]
 impl TestAccount {
-    pub fn to_address(&self) -> Address {
-        Address::from_base58(crate::genesis::INIT_ACCOUNTS[*self as usize].0).unwrap()
+    pub fn to_address(&self) -> NormalAddress {
+        let nonce = match *self {
+            TestAccount::A => AccountANonce.load(Ordering::Relaxed),
+            TestAccount::B => AccountBNonce.load(Ordering::Relaxed),
+            TestAccount::C => AccountCNonce.load(Ordering::Relaxed),
+        };
+
+        let (pk, _) = crypto::gen_keypair_from_seed(&encode_be_u64!(nonce));
+        NormalAddress::from_pkey(&pk)
+    }
+
+    pub fn next_address(&self) -> NormalAddress {
+        let mut nonce = match *self {
+            TestAccount::A => AccountANonce.load(Ordering::Relaxed),
+            TestAccount::B => AccountBNonce.load(Ordering::Relaxed),
+            TestAccount::C => AccountCNonce.load(Ordering::Relaxed),
+        };
+        nonce += 1;
+
+        match *self {
+            TestAccount::A => AccountANonce.store(nonce, Ordering::Relaxed),
+            TestAccount::B => AccountBNonce.store(nonce, Ordering::Relaxed),
+            TestAccount::C => AccountCNonce.store(nonce, Ordering::Relaxed),
+        };
+
+        let (pk, _) = crypto::gen_keypair_from_seed(&encode_be_u64!(nonce));
+        NormalAddress::from_pkey(&pk)
+    }
+
+    pub fn to_pkey(&self) -> PublicKey {
+        let nonce = match *self {
+            TestAccount::A => AccountANonce.load(Ordering::Relaxed),
+            TestAccount::B => AccountBNonce.load(Ordering::Relaxed),
+            TestAccount::C => AccountCNonce.load(Ordering::Relaxed),
+        };
+
+        let (pk, _) = crypto::gen_keypair_from_seed(&encode_be_u64!(nonce));
+        pk
+    }
+
+    pub fn to_next_pkey(&self) -> PublicKey {
+        let mut nonce = match *self {
+            TestAccount::A => AccountANonce.load(Ordering::Relaxed),
+            TestAccount::B => AccountBNonce.load(Ordering::Relaxed),
+            TestAccount::C => AccountCNonce.load(Ordering::Relaxed),
+        };
+
+        nonce += 1;
+
+        let (pk, _) = crypto::gen_keypair_from_seed(&encode_be_u64!(nonce));
+        pk
     }
 
     pub fn to_skey(&self) -> SecretKey {
-        let key = crate::genesis::INIT_ACCOUNTS_SKEYS[*self as usize].from_base58().unwrap();
-        let mut key_arr = [0; 64];
-        key_arr.copy_from_slice(&key);
-        SecretKey(key_arr)
+        let nonce = match *self {
+            TestAccount::A => AccountANonce.load(Ordering::Relaxed),
+            TestAccount::B => AccountBNonce.load(Ordering::Relaxed),
+            TestAccount::C => AccountCNonce.load(Ordering::Relaxed),
+        };
+
+        let (_, sk) = crypto::gen_keypair_from_seed(&encode_be_u64!(nonce));
+        sk
     }
 }
 
@@ -281,10 +350,13 @@ impl TestAccount {
 /// genesis test accounts. 
 pub fn send_coins(sender: TestAccount, receiver: TestAccount, amount: u64, fee: u64, nonce: u64) -> Tx {
     assert_ne!(sender, receiver);
+
+    let sender_pkey = sender.to_pkey();
     
     let mut tx = Send {
-        from: sender.to_address().unwrap_normal(),
-        to: receiver.to_address(),
+        from: sender_pkey,
+        next_address: sender.next_address(),
+        to: Address::Normal(receiver.to_address()),
         amount: Balance::from_u64(amount),
         fee: Balance::from_u64(fee),
         asset_hash: crypto::hash_slice(crate::genesis::MAIN_CUR_NAME),
