@@ -102,6 +102,9 @@ pub struct Mempool {
 
     /// Reference to the pow chain.
     chain_ref: PowChainRef,
+
+    /// Cache set of next transactions to be added to a block.
+    next_tx_set_cache: Option<Vec<Arc<Tx>>>,
 }
 
 impl Mempool {
@@ -317,25 +320,35 @@ impl Mempool {
     /// Attempts to perform a prune on the transactions stored 
     /// in the memory pool, removing the oldest transactions 
     /// that have the lowest fees. The prune will be performed
-    /// only if the mempool is more than 80% full or if there
-    /// are any past transactions found i.e. transactions with
-    /// nonces that are lower than the current creator's nonce.
+    /// only if the mempool is more than 80% full.
     /// 
     /// This operation is idempotent.
     pub fn prune(&mut self) {
         unimplemented!();
     }
 
-    /// Attempts to retrieve a number of valid transactions from
+    /// Attempts to calculate a next transaction set that is to be
+    /// appended to a block. This does not remove the transaction
+    /// set from the mempool. Use this asynchronously.
+    pub fn get_next_tx_set(&self) -> Option<Vec<Arc<Tx>>> {
+        unimplemented!();
+    }
+
+    /// Caches a tx set to be taken out of the mempool. Use this asynchronously.
+    pub fn cache_next_tx_set(&mut self, tx_set: Vec<Arc<Tx>>) -> Result<(), MempoolErr> {
+        unimplemented!();
+    }
+
+    /// Attempts to retrieve a set of valid transactions from
     /// the mempool. The resulting transaction list will be in a
     /// canonical ordering. Returns `None` if there are no valid
     /// transactions in the mempool.
-    pub fn take(&mut self, count: usize) -> Option<Vec<Arc<Tx>>> {
+    pub fn take(&mut self) -> Option<Vec<Arc<Tx>>> {
         if self.tx_lookup.is_empty() {
             return None;
         }
 
-        unimplemented!();
+        self.next_tx_set_cache.take()
     }
 
     fn get_account_nonce(&self, address: &Address) -> Option<u64> {

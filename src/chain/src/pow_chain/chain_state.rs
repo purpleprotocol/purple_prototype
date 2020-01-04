@@ -220,10 +220,9 @@ impl StateInterface for PowChainState {
         //
         // The key of a nonce has the following format:
         // `<account-address>.n`
-        let nonce_key = format!("{}.n", address);
-        let nonce_key = nonce_key.as_bytes();
-
+        let nonce_key = [address.as_bytes(), &b".n"[..]].concat();
         let encoded_nonce = trie.get(&nonce_key).ok()??;
+        
         Some(decode_be_u64!(encoded_nonce).unwrap())
     }
 
