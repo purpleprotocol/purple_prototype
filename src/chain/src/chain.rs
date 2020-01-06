@@ -2168,6 +2168,10 @@ pub mod tests {
         fn validate_tx(&self, tx: Arc<Tx>) -> bool {
             unimplemented!();
         }
+    
+        fn apply_tx(&mut self, tx: Arc<Tx>) {
+            unimplemented!();
+        }
     }
 
     #[derive(Clone, Debug)]

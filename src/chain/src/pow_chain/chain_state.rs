@@ -222,13 +222,18 @@ impl StateInterface for PowChainState {
         // `<account-address>.n`
         let nonce_key = [address.as_bytes(), &b".n"[..]].concat();
         let encoded_nonce = trie.get(&nonce_key).ok()??;
-        
+
         Some(decode_be_u64!(encoded_nonce).unwrap())
     }
 
     fn validate_tx(&self, tx: Arc<Tx>) -> bool {
         let trie = TrieDB::<BlakeDbHasher, Codec>::new(&self.db, &self.state_root).unwrap();
         tx.validate(&trie)
+    }
+
+    fn apply_tx(&mut self, tx: Arc<Tx>) {
+        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::from_existing(&mut self.db, &mut self.state_root).unwrap();
+        tx.apply(&mut trie);
     }
 }
 

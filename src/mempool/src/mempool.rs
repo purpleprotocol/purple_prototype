@@ -19,7 +19,8 @@
 #![allow(non_snake_case)]
 
 use crate::error::MempoolErr;
-use chain::PowChainRef;
+use chain::{PowChainRef, PowChainState, MAX_TX_SET_SIZE};
+use chain::types::StateInterface;
 use account::{NormalAddress, Address, Balance};
 use chrono::{DateTime, Utc};
 use hashbrown::{HashSet, HashMap};
@@ -104,6 +105,9 @@ pub struct Mempool {
     chain_ref: PowChainRef,
 
     /// Cache set of next transactions to be added to a block.
+    /// 
+    /// TODO: Make this a queue of sets and cache subsequent 
+    /// tx sets as well.
     next_tx_set_cache: Option<Vec<Arc<Tx>>>,
 }
 
@@ -131,6 +135,7 @@ impl Mempool {
             preferred_currencies,
             preference_ratio,
             chain_ref,
+            next_tx_set_cache: None,
         }
     }
 
@@ -330,7 +335,71 @@ impl Mempool {
     /// Attempts to calculate a next transaction set that is to be
     /// appended to a block. This does not remove the transaction
     /// set from the mempool. Use this asynchronously.
-    pub fn get_next_tx_set(&self) -> Option<Vec<Arc<Tx>>> {
+    pub fn calculate_next_tx_set(&self) -> Option<Vec<Arc<Tx>>> {
+        debug!("Calculating next transaction set...");
+
+        if MAX_TX_SET_SIZE < 2048 {
+            panic!("The maximum transaction set size cannot be less than 2kb!");
+        }
+
+        if self.tx_lookup.is_empty() {
+            debug!("The mempool is empty! No transaction set found!");
+            return None;
+        }
+
+        // Allocate a capacity of the maximum tx set size divided
+        // by the average size of a transaction i.e. ~250 bytes.
+        let capacity = MAX_TX_SET_SIZE / 250;
+        
+        let mut cur_tx_set_size = 0;
+        let mut taken_set: HashSet<Hash> = HashSet::with_capacity(capacity);
+        let mut obsolete_set: HashSet<Hash> = HashSet::with_capacity(capacity);
+        let mut tx_set: Vec<Arc<Tx>> = Vec::with_capacity(capacity);
+        let mut next_chain_state: PowChainState = self.chain_ref.canonical_tip_state();
+        let mut exceeded_max_tx_set_size = false;
+
+        // For each preferred currency take valid 
+        // transactions with the biggest fees.
+        for cur_hash in self.preferred_currencies.iter() {
+            if let Some(cur_entry) = self.fee_map.get(&cur_hash) {
+                for (_, balance_entry) in cur_entry.iter() {
+                    let iter = balance_entry
+                        .iter()
+                        // Filter orphans
+                        .filter(|tx_hash| !self.orphan_set.contains(&tx_hash));
+
+                    for tx_hash in iter {
+                        let tx = self.tx_lookup.get(tx_hash).unwrap();
+
+                        if cur_tx_set_size + tx.byte_size() > MAX_TX_SET_SIZE {
+                            exceeded_max_tx_set_size = true;
+                            break;
+                        }
+
+                        if next_chain_state.validate_tx(tx.clone()) {
+                            next_chain_state.apply_tx(tx.clone());
+                            
+                            // Add to set
+                            taken_set.insert(tx_hash.clone());
+                            tx_set.push(tx.clone());
+                            cur_tx_set_size += tx.byte_size();
+                        } else {
+                            // Mark transaction as obsolete is it failed validation
+                            obsolete_set.insert(tx_hash.clone());
+                        }
+                    }
+
+                    if exceeded_max_tx_set_size {
+                        break;
+                    }
+                }
+            }
+
+            if exceeded_max_tx_set_size {
+                break;
+            }
+        }
+
         unimplemented!();
     }
 

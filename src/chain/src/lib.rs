@@ -28,7 +28,7 @@ mod block;
 mod chain;
 mod pow_chain;
 mod init;
-mod types;
+pub mod types;
 
 #[cfg(test)]
 mod test_helpers;

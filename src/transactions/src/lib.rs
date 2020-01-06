@@ -229,6 +229,11 @@ impl Tx {
         }
     }
 
+    /// Returns the size in bytes of a transaction.
+    pub fn byte_size(&self) -> usize {
+        unimplemented!();
+    }
+
     pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>) -> Tx {
         let mut rng = rand::thread_rng();
         let random = rng.gen_range(0, 8);
