@@ -384,7 +384,7 @@ impl Mempool {
                             tx_set.push(tx.clone());
                             cur_tx_set_size += tx.byte_size();
                         } else {
-                            // Mark transaction as obsolete is it failed validation
+                            // Mark transaction as obsolete since it failed validation
                             obsolete_set.insert(tx_hash.clone());
                         }
                     }
