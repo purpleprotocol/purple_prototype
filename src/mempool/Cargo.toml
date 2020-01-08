@@ -8,6 +8,7 @@ edition = "2018"
 parking_lot = "0.7.1"
 chrono = "0.4.6"
 log = "0.4.0"
+rand = "0.6.0"
 graphlib = "0.5.3"
 patricia-trie = "0.3.0"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
