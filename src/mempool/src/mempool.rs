@@ -476,9 +476,18 @@ impl Mempool {
         })
     }
 
+    pub fn has_ready_tx_set(&self) -> bool {
+        self.next_tx_set_cache.is_some()
+    }
+
     /// Caches a tx set to be taken out of the mempool. Use this asynchronously.
     pub fn cache_next_tx_set(&mut self, tx_set: TxSet) -> Result<(), MempoolErr> {
-        unimplemented!();
+        if self.has_ready_tx_set() {
+            return Err(MempoolErr::AlreadyHasTxSet);
+        }
+
+        self.next_tx_set_cache = Some(tx_set);
+        Ok(())
     }
 
     /// Attempts to retrieve a set of valid transactions from
