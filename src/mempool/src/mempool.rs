@@ -109,7 +109,7 @@ pub struct Mempool {
     /// 
     /// TODO: Make this a queue of sets and cache subsequent 
     /// tx sets as well.
-    next_tx_set_cache: Option<Vec<Arc<Tx>>>,
+    next_tx_set_cache: Option<TxSet>,
 }
 
 impl Mempool {
@@ -499,7 +499,14 @@ impl Mempool {
             return None;
         }
 
-        self.next_tx_set_cache.take()
+        let tx_set = self.next_tx_set_cache.take()?;
+
+        // Remove obsolete transactions
+        for obsolete in tx_set.obsolete_set.iter() {
+            self.remove(obsolete);
+        }
+
+        Some(tx_set.tx_set)
     }
 
     fn get_account_nonce(&self, address: &Address) -> Option<u64> {
