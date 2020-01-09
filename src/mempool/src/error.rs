@@ -36,4 +36,7 @@ pub enum MempoolErr {
 
     /// The appended tx's nonce is less or equal than the current account nonce.
     NonceLeq,
+
+    /// The mempool already has a valid transaction set available.
+    AlreadyHasTxSet,
 }

@@ -131,4 +131,7 @@ pub trait StateInterface {
 
     /// Validates the provided transaction against the stored chain state.
     fn validate_tx(&self, tx: Arc<Tx>) -> bool;
+
+    /// Applies a single transaction on the stored chain state.
+    fn apply_tx(&mut self, tx: Arc<Tx>);
 }

@@ -16,6 +16,9 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#[macro_use]
+extern crate log;
+
 mod mempool;
 mod error;
 pub use crate::mempool::*;

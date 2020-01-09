@@ -44,6 +44,9 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
+/// The maximum size, in bytes, of a transaction set in a transaction block.
+pub const MAX_TX_SET_SIZE: usize = 204800; // 200kb
+
 #[derive(Clone, Debug)]
 /// A block belonging to the `PowChain`.
 pub struct TransactionBlock {

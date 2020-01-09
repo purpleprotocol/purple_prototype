@@ -19,7 +19,8 @@
 #![allow(non_snake_case)]
 
 use crate::error::MempoolErr;
-use chain::PowChainRef;
+use chain::{PowChainRef, PowChainState, MAX_TX_SET_SIZE};
+use chain::types::StateInterface;
 use account::{NormalAddress, Address, Balance};
 use chrono::{DateTime, Utc};
 use hashbrown::{HashSet, HashMap};
@@ -28,6 +29,7 @@ use std::collections::{VecDeque, BTreeMap};
 use patricia_trie::{TrieDB, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use crypto::Hash;
+use rand::Rng;
 use std::sync::Arc;
 
 /// How far into the future a transaction can be 
@@ -102,6 +104,12 @@ pub struct Mempool {
 
     /// Reference to the pow chain.
     chain_ref: PowChainRef,
+
+    /// Cache set of next transactions to be added to a block.
+    /// 
+    /// TODO: Make this a queue of sets and cache subsequent 
+    /// tx sets as well.
+    next_tx_set_cache: Option<TxSet>,
 }
 
 impl Mempool {
@@ -128,6 +136,7 @@ impl Mempool {
             preferred_currencies,
             preference_ratio,
             chain_ref,
+            next_tx_set_cache: None,
         }
     }
 
@@ -317,25 +326,187 @@ impl Mempool {
     /// Attempts to perform a prune on the transactions stored 
     /// in the memory pool, removing the oldest transactions 
     /// that have the lowest fees. The prune will be performed
-    /// only if the mempool is more than 80% full or if there
-    /// are any past transactions found i.e. transactions with
-    /// nonces that are lower than the current creator's nonce.
+    /// only if the mempool is more than 80% full.
     /// 
     /// This operation is idempotent.
     pub fn prune(&mut self) {
         unimplemented!();
     }
 
-    /// Attempts to retrieve a number of valid transactions from
+    /// Attempts to calculate a next transaction set that is to be
+    /// appended to a block. This does not remove the transaction
+    /// set from the mempool. Use this asynchronously.
+    pub fn calculate_next_tx_set(&self) -> Option<TxSet> {
+        debug!("Calculating next transaction set...");
+
+        if MAX_TX_SET_SIZE < 2048 {
+            panic!("The maximum transaction set size cannot be less than 2kb!");
+        }
+
+        if self.tx_lookup.is_empty() {
+            debug!("The mempool is empty! No transaction set found!");
+            return None;
+        }
+
+        // Allocate a capacity of the maximum tx set size divided
+        // by the average size of a transaction i.e. ~250 bytes.
+        let capacity = MAX_TX_SET_SIZE / 250;
+        
+        let mut cur_tx_set_size = 0;
+        let mut taken_set: HashSet<Hash> = HashSet::with_capacity(capacity);
+        let mut obsolete_set: HashSet<Hash> = HashSet::with_capacity(capacity);
+        let mut tx_set: Vec<Arc<Tx>> = Vec::with_capacity(capacity);
+        let mut next_chain_state: PowChainState = self.chain_ref.canonical_tip_state();
+        let mut exceeded_max_tx_set_size = false;
+        let mut exceeded_ratio_size_threshold = false;
+
+        // TODO: Use decimals here instead of floats
+        let ratio_size_threshold = (self.preference_ratio as f32 / (100 as f32)) as usize * MAX_TX_SET_SIZE;
+
+        // For each preferred currency take valid 
+        // transactions with the biggest fees.
+        for cur_hash in self.preferred_currencies.iter() {
+            if let Some(cur_entry) = self.fee_map.get(&cur_hash) {
+                for (_, balance_entry) in cur_entry.iter() {
+                    let iter = balance_entry
+                        .iter()
+                        // Filter orphans
+                        .filter(|tx_hash| !self.orphan_set.contains(&tx_hash));
+
+                    for tx_hash in iter {
+                        let tx = self.tx_lookup.get(tx_hash).unwrap();
+                        let tx_byte_size = tx.byte_size();
+
+                        if cur_tx_set_size + tx_byte_size > ratio_size_threshold {
+                            exceeded_ratio_size_threshold = true;
+                            break;
+                        }
+
+                        if next_chain_state.validate_tx(tx.clone()) {
+                            next_chain_state.apply_tx(tx.clone());
+                            
+                            // Add to set
+                            taken_set.insert(tx_hash.clone());
+                            tx_set.push(tx.clone());
+                            cur_tx_set_size += tx_byte_size;
+                        } else {
+                            // Mark transaction as obsolete since it failed validation
+                            obsolete_set.insert(tx_hash.clone());
+                        }
+                    }
+
+                    if exceeded_ratio_size_threshold {
+                        break;
+                    }
+                }
+            }
+
+            if exceeded_ratio_size_threshold {
+                break;
+            }
+        }
+
+        let fee_currencies: Vec<&Hash> = self.fee_map
+            .keys()
+            .collect();
+
+        // Hack to break the loop when we cannot fill a tx set
+        // to its maximum size but we have exhausted all valid 
+        // transactions. 
+        // 
+        // TODO: Find a better way to do this
+        let mut iter_count = 0;
+
+        // Take transactions with the biggest fees 
+        // from random fee currencies.
+        loop {
+            let mut rng = rand::thread_rng();
+            let cur_idx = rng.gen_range(0, fee_currencies.len());
+            let fee_cur_hash = fee_currencies[cur_idx];
+
+            iter_count += 1;
+
+            if let Some(cur_entry) = self.fee_map.get(&fee_cur_hash) {
+                for (_, balance_entry) in cur_entry.iter() {
+                    let mut iter = balance_entry
+                        .iter()
+                        // Filter orphans
+                        .filter(|tx_hash| !self.orphan_set.contains(&tx_hash) && !taken_set.contains(&tx_hash) && !obsolete_set.contains(&tx_hash))
+                        .take(1);
+
+                    if let Some(tx_hash) = iter.next() {
+                        let tx = self.tx_lookup.get(tx_hash).unwrap();
+                        let tx_byte_size = tx.byte_size();
+
+                        if cur_tx_set_size + tx_byte_size > MAX_TX_SET_SIZE {
+                            exceeded_max_tx_set_size = true;
+                            break;
+                        }
+
+                        if next_chain_state.validate_tx(tx.clone()) {
+                            next_chain_state.apply_tx(tx.clone());
+                            
+                            // Add to set
+                            taken_set.insert(tx_hash.clone());
+                            tx_set.push(tx.clone());
+                            cur_tx_set_size += tx_byte_size;
+                            iter_count = 0;
+                            break;
+                        } else {
+                            // Mark transaction as obsolete since it failed validation
+                            obsolete_set.insert(tx_hash.clone());
+                        }
+                    }
+                }
+            }
+
+            if exceeded_max_tx_set_size || iter_count >= 20 {
+                break;
+            }
+        }
+
+        if tx_set.is_empty() {
+            return None;
+        }
+
+        Some(TxSet {
+            tx_set,
+            taken_set,
+            obsolete_set,
+        })
+    }
+
+    pub fn has_ready_tx_set(&self) -> bool {
+        self.next_tx_set_cache.is_some()
+    }
+
+    /// Caches a tx set to be taken out of the mempool. Use this asynchronously.
+    pub fn cache_next_tx_set(&mut self, tx_set: TxSet) -> Result<(), MempoolErr> {
+        if self.has_ready_tx_set() {
+            return Err(MempoolErr::AlreadyHasTxSet);
+        }
+
+        self.next_tx_set_cache = Some(tx_set);
+        Ok(())
+    }
+
+    /// Attempts to retrieve a set of valid transactions from
     /// the mempool. The resulting transaction list will be in a
     /// canonical ordering. Returns `None` if there are no valid
     /// transactions in the mempool.
-    pub fn take(&mut self, count: usize) -> Option<Vec<Arc<Tx>>> {
+    pub fn take(&mut self) -> Option<Vec<Arc<Tx>>> {
         if self.tx_lookup.is_empty() {
             return None;
         }
 
-        unimplemented!();
+        let tx_set = self.next_tx_set_cache.take()?;
+
+        // Remove obsolete transactions
+        for obsolete in tx_set.obsolete_set.iter() {
+            self.remove(obsolete);
+        }
+
+        Some(tx_set.tx_set)
     }
 
     fn get_account_nonce(&self, address: &Address) -> Option<u64> {
@@ -362,6 +533,12 @@ impl Mempool {
             }
         }
     }
+}
+
+pub struct TxSet {
+    pub(crate) tx_set: Vec<Arc<Tx>>,
+    pub(crate) taken_set: HashSet<Hash>,
+    pub(crate) obsolete_set: HashSet<Hash>,
 }
 
 #[cfg(test)]

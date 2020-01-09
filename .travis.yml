@@ -33,6 +33,7 @@ matrix:
       - export CXX_FOR_BUILD=cl.exe
   allow_failures:
     - rust: nightly
+    - os: windows
   fast_finish: true
 
 before_script:
