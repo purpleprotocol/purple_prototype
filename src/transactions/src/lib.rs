@@ -62,176 +62,207 @@ use rand::Rng;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tx {
-    Call(Call),
-    OpenContract(OpenContract),
-    Send(Send),
-    Burn(Burn),
-    CreateCurrency(CreateCurrency),
-    CreateMintable(CreateMintable),
-    Mint(Mint),
-    CreateUnique(CreateUnique),
-    ChangeMinter(ChangeMinter),
+    Call(Call, usize),
+    OpenContract(OpenContract, usize),
+    Send(Send, usize),
+    Burn(Burn, usize),
+    CreateCurrency(CreateCurrency, usize),
+    CreateMintable(CreateMintable, usize),
+    Mint(Mint, usize),
+    CreateUnique(CreateUnique, usize),
+    ChangeMinter(ChangeMinter, usize),
 }
 
 impl Tx {
     pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
         match *self {
-            Tx::Call(ref tx) => tx.validate(trie),
-            Tx::OpenContract(ref tx) => tx.validate(trie),
-            Tx::Send(ref tx) => tx.validate(trie),
-            Tx::Burn(ref tx) => tx.validate(trie),
-            Tx::CreateCurrency(ref tx) => tx.validate(trie),
-            Tx::CreateMintable(ref tx) => tx.validate(trie),
-            Tx::Mint(ref tx) => tx.validate(trie),
-            Tx::CreateUnique(ref tx) => tx.validate(trie),
-            Tx::ChangeMinter(ref tx) => tx.validate(trie),
+            Tx::Call(ref tx, _) => tx.validate(trie),
+            Tx::OpenContract(ref tx, _) => tx.validate(trie),
+            Tx::Send(ref tx, _) => tx.validate(trie),
+            Tx::Burn(ref tx, _) => tx.validate(trie),
+            Tx::CreateCurrency(ref tx, _) => tx.validate(trie),
+            Tx::CreateMintable(ref tx, _) => tx.validate(trie),
+            Tx::Mint(ref tx, _) => tx.validate(trie),
+            Tx::CreateUnique(ref tx, _) => tx.validate(trie),
+            Tx::ChangeMinter(ref tx, _) => tx.validate(trie),
         }
     }
 
     pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
         match *self {
-            Tx::Call(ref tx) => tx.apply(trie),
-            Tx::OpenContract(ref tx) => tx.apply(trie),
-            Tx::Send(ref tx) => tx.apply(trie),
-            Tx::Burn(ref tx) => tx.apply(trie),
-            Tx::CreateCurrency(ref tx) => tx.apply(trie),
-            Tx::CreateMintable(ref tx) => tx.apply(trie),
-            Tx::Mint(ref tx) => tx.apply(trie),
-            Tx::CreateUnique(ref tx) => tx.apply(trie),
-            Tx::ChangeMinter(ref tx) => tx.apply(trie),
+            Tx::Call(ref tx, _) => tx.apply(trie),
+            Tx::OpenContract(ref tx, _) => tx.apply(trie),
+            Tx::Send(ref tx, _) => tx.apply(trie),
+            Tx::Burn(ref tx, _) => tx.apply(trie),
+            Tx::CreateCurrency(ref tx, _) => tx.apply(trie),
+            Tx::CreateMintable(ref tx, _) => tx.apply(trie),
+            Tx::Mint(ref tx, _) => tx.apply(trie),
+            Tx::CreateUnique(ref tx, _) => tx.apply(trie),
+            Tx::ChangeMinter(ref tx, _) => tx.apply(trie),
         }
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         match *self {
-            Tx::Call(ref tx) => tx.to_bytes(),
-            Tx::OpenContract(ref tx) => tx.to_bytes(),
-            Tx::Send(ref tx) => tx.to_bytes(),
-            Tx::Burn(ref tx) => tx.to_bytes(),
-            Tx::CreateCurrency(ref tx) => tx.to_bytes(),
-            Tx::CreateMintable(ref tx) => tx.to_bytes(),
-            Tx::Mint(ref tx) => tx.to_bytes(),
-            Tx::CreateUnique(ref tx) => tx.to_bytes(),
-            Tx::ChangeMinter(ref tx) => tx.to_bytes(),
+            Tx::Call(ref tx, _) => tx.to_bytes(),
+            Tx::OpenContract(ref tx, _) => tx.to_bytes(),
+            Tx::Send(ref tx, _) => tx.to_bytes(),
+            Tx::Burn(ref tx, _) => tx.to_bytes(),
+            Tx::CreateCurrency(ref tx, _) => tx.to_bytes(),
+            Tx::CreateMintable(ref tx, _) => tx.to_bytes(),
+            Tx::Mint(ref tx, _) => tx.to_bytes(),
+            Tx::CreateUnique(ref tx, _) => tx.to_bytes(),
+            Tx::ChangeMinter(ref tx, _) => tx.to_bytes(),
+        }
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Tx, &'static str> {
+        if bytes.len() <= 1 {
+            return Err("Invalid transaction size!");
+        }
+
+        let tx_type = bytes[0];
+        
+        match tx_type {
+            Call::TX_TYPE => Ok(Tx::Call(Call::from_bytes(bytes)?, bytes.len() - 1)),
+            Send::TX_TYPE => Ok(Tx::Send(Send::from_bytes(bytes)?, bytes.len() - 1)),
+            ChangeMinter::TX_TYPE => Ok(Tx::ChangeMinter(ChangeMinter::from_bytes(bytes)?, bytes.len() - 1)),
+            Burn::TX_TYPE => Ok(Tx::Burn(Burn::from_bytes(bytes)?, bytes.len() - 1)),
+            CreateCurrency::TX_TYPE => Ok(Tx::CreateCurrency(CreateCurrency::from_bytes(bytes)?, bytes.len() - 1)),
+            CreateMintable::TX_TYPE => Ok(Tx::CreateMintable(CreateMintable::from_bytes(bytes)?, bytes.len() - 1)),
+            CreateUnique::TX_TYPE => Ok(Tx::CreateUnique(CreateUnique::from_bytes(bytes)?, bytes.len() - 1)),
+            Mint::TX_TYPE => Ok(Tx::Mint(Mint::from_bytes(bytes)?, bytes.len() - 1)),
+            OpenContract::TX_TYPE => Ok(Tx::OpenContract(OpenContract::from_bytes(bytes)?, bytes.len() - 1)),
+            _ => Err("Invalid transaction type!")
         }
     }
 
     pub fn compute_hash_message(&self) -> Vec<u8> {
         match *self {
-            Tx::Call(ref tx) => tx.compute_hash_message(),
-            Tx::OpenContract(ref tx) => tx.compute_hash_message(),
-            Tx::Send(ref tx) => tx.compute_hash_message(),
-            Tx::Burn(ref tx) => tx.compute_hash_message(),
-            Tx::CreateCurrency(ref tx) => tx.compute_hash_message(),
-            Tx::CreateMintable(ref tx) => tx.compute_hash_message(),
-            Tx::Mint(ref tx) => tx.compute_hash_message(),
-            Tx::CreateUnique(ref tx) => tx.compute_hash_message(),
-            Tx::ChangeMinter(ref tx) => tx.compute_hash_message(),
+            Tx::Call(ref tx, _) => tx.compute_hash_message(),
+            Tx::OpenContract(ref tx, _) => tx.compute_hash_message(),
+            Tx::Send(ref tx, _) => tx.compute_hash_message(),
+            Tx::Burn(ref tx, _) => tx.compute_hash_message(),
+            Tx::CreateCurrency(ref tx, _) => tx.compute_hash_message(),
+            Tx::CreateMintable(ref tx, _) => tx.compute_hash_message(),
+            Tx::Mint(ref tx, _) => tx.compute_hash_message(),
+            Tx::CreateUnique(ref tx, _) => tx.compute_hash_message(),
+            Tx::ChangeMinter(ref tx, _) => tx.compute_hash_message(),
         }
     }
 
     pub fn transaction_hash(&self) -> Option<Hash> {
         match *self {
-            Tx::Call(ref tx) => tx.hash,
-            Tx::OpenContract(ref tx) => tx.hash,
-            Tx::Send(ref tx) => tx.hash,
-            Tx::Burn(ref tx) => tx.hash,
-            Tx::CreateCurrency(ref tx) => tx.hash,
-            Tx::CreateMintable(ref tx) => tx.hash,
-            Tx::Mint(ref tx) => tx.hash,
-            Tx::CreateUnique(ref tx) => tx.hash,
-            Tx::ChangeMinter(ref tx) => tx.hash,
+            Tx::Call(ref tx, _) => tx.hash,
+            Tx::OpenContract(ref tx, _) => tx.hash,
+            Tx::Send(ref tx, _) => tx.hash,
+            Tx::Burn(ref tx, _) => tx.hash,
+            Tx::CreateCurrency(ref tx, _) => tx.hash,
+            Tx::CreateMintable(ref tx, _) => tx.hash,
+            Tx::Mint(ref tx, _) => tx.hash,
+            Tx::CreateUnique(ref tx, _) => tx.hash,
+            Tx::ChangeMinter(ref tx, _) => tx.hash,
         }
     }
 
     pub fn nonce(&self) -> u64 {
         match *self {
-            Tx::Call(ref tx) => tx.nonce,
-            Tx::OpenContract(ref tx) => tx.nonce,
-            Tx::Send(ref tx) => tx.nonce,
-            Tx::Burn(ref tx) => tx.nonce,
-            Tx::CreateCurrency(ref tx) => tx.nonce,
-            Tx::CreateMintable(ref tx) => tx.nonce,
-            Tx::Mint(ref tx) => tx.nonce,
-            Tx::CreateUnique(ref tx) => tx.nonce,
-            Tx::ChangeMinter(ref tx) => tx.nonce,
+            Tx::Call(ref tx, _) => tx.nonce,
+            Tx::OpenContract(ref tx, _) => tx.nonce,
+            Tx::Send(ref tx, _) => tx.nonce,
+            Tx::Burn(ref tx, _) => tx.nonce,
+            Tx::CreateCurrency(ref tx, _) => tx.nonce,
+            Tx::CreateMintable(ref tx, _) => tx.nonce,
+            Tx::Mint(ref tx, _) => tx.nonce,
+            Tx::CreateUnique(ref tx, _) => tx.nonce,
+            Tx::ChangeMinter(ref tx, _) => tx.nonce,
         }
     }
 
     pub fn tx_hash(&self) -> Option<Hash> {
         match *self {
-            Tx::Call(ref tx) => tx.hash,
-            Tx::OpenContract(ref tx) => tx.hash,
-            Tx::Send(ref tx) => tx.hash,
-            Tx::Burn(ref tx) => tx.hash,
-            Tx::CreateCurrency(ref tx) => tx.hash,
-            Tx::CreateMintable(ref tx) => tx.hash,
-            Tx::Mint(ref tx) => tx.hash,
-            Tx::CreateUnique(ref tx) => tx.hash,
-            Tx::ChangeMinter(ref tx) => tx.hash,
+            Tx::Call(ref tx, _) => tx.hash,
+            Tx::OpenContract(ref tx, _) => tx.hash,
+            Tx::Send(ref tx, _) => tx.hash,
+            Tx::Burn(ref tx, _) => tx.hash,
+            Tx::CreateCurrency(ref tx, _) => tx.hash,
+            Tx::CreateMintable(ref tx, _) => tx.hash,
+            Tx::Mint(ref tx, _) => tx.hash,
+            Tx::CreateUnique(ref tx, _) => tx.hash,
+            Tx::ChangeMinter(ref tx, _) => tx.hash,
         }
     }
 
     pub fn fee(&self) -> Balance {
         match *self {
-            Tx::Call(ref tx) => tx.fee.clone(),
-            Tx::OpenContract(ref tx) => tx.fee.clone(),
-            Tx::Send(ref tx) => tx.fee.clone(),
-            Tx::Burn(ref tx) => tx.fee.clone(),
-            Tx::CreateCurrency(ref tx) => tx.fee.clone(),
-            Tx::CreateMintable(ref tx) => tx.fee.clone(),
-            Tx::Mint(ref tx) => tx.fee.clone(),
-            Tx::CreateUnique(ref tx) => tx.fee.clone(),
-            Tx::ChangeMinter(ref tx) => tx.fee.clone(),
+            Tx::Call(ref tx, _) => tx.fee.clone(),
+            Tx::OpenContract(ref tx, _) => tx.fee.clone(),
+            Tx::Send(ref tx, _) => tx.fee.clone(),
+            Tx::Burn(ref tx, _) => tx.fee.clone(),
+            Tx::CreateCurrency(ref tx, _) => tx.fee.clone(),
+            Tx::CreateMintable(ref tx, _) => tx.fee.clone(),
+            Tx::Mint(ref tx, _) => tx.fee.clone(),
+            Tx::CreateUnique(ref tx, _) => tx.fee.clone(),
+            Tx::ChangeMinter(ref tx, _) => tx.fee.clone(),
         }
     }
 
     pub fn fee_hash(&self) -> Hash {
         match *self {
-            Tx::Call(ref tx) => tx.fee_hash,
-            Tx::OpenContract(ref tx) => tx.fee_hash,
-            Tx::Send(ref tx) => tx.fee_hash,
-            Tx::Burn(ref tx) => tx.fee_hash,
-            Tx::CreateCurrency(ref tx) => tx.fee_hash,
-            Tx::CreateMintable(ref tx) => tx.fee_hash,
-            Tx::Mint(ref tx) => tx.fee_hash,
-            Tx::CreateUnique(ref tx) => tx.fee_hash,
-            Tx::ChangeMinter(ref tx) => tx.fee_hash,
+            Tx::Call(ref tx, _) => tx.fee_hash,
+            Tx::OpenContract(ref tx, _) => tx.fee_hash,
+            Tx::Send(ref tx, _) => tx.fee_hash,
+            Tx::Burn(ref tx, _) => tx.fee_hash,
+            Tx::CreateCurrency(ref tx, _) => tx.fee_hash,
+            Tx::CreateMintable(ref tx, _) => tx.fee_hash,
+            Tx::Mint(ref tx, _) => tx.fee_hash,
+            Tx::CreateUnique(ref tx, _) => tx.fee_hash,
+            Tx::ChangeMinter(ref tx, _) => tx.fee_hash,
         }
     }
 
     /// Returns the signing address of the transaction creator.
     pub fn creator_signing_address(&self) -> NormalAddress {
         match *self {
-            Tx::Call(ref tx) => NormalAddress::from_pkey(&tx.from),
-            Tx::OpenContract(ref tx) => NormalAddress::from_pkey(&tx.creator),
-            Tx::Send(ref tx) => NormalAddress::from_pkey(&tx.from),
-            Tx::Burn(ref tx) => NormalAddress::from_pkey(&tx.burner),
-            Tx::CreateCurrency(ref tx) => NormalAddress::from_pkey(&tx.creator),
-            Tx::CreateMintable(ref tx) => NormalAddress::from_pkey(&tx.creator),
-            Tx::Mint(ref tx) => NormalAddress::from_pkey(&tx.minter),
-            Tx::CreateUnique(ref tx) => NormalAddress::from_pkey(&tx.creator),
-            Tx::ChangeMinter(ref tx) => NormalAddress::from_pkey(&tx.minter),
+            Tx::Call(ref tx, _) => NormalAddress::from_pkey(&tx.from),
+            Tx::OpenContract(ref tx, _) => NormalAddress::from_pkey(&tx.creator),
+            Tx::Send(ref tx, _) => NormalAddress::from_pkey(&tx.from),
+            Tx::Burn(ref tx, _) => NormalAddress::from_pkey(&tx.burner),
+            Tx::CreateCurrency(ref tx, _) => NormalAddress::from_pkey(&tx.creator),
+            Tx::CreateMintable(ref tx, _) => NormalAddress::from_pkey(&tx.creator),
+            Tx::Mint(ref tx, _) => NormalAddress::from_pkey(&tx.minter),
+            Tx::CreateUnique(ref tx, _) => NormalAddress::from_pkey(&tx.creator),
+            Tx::ChangeMinter(ref tx, _) => NormalAddress::from_pkey(&tx.minter),
         }
     }
 
     pub fn next_address(&self) -> NormalAddress {
         match *self {
-            Tx::Call(ref tx) => tx.next_address.clone(),
-            Tx::OpenContract(ref tx) => tx.next_address.clone(),
-            Tx::Send(ref tx) => tx.next_address.clone(),
-            Tx::Burn(ref tx) => tx.next_address.clone(),
-            Tx::CreateCurrency(ref tx) => tx.next_address.clone(),
-            Tx::CreateMintable(ref tx) => tx.next_address.clone(),
-            Tx::Mint(ref tx) => tx.next_address.clone(),
-            Tx::CreateUnique(ref tx) => tx.next_address.clone(),
-            Tx::ChangeMinter(ref tx) => tx.next_address.clone(),
+            Tx::Call(ref tx, _) => tx.next_address.clone(),
+            Tx::OpenContract(ref tx, _) => tx.next_address.clone(),
+            Tx::Send(ref tx, _) => tx.next_address.clone(),
+            Tx::Burn(ref tx, _) => tx.next_address.clone(),
+            Tx::CreateCurrency(ref tx, _) => tx.next_address.clone(),
+            Tx::CreateMintable(ref tx, _) => tx.next_address.clone(),
+            Tx::Mint(ref tx, _) => tx.next_address.clone(),
+            Tx::CreateUnique(ref tx, _) => tx.next_address.clone(),
+            Tx::ChangeMinter(ref tx, _) => tx.next_address.clone(),
         }
     }
 
     /// Returns the size in bytes of a transaction.
     pub fn byte_size(&self) -> usize {
-        unimplemented!();
+        match *self {
+            Tx::Call(_, byte_size) => byte_size,
+            Tx::OpenContract(_, byte_size) => byte_size,
+            Tx::Send(_, byte_size) => byte_size,
+            Tx::Burn(_, byte_size) => byte_size,
+            Tx::CreateCurrency(_, byte_size) => byte_size,
+            Tx::CreateMintable(_, byte_size) => byte_size,
+            Tx::Mint(_, byte_size) => byte_size,
+            Tx::CreateUnique(_, byte_size) => byte_size,
+            Tx::ChangeMinter(_, byte_size) => byte_size,
+        }
     }
 
     pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>) -> Tx {
@@ -240,14 +271,51 @@ impl Tx {
         let id = Identity::new();
 
         match random {
-            0 => Tx::OpenContract(OpenContract::arbitrary_valid(trie, id.skey().clone())),
-            1 => Tx::Send(Send::arbitrary_valid(trie, id.skey().clone())),
-            2 => Tx::Burn(Burn::arbitrary_valid(trie, id.skey().clone())),
-            3 => Tx::CreateCurrency(CreateCurrency::arbitrary_valid(trie, id.skey().clone())),
-            4 => Tx::CreateMintable(CreateMintable::arbitrary_valid(trie, id.skey().clone())),
-            5 => Tx::Mint(Mint::arbitrary_valid(trie, id.skey().clone())),
-            6 => Tx::CreateUnique(CreateUnique::arbitrary_valid(trie, id.skey().clone())),
-            7 => Tx::ChangeMinter(ChangeMinter::arbitrary_valid(trie, id.skey().clone())),
+            0 => {
+                let tx: Call = Call::arbitrary_valid(trie, id.skey().clone());
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::Call(tx, byte_size)
+            },
+            1 => {
+                let tx: OpenContract = OpenContract::arbitrary_valid(trie, id.skey().clone());
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::OpenContract(tx, byte_size)
+            },
+            2 => {
+                let tx: Send = Send::arbitrary_valid(trie, id.skey().clone());
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::Send(tx, byte_size)
+            },
+            3 => {
+                let tx: Burn = Burn::arbitrary_valid(trie, id.skey().clone());
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::Burn(tx, byte_size)
+            },
+            4 => {
+                let tx: CreateCurrency = CreateCurrency::arbitrary_valid(trie, id.skey().clone());
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::CreateCurrency(tx, byte_size)
+            },
+            5 => {
+                let tx: CreateMintable = CreateMintable::arbitrary_valid(trie, id.skey().clone());
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::CreateMintable(tx, byte_size)
+            },
+            6 => {
+                let tx: Mint = Mint::arbitrary_valid(trie, id.skey().clone());
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::Mint(tx, byte_size)
+            },
+            7 => {
+                let tx: CreateUnique = CreateUnique::arbitrary_valid(trie, id.skey().clone());
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::CreateUnique(tx, byte_size)
+            },
+            8 => {
+                let tx: ChangeMinter = ChangeMinter::arbitrary_valid(trie, id.skey().clone());
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::ChangeMinter(tx, byte_size)
+            },
             _ => panic!(),
         }
     }
@@ -259,15 +327,51 @@ impl Arbitrary for Tx {
         let random = rng.gen_range(0, 9);
 
         match random {
-            0 => Tx::Call(Arbitrary::arbitrary(g)),
-            1 => Tx::OpenContract(Arbitrary::arbitrary(g)),
-            2 => Tx::Send(Arbitrary::arbitrary(g)),
-            3 => Tx::Burn(Arbitrary::arbitrary(g)),
-            4 => Tx::CreateCurrency(Arbitrary::arbitrary(g)),
-            5 => Tx::CreateMintable(Arbitrary::arbitrary(g)),
-            6 => Tx::Mint(Arbitrary::arbitrary(g)),
-            7 => Tx::CreateUnique(Arbitrary::arbitrary(g)),
-            8 => Tx::ChangeMinter(Arbitrary::arbitrary(g)),
+            0 => {
+                let tx: Call = Arbitrary::arbitrary(g);
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::Call(tx, byte_size)
+            },
+            1 => {
+                let tx: OpenContract = Arbitrary::arbitrary(g);
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::OpenContract(tx, byte_size)
+            },
+            2 => {
+                let tx: Send = Arbitrary::arbitrary(g);
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::Send(tx, byte_size)
+            },
+            3 => {
+                let tx: Burn = Arbitrary::arbitrary(g);
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::Burn(tx, byte_size)
+            },
+            4 => {
+                let tx: CreateCurrency = Arbitrary::arbitrary(g);
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::CreateCurrency(tx, byte_size)
+            },
+            5 => {
+                let tx: CreateMintable = Arbitrary::arbitrary(g);
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::CreateMintable(tx, byte_size)
+            },
+            6 => {
+                let tx: Mint = Arbitrary::arbitrary(g);
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::Mint(tx, byte_size)
+            },
+            7 => {
+                let tx: CreateUnique = Arbitrary::arbitrary(g);
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::CreateUnique(tx, byte_size)
+            },
+            8 => {
+                let tx: ChangeMinter = Arbitrary::arbitrary(g);
+                let byte_size = tx.to_bytes().unwrap().len() - 1;
+                Tx::ChangeMinter(tx, byte_size)
+            },
             _ => panic!(),
         }
     }
@@ -351,5 +455,17 @@ pub fn send_coins(sender: TestAccount, receiver: TestAccount, amount: u64, fee: 
 
     tx.sign(sender.to_skey(sender_nonce));
     tx.compute_hash();
-    Tx::Send(tx)
+    let byte_size = tx.to_bytes().unwrap().len() - 1;
+    Tx::Send(tx, byte_size)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(tx: Tx) -> bool {
+            tx == Tx::from_bytes(&Tx::to_bytes(&tx).unwrap()).unwrap()
+        }
+    }
 }
