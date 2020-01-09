@@ -357,6 +357,11 @@ impl Call {
         Ok(call)
     }
 
+    /// Returns a random valid transaction for the provided state.
+    pub fn arbitrary_valid(trie: &TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Call {
+        unimplemented!();
+    }
+
     impl_hash!();
 }
 
