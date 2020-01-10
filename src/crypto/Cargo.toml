@@ -6,7 +6,7 @@ authors = []
 publish = false
 
 [dependencies]
-blake2-rfc = "0.2.18"
+blake3 = "0.1.0"
 hex = "0.3.2"
 byteorder = "1.2.7"
 crc32fast = "1.2.0"

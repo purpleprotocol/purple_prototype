@@ -16,7 +16,6 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use blake2_rfc::blake2b::blake2b;
 use crate::blake_hasher::BlakeHasher;
 use crc32fast::Hasher as CrcHasher;
 use hashdb::Hasher;
@@ -136,8 +135,10 @@ impl AsRef<[u8]> for Hash {
 #[inline]
 pub fn hash_slice(val: &[u8]) -> Hash {
     let mut result: [u8; HASH_BYTES] = [0; HASH_BYTES];
-    let blake_result = blake2b(HASH_BYTES, &[], val);
-    result.copy_from_slice(blake_result.as_bytes());
+    let mut blake_hasher = blake3::Hasher::new();
+    blake_hasher.update(val);
+    let mut reader = blake_hasher.finalize_xof();
+    reader.fill(&mut result);
     Hash(result)
 }
 
