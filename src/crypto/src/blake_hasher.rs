@@ -21,14 +21,15 @@ use merkle_light::hash::Algorithm;
 use std::default::Default;
 use std::hash::Hasher;
 use std::u64;
+use std::io::Write;
 
 pub struct BlakeHasher {
-    buffer: Vec<u8>,
+    hasher: blake3::Hasher,
 }
 
 impl BlakeHasher {
     pub fn new() -> BlakeHasher {
-        BlakeHasher { buffer: Vec::new() }
+        BlakeHasher { hasher: blake3::Hasher::new() }
     }
 }
 
@@ -41,13 +42,13 @@ impl Default for BlakeHasher {
 impl Hasher for BlakeHasher {
     #[inline]
     fn write(&mut self, bytes: &[u8]) -> () {
-        &self.buffer.append(&mut bytes.to_vec());
+        &self.hasher.write(bytes);
     }
 
     #[inline]
     fn finish(&self) -> u64 {
-        let result = hash_slice(&self.buffer);
-        let hex_encoded = hex::encode(result);
+        let result = self.hasher.finalize();
+        let hex_encoded = result.to_hex();
 
         u64::from_str_radix(&hex_encoded, 16).unwrap()
     }
@@ -56,11 +57,14 @@ impl Hasher for BlakeHasher {
 impl Algorithm<Hash> for BlakeHasher {
     #[inline]
     fn hash(&mut self) -> Hash {
-        hash_slice(&self.buffer)
+        let mut result: [u8; HASH_BYTES] = [0; HASH_BYTES];
+        let mut reader = self.hasher.finalize_xof();
+        reader.fill(&mut result);
+        Hash(result)
     }
 
     #[inline]
     fn reset(&mut self) {
-        self.buffer = Vec::new();
+        self.hasher = blake3::Hasher::new();
     }
 }
