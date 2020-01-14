@@ -54,7 +54,7 @@ pub use crate::open_contract::*;
 pub use crate::send::*;
 
 use account::{Address, NormalAddress, Balance};
-use crypto::{Hash, SecretKey, PublicKey, FromBase58, Identity};
+use crypto::{ShortHash, Hash, SecretKey, PublicKey, FromBase58, Identity};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use quickcheck::Arbitrary;
@@ -151,7 +151,7 @@ impl Tx {
         }
     }
 
-    pub fn transaction_hash(&self) -> Option<Hash> {
+    pub fn transaction_hash(&self) -> Option<ShortHash> {
         match *self {
             Tx::Call(ref tx, _) => tx.hash,
             Tx::OpenContract(ref tx, _) => tx.hash,
@@ -207,7 +207,7 @@ impl Tx {
         }
     }
 
-    pub fn fee_hash(&self) -> Hash {
+    pub fn fee_hash(&self) -> ShortHash {
         match *self {
             Tx::Call(ref tx, _) => tx.fee_hash,
             Tx::OpenContract(ref tx, _) => tx.fee_hash,

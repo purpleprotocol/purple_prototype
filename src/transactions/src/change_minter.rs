@@ -524,8 +524,8 @@ mod tests {
         let new_minter_addr = Address::normal_from_pkey(id2.pkey());
         let next_address1 = NormalAddress::from_pkey(id3.pkey());
         let next_address2 = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -589,8 +589,8 @@ mod tests {
         let new_minter_addr = Address::normal_from_pkey(id2.pkey());
         let next_address1 = NormalAddress::from_pkey(id3.pkey());
         let next_address2 = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -654,8 +654,8 @@ mod tests {
         let new_minter_addr = Address::normal_from_pkey(id2.pkey());
         let next_address1 = NormalAddress::from_pkey(id3.pkey());
         let next_address2 = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -722,8 +722,8 @@ mod tests {
         let root = Hash::NULL_RLP;
         let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
 
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = ChangeMinter {
@@ -755,8 +755,8 @@ mod tests {
         let new_minter_addr = Address::normal_from_pkey(id2.pkey());
         let next_address1 = NormalAddress::from_pkey(id3.pkey());
         let next_address2 = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut db = test_helpers::init_tempdb();
@@ -864,8 +864,8 @@ mod tests {
         fn verify_signature(
             new_minter: Address,
             fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
+            asset_hash: ShortHash,
+            fee_hash: ShortHash
         ) -> bool {
             let id = Identity::new();
             let id2 = Identity::new();

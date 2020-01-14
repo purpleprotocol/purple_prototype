@@ -593,7 +593,7 @@ mod tests {
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
         let creator_next_addr = next_address.clone();
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;

@@ -445,8 +445,8 @@ mod tests {
             inputs: String,
             gas_price: Balance,
             gas_limit: Gas,
-            asset_hash: Hash,
-            fee_hash: Hash
+            asset_hash: ShortHash,
+            fee_hash: ShortHash
         ) -> bool {
             let id = Identity::new();
             let id2 = Identity::new();

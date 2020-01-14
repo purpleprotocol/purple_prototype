@@ -695,7 +695,7 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -738,7 +738,7 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -781,8 +781,8 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -826,8 +826,8 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -871,8 +871,8 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -916,7 +916,7 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -959,7 +959,7 @@ mod tests {
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let addr_hash = crypto::hash_slice(b"test_contract");
         let to_addr = ContractAddress::new(addr_hash);
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -1002,7 +1002,7 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
         let amount = Balance::from_bytes(b"100.123").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
@@ -1085,7 +1085,7 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = NormalAddress::from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
         let amount = Balance::from_bytes(b"100.123").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
@@ -1181,8 +1181,8 @@ mod tests {
             next_address: NormalAddress,
             amount: Balance,
             fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
+            asset_hash: ShortHash,
+            fee_hash: ShortHash
         ) -> bool {
             let id = Identity::new();
 

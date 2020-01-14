@@ -26,7 +26,7 @@ extern crate rlp;
 extern crate tempdir;
 
 use account::{NormalAddress, Balance};
-use crypto::Hash;
+use crypto::ShortHash;
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{BlakeDbHasher, Codec, PersistentDb};
 use quicksort::*;
@@ -42,7 +42,7 @@ pub fn init_tempdb() -> PersistentDb {
 pub fn init_balance(
     trie: &mut TrieDBMut<BlakeDbHasher, Codec>,
     address: NormalAddress,
-    asset_hash: Hash,
+    asset_hash: ShortHash,
     amount: &[u8],
 ) {
     let bin_asset_hash = asset_hash.to_vec();

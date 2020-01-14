@@ -620,8 +620,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -663,8 +663,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -707,8 +707,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -750,8 +750,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -793,8 +793,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -836,8 +836,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -871,8 +871,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
@@ -972,8 +972,8 @@ mod tests {
             fee: Balance,
             coin_supply: u64,
             precision: u8,
-            asset_hash: Hash,
-            fee_hash: Hash
+            asset_hash: ShortHash,
+            fee_hash: ShortHash
         ) -> bool {
             let id = Identity::new();
 

@@ -86,3 +86,15 @@ impl std::fmt::Display for ShortHash {
         write!(f, "{}", hex::encode(self.0))
     }
 }
+
+impl Arbitrary for ShortHash {
+    fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> ShortHash {
+        let mut rng = rand::thread_rng();
+        let bytes: Vec<u8> = (0..SHORT_HASH_BYTES).map(|_| rng.gen_range(1, 255)).collect();
+
+        let mut result = [0; SHORT_HASH_BYTES];
+        result.copy_from_slice(&bytes);
+
+        ShortHash(result)
+    }
+}

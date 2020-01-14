@@ -18,7 +18,7 @@
 
 use account::{Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, Signature};
+use crypto::{ShortHash, Hash, Signature};
 use crypto::{PublicKey as Pk, SecretKey as Sk};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
@@ -31,12 +31,10 @@ pub struct Burn {
     pub(crate) next_address: NormalAddress,
     pub(crate) amount: Balance,
     pub(crate) fee: Balance,
-    pub(crate) asset_hash: Hash,
-    pub(crate) fee_hash: Hash,
+    pub(crate) asset_hash: ShortHash,
+    pub(crate) fee_hash: ShortHash,
     pub(crate) nonce: u64,
-    
     pub(crate) hash: Option<Hash>,
-    
     pub(crate) signature: Option<Signature>,
 }
 
@@ -314,14 +312,15 @@ impl Burn {
     /// 2) Fee length           - 8bits
     /// 3) Amount length        - 8bits
     /// 4) Nonce                - 64bits
-    /// 5) Burner               - 33byte binary
-    /// 6) Next address         - 33byte binary
-    /// 7) Currency hash        - 32byte binary
-    /// 8) Fee hash             - 32byte binary
-    /// 9) Signature            - 64byte binary
-    /// 10) Amount              - Binary of amount length
-    /// 11) Fee                 - Binary of fee length
-    /// 12) Signature           - Binary of signature length
+    /// 5) Currency flag        - 1byte (Value is 1 if currency and fee hashes are identical. Otherwise is 0)
+    /// 6) Currency hash        - 8byte binary
+    /// 7) Fee hash             - 8byte binary (Non-existent if currency flag is true)
+    /// 8) Burner               - 33byte binary
+    /// 9) Next address         - 33byte binary
+    /// 10) Signature           - 64byte binary
+    /// 11) Amount              - Binary of amount length
+    /// 12) Fee                 - Binary of fee length
+    /// 13) Signature           - Binary of signature length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -341,6 +340,12 @@ impl Burn {
         let next_address = self.next_address.to_bytes();
         let asset_hash = &self.asset_hash.0;
         let fee_hash = &self.fee_hash.0;
+        let currency_flag = if asset_hash == fee_hash {
+            1
+        } else {
+            0
+        };
+
         let amount = self.amount.to_bytes();
         let fee = self.fee.to_bytes();
 
@@ -353,11 +358,15 @@ impl Burn {
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
+        buffer.write_u8(currency_flag);
+        buffer.extend_from_slice(asset_hash);
+
+        if currency_flag == 0 {
+            buffer.extend_from_slice(fee_hash);
+        }
 
         buffer.extend_from_slice(&self.burner.0);
         buffer.extend_from_slice(&next_address);
-        buffer.extend_from_slice(asset_hash);
-        buffer.extend_from_slice(fee_hash);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(&amount);
         buffer.extend_from_slice(&fee);
@@ -401,9 +410,47 @@ impl Burn {
             return Err("Bad nonce");
         };
 
+        rdr.set_position(4);
+
+        let currency_flag = if let Ok(result) = rdr.read_u8() {
+            if result == 0 || result == 1 {
+                result 
+            } else {
+                return Err("Bad currency flag value");
+            }
+        } else {
+            return Err("Bad currency flag");
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..11).collect();
+        let _: Vec<u8> = buf.drain(..12).collect();
+
+        let asset_hash = if buf.len() > 8 as usize {
+            let mut hash = [0; 8];
+            let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            ShortHash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if currency_flag == 1 {
+            asset_hash
+        } else {
+            if buf.len() > 8 as usize {
+                let mut hash = [0; 8];
+                let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+                hash.copy_from_slice(&hash_vec);
+
+                ShortHash(hash)
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        };
 
         let burner = if buf.len() > 32 as usize {
             let burner_vec: Vec<u8> = buf.drain(..32).collect();
@@ -422,28 +469,6 @@ impl Burn {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let asset_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let fee_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -559,7 +584,7 @@ mod tests {
         let id2 = Identity::new();
         let burner_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -604,7 +629,7 @@ mod tests {
         let id2 = Identity::new();
         let burner_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -649,8 +674,8 @@ mod tests {
         let id2 = Identity::new();
         let burner_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -701,8 +726,8 @@ mod tests {
         let id2 = Identity::new();
         let burner_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -753,8 +778,8 @@ mod tests {
         let id2 = Identity::new();
         let burner_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -805,7 +830,7 @@ mod tests {
         let id2 = Identity::new();
         let burner_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -850,7 +875,7 @@ mod tests {
         let id2 = Identity::new();
         let burner_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
@@ -924,7 +949,7 @@ mod tests {
             tx.verify_hash()
         }
 
-        fn verify_signature(id: Identity, next_address: NormalAddress, amount: Balance, fee: Balance, asset_hash: Hash, fee_hash: Hash) -> bool {
+        fn verify_signature(id: Identity, next_address: NormalAddress, amount: Balance, fee: Balance, asset_hash: ShortHash, fee_hash: ShortHash) -> bool {
             let mut tx = Burn {
                 burner: id.pkey().clone(),
                 next_address,
