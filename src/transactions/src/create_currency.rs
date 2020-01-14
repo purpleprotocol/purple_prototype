@@ -28,10 +28,10 @@ pub struct CreateCurrency {
     pub(crate) creator: Pk,
     pub(crate) next_address: NormalAddress,
     pub(crate) receiver: Address,
-    pub(crate) asset_hash: Hash,
+    pub(crate) asset_hash: ShortHash,
     pub(crate) coin_supply: u64,
     pub(crate) precision: u8,
-    pub(crate) fee_hash: Hash,
+    pub(crate) fee_hash: ShortHash,
     pub(crate) fee: Balance,
     pub(crate) nonce: u64,
     
@@ -365,13 +365,14 @@ impl CreateCurrency {
     /// 3) Precision            - 8bits
     /// 4) Coin supply          - 64bits
     /// 5) Nonce                - 64bits
-    /// 6) Creator              - 33byte binary
-    /// 7) Receiver             - 33byte binary
-    /// 8) Next address         - 33byte binary
-    /// 9) Currency hash        - 32byte binary
-    /// 10) Fee hash            - 32byte binary
-    /// 11) Signature           - 64byte binary
-    /// 12) Fee                 - Binary of fee length
+    /// 6) Currency flag        - 1byte (Value is 1 if currency and fee hashes are identical. Otherwise is 0)
+    /// 7) Asset hash           - 8byte binary
+    /// 8) Fee hash             - 8byte binary (Non-existent if currency flag is true)
+    /// 9) Creator              - 33byte binary
+    /// 10) Receiver            - 33byte binary
+    /// 11) Next address        - 33byte binary
+    /// 12) Signature           - 64byte binary
+    /// 13) Fee                 - Binary of fee length
      pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
 
@@ -389,6 +390,11 @@ impl CreateCurrency {
         let precision = &self.precision;
         let fee = &self.fee.to_bytes();
         let nonce = &self.nonce;
+        let currency_flag = if asset_hash == fee_hash {
+            1
+        } else {
+            0
+        };
 
         let fee_len = fee.len();
 
@@ -397,12 +403,15 @@ impl CreateCurrency {
         buffer.write_u8(*precision).unwrap();
         buffer.write_u64::<BigEndian>(*coin_supply).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
+        buffer.extend_from_slice(asset_hash);
+
+        if currency_flag == 0 {
+            buffer.extend_from_slice(fee_hash);
+        }
 
         buffer.extend_from_slice(&self.creator.0);
         buffer.extend_from_slice(&receiver);
         buffer.extend_from_slice(&next_address);
-        buffer.extend_from_slice(asset_hash);
-        buffer.extend_from_slice(fee_hash);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(fee);
 
@@ -453,9 +462,47 @@ impl CreateCurrency {
             return Err("Bad nonce");
         };
 
+        rdr.set_position(12);
+
+        let currency_flag = if let Ok(result) = rdr.read_u8() {
+            if result == 0 || result == 1 {
+                result 
+            } else {
+                return Err("Bad currency flag value");
+            }
+        } else {
+            return Err("Bad currency flag");
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..19).collect();
+        let _: Vec<u8> = buf.drain(..20).collect();
+
+        let asset_hash = if buf.len() > 8 as usize {
+            let mut hash = [0; 8];
+            let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            ShortHash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if currency_flag == 1 {
+            asset_hash
+        } else {
+            if buf.len() > 8 as usize {
+                let mut hash = [0; 8];
+                let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+                hash.copy_from_slice(&hash_vec);
+
+                ShortHash(hash)
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        };
 
         let creator = if buf.len() > 32 as usize {
             let creator_vec: Vec<u8> = buf.drain(..32).collect();
@@ -485,28 +532,6 @@ impl CreateCurrency {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let asset_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let fee_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
         } else {
             return Err("Incorrect packet structure");
         };
