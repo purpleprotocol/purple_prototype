@@ -415,6 +415,7 @@ impl Mint {
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
+        buffer.write_u8(currency_flag).unwrap();
         buffer.extend_from_slice(asset_hash);
 
         if currency_flag == 0 {
@@ -475,7 +476,7 @@ impl Mint {
             return Err("Bad nonce");
         };
 
-        rdr.set_position(6);
+        rdr.set_position(13);
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {
@@ -549,23 +550,23 @@ impl Mint {
             return Err("Incorrect packet structure");
         };
 
-        let amount = if buf.len() > amount_len as usize {
-            let amount_vec: Vec<u8> = buf.drain(..amount_len as usize).collect();
-
-            match Balance::from_bytes(&amount_vec) {
-                Ok(result) => result,
-                Err(_) => return Err("Bad amount"),
-            }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
         let signature = if buf.len() > 64 as usize {
             let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
 
             match Signature::from_bytes(&sig_vec) {
                 Ok(sig) => sig,
                 Err(err) => return Err(err),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let amount = if buf.len() > amount_len as usize {
+            let amount_vec: Vec<u8> = buf.drain(..amount_len as usize).collect();
+
+            match Balance::from_bytes(&amount_vec) {
+                Ok(result) => result,
+                Err(_) => return Err("Bad amount"),
             }
         } else {
             return Err("Incorrect packet structure");

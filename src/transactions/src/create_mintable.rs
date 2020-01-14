@@ -449,6 +449,7 @@ impl CreateMintable {
         buffer.write_u64::<BigEndian>(*coin_supply).unwrap();
         buffer.write_u64::<BigEndian>(*max_supply).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
+        buffer.write_u8(currency_flag).unwrap();
         buffer.extend_from_slice(asset_hash);
 
         if currency_flag == 0 {
@@ -517,7 +518,7 @@ impl CreateMintable {
             return Err("Bad nonce");
         };
 
-        rdr.set_position(20);
+        rdr.set_position(27);
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {

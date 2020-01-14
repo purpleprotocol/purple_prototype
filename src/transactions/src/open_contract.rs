@@ -326,6 +326,7 @@ impl OpenContract {
         buffer.write_u16::<BigEndian>(state_len as u16).unwrap();
         buffer.write_u16::<BigEndian>(code_len as u16).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
+        buffer.write_u8(currency_flag).unwrap();
         buffer.extend_from_slice(asset_hash);
 
         if currency_flag == 0 {
@@ -408,7 +409,7 @@ impl OpenContract {
             return Err("Bad nonce");
         };
 
-        rdr.set_position(9);
+        rdr.set_position(16);
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {

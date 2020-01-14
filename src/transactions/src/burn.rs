@@ -359,7 +359,7 @@ impl Burn {
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
-        buffer.write_u8(currency_flag);
+        buffer.write_u8(currency_flag).unwrap();
         buffer.extend_from_slice(asset_hash);
 
         if currency_flag == 0 {
@@ -411,7 +411,7 @@ impl Burn {
             return Err("Bad nonce");
         };
 
-        rdr.set_position(4);
+        rdr.set_position(11);
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {

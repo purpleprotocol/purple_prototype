@@ -330,7 +330,7 @@ impl ChangeMinter {
         buf.write_u8(tx_type).unwrap();
         buf.write_u8(fee_len as u8).unwrap();
         buf.write_u64::<BigEndian>(*nonce).unwrap();
-        buf.write_u8(currency_flag);
+        buf.write_u8(currency_flag).unwrap();
         buf.extend_from_slice(asset_hash);
 
         if currency_flag == 0 {
@@ -374,7 +374,7 @@ impl ChangeMinter {
             return Err("Bad nonce");
         };
 
-        rdr.set_position(3);
+        rdr.set_position(10);
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {

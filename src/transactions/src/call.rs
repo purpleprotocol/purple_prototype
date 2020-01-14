@@ -143,7 +143,7 @@ impl Call {
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u16::<BigEndian>(inputs_len as u16).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
-        buffer.write_u8(currency_flag);
+        buffer.write_u8(currency_flag).unwrap();
         buffer.extend_from_slice(asset_hash);
 
         if currency_flag == 0 {
@@ -223,7 +223,7 @@ impl Call {
             return Err("Bad nonce");
         };
 
-        rdr.set_position(8);
+        rdr.set_position(15);
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {

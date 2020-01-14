@@ -404,6 +404,7 @@ impl CreateCurrency {
         buffer.write_u8(*precision).unwrap();
         buffer.write_u64::<BigEndian>(*coin_supply).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
+        buffer.write_u8(currency_flag).unwrap();
         buffer.extend_from_slice(asset_hash);
 
         if currency_flag == 0 {
@@ -463,7 +464,7 @@ impl CreateCurrency {
             return Err("Bad nonce");
         };
 
-        rdr.set_position(12);
+        rdr.set_position(19);
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {
