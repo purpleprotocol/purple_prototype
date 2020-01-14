@@ -21,6 +21,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
+use rand::Rng;
 use std::io::Cursor;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -329,11 +330,11 @@ impl ChangeMinter {
         buf.write_u8(tx_type).unwrap();
         buf.write_u8(fee_len as u8).unwrap();
         buf.write_u64::<BigEndian>(*nonce).unwrap();
-        buffer.write_u8(currency_flag);
-        buffer.extend_from_slice(asset_hash);
+        buf.write_u8(currency_flag);
+        buf.extend_from_slice(asset_hash);
 
         if currency_flag == 0 {
-            buffer.extend_from_slice(fee_hash);
+            buf.extend_from_slice(fee_hash);
         }
 
         buf.extend_from_slice(&self.minter.0);
