@@ -560,6 +560,17 @@ impl Mint {
             return Err("Incorrect packet structure");
         };
 
+        let signature = if buf.len() > 64 as usize {
+            let sig_vec: Vec<u8> = buf.drain(..64 as usize).collect();
+
+            match Signature::from_bytes(&sig_vec) {
+                Ok(sig) => sig,
+                Err(err) => return Err(err),
+            }
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
         let fee = if buf.len() == fee_len as usize {
             let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
 

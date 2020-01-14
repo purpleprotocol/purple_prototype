@@ -32,9 +32,9 @@ pub struct OpenContract {
     pub(crate) code: Vec<u8>,
     pub(crate) default_state: Vec<u8>,
     pub(crate) amount: Balance,
-    pub(crate) asset_hash: Hash,
+    pub(crate) asset_hash: ShortHash,
     pub(crate) fee: Balance,
-    pub(crate) fee_hash: Hash,
+    pub(crate) fee_hash: ShortHash,
     pub(crate) self_payable: bool,
     pub(crate) nonce: u64,
     
@@ -273,16 +273,17 @@ impl OpenContract {
     /// 5) State length             - 16bits
     /// 6) Code length              - 16bits
     /// 7) Nonce                    - 64bits
-    /// 8) Owner                    - 32byte binary
-    /// 9) Address                  - 33byte binary
-    /// 10) Next address            - 33byte binary
-    /// 11) Currency hash           - 32byte binary
-    /// 12) Fee hash                - 32byte binary
-    /// 13) Signature               - 64byte binary
-    /// 14) Amount                  - Binary of amount length
-    /// 15) Fee                     - Binary of fee length
-    /// 16) Default state           - Binary of state length
-    /// 17) Code                    - Binary of code length
+    /// 8) Currency flag            - 1byte (Value is 1 if currency and fee hashes are identical. Otherwise is 0)
+    /// 9) Asset hash               - 8byte binary
+    /// 10) Fee hash                - 8byte binary (Non-existent if currency flag is true)
+    /// 11) Owner                   - 32byte binary
+    /// 12) Address                 - 33byte binary
+    /// 13) Next address            - 33byte binary
+    /// 14) Signature               - 64byte binary
+    /// 15) Amount                  - Binary of amount length
+    /// 16) Fee                     - Binary of fee length
+    /// 17) Default state           - Binary of state length
+    /// 18) Code                    - Binary of code length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -302,9 +303,16 @@ impl OpenContract {
         let self_payable: u8 = if self.self_payable { 1 } else { 0 };
         let code = &self.code;
         let default_state = &self.default_state;
+        let asset_hash = &self.asset_hash.0;
+        let fee_hash = &self.fee_hash.0;
         let amount = self.amount.to_bytes();
         let fee = self.fee.to_bytes();
         let nonce = &self.nonce;
+        let currency_flag = if asset_hash == fee_hash {
+            1
+        } else {
+            0
+        };
 
         let amount_len = amount.len();
         let fee_len = fee.len();
@@ -318,12 +326,15 @@ impl OpenContract {
         buffer.write_u16::<BigEndian>(state_len as u16).unwrap();
         buffer.write_u16::<BigEndian>(code_len as u16).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
+        buffer.extend_from_slice(asset_hash);
+
+        if currency_flag == 0 {
+            buffer.extend_from_slice(fee_hash);
+        }
 
         buffer.extend_from_slice(&self.creator.0);
         buffer.extend_from_slice(&address);
         buffer.extend_from_slice(self.next_address.as_bytes());
-        buffer.extend_from_slice(&self.asset_hash.0);
-        buffer.extend_from_slice(&self.fee_hash.0);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(&amount);
         buffer.extend_from_slice(&fee);
@@ -397,9 +408,47 @@ impl OpenContract {
             return Err("Bad nonce");
         };
 
+        rdr.set_position(9);
+
+        let currency_flag = if let Ok(result) = rdr.read_u8() {
+            if result == 0 || result == 1 {
+                result 
+            } else {
+                return Err("Bad currency flag value");
+            }
+        } else {
+            return Err("Bad currency flag");
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..16).collect();
+        let _: Vec<u8> = buf.drain(..17).collect();
+
+        let asset_hash = if buf.len() > 8 as usize {
+            let mut hash = [0; 8];
+            let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            ShortHash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if currency_flag == 1 {
+            asset_hash
+        } else {
+            if buf.len() > 8 as usize {
+                let mut hash = [0; 8];
+                let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+                hash.copy_from_slice(&hash_vec);
+
+                ShortHash(hash)
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        };
 
         let creator = if buf.len() > 32 as usize {
             let creator_vec: Vec<u8> = buf.drain(..32).collect();
@@ -431,28 +480,6 @@ impl OpenContract {
             }
         } else {
             return Err("Incorrect packet structure! Buffer size is smaller than the size for the next address field");
-        };
-
-        let asset_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure! Buffer size is smaller than the size for the fee hash field");
-        };
-
-        let fee_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure! Buffer size is smaller than the size for the fee hash field");
         };
 
         let signature = if buf.len() > 64 as usize {
@@ -558,6 +585,16 @@ use quickcheck::Arbitrary;
 impl Arbitrary for OpenContract {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> OpenContract {
         let (pk, _) = crypto::gen_keypair();
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(0, 2);
+
+        let asset_hash = Arbitrary::arbitrary(g);
+        let fee_hash = if random == 1 {
+            asset_hash
+        } else {
+            Arbitrary::arbitrary(g)
+        };
+
         let mut tx = OpenContract {
             creator: pk,
             next_address: Arbitrary::arbitrary(g),
@@ -565,10 +602,10 @@ impl Arbitrary for OpenContract {
             default_state: Arbitrary::arbitrary(g),
             self_payable: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
-            asset_hash: Arbitrary::arbitrary(g),
+            asset_hash,
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
-            fee_hash: Arbitrary::arbitrary(g),
+            fee_hash,
             address: Some(Arbitrary::arbitrary(g)),
             hash: None,
             signature: Some(Arbitrary::arbitrary(g)),
@@ -697,9 +734,9 @@ mod tests {
             code: Vec<u8>,
             default_state: Vec<u8>,
             amount: Balance,
-            asset_hash: Hash,
+            asset_hash: ShortHash,
             fee: Balance,
-            fee_hash: Hash,
+            fee_hash: ShortHash,
             self_payable: bool
         ) -> bool {
             let id = Identity::new();

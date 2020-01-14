@@ -151,7 +151,7 @@ impl Tx {
         }
     }
 
-    pub fn transaction_hash(&self) -> Option<ShortHash> {
+    pub fn transaction_hash(&self) -> Option<Hash> {
         match *self {
             Tx::Call(ref tx, _) => tx.hash,
             Tx::OpenContract(ref tx, _) => tx.hash,
