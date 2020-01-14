@@ -19,9 +19,10 @@
 use account::{Address, Balance, NormalAddress};
 use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
+use rand::Rng;
 use std::io::Cursor;
 
 pub const ASSET_NAME_SIZE: usize = 32;
@@ -39,10 +40,10 @@ pub struct CreateUnique {
     pub(crate) receiver: Address,
 
     /// The global identifier of the asset
-    pub(crate) asset_hash: Hash,
+    pub(crate) asset_hash: ShortHash,
 
     /// The id of the currency that the transaction is paid in
-    pub(crate) fee_hash: Hash,
+    pub(crate) fee_hash: ShortHash,
 
     /// The name of the asset
     pub(crate) name: [u8; ASSET_NAME_SIZE],
@@ -109,19 +110,20 @@ impl CreateUnique {
     /// 2) Fee length           - 8bits
     /// 3) Meta Exist BitMask   - 8bits
     /// 4) Nonce                - 64bits
-    /// 5) Creator              - 33byte binary
-    /// 6) Receiver             - 33byte binary
-    /// 7) Next address         - 33byte binary
-    /// 8) Asset hash           - 32byte binary
-    /// 9) Fee hash             - 32byte binary
-    /// 10) Name                - 32byte binary
-    /// 11) Signature           - 64byte binary
-    /// 12) Fee                 - Binary of fee length
-    /// 13) Meta1 (Optional)    - 32byte binary
-    /// 14) Meta2 (Optional)    - 32byte binary
-    /// 15) Meta3 (Optional)    - 32byte binary
-    /// 16) Meta4 (Optional)    - 32byte binary
-    /// 17) Meta5 (Optional)    - 32byte binary
+    /// 5) Currency flag        - 1byte (Value is 1 if currency and fee hashes are identical. Otherwise is 0)
+    /// 6) Asset hash           - 8byte binary
+    /// 7) Fee hash             - 8byte binary (Non-existent if currency flag is true)
+    /// 8) Creator              - 33byte binary
+    /// 9) Receiver             - 33byte binary
+    /// 10) Next address        - 33byte binary
+    /// 11) Name                - 32byte binary
+    /// 12) Signature           - 64byte binary
+    /// 13) Fee                 - Binary of fee length
+    /// 14) Meta1 (Optional)    - 32byte binary
+    /// 15) Meta2 (Optional)    - 32byte binary
+    /// 16) Meta3 (Optional)    - 32byte binary
+    /// 17) Meta4 (Optional)    - 32byte binary
+    /// 18) Meta5 (Optional)    - 32byte binary
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buf: Vec<u8> = Vec::new();
         let mut bitmask: u8 = 0;
@@ -157,18 +159,27 @@ impl CreateUnique {
         let fee = self.fee.to_bytes();
         let fee_len = fee.len();
         let nonce = &self.nonce;
+        let currency_flag = if asset_hash == fee_hash {
+            1
+        } else {
+            0
+        };
 
         // Write to buffer
         buf.write_u8(tx_type).unwrap();
         buf.write_u8(fee_len as u8).unwrap();
         buf.write_u8(bitmask).unwrap();
         buf.write_u64::<BigEndian>(*nonce).unwrap();
+        buf.write_u8(currency_flag).unwrap();
+        buf.extend_from_slice(asset_hash);
+
+        if currency_flag == 0 {
+            buf.extend_from_slice(fee_hash);
+        }
 
         buf.extend_from_slice(&self.creator.0);
         buf.extend_from_slice(&receiver);
         buf.extend_from_slice(&next_address);
-        buf.extend_from_slice(asset_hash);
-        buf.extend_from_slice(fee_hash);
         buf.extend_from_slice(name);
         buf.extend_from_slice(&signature);
         buf.extend_from_slice(&fee);
@@ -233,8 +244,46 @@ impl CreateUnique {
             return Err("Bad nonce");
         };
 
+        rdr.set_position(11);
+
+        let currency_flag = if let Ok(result) = rdr.read_u8() {
+            if result == 0 || result == 1 {
+                result 
+            } else {
+                return Err("Bad currency flag value");
+            }
+        } else {
+            return Err("Bad currency flag");
+        };
+
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..11).collect();
+        let _: Vec<u8> = buf.drain(..12).collect();
+
+        let asset_hash = if buf.len() > 8 as usize {
+            let mut hash = [0; 8];
+            let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            ShortHash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if currency_flag == 1 {
+            asset_hash
+        } else {
+            if buf.len() > 8 as usize {
+                let mut hash = [0; 8];
+                let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+                hash.copy_from_slice(&hash_vec);
+
+                ShortHash(hash)
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        };
 
         let creator = if buf.len() > 32 as usize {
             let creator_vec: Vec<u8> = buf.drain(..32).collect();
@@ -264,28 +313,6 @@ impl CreateUnique {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let asset_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let fee_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -469,7 +496,6 @@ fn assemble_message(obj: &CreateUnique) -> Vec<u8> {
 }
 
 use quickcheck::Arbitrary;
-use rand::Rng;
 
 #[derive(Clone, Debug)]
 struct Array32(pub [u8; 32]);
@@ -520,18 +546,28 @@ impl Arbitrary for CreateUnique {
         };
 
         let (pk, _) = crypto::gen_keypair();
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(0, 2);
+
+        let asset_hash = Arbitrary::arbitrary(g);
+        let fee_hash = if random == 1 {
+            asset_hash
+        } else {
+            Arbitrary::arbitrary(g)
+        };
+
         let mut tx = CreateUnique {
             creator: pk,
             next_address: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
-            asset_hash: Arbitrary::arbitrary(g),
+            asset_hash,
             name: name.0,
             meta1,
             meta2,
             meta3,
             meta4,
             meta5,
-            fee_hash: Arbitrary::arbitrary(g),
+            fee_hash,
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
             hash: None,
@@ -569,8 +605,8 @@ mod tests {
             fee: Balance,
             name: Array32,
             meta: (Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>, Option<Array32>),
-            asset_hash: Hash,
-            fee_hash: Hash
+            asset_hash: ShortHash,
+            fee_hash: ShortHash
         ) -> bool {
             let id = Identity::new();
             let id2 = Identity::new();

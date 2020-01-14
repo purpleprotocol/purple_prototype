@@ -18,9 +18,10 @@
 
 use account::{Address, Balance, ContractAddress, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
+use rand::Rng;
 use purple_vm::Gas;
 use std::io::Cursor;
 use std::str;
@@ -35,12 +36,10 @@ pub struct Call {
     pub(crate) fee: Balance,
     pub(crate) gas_price: Balance,
     pub(crate) gas_limit: Gas,
-    pub(crate) asset_hash: Hash,
-    pub(crate) fee_hash: Hash,
+    pub(crate) asset_hash: ShortHash,
+    pub(crate) fee_hash: ShortHash,
     pub(crate) nonce: u64,
-    
     pub(crate) hash: Option<Hash>,
-    
     pub(crate) signature: Option<Signature>,
 }
 
@@ -92,16 +91,17 @@ impl Call {
     /// 5) Fee length           - 8bits
     /// 6) Inputs length        - 16bits
     /// 7) Nonce                - 64bits
-    /// 8) From                 - 33byte binary
-    /// 9) To                   - 33byte binary
-    /// 10) Next address        - 33byte binary
-    /// 11) Currency hash       - 32byte binary
-    /// 12) Fee hash            - 32byte binary
-    /// 13) Signature           - 64byte binary
+    /// 8) Currency flag        - 1byte (Value is 1 if currency and fee hashes are identical. Otherwise is 0)
+    /// 9) Currency hash        - 8byte binary
+    /// 10) Fee hash            - 8byte binary (Non-existent if currency flag is true)
+    /// 11) From                - 33byte binary
+    /// 12) To                  - 33byte binary
+    /// 13) Next address        - 33byte binary
+    /// 14) Signature           - 64byte binary
     /// 14) Gas price           - Binary of gas price length
-    /// 15) Amount              - Binary of amount length
-    /// 16) Fee                 - Binary of fee length
-    /// 17) Inputs              - Binary of inputs length
+    /// 16) Amount              - Binary of amount length
+    /// 17) Fee                 - Binary of fee length
+    /// 18) Inputs              - Binary of inputs length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -123,6 +123,11 @@ impl Call {
         let fee = self.fee.to_bytes();
         let inputs = self.inputs.as_bytes();
         let nonce = &self.nonce;
+        let currency_flag = if asset_hash == fee_hash {
+            1
+        } else {
+            0
+        };
 
         let gas_limit_len = gas_limit.len();
         let gas_price_len = gas_price.len();
@@ -138,12 +143,16 @@ impl Call {
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u16::<BigEndian>(inputs_len as u16).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
+        buffer.write_u8(currency_flag).unwrap();
+        buffer.extend_from_slice(asset_hash);
+
+        if currency_flag == 0 {
+            buffer.extend_from_slice(fee_hash);
+        }
 
         buffer.extend_from_slice(&self.from.0);
         buffer.extend_from_slice(&to);
         buffer.extend_from_slice(&next_address);
-        buffer.extend_from_slice(asset_hash);
-        buffer.extend_from_slice(fee_hash);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(&gas_limit);
         buffer.extend_from_slice(&gas_price);
@@ -214,9 +223,47 @@ impl Call {
             return Err("Bad nonce");
         };
 
+        rdr.set_position(15);
+
+        let currency_flag = if let Ok(result) = rdr.read_u8() {
+            if result == 0 || result == 1 {
+                result 
+            } else {
+                return Err("Bad currency flag value");
+            }
+        } else {
+            return Err("Bad currency flag");
+        };
+
         // Consume cursor
         let mut buf = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..15).collect();
+        let _: Vec<u8> = buf.drain(..16).collect();
+
+        let asset_hash = if buf.len() > 8 as usize {
+            let mut hash = [0; 8];
+            let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            ShortHash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if currency_flag == 1 {
+            asset_hash
+        } else {
+            if buf.len() > 8 as usize {
+                let mut hash = [0; 8];
+                let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+                hash.copy_from_slice(&hash_vec);
+
+                ShortHash(hash)
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        };
 
         let from = if buf.len() > 32 as usize {
             let from_vec: Vec<u8> = buf.drain(..32).collect();
@@ -246,28 +293,6 @@ impl Call {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let asset_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let fee_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -396,17 +421,27 @@ use quickcheck::Arbitrary;
 impl Arbitrary for Call {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Call {
         let (pk, _) = crypto::gen_keypair();
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(0, 2);
+
+        let asset_hash = Arbitrary::arbitrary(g);
+        let fee_hash = if random == 1 {
+            asset_hash
+        } else {
+            Arbitrary::arbitrary(g)
+        };
+
         let mut tx = Call {
             from: pk,
             next_address: Arbitrary::arbitrary(g),
             to: Arbitrary::arbitrary(g),
-            fee_hash: Arbitrary::arbitrary(g),
+            fee_hash,
             fee: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
             gas_limit: Arbitrary::arbitrary(g),
             inputs: Arbitrary::arbitrary(g),
             gas_price: Arbitrary::arbitrary(g),
-            asset_hash: Arbitrary::arbitrary(g),
+            asset_hash,
             nonce: Arbitrary::arbitrary(g),
             hash: None,
             signature: Some(Arbitrary::arbitrary(g)),
@@ -445,8 +480,8 @@ mod tests {
             inputs: String,
             gas_price: Balance,
             gas_limit: Gas,
-            asset_hash: Hash,
-            fee_hash: Hash
+            asset_hash: ShortHash,
+            fee_hash: ShortHash
         ) -> bool {
             let id = Identity::new();
             let id2 = Identity::new();

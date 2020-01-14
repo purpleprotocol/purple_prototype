@@ -17,7 +17,7 @@
 */
 
 use account::{Balance, NormalAddress};
-use crypto::Hash;
+use crypto::{ShortHash, Hash};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
 use std::default::Default;
@@ -36,13 +36,13 @@ pub(crate) const INIT_ACCOUNTS: &'static [(&'static str, u64)] = &[];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Genesis {
-    asset_hash: Hash,
+    asset_hash: ShortHash,
     coin_supply: u64,
 }
 
 impl Default for Genesis {
     fn default() -> Genesis {
-        let main_asset_hash = crypto::hash_slice(MAIN_CUR_NAME);
+        let main_asset_hash = crypto::hash_slice(MAIN_CUR_NAME).to_short();
 
         Genesis {
             coin_supply: COIN_SUPPLY,

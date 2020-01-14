@@ -18,9 +18,10 @@
 
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
+use rand::Rng;
 use std::io::Cursor;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -29,11 +30,11 @@ pub struct CreateMintable {
     pub(crate) next_address: NormalAddress,
     pub(crate) receiver: Address,
     pub(crate) minter_address: Address,
-    pub(crate) asset_hash: Hash,
+    pub(crate) asset_hash: ShortHash,
     pub(crate) coin_supply: u64,
     pub(crate) max_supply: u64,
     pub(crate) precision: u8,
-    pub(crate) fee_hash: Hash,
+    pub(crate) fee_hash: ShortHash,
     pub(crate) fee: Balance,
     pub(crate) nonce: u64,
     pub(crate) hash: Option<Hash>,
@@ -406,14 +407,15 @@ impl CreateMintable {
     /// 4) Coin supply          - 64bits
     /// 5) Max supply           - 64bits
     /// 6) Nonce                - 64bits
-    /// 7) Creator              - 33byte binary
-    /// 8) Receiver             - 33byte binary
-    /// 9) Next address         - 33byte binary
-    /// 10) Minter address      - 33byte binary
-    /// 11) Currency hash       - 32byte binary
-    /// 12) Fee hash            - 32byte binary
-    /// 13) Signature           - 64byte binary
-    /// 14) Fee                 - Binary of fee length
+    /// 7) Currency flag        - 1byte (Value is 1 if currency and fee hashes are identical. Otherwise is 0)
+    /// 8) Asset hash           - 8byte binary
+    /// 9) Fee hash             - 8byte binary (Non-existent if currency flag is true)
+    /// 10) Creator             - 33byte binary
+    /// 11) Receiver            - 33byte binary
+    /// 12) Next address        - 33byte binary
+    /// 13) Minter address      - 33byte binary
+    /// 14) Signature           - 64byte binary
+    /// 15) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
 
@@ -433,6 +435,11 @@ impl CreateMintable {
         let precision = &self.precision;
         let fee = &self.fee.to_bytes();
         let nonce = &self.nonce;
+        let currency_flag = if asset_hash == fee_hash {
+            1
+        } else {
+            0
+        };
 
         let fee_len = fee.len();
 
@@ -442,13 +449,17 @@ impl CreateMintable {
         buffer.write_u64::<BigEndian>(*coin_supply).unwrap();
         buffer.write_u64::<BigEndian>(*max_supply).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
+        buffer.write_u8(currency_flag).unwrap();
+        buffer.extend_from_slice(asset_hash);
+
+        if currency_flag == 0 {
+            buffer.extend_from_slice(fee_hash);
+        }
 
         buffer.extend_from_slice(&self.creator.0);
         buffer.extend_from_slice(&receiver);
         buffer.extend_from_slice(&next_address);
         buffer.extend_from_slice(&minter_address);
-        buffer.extend_from_slice(asset_hash);
-        buffer.extend_from_slice(fee_hash);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(fee);
 
@@ -507,9 +518,47 @@ impl CreateMintable {
             return Err("Bad nonce");
         };
 
+        rdr.set_position(27);
+
+        let currency_flag = if let Ok(result) = rdr.read_u8() {
+            if result == 0 || result == 1 {
+                result 
+            } else {
+                return Err("Bad currency flag value");
+            }
+        } else {
+            return Err("Bad currency flag");
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..27).collect();
+        let _: Vec<u8> = buf.drain(..28).collect();
+
+        let asset_hash = if buf.len() > 8 as usize {
+            let mut hash = [0; 8];
+            let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            ShortHash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if currency_flag == 1 {
+            asset_hash
+        } else {
+            if buf.len() > 8 as usize {
+                let mut hash = [0; 8];
+                let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+                hash.copy_from_slice(&hash_vec);
+
+                ShortHash(hash)
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        };
 
         let creator = if buf.len() > 32 as usize {
             let creator_vec: Vec<u8> = buf.drain(..32).collect();
@@ -546,28 +595,6 @@ impl CreateMintable {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let asset_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let fee_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -655,16 +682,26 @@ use quickcheck::Arbitrary;
 impl Arbitrary for CreateMintable {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> CreateMintable {
         let (pk, _) = crypto::gen_keypair();
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(0, 2);
+
+        let asset_hash = Arbitrary::arbitrary(g);
+        let fee_hash = if random == 1 {
+            asset_hash
+        } else {
+            Arbitrary::arbitrary(g)
+        };
+
         let mut tx = CreateMintable {
             creator: pk,
             next_address: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
             minter_address: Arbitrary::arbitrary(g),
-            asset_hash: Arbitrary::arbitrary(g),
+            asset_hash,
             coin_supply: Arbitrary::arbitrary(g),
             max_supply: Arbitrary::arbitrary(g),
             precision: Arbitrary::arbitrary(g),
-            fee_hash: Arbitrary::arbitrary(g),
+            fee_hash,
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
             hash: None,
@@ -687,8 +724,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -732,8 +769,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -777,8 +814,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -822,8 +859,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -867,8 +904,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -912,8 +949,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -949,8 +986,8 @@ mod tests {
         let id2 = Identity::new();
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -996,8 +1033,8 @@ mod tests {
         let creator_addr = NormalAddress::from_pkey(id.pkey());
         let next_address = NormalAddress::from_pkey(id2.pkey());
         let minter_addr = Address::normal_from_pkey(id3.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
@@ -1107,8 +1144,8 @@ mod tests {
             coin_supply: u64,
             max_supply: u64,
             precision: u8,
-            asset_hash: Hash,
-            fee_hash: Hash
+            asset_hash: ShortHash,
+            fee_hash: ShortHash
         ) -> bool {
             let id = Identity::new();
             let id2 = Identity::new();

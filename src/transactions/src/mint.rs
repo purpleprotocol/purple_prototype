@@ -18,9 +18,10 @@
 
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
+use rand::Rng;
 use std::io::Cursor;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -29,8 +30,8 @@ pub struct Mint {
     pub(crate) next_address: NormalAddress,
     pub(crate) receiver: Address,
     pub(crate) amount: Balance,
-    pub(crate) asset_hash: Hash,
-    pub(crate) fee_hash: Hash,
+    pub(crate) asset_hash: ShortHash,
+    pub(crate) fee_hash: ShortHash,
     pub(crate) fee: Balance,
     pub(crate) nonce: u64,
     
@@ -373,14 +374,15 @@ impl Mint {
     /// 3) Amount length            - 8bits
     /// 4) Signature length         - 16bits
     /// 5) Nonce                    - 64bits
-    /// 6) Minter                   - 32byte binary
-    /// 7) Receiver                 - 33byte binary
-    /// 8) Next address             - 33byte binary
-    /// 9) Currency hash            - 32byte binary
-    /// 10) Fee hash                - 32byte binary
-    /// 11) Signature               - 64byte binary
-    /// 12) Amount                  - Binary of amount length
-    /// 13) Fee                     - Binary of fee length
+    /// 6) Currency flag            - 1byte (Value is 1 if currency and fee hashes are identical. Otherwise is 0)
+    /// 7) Asset hash               - 8byte binary
+    /// 8) Fee hash                 - 8byte binary (Non-existent if currency flag is true)
+    /// 9) Minter                   - 32byte binary
+    /// 10) Receiver                - 33byte binary
+    /// 11) Next address            - 33byte binary
+    /// 12) Signature               - 64byte binary
+    /// 13) Amount                  - Binary of amount length
+    /// 14) Fee                     - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -398,6 +400,11 @@ impl Mint {
         let amount = self.amount.to_bytes();
         let fee = self.fee.to_bytes();
         let nonce = &self.nonce;
+        let currency_flag = if asset_hash == fee_hash {
+            1
+        } else {
+            0
+        };
 
         let fee_len = fee.len();
         let amount_len = amount.len();
@@ -408,12 +415,16 @@ impl Mint {
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u16::<BigEndian>(signature_len as u16).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
+        buffer.write_u8(currency_flag).unwrap();
+        buffer.extend_from_slice(asset_hash);
+
+        if currency_flag == 0 {
+            buffer.extend_from_slice(fee_hash);
+        }
 
         buffer.extend_from_slice(&self.minter.0);
         buffer.extend_from_slice(receiver);
         buffer.extend_from_slice(next_address);
-        buffer.extend_from_slice(asset_hash);
-        buffer.extend_from_slice(fee_hash);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(&amount);
         buffer.extend_from_slice(&fee);
@@ -465,9 +476,47 @@ impl Mint {
             return Err("Bad nonce");
         };
 
+        rdr.set_position(13);
+
+        let currency_flag = if let Ok(result) = rdr.read_u8() {
+            if result == 0 || result == 1 {
+                result 
+            } else {
+                return Err("Bad currency flag value");
+            }
+        } else {
+            return Err("Bad currency flag");
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..13).collect();
+        let _: Vec<u8> = buf.drain(..14).collect();
+
+        let asset_hash = if buf.len() > 8 as usize {
+            let mut hash = [0; 8];
+            let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            ShortHash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if currency_flag == 1 {
+            asset_hash
+        } else {
+            if buf.len() > 8 as usize {
+                let mut hash = [0; 8];
+                let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+                hash.copy_from_slice(&hash_vec);
+
+                ShortHash(hash)
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        };
 
         let minter = if buf.len() > 32 as usize {
             let minter_vec: Vec<u8> = buf.drain(..32).collect();
@@ -497,28 +546,6 @@ impl Mint {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let asset_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let fee_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -608,13 +635,23 @@ use quickcheck::Arbitrary;
 impl Arbitrary for Mint {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Mint {
         let (pk, _) = crypto::gen_keypair();
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(0, 2);
+
+        let asset_hash = Arbitrary::arbitrary(g);
+        let fee_hash = if random == 1 {
+            asset_hash
+        } else {
+            Arbitrary::arbitrary(g)
+        };
+
         let mut tx = Mint {
             minter: pk,
             next_address: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
-            asset_hash: Arbitrary::arbitrary(g),
-            fee_hash: Arbitrary::arbitrary(g),
+            asset_hash,
+            fee_hash,
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
             hash: None,
@@ -644,8 +681,8 @@ mod tests {
         let minter_addr = NormalAddress::from_pkey(id2.pkey());
         let next_address = NormalAddress::from_pkey(id3.pkey());
         let minter_next_address = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -709,8 +746,8 @@ mod tests {
         let minter_addr = NormalAddress::from_pkey(id2.pkey());
         let next_address = NormalAddress::from_pkey(id3.pkey());
         let minter_next_address = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -774,8 +811,8 @@ mod tests {
         let minter_addr = NormalAddress::from_pkey(id2.pkey());
         let next_address = NormalAddress::from_pkey(id3.pkey());
         let minter_next_address = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -839,8 +876,8 @@ mod tests {
         let minter_addr = NormalAddress::from_pkey(id2.pkey());
         let next_address = NormalAddress::from_pkey(id3.pkey());
         let minter_next_address = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -883,8 +920,8 @@ mod tests {
         let minter_addr = NormalAddress::from_pkey(id2.pkey());
         let next_address = NormalAddress::from_pkey(id3.pkey());
         let minter_next_address = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -946,8 +983,8 @@ mod tests {
         let minter_addr = NormalAddress::from_pkey(id2.pkey());
         let next_address = NormalAddress::from_pkey(id3.pkey());
         let minter_next_address = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -1033,8 +1070,8 @@ mod tests {
         let minter_addr = NormalAddress::from_pkey(id2.pkey());
         let next_address = NormalAddress::from_pkey(id3.pkey());
         let minter_next_address = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -1120,8 +1157,8 @@ mod tests {
         let minter_addr = NormalAddress::from_pkey(id2.pkey());
         let next_address = NormalAddress::from_pkey(id3.pkey());
         let minter_next_address = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -1216,8 +1253,8 @@ mod tests {
             receiver: Address,
             amount: Balance,
             fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
+            asset_hash: ShortHash,
+            fee_hash: ShortHash
         ) -> bool {
             let id = Identity::new();
             let id2 = Identity::new();

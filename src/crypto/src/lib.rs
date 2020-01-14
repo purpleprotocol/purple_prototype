@@ -22,6 +22,7 @@ extern crate serde_derive;
 pub extern crate crc32fast;
 pub use blake_hasher::*;
 pub use hash::*;
+pub use short_hash::*;
 pub use node_id::*;
 pub use rust_base58::base58::*;
 pub use rust_sodium::crypto::aead;
@@ -38,6 +39,7 @@ use rust_sodium::crypto::sign::{keypair_from_seed, Seed};
 
 mod blake_hasher;
 mod hash;
+mod short_hash;
 mod node_id;
 mod signature;
 

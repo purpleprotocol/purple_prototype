@@ -28,7 +28,7 @@ use transactions::Tx;
 use std::collections::{VecDeque, BTreeMap};
 use patricia_trie::{TrieDB, Trie};
 use persistence::{BlakeDbHasher, Codec};
-use crypto::Hash;
+use crypto::{ShortHash, Hash};
 use rand::Rng;
 use std::sync::Arc;
 
@@ -62,7 +62,7 @@ pub struct Mempool {
     /// 
     /// Each entry in the map is an ordered binary tree 
     /// map between transaction fees and transaction hashes.
-    fee_map: HashMap<Hash, BTreeMap<Balance, VecDeque<Hash>>>,
+    fee_map: HashMap<ShortHash, BTreeMap<Balance, VecDeque<Hash>>>,
 
     /// Mapping between signing addresses that have issued 
     /// transactions which are currently stored in the mempool 
@@ -87,7 +87,7 @@ pub struct Mempool {
     /// there is no preferred currency, they will be
     /// taken out of all available currencies from
     /// the biggest fee to the least.
-    preferred_currencies: Vec<Hash>,
+    preferred_currencies: Vec<ShortHash>,
 
     /// Ratio of preferred transaction to include in a ready batch,
     /// for example if 50 preference ratio is given, 50% of the transactions
@@ -116,7 +116,7 @@ impl Mempool {
     pub fn new(
         chain_ref: PowChainRef,
         max_size: u64, 
-        preferred_currencies: Vec<Hash>,
+        preferred_currencies: Vec<ShortHash>,
         preference_ratio: u8,
     ) -> Mempool {
         if preference_ratio < 50 || preference_ratio > 100 {
@@ -406,7 +406,7 @@ impl Mempool {
             }
         }
 
-        let fee_currencies: Vec<&Hash> = self.fee_map
+        let fee_currencies: Vec<&ShortHash> = self.fee_map
             .keys()
             .collect();
 
@@ -574,7 +574,7 @@ mod tests {
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
             let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
-            let cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME);
+            let cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME).to_short();
 
             // Transactions from account A
             let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));

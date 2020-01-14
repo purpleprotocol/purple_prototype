@@ -18,9 +18,10 @@
 
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
+use rand::Rng;
 use std::io::Cursor;
 use std::str;
 
@@ -31,12 +32,10 @@ pub struct Send {
     pub(crate) to: Address,
     pub(crate) amount: Balance,
     pub(crate) fee: Balance,
-    pub(crate) asset_hash: Hash,
-    pub(crate) fee_hash: Hash,
+    pub(crate) asset_hash: ShortHash,
+    pub(crate) fee_hash: ShortHash,
     pub(crate) nonce: u64,
-    
     pub(crate) hash: Option<Hash>,
-    
     pub(crate) signature: Option<Signature>,
 }
 
@@ -439,14 +438,15 @@ impl Send {
     /// 2) Amount length            - 8bits
     /// 3) Fee length               - 8bits
     /// 4) Nonce                    - 64bits
-    /// 5) From                     - 32byte binary
-    /// 6) To                       - 33byte binary
-    /// 7) Next address             - 33byte binary
-    /// 7) Currency hash            - 32byte binary
-    /// 8) Fee hash                 - 32byte binary
-    /// 9) Signature                - 64byte binary
-    /// 10) Amount                  - Binary of amount length
-    /// 11) Fee                     - Binary of fee length
+    /// 5) Currency flag            - 1byte (Value is 1 if currency and fee hashes are identical. Otherwise is 0)
+    /// 6) Asset hash               - 8byte binary
+    /// 7) Fee hash                 - 8byte binary (Non-existent if currency flag is true)
+    /// 8) From                     - 32byte binary
+    /// 9) To                       - 33byte binary
+    /// 10) Next address            - 33byte binary
+    /// 11) Signature               - 64byte binary
+    /// 12) Amount                  - Binary of amount length
+    /// 13) Fee                     - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
         let tx_type: u8 = Self::TX_TYPE;
@@ -461,7 +461,14 @@ impl Send {
         let next_address = self.next_address.as_bytes();
         let amount = self.amount.to_bytes();
         let fee = self.fee.to_bytes();
+        let asset_hash = &self.asset_hash.0;
+        let fee_hash = &self.fee_hash.0;
         let nonce = &self.nonce;
+        let currency_flag = if asset_hash == fee_hash {
+            1
+        } else {
+            0
+        };
 
         let fee_len = fee.len();
         let amount_len = amount.len();
@@ -470,11 +477,16 @@ impl Send {
         buffer.write_u8(amount_len as u8).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
+        buffer.write_u8(currency_flag).unwrap();
+        buffer.extend_from_slice(asset_hash);
+
+        if currency_flag == 0 {
+            buffer.extend_from_slice(fee_hash);
+        }
+
         buffer.extend_from_slice(&self.from.0);
         buffer.extend_from_slice(to);
         buffer.extend_from_slice(next_address);
-        buffer.extend_from_slice(&self.asset_hash.0);
-        buffer.extend_from_slice(&self.fee_hash.0);
         buffer.extend_from_slice(&signature);
         buffer.extend_from_slice(&amount);
         buffer.extend_from_slice(&fee);
@@ -518,9 +530,47 @@ impl Send {
             return Err("Bad nonce");
         };
 
+        rdr.set_position(11);
+
+        let currency_flag = if let Ok(result) = rdr.read_u8() {
+            if result == 0 || result == 1 {
+                result 
+            } else {
+                return Err("Bad currency flag value");
+            }
+        } else {
+            return Err("Bad currency flag");
+        };
+
         // Consume cursor
         let mut buf = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..11).collect();
+        let _: Vec<u8> = buf.drain(..12).collect();
+
+        let asset_hash = if buf.len() > 8 as usize {
+            let mut hash = [0; 8];
+            let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            ShortHash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if currency_flag == 1 {
+            asset_hash
+        } else {
+            if buf.len() > 8 as usize {
+                let mut hash = [0; 8];
+                let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+                hash.copy_from_slice(&hash_vec);
+
+                ShortHash(hash)
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        };
 
         let from = if buf.len() > 32 as usize {
             let from_vec: Vec<u8> = buf.drain(..32).collect();
@@ -550,28 +600,6 @@ impl Send {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let asset_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let fee_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -660,6 +688,15 @@ use quickcheck::Arbitrary;
 impl Arbitrary for Send {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Send {
         let (pk, _) = crypto::gen_keypair();
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(0, 2);
+
+        let asset_hash = Arbitrary::arbitrary(g);
+        let fee_hash = if random == 1 {
+            asset_hash
+        } else {
+            Arbitrary::arbitrary(g)
+        };
 
         let mut tx = Send {
             from: pk,
@@ -667,8 +704,8 @@ impl Arbitrary for Send {
             to: Arbitrary::arbitrary(g),
             amount: Arbitrary::arbitrary(g),
             fee: Arbitrary::arbitrary(g),
-            asset_hash: Arbitrary::arbitrary(g),
-            fee_hash: Arbitrary::arbitrary(g),
+            asset_hash,
+            fee_hash,
             nonce: Arbitrary::arbitrary(g),
             hash: None,
             signature: Some(Arbitrary::arbitrary(g)),
@@ -695,7 +732,7 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -738,7 +775,7 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -781,8 +818,8 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -826,8 +863,8 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -871,8 +908,8 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -916,7 +953,7 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -959,7 +996,7 @@ mod tests {
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let addr_hash = crypto::hash_slice(b"test_contract");
         let to_addr = ContractAddress::new(addr_hash);
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -1002,7 +1039,7 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = Address::normal_from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
         let amount = Balance::from_bytes(b"100.123").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
@@ -1085,7 +1122,7 @@ mod tests {
         let from_addr = NormalAddress::from_pkey(&from_id.pkey());
         let from_next_addr = NormalAddress::from_pkey(&from_id2.pkey());
         let to_addr = NormalAddress::from_pkey(&to_id.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency");
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
         let amount = Balance::from_bytes(b"100.123").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
@@ -1181,8 +1218,8 @@ mod tests {
             next_address: NormalAddress,
             amount: Balance,
             fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
+            asset_hash: ShortHash,
+            fee_hash: ShortHash
         ) -> bool {
             let id = Identity::new();
 

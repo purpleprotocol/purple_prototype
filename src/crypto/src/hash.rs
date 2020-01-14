@@ -17,6 +17,7 @@
 */
 
 use crate::blake_hasher::BlakeHasher;
+use crate::short_hash::ShortHash;
 use crc32fast::Hasher as CrcHasher;
 use hashdb::Hasher;
 use quickcheck::Arbitrary;
@@ -60,6 +61,11 @@ impl Hash {
     pub fn random() -> Hash {
         let random_bytes = rand::thread_rng().gen::<[u8; HASH_BYTES]>();
         Hash(random_bytes)
+    }
+
+    /// Converts a 32 byte `Hash` to a 8 bytes `ShortHash`
+    pub fn to_short(&self) -> ShortHash {
+        ShortHash::from_hash(&self)
     }
 }
 

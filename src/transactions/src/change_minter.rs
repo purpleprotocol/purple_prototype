@@ -18,9 +18,10 @@
 
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
 use persistence::{BlakeDbHasher, Codec};
+use rand::Rng;
 use std::io::Cursor;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,11 +36,11 @@ pub struct ChangeMinter {
     pub(crate) new_minter: Address,
 
     /// The global identifier of the mintable asset
-    pub(crate) asset_hash: Hash,
+    pub(crate) asset_hash: ShortHash,
 
     /// The global identifier of the asset in which
     /// the transaction fee is paid in.
-    pub(crate) fee_hash: Hash,
+    pub(crate) fee_hash: ShortHash,
 
     /// The transaction's fee
     pub(crate) fee: Balance,
@@ -294,13 +295,14 @@ impl ChangeMinter {
     /// 1) Transaction type(8)  - 8bits
     /// 2) Fee length           - 8bits
     /// 3) Nonce                - 64bits
-    /// 4) Minter               - 32byte binary
-    /// 5) New Minter           - 33byte binary
-    /// 6) Next address         - 33byte binary
-    /// 7) Asset hash           - 32byte binary
-    /// 8) Fee hash             - 32byte binary
-    /// 9) Signature            - 64byte binary
-    /// 10) Fee                 - Binary of fee length
+    /// 4) Currency flag        - 1byte (Value is 1 if currency and fee hashes are identical. Otherwise is 0)
+    /// 5) Asset hash           - 8byte binary
+    /// 6) Fee hash             - 8byte binary (Non-existent if currency flag is true)
+    /// 7) Minter               - 32byte binary
+    /// 8) New Minter           - 33byte binary
+    /// 9) Fee hash             - 32byte binary
+    /// 10) Signature           - 64byte binary
+    /// 11) Fee                 - Binary of fee length
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buf: Vec<u8> = Vec::new();
 
@@ -318,17 +320,26 @@ impl ChangeMinter {
         let fee = &self.fee.to_bytes();
         let fee_len = fee.len();
         let nonce = &self.nonce;
+        let currency_flag = if asset_hash == fee_hash {
+            1
+        } else {
+            0
+        };
 
         // Write to buffer
         buf.write_u8(tx_type).unwrap();
         buf.write_u8(fee_len as u8).unwrap();
         buf.write_u64::<BigEndian>(*nonce).unwrap();
+        buf.write_u8(currency_flag).unwrap();
+        buf.extend_from_slice(asset_hash);
+
+        if currency_flag == 0 {
+            buf.extend_from_slice(fee_hash);
+        }
 
         buf.extend_from_slice(&self.minter.0);
         buf.extend_from_slice(new_minter);
         buf.extend_from_slice(next_address);
-        buf.extend_from_slice(asset_hash);
-        buf.extend_from_slice(fee_hash);
         buf.extend_from_slice(&signature);
         buf.extend_from_slice(&fee);
 
@@ -363,8 +374,46 @@ impl ChangeMinter {
             return Err("Bad nonce");
         };
 
+        rdr.set_position(10);
+
+        let currency_flag = if let Ok(result) = rdr.read_u8() {
+            if result == 0 || result == 1 {
+                result 
+            } else {
+                return Err("Bad currency flag value");
+            }
+        } else {
+            return Err("Bad currency flag");
+        };
+
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..10).collect();
+        let _: Vec<u8> = buf.drain(..11).collect();
+
+        let asset_hash = if buf.len() > 8 as usize {
+            let mut hash = [0; 8];
+            let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+            hash.copy_from_slice(&hash_vec);
+
+            ShortHash(hash)
+        } else {
+            return Err("Incorrect packet structure");
+        };
+
+        let fee_hash = if currency_flag == 1 {
+            asset_hash
+        } else {
+            if buf.len() > 8 as usize {
+                let mut hash = [0; 8];
+                let hash_vec: Vec<u8> = buf.drain(..8).collect();
+
+                hash.copy_from_slice(&hash_vec);
+
+                ShortHash(hash)
+            } else {
+                return Err("Incorrect packet structure");
+            }
+        };
 
         let minter = if buf.len() > 32 as usize {
             let minter_vec: Vec<u8> = buf.drain(..32).collect();
@@ -394,28 +443,6 @@ impl ChangeMinter {
                 Ok(addr) => addr,
                 Err(err) => return Err(err),
             }
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let asset_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
-        } else {
-            return Err("Incorrect packet structure");
-        };
-
-        let fee_hash = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
-
-            hash.copy_from_slice(&hash_vec);
-
-            Hash(hash)
         } else {
             return Err("Incorrect packet structure");
         };
@@ -490,12 +517,22 @@ use quickcheck::Arbitrary;
 impl Arbitrary for ChangeMinter {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> ChangeMinter {
         let (pk, _) = crypto::gen_keypair();
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(0, 2);
+
+        let asset_hash = Arbitrary::arbitrary(g);
+        let fee_hash = if random == 1 {
+            asset_hash
+        } else {
+            Arbitrary::arbitrary(g)
+        };
+
         let mut tx = ChangeMinter {
             minter: pk,
             next_address: Arbitrary::arbitrary(g),
             new_minter: Arbitrary::arbitrary(g),
-            asset_hash: Arbitrary::arbitrary(g),
-            fee_hash: Arbitrary::arbitrary(g),
+            asset_hash,
+            fee_hash,
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
             hash: None,
@@ -524,8 +561,8 @@ mod tests {
         let new_minter_addr = Address::normal_from_pkey(id2.pkey());
         let next_address1 = NormalAddress::from_pkey(id3.pkey());
         let next_address2 = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -589,8 +626,8 @@ mod tests {
         let new_minter_addr = Address::normal_from_pkey(id2.pkey());
         let next_address1 = NormalAddress::from_pkey(id3.pkey());
         let next_address2 = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -654,8 +691,8 @@ mod tests {
         let new_minter_addr = Address::normal_from_pkey(id2.pkey());
         let next_address1 = NormalAddress::from_pkey(id3.pkey());
         let next_address2 = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
         let mut root = Hash::NULL_RLP;
@@ -722,8 +759,8 @@ mod tests {
         let root = Hash::NULL_RLP;
         let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
 
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut tx = ChangeMinter {
@@ -755,8 +792,8 @@ mod tests {
         let new_minter_addr = Address::normal_from_pkey(id2.pkey());
         let next_address1 = NormalAddress::from_pkey(id3.pkey());
         let next_address2 = NormalAddress::from_pkey(id4.pkey());
-        let asset_hash = crypto::hash_slice(b"Test currency 1");
-        let fee_hash = crypto::hash_slice(b"Test currency 2");
+        let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut db = test_helpers::init_tempdb();
@@ -864,8 +901,8 @@ mod tests {
         fn verify_signature(
             new_minter: Address,
             fee: Balance,
-            asset_hash: Hash,
-            fee_hash: Hash
+            asset_hash: ShortHash,
+            fee_hash: ShortHash
         ) -> bool {
             let id = Identity::new();
             let id2 = Identity::new();
