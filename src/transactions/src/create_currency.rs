@@ -613,14 +613,24 @@ use quickcheck::Arbitrary;
 impl Arbitrary for CreateCurrency {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> CreateCurrency {
         let (pk, _) = crypto::gen_keypair();
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(0, 2);
+
+        let asset_hash = Arbitrary::arbitrary(g);
+        let fee_hash = if random == 1 {
+            asset_hash
+        } else {
+            Arbitrary::arbitrary(g)
+        };
+
         let mut tx = CreateCurrency {
             creator: pk,
             next_address: Arbitrary::arbitrary(g),
             receiver: Arbitrary::arbitrary(g),
-            asset_hash: Arbitrary::arbitrary(g),
+            asset_hash,
             coin_supply: Arbitrary::arbitrary(g),
             precision: Arbitrary::arbitrary(g),
-            fee_hash: Arbitrary::arbitrary(g),
+            fee_hash,
             fee: Arbitrary::arbitrary(g),
             nonce: Arbitrary::arbitrary(g),
             hash: None,
