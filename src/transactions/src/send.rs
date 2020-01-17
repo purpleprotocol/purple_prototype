@@ -668,8 +668,6 @@ fn assemble_message(obj: &Send) -> Vec<u8> {
     let next_address = obj.next_address.as_bytes();
     let amount = obj.amount.to_bytes();
     let fee = obj.fee.to_bytes();
-    let asset_hash = obj.asset_hash.0;
-    let fee_hash = obj.fee_hash.0;
 
     // Compose data to sign
     buf.write_u64::<BigEndian>(obj.nonce).unwrap();
