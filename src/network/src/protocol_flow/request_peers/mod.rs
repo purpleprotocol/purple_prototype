@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2018-2019 The Purple Core Developers.
+  Copyright (C) 2018-2020 The Purple Core Developers.
   This file is part of the Purple Core Library.
 
   The Purple Core Library is free software: you can redistribute it and/or modify
