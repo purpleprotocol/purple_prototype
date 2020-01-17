@@ -180,30 +180,8 @@ pub fn handle_packet<N: NetworkInterface>(
             _ => Err(NetworkErr::PacketParseErr),
         },
 
-        _ => {
-            debug!("Could not parse packet with type {} from {}", packet_type, peer_addr);
-            Err(NetworkErr::PacketParseErr)
-        }
-    }
-}
-
-/// Parses and handles a packet.
-pub fn handle_pool_packet<N: NetworkInterface>(
-    network: &mut N,
-    conn_type: ConnectionType,
-    peer_addr: &SocketAddr,
-    packet: &[u8],
-) -> Result<(), NetworkErr> {
-    let packet_type = packet[0];
-
-    match packet_type {
-        Ping::PACKET_TYPE => match Ping::from_bytes(packet) {
-            Ok(packet) => Ping::handle(network, peer_addr, &packet, conn_type),
-            _ => Err(NetworkErr::PacketParseErr),
-        },
-
-        Pong::PACKET_TYPE => match Pong::from_bytes(packet) {
-            Ok(packet) => Pong::handle(network, peer_addr, &packet, conn_type),
+        AnnounceTx::PACKET_TYPE => match AnnounceTx::from_bytes(packet) {
+            Ok(packet) => AnnounceTx::handle(network, peer_addr, &packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
