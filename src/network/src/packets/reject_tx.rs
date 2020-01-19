@@ -24,48 +24,53 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
 use crypto::{ShortHash, PublicKey as Pk, SecretKey as Sk, Signature};
-use transactions::Tx;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct SendTx {
-    tx: Arc<Tx>,
-    nonce: u64,
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum TxRejectStatus {
+    MempoolFull,
+    Witnessed,
 }
 
-impl SendTx {
-    pub fn new(nonce: u64, tx: Arc<Tx>) -> SendTx {
-        SendTx { 
-            tx,
+#[derive(Debug, Clone, PartialEq)]
+pub struct RejectTx {
+    nonce: u64,
+    status: TxRejectStatus,
+}
+
+impl RejectTx {
+    pub fn new(nonce: u64, status: TxRejectStatus) -> RejectTx {
+        RejectTx { 
             nonce,
+            status,
         }
     }
 }
 
-impl Packet for SendTx {
-    const PACKET_TYPE: u8 = 9;
+impl Packet for RejectTx {
+    const PACKET_TYPE: u8 = 10;
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
         let packet_type: u8 = Self::PACKET_TYPE;
-        let tx_bytes = self.tx.to_bytes();
-        let tx_len = tx_bytes.len();
+        let status = match self.status {
+            TxRejectStatus::Witnessed => 0,
+            TxRejectStatus::MempoolFull => 1,
+        };
 
         // Packet structure:
-        // 1) Packet type(9)   - 8bits
-        // 2) Tx length        - 16bits
+        // 1) Packet type(8)   - 8bits
+        // 2) Reject status    - 8bits
         // 2) Nonce            - 64bits
-        // 3) Transaction      - Tx length bytes
         buffer.write_u8(packet_type).unwrap();
-        buffer.write_u16::<BigEndian>(tx_len as u16).unwrap();
+        buffer.write_u8(status).unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
-        buffer.extend_from_slice(&tx_bytes);
         buffer
     }
 
-    fn from_bytes(bin: &[u8]) -> Result<Arc<SendTx>, NetworkErr> {
+    fn from_bytes(bin: &[u8]) -> Result<Arc<RejectTx>, NetworkErr> {
         let mut rdr = Cursor::new(bin.to_vec());
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
@@ -79,13 +84,17 @@ impl Packet for SendTx {
 
         rdr.set_position(1);
 
-        let tx_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
-            result
+        let status = if let Ok(result) = rdr.read_u8() {
+            match result {
+                0 => TxRejectStatus::Witnessed,
+                1 => TxRejectStatus::MempoolFull,
+                _ => return Err(NetworkErr::BadFormat)
+            }
         } else {
             return Err(NetworkErr::BadFormat);
         };
 
-        rdr.set_position(3);
+        rdr.set_position(2);
 
         let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
@@ -93,20 +102,9 @@ impl Packet for SendTx {
             return Err(NetworkErr::BadFormat);
         };
 
-        // Consume cursor
-        let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..11).collect();
-
-        let tx = if buf.len() == tx_len as usize {
-            let tx = Tx::from_bytes(&buf).map_err(|_| NetworkErr::BadFormat)?;
-            Arc::new(tx)
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
-        let packet = SendTx { 
-            tx,
+        let packet = RejectTx { 
             nonce, 
+            status,
         };
 
         Ok(Arc::new(packet))
@@ -115,7 +113,7 @@ impl Packet for SendTx {
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &SendTx,
+        packet: &RejectTx,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         unimplemented!();
@@ -126,9 +124,26 @@ impl Packet for SendTx {
 use quickcheck::Arbitrary;
 
 #[cfg(test)]
-impl Arbitrary for SendTx {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> SendTx {
-        SendTx::new(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+use rand::Rng;
+
+#[cfg(test)]
+impl Arbitrary for RejectTx {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> RejectTx {
+        RejectTx::new(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+    }
+}
+
+#[cfg(test)]
+impl Arbitrary for TxRejectStatus {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> TxRejectStatus {
+        let mut rng = rand::thread_rng();
+        let num = rng.gen_range(0, 2);
+
+        match num {
+            0 => TxRejectStatus::Witnessed,
+            1 => TxRejectStatus::MempoolFull,
+            _ => panic!(),
+        }
     }
 }
 
@@ -138,8 +153,8 @@ mod tests {
     use chain::PowBlock;
 
     quickcheck! {
-        fn serialize_deserialize(packet: Arc<SendTx>) -> bool {
-            packet == SendTx::from_bytes(&SendTx::to_bytes(&packet)).unwrap()
+        fn serialize_deserialize(packet: Arc<RejectTx>) -> bool {
+            packet == RejectTx::from_bytes(&RejectTx::to_bytes(&packet)).unwrap()
         }
     }
 }
