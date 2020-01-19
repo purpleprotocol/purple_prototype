@@ -24,37 +24,34 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
 use crypto::{ShortHash, PublicKey as Pk, SecretKey as Sk, Signature};
-use rand::Rng;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AnnounceTx {
+pub struct RequestTx {
     tx_hash: ShortHash,
     nonce: u64,
 }
 
-impl AnnounceTx {
-    pub fn new(tx_hash: ShortHash) -> AnnounceTx {
-        let mut rng = rand::thread_rng();
-        
-        AnnounceTx { 
+impl RequestTx {
+    pub fn new(nonce: u64, tx_hash: ShortHash) -> RequestTx {
+        RequestTx { 
             tx_hash,
-            nonce: rng.gen(),
+            nonce,
         }
     }
 }
 
-impl Packet for AnnounceTx {
-    const PACKET_TYPE: u8 = 7;
+impl Packet for RequestTx {
+    const PACKET_TYPE: u8 = 8;
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
         let packet_type: u8 = Self::PACKET_TYPE;
 
         // Packet structure:
-        // 1) Packet type(7)   - 8bits
+        // 1) Packet type(8)   - 8bits
         // 2) Nonce            - 64bits
         // 3) Transaction hash - 8bytes
         buffer.write_u8(packet_type).unwrap();
@@ -63,7 +60,7 @@ impl Packet for AnnounceTx {
         buffer
     }
 
-    fn from_bytes(bin: &[u8]) -> Result<Arc<AnnounceTx>, NetworkErr> {
+    fn from_bytes(bin: &[u8]) -> Result<Arc<RequestTx>, NetworkErr> {
         let mut rdr = Cursor::new(bin.to_vec());
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
@@ -96,7 +93,7 @@ impl Packet for AnnounceTx {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = AnnounceTx { 
+        let packet = RequestTx { 
             tx_hash,
             nonce, 
         };
@@ -107,7 +104,7 @@ impl Packet for AnnounceTx {
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &AnnounceTx,
+        packet: &RequestTx,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         unimplemented!();
@@ -118,9 +115,9 @@ impl Packet for AnnounceTx {
 use quickcheck::Arbitrary;
 
 #[cfg(test)]
-impl Arbitrary for AnnounceTx {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> AnnounceTx {
-        AnnounceTx::new(Arbitrary::arbitrary(g))
+impl Arbitrary for RequestTx {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> RequestTx {
+        RequestTx::new(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
     }
 }
 
@@ -130,8 +127,8 @@ mod tests {
     use chain::PowBlock;
 
     quickcheck! {
-        fn serialize_deserialize(packet: Arc<AnnounceTx>) -> bool {
-            packet == AnnounceTx::from_bytes(&AnnounceTx::to_bytes(&packet)).unwrap()
+        fn serialize_deserialize(packet: Arc<RequestTx>) -> bool {
+            packet == RequestTx::from_bytes(&RequestTx::to_bytes(&packet)).unwrap()
         }
     }
 }
