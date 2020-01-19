@@ -27,7 +27,7 @@ quickcheck = "0.7.2"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
 
 [dev-dependencies]
-graphlib = { version = "0.5.3", features = ["dot"] }
+graphlib = { version = "0.6.0", features = ["dot"] }
 rayon = "1.2.0"
 test-helpers = { path = "../util/test-helpers" }
 
