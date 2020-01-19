@@ -190,6 +190,11 @@ pub fn handle_packet<N: NetworkInterface>(
             _ => Err(NetworkErr::PacketParseErr),
         },
 
+        SendTx::PACKET_TYPE => match SendTx::from_bytes(packet) {
+            Ok(packet) => SendTx::handle(network, peer_addr, &packet, conn_type),
+            _ => Err(NetworkErr::PacketParseErr),
+        },
+
         _ => {
             debug!("Could not parse packet with type {} from {}", packet_type, peer_addr);
             Err(NetworkErr::PacketParseErr)

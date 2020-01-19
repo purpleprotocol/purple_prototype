@@ -102,17 +102,17 @@ impl Tx {
         }
     }
 
-    pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         match *self {
-            Tx::Call(ref tx, _) => tx.to_bytes(),
-            Tx::OpenContract(ref tx, _) => tx.to_bytes(),
-            Tx::Send(ref tx, _) => tx.to_bytes(),
-            Tx::Burn(ref tx, _) => tx.to_bytes(),
-            Tx::CreateCurrency(ref tx, _) => tx.to_bytes(),
-            Tx::CreateMintable(ref tx, _) => tx.to_bytes(),
-            Tx::Mint(ref tx, _) => tx.to_bytes(),
-            Tx::CreateUnique(ref tx, _) => tx.to_bytes(),
-            Tx::ChangeMinter(ref tx, _) => tx.to_bytes(),
+            Tx::Call(ref tx, _) => tx.to_bytes().unwrap(),
+            Tx::OpenContract(ref tx, _) => tx.to_bytes().unwrap(),
+            Tx::Send(ref tx, _) => tx.to_bytes().unwrap(),
+            Tx::Burn(ref tx, _) => tx.to_bytes().unwrap(),
+            Tx::CreateCurrency(ref tx, _) => tx.to_bytes().unwrap(),
+            Tx::CreateMintable(ref tx, _) => tx.to_bytes().unwrap(),
+            Tx::Mint(ref tx, _) => tx.to_bytes().unwrap(),
+            Tx::CreateUnique(ref tx, _) => tx.to_bytes().unwrap(),
+            Tx::ChangeMinter(ref tx, _) => tx.to_bytes().unwrap(),
         }
     }
 
@@ -465,7 +465,7 @@ mod tests {
 
     quickcheck! {
         fn serialize_deserialize(tx: Tx) -> bool {
-            tx == Tx::from_bytes(&Tx::to_bytes(&tx).unwrap()).unwrap()
+            tx == Tx::from_bytes(&Tx::to_bytes(&tx)).unwrap()
         }
     }
 }
