@@ -24,6 +24,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
 use crypto::{ShortHash, PublicKey as Pk, SecretKey as Sk, Signature};
+use rand::Rng;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -31,11 +32,17 @@ use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnounceTx {
     tx_hash: ShortHash,
+    nonce: u64,
 }
 
 impl AnnounceTx {
     pub fn new(tx_hash: ShortHash) -> AnnounceTx {
-        AnnounceTx { tx_hash }
+        let mut rng = rand::thread_rng();
+        
+        AnnounceTx { 
+            tx_hash,
+            nonce: rng.gen(),
+        }
     }
 }
 
@@ -48,8 +55,10 @@ impl Packet for AnnounceTx {
 
         // Packet structure:
         // 1) Packet type(7)   - 8bits
-        // 2) Transaction hash - 8bytes
+        // 2) Nonce            - 64bits
+        // 3) Transaction hash - 8bytes
         buffer.write_u8(packet_type).unwrap();
+        buffer.write_u64::<BigEndian>(self.nonce).unwrap();
         buffer.extend_from_slice(&self.tx_hash.0);
         buffer
     }
@@ -66,9 +75,17 @@ impl Packet for AnnounceTx {
             return Err(NetworkErr::BadFormat);
         }
 
+        rdr.set_position(1);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..1).collect();
+        let _: Vec<u8> = buf.drain(..9).collect();
 
         let tx_hash = if buf.len() == 8 as usize {
             let mut hash = [0; 8];
@@ -79,7 +96,11 @@ impl Packet for AnnounceTx {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = AnnounceTx { tx_hash };
+        let packet = AnnounceTx { 
+            tx_hash,
+            nonce, 
+        };
+
         Ok(Arc::new(packet))
     }
 
@@ -99,9 +120,7 @@ use quickcheck::Arbitrary;
 #[cfg(test)]
 impl Arbitrary for AnnounceTx {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> AnnounceTx {
-        AnnounceTx {
-            tx_hash: Arbitrary::arbitrary(g),
-        }
+        AnnounceTx::new(Arbitrary::arbitrary(g))
     }
 }
 
