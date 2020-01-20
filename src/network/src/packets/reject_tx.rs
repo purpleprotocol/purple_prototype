@@ -20,6 +20,9 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
+use crate::protocol_flow::transaction_propagation::Pair;
+use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
+use crate::validation::sender::Sender;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
@@ -119,7 +122,40 @@ impl Packet for RejectTx {
         packet: &RejectTx,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        unimplemented!();
+        debug!(
+            "Received RejectTx packet from {} with nonce {}",
+            addr, packet.nonce
+        );
+
+        // Retrieve pairs map
+        let pairs = {
+            let peers = network.peers();
+            let peers = peers.read();
+            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
+
+            peer.validator.transaction_propagation.pairs.clone()
+        };
+
+        let sender = {
+            if let Some(pair) = pairs.get(&packet.nonce) {
+                pair.sender.clone()
+            } else {
+                return Err(NetworkErr::AckErr);
+            }
+        };
+
+        debug!("Acking RejectTx {}", packet.nonce);
+
+        // Ack packet
+        {
+            let packet = InboundPacket::RejectTx(Arc::new(packet.clone()));
+            let mut sender = sender.lock();
+            sender.acknowledge(&packet)?;
+        }
+
+        debug!("RejectTx {} acked!", packet.nonce);
+
+        Ok(())
     }
 }
 
