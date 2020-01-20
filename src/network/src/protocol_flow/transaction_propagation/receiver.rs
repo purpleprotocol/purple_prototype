@@ -39,7 +39,7 @@ impl Receiver<OutboundPacket, InboundPacket> for TxReceiver {
     }
 
     fn done(&self) -> bool {
-        unimplemented!();
+        self.state == TxReceiverState::Done
     }
 
     fn can_receive(&self) -> bool {
@@ -47,6 +47,6 @@ impl Receiver<OutboundPacket, InboundPacket> for TxReceiver {
     }
 
     fn reset(&mut self) {
-        unimplemented!();
+        self.state = TxReceiverState::Ready
     }
 }

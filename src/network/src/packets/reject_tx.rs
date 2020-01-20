@@ -30,6 +30,7 @@ use std::sync::Arc;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum TxRejectStatus {
+    NoMempool,
     MempoolFull,
     Witnessed,
 }
@@ -58,6 +59,7 @@ impl Packet for RejectTx {
         let status = match self.status {
             TxRejectStatus::Witnessed => 0,
             TxRejectStatus::MempoolFull => 1,
+            TxRejectStatus::NoMempool => 2,
         };
 
         // Packet structure:
@@ -88,6 +90,7 @@ impl Packet for RejectTx {
             match result {
                 0 => TxRejectStatus::Witnessed,
                 1 => TxRejectStatus::MempoolFull,
+                2 => TxRejectStatus::NoMempool,
                 _ => return Err(NetworkErr::BadFormat)
             }
         } else {
@@ -137,11 +140,12 @@ impl Arbitrary for RejectTx {
 impl Arbitrary for TxRejectStatus {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> TxRejectStatus {
         let mut rng = rand::thread_rng();
-        let num = rng.gen_range(0, 2);
+        let num = rng.gen_range(0, 3);
 
         match num {
             0 => TxRejectStatus::Witnessed,
             1 => TxRejectStatus::MempoolFull,
+            2 => TxRejectStatus::NoMempool,
             _ => panic!(),
         }
     }

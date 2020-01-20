@@ -33,6 +33,7 @@ use crypto::NodeId;
 use crypto::SecretKey as Sk;
 use hashbrown::{HashMap, HashSet};
 use parking_lot::RwLock;
+use mempool::Mempool;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -77,6 +78,9 @@ pub struct Network {
     /// Accept connections boolean reference
     pub(crate) accept_connections: Arc<AtomicBool>,
 
+    /// Reference to the mempool
+    pub(crate) mempool_ref: Option<Arc<RwLock<Mempool>>>,
+
     #[cfg(feature = "miner")]
     /// Our retrieved ip address
     pub(crate) our_ip: SocketAddr,
@@ -92,6 +96,7 @@ impl Network {
         pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
         pow_chain_ref: PowChainRef,
         bootstrap_cache: BootstrapCache,
+        mempool_ref: Option<Arc<RwLock<Mempool>>>,
         accept_connections: Arc<AtomicBool>,
         our_ip: Option<SocketAddr>,
     ) -> Network {
@@ -105,6 +110,7 @@ impl Network {
             pow_chain_sender,
             pow_chain_ref,
             bootstrap_cache,
+            mempool_ref,
             accept_connections,
 
             #[cfg(feature = "miner")]

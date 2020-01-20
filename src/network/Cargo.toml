@@ -24,6 +24,7 @@ hashdb = "0.3.0"
 chain = { path = "../chain" }
 crypto = { path = "../crypto" }
 transactions = { path = "../transactions" }
+mempool = { path = "../mempool" }
 persistence = { path = "../persistence" }
 quickcheck = "0.7.2"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["rayon", "serde"] }

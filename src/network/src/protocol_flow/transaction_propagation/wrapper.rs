@@ -24,8 +24,9 @@ use std::default::Default;
 
 /// The pairs buffer size. This number represents
 /// the maximum amount of transactions that can be 
-/// concurrently propagated at the same time.
-pub const PAIRS_BUFFER_SIZE: usize = 10000;
+/// concurrently propagated at the same time for one
+/// peer.
+pub const PAIRS_BUFFER_SIZE: usize = 8000;
 
 #[derive(Clone, Debug)]
 pub struct TransactionPropagation {
