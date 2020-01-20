@@ -20,7 +20,7 @@ use crate::packets::*;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq)]
-/// Wrapper over an inbound packet in this hierarchical state-machine.
+/// Wrapper over an inbound packet in this state-machine.
 pub enum InboundPacket {
     RequestTx(Arc<RequestTx>),
     RejectTx(Arc<RejectTx>),

@@ -18,7 +18,7 @@
 
 use crate::protocol_flow::transaction_propagation::*;
 use parking_lot::Mutex;
-use hashbrown::HashMap;
+use dashmap::DashMap;
 use std::sync::Arc;
 use std::default::Default;
 
@@ -35,13 +35,13 @@ pub struct TransactionPropagation {
     /// nonces, representing a propagated transaction,
     /// and `Sender/Receiver` pairs. In this way, we can
     /// concurrently propagate multiple transactions.
-    pub(crate) pairs: HashMap<u64, Pair>,
+    pub(crate) pairs: Arc<DashMap<u64, Pair>>,
 }
 
 impl Default for TransactionPropagation {
     fn default() -> Self {
         TransactionPropagation {
-            pairs: HashMap::with_capacity(PAIRS_BUFFER_SIZE),
+            pairs: Arc::new(DashMap::with_capacity(PAIRS_BUFFER_SIZE)),
         }
     }
 }
