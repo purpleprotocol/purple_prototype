@@ -18,10 +18,35 @@
 
 use crate::protocol_flow::transaction_propagation::*;
 use parking_lot::Mutex;
+use hashbrown::HashMap;
 use std::sync::Arc;
+use std::default::Default;
+
+/// The pairs buffer size. This number represents
+/// the maximum amount of transactions that can be 
+/// concurrently propagated at the same time.
+pub const PAIRS_BUFFER_SIZE: usize = 10000;
+
+#[derive(Clone, Debug)]
+pub struct TransactionPropagation {
+    /// For maximum performance, model the transaction
+    /// propagation protocol flow as a mapping between
+    /// nonces, representing a propagated transaction,
+    /// and `Sender/Receiver` pairs. In this way, we can
+    /// concurrently propagate multiple transactions.
+    pub(crate) pairs: HashMap<u64, Pair>,
+}
+
+impl Default for TransactionPropagation {
+    fn default() -> Self {
+        TransactionPropagation {
+            pairs: HashMap::with_capacity(PAIRS_BUFFER_SIZE),
+        }
+    }
+}
 
 #[derive(Clone, Default, Debug)]
-pub struct TransactionPropagation {
+pub struct Pair {
     pub(crate) sender: Arc<Mutex<TxSender>>,
     pub(crate) receiver: Arc<Mutex<TxReceiver>>,
 }
