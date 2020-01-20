@@ -366,6 +366,10 @@ impl NetworkInterface for Network {
         self.bootstrap_cache.clone()
     }
 
+    fn mempool_ref(&self) -> Option<Arc<RwLock<Mempool>>> {
+        self.mempool_ref.clone()
+    }
+
     fn after_connect(&self, addr: &SocketAddr) {
         debug!("Executing after connect callback for {}", addr);
 

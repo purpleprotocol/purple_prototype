@@ -24,4 +24,5 @@ use std::sync::Arc;
 pub enum InboundPacket {
     RequestTx(Arc<RequestTx>),
     RejectTx(Arc<RejectTx>),
+    None,
 }

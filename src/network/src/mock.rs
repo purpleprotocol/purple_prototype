@@ -24,6 +24,7 @@ use crate::peer::{ConnectionType, Peer};
 use crate::validation::sender::Sender as SenderTrait;
 use crate::bootstrap::cache::BootstrapCache;
 use persistence::PersistentDb;
+use mempool::Mempool;
 use chain::*;
 use chrono::Duration;
 use crypto::NodeId;
@@ -330,6 +331,10 @@ impl NetworkInterface for MockNetwork {
 
     fn bootstrap_cache(&self) -> BootstrapCache {
         self.bootstrap_cache.clone()
+    }
+
+    fn mempool_ref(&self) -> Option<Arc<RwLock<Mempool>>> {
+        unimplemented!();
     }
 
     fn after_connect(&self, _peer: &SocketAddr) { }

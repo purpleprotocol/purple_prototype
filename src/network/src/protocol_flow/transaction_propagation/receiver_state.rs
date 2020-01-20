@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crypto::ShortHash;
 use std::default::Default;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -24,7 +25,7 @@ pub enum TxReceiverState {
     Ready,
 
     /// We are waiting for a `SendTx` packet.
-    WaitingTx(u64),
+    WaitingTx(u64, ShortHash),
 
     /// The transaction has been rejected and this state-machine is done.
     Done,

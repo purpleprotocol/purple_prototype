@@ -31,8 +31,8 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendTx {
-    tx: Arc<Tx>,
-    nonce: u64,
+    pub(crate) tx: Arc<Tx>,
+    pub(crate) nonce: u64,
 }
 
 impl SendTx {
