@@ -17,13 +17,19 @@
 */
 
 use std::default::Default;
+use std::sync::Arc;
+use transactions::Tx;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TxSenderState {
     /// The `Sender` is ready to send an `AnnounceTx` packet.
     Ready,
 
     /// The `Sender` is waiting for a `RequestTx` or `RejectTx` packet.
-    WaitingResponse(u64),
+    WaitingResponse(u64, Arc<Tx>),
+
+    /// The `Sender` is ready to send a `SendTx` packet.
+    ReadyToSend(u64, Arc<Tx>),
 
     /// The state-machine is done.
     Done,

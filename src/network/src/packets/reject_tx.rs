@@ -36,8 +36,8 @@ pub enum TxRejectStatus {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RejectTx {
-    nonce: u64,
-    status: TxRejectStatus,
+    pub(crate) nonce: u64,
+    pub(crate) status: TxRejectStatus,
 }
 
 impl RejectTx {

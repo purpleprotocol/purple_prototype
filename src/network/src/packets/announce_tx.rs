@@ -31,8 +31,8 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnounceTx {
-    tx_hash: ShortHash,
-    nonce: u64,
+    pub(crate) tx_hash: ShortHash,
+    pub(crate) nonce: u64,
 }
 
 impl AnnounceTx {

@@ -33,6 +33,10 @@ bin-tools = { path = "../util/bin-tools/" }
 path = "../chain"
 features = ["test"]
 
+[dev-dependencies.transactions]
+path = "../transactions"
+features = ["test"]
+
 [dev-dependencies]
 tempdir = "0.3.7"
 rayon = "1.2.0"
