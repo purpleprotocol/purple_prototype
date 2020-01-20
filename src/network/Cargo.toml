@@ -14,6 +14,7 @@ chrono = "0.4.6"
 tokio = "0.1.11"
 tokio-timer = "0.2.8"
 tokio-io-timeout = "0.3.1"
+dashmap = "3.2.1"
 futures = "0.1.25"
 rlp = "0.3.0"
 log = "0.4.0"
@@ -24,6 +25,7 @@ hashdb = "0.3.0"
 chain = { path = "../chain" }
 crypto = { path = "../crypto" }
 transactions = { path = "../transactions" }
+mempool = { path = "../mempool" }
 persistence = { path = "../persistence" }
 quickcheck = "0.7.2"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["rayon", "serde"] }
@@ -31,6 +33,10 @@ bin-tools = { path = "../util/bin-tools/" }
 
 [dev-dependencies.chain]
 path = "../chain"
+features = ["test"]
+
+[dev-dependencies.transactions]
+path = "../transactions"
 features = ["test"]
 
 [dev-dependencies]

@@ -23,6 +23,7 @@ use chain::*;
 use crypto::{NodeId, SecretKey as Sk};
 use hashbrown::HashMap;
 use parking_lot::RwLock;
+use mempool::Mempool;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -101,6 +102,9 @@ pub trait NetworkInterface: Clone + Send {
 
     /// Returns a handle to the bootstrap cache.
     fn bootstrap_cache(&self) -> BootstrapCache;
+
+    /// Returns a reference to the mempool if we have one.
+    fn mempool_ref(&self) -> Option<Arc<RwLock<Mempool>>>;
 
     /// Call-back that executes after a `Connect` or `ConnectPool`
     /// packet has been successfully processed from a peer.

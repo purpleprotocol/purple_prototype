@@ -33,6 +33,9 @@ pub trait Receiver<I, O> {
     /// Returns true if the receiver is able to receive packets.
     fn can_receive(&self) -> bool;
 
+    /// Returns true if the state of the machine is final.
+    fn done(&self) -> bool;
+
     /// Resets the `Receiver` to its default state.
     fn reset(&mut self);
 }

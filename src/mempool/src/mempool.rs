@@ -41,20 +41,20 @@ const FUTURE_LIMIT: u64 = 10;
 pub struct Mempool {
     /// Lookup table between transaction hashes
     /// and transaction data.
-    tx_lookup: HashMap<Hash, Arc<Tx>>,
+    tx_lookup: HashMap<ShortHash, Arc<Tx>>,
 
     /// Mapping between transaction hashes and a timestamp
     /// denoting the moment they have been added to the mempool.
-    timestamp_lookup: HashMap<Hash, DateTime<Utc>>,
+    timestamp_lookup: HashMap<ShortHash, DateTime<Utc>>,
 
     /// Mapping between timestamps of the moment transactions have
     /// been added to the mempool and the respective transactions
     /// hashes.
-    timestamp_reverse_lookup: BTreeMap<DateTime<Utc>, Hash>,
+    timestamp_reverse_lookup: BTreeMap<DateTime<Utc>, ShortHash>,
 
     /// Set containing hashes of transactions that 
     /// are currently orphans.
-    orphan_set: HashSet<Hash>,
+    orphan_set: HashSet<ShortHash>,
 
     /// Mapping between currency hashes and transaction
     /// fees. Note that orphan transactions are not stored
@@ -62,7 +62,7 @@ pub struct Mempool {
     /// 
     /// Each entry in the map is an ordered binary tree 
     /// map between transaction fees and transaction hashes.
-    fee_map: HashMap<ShortHash, BTreeMap<Balance, VecDeque<Hash>>>,
+    fee_map: HashMap<ShortHash, BTreeMap<Balance, VecDeque<ShortHash>>>,
 
     /// Mapping between signing addresses that have issued 
     /// transactions which are currently stored in the mempool 
@@ -75,7 +75,7 @@ pub struct Mempool {
     address_reverse_mappings: HashMap<NormalAddress, NormalAddress>,
 
     /// Mapping between signing addresses and their transaction hashes.
-    address_hash_mappings: HashMap<NormalAddress, Hash>,
+    address_hash_mappings: HashMap<NormalAddress, ShortHash>,
 
     /// Vector of preferred currencies. The element at
     /// index 0 in the vector is the first preferred,
@@ -142,7 +142,7 @@ impl Mempool {
 
     /// Returns `true` if there is an existing transaction with
     /// the given `Hash` in the mempool.
-    pub fn exists(&self, tx_hash: &Hash) -> bool {
+    pub fn exists(&self, tx_hash: &ShortHash) -> bool {
         self.tx_lookup.get(tx_hash).is_some()
     }
 
@@ -153,7 +153,7 @@ impl Mempool {
     /// This operation will orphan any transactions that depend
     /// on the given transaction. Use `Mempool::remove_branch()`
     /// to remove any dependent transactions as well.
-    pub fn remove(&mut self, tx_hash: &Hash) -> Option<Arc<Tx>> {
+    pub fn remove(&mut self, tx_hash: &ShortHash) -> Option<Arc<Tx>> {
         let tx = self.tx_lookup.remove(tx_hash)?;
         let signing_address = tx.creator_signing_address();
         let fee = tx.fee();
@@ -200,7 +200,7 @@ impl Mempool {
     /// Removes the transaction with the given `Hash` from the 
     /// mempool and any dependent transactions and returns them. 
     /// Returns `None` if there is no such transaction in the mempool.
-    pub fn remove_branch(&mut self, tx_hash: &Hash) -> Option<Vec<Arc<Tx>>> {
+    pub fn remove_branch(&mut self, tx_hash: &ShortHash) -> Option<Vec<Arc<Tx>>> {
         unimplemented!();
     }
 
@@ -217,7 +217,7 @@ impl Mempool {
         let tx_signing_addr = tx.creator_signing_address();
         let tx_next_addr = tx.next_address();
         let tx_nonce = tx.nonce();
-        let tx_hash = tx.tx_hash().unwrap();
+        let tx_hash = tx.tx_hash().unwrap().to_short();
         let mut is_orphan = true;
 
         // Check for existence
@@ -353,8 +353,8 @@ impl Mempool {
         let capacity = MAX_TX_SET_SIZE / 250;
         
         let mut cur_tx_set_size = 0;
-        let mut taken_set: HashSet<Hash> = HashSet::with_capacity(capacity);
-        let mut obsolete_set: HashSet<Hash> = HashSet::with_capacity(capacity);
+        let mut taken_set: HashSet<ShortHash> = HashSet::with_capacity(capacity);
+        let mut obsolete_set: HashSet<ShortHash> = HashSet::with_capacity(capacity);
         let mut tx_set: Vec<Arc<Tx>> = Vec::with_capacity(capacity);
         let mut next_chain_state: PowChainState = self.chain_ref.canonical_tip_state();
         let mut exceeded_max_tx_set_size = false;
@@ -537,8 +537,8 @@ impl Mempool {
 
 pub struct TxSet {
     pub(crate) tx_set: Vec<Arc<Tx>>,
-    pub(crate) taken_set: HashSet<Hash>,
-    pub(crate) obsolete_set: HashSet<Hash>,
+    pub(crate) taken_set: HashSet<ShortHash>,
+    pub(crate) obsolete_set: HashSet<ShortHash>,
 }
 
 #[cfg(test)]
@@ -611,35 +611,35 @@ mod tests {
             }
 
             // Check tx lookup
-            assert!(mempool.tx_lookup.contains_key(&A_1.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&A_2.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&B_2.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&C_1.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&C_3.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&A_5.tx_hash().unwrap()));
+            assert!(mempool.tx_lookup.contains_key(&A_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&C_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&C_3.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
 
             // Check timestamp lookup
-            assert!(mempool.timestamp_lookup.contains_key(&A_1.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&A_2.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&B_2.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&C_1.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&C_3.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&A_5.tx_hash().unwrap()));
+            assert!(mempool.timestamp_lookup.contains_key(&A_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&A_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&C_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&C_3.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
             
             // Check timestamp reverse lookup
-            let A_1_ts = mempool.timestamp_lookup.get(&A_1.tx_hash().unwrap()).unwrap().clone();
-            let A_2_ts = mempool.timestamp_lookup.get(&A_2.tx_hash().unwrap()).unwrap().clone();
-            let B_2_ts = mempool.timestamp_lookup.get(&B_2.tx_hash().unwrap()).unwrap().clone();
-            let C_1_ts = mempool.timestamp_lookup.get(&C_1.tx_hash().unwrap()).unwrap().clone();
-            let C_3_ts = mempool.timestamp_lookup.get(&C_3.tx_hash().unwrap()).unwrap().clone();
-            let A_5_ts = mempool.timestamp_lookup.get(&A_5.tx_hash().unwrap()).unwrap().clone();
+            let A_1_ts = mempool.timestamp_lookup.get(&A_1.tx_hash().unwrap().to_short()).unwrap().clone();
+            let A_2_ts = mempool.timestamp_lookup.get(&A_2.tx_hash().unwrap().to_short()).unwrap().clone();
+            let B_2_ts = mempool.timestamp_lookup.get(&B_2.tx_hash().unwrap().to_short()).unwrap().clone();
+            let C_1_ts = mempool.timestamp_lookup.get(&C_1.tx_hash().unwrap().to_short()).unwrap().clone();
+            let C_3_ts = mempool.timestamp_lookup.get(&C_3.tx_hash().unwrap().to_short()).unwrap().clone();
+            let A_5_ts = mempool.timestamp_lookup.get(&A_5.tx_hash().unwrap().to_short()).unwrap().clone();
 
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&A_1_ts).unwrap(), &A_1.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&A_2_ts).unwrap(), &A_2.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&B_2_ts).unwrap(), &B_2.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&C_1_ts).unwrap(), &C_1.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&C_3_ts).unwrap(), &C_3.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&A_5_ts).unwrap(), &A_5.tx_hash().unwrap());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&A_1_ts).unwrap(), &A_1.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&A_2_ts).unwrap(), &A_2.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&B_2_ts).unwrap(), &B_2.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&C_1_ts).unwrap(), &C_1.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&C_3_ts).unwrap(), &C_3.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&A_5_ts).unwrap(), &A_5.tx_hash().unwrap().to_short());
 
             // Check order of timestamps
             let (_, is_valid) = stage_1
@@ -650,11 +650,11 @@ mod tests {
                     }
 
                     if last.is_none() {
-                        let ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap()).unwrap().clone();
+                        let ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap().to_short()).unwrap().clone();
                         (Some(ts), true)
                     } else {
                         let last = last.unwrap();
-                        let cur_ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap()).unwrap().clone();
+                        let cur_ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap().to_short()).unwrap().clone();
 
                         if last < cur_ts {
                             (Some(cur_ts), true)
@@ -679,12 +679,12 @@ mod tests {
             }
 
             // Check orphan pool
-            assert!(!mempool.orphan_set.contains(&A_1.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&A_2.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&C_1.tx_hash().unwrap()));
-            assert!(mempool.orphan_set.contains(&C_3.tx_hash().unwrap()));
-            assert!(mempool.orphan_set.contains(&B_2.tx_hash().unwrap()));
-            assert!(mempool.orphan_set.contains(&A_5.tx_hash().unwrap()));
+            assert!(!mempool.orphan_set.contains(&A_1.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_2.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&C_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.orphan_set.contains(&C_3.tx_hash().unwrap().to_short()));
+            assert!(mempool.orphan_set.contains(&B_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.orphan_set.contains(&A_5.tx_hash().unwrap().to_short()));
 
             // Append and validate stage 2
             for tx in stage_2.iter() {
@@ -692,35 +692,35 @@ mod tests {
             }
 
             // Check tx lookup
-            assert!(mempool.tx_lookup.contains_key(&A_4.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&B_1.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&B_5.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&C_5.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&C_4.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&B_4.tx_hash().unwrap()));
+            assert!(mempool.tx_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_5.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&C_5.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&C_4.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
 
             // Check timestamp lookup
-            assert!(mempool.timestamp_lookup.contains_key(&A_4.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&B_1.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&B_5.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&C_5.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&C_4.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&B_4.tx_hash().unwrap()));
+            assert!(mempool.timestamp_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&B_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&B_5.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&C_5.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&C_4.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
             
             // Check timestamp reverse lookup
-            let A_4_ts = mempool.timestamp_lookup.get(&A_4.tx_hash().unwrap()).unwrap().clone();
-            let B_1_ts = mempool.timestamp_lookup.get(&B_1.tx_hash().unwrap()).unwrap().clone();
-            let B_5_ts = mempool.timestamp_lookup.get(&B_5.tx_hash().unwrap()).unwrap().clone();
-            let C_5_ts = mempool.timestamp_lookup.get(&C_5.tx_hash().unwrap()).unwrap().clone();
-            let C_4_ts = mempool.timestamp_lookup.get(&C_4.tx_hash().unwrap()).unwrap().clone();
-            let B_4_ts = mempool.timestamp_lookup.get(&B_4.tx_hash().unwrap()).unwrap().clone();
+            let A_4_ts = mempool.timestamp_lookup.get(&A_4.tx_hash().unwrap().to_short()).unwrap().clone();
+            let B_1_ts = mempool.timestamp_lookup.get(&B_1.tx_hash().unwrap().to_short()).unwrap().clone();
+            let B_5_ts = mempool.timestamp_lookup.get(&B_5.tx_hash().unwrap().to_short()).unwrap().clone();
+            let C_5_ts = mempool.timestamp_lookup.get(&C_5.tx_hash().unwrap().to_short()).unwrap().clone();
+            let C_4_ts = mempool.timestamp_lookup.get(&C_4.tx_hash().unwrap().to_short()).unwrap().clone();
+            let B_4_ts = mempool.timestamp_lookup.get(&B_4.tx_hash().unwrap().to_short()).unwrap().clone();
 
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&A_4_ts).unwrap(), &A_4.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&B_1_ts).unwrap(), &B_1.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&B_5_ts).unwrap(), &B_5.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&C_5_ts).unwrap(), &C_5.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&C_4_ts).unwrap(), &C_4.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&B_4_ts).unwrap(), &B_4.tx_hash().unwrap());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&A_4_ts).unwrap(), &A_4.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&B_1_ts).unwrap(), &B_1.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&B_5_ts).unwrap(), &B_5.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&C_5_ts).unwrap(), &C_5.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&C_4_ts).unwrap(), &C_4.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&B_4_ts).unwrap(), &B_4.tx_hash().unwrap().to_short());
 
             // Check order of timestamps
             let (_, is_valid) = stage_2
@@ -731,11 +731,11 @@ mod tests {
                     }
 
                     if last.is_none() {
-                        let ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap()).unwrap().clone();
+                        let ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap().to_short()).unwrap().clone();
                         (Some(ts), true)
                     } else {
                         let last = last.unwrap();
-                        let cur_ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap()).unwrap().clone();
+                        let cur_ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap().to_short()).unwrap().clone();
 
                         if last < cur_ts {
                             (Some(cur_ts), true)
@@ -760,18 +760,18 @@ mod tests {
             }
 
             // Check orphan pool
-            assert!(!mempool.orphan_set.contains(&A_1.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&A_2.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&C_1.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&B_1.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&B_2.tx_hash().unwrap()));
-            assert!(mempool.orphan_set.contains(&B_4.tx_hash().unwrap()));
-            assert!(mempool.orphan_set.contains(&B_5.tx_hash().unwrap()));
-            assert!(mempool.orphan_set.contains(&C_3.tx_hash().unwrap()));
-            assert!(mempool.orphan_set.contains(&C_4.tx_hash().unwrap()));
-            assert!(mempool.orphan_set.contains(&C_5.tx_hash().unwrap()));
-            assert!(mempool.orphan_set.contains(&A_4.tx_hash().unwrap()));
-            assert!(mempool.orphan_set.contains(&A_5.tx_hash().unwrap()));
+            assert!(!mempool.orphan_set.contains(&A_1.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_2.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&C_1.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_1.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.orphan_set.contains(&B_4.tx_hash().unwrap().to_short()));
+            assert!(mempool.orphan_set.contains(&B_5.tx_hash().unwrap().to_short()));
+            assert!(mempool.orphan_set.contains(&C_3.tx_hash().unwrap().to_short()));
+            assert!(mempool.orphan_set.contains(&C_4.tx_hash().unwrap().to_short()));
+            assert!(mempool.orphan_set.contains(&C_5.tx_hash().unwrap().to_short()));
+            assert!(mempool.orphan_set.contains(&A_4.tx_hash().unwrap().to_short()));
+            assert!(mempool.orphan_set.contains(&A_5.tx_hash().unwrap().to_short()));
 
             // Append and validate stage 3
             for tx in stage_3.iter() {
@@ -779,23 +779,23 @@ mod tests {
             }
 
             // Check tx lookup
-            assert!(mempool.tx_lookup.contains_key(&A_3.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&B_2.tx_hash().unwrap()));
-            assert!(mempool.tx_lookup.contains_key(&C_3.tx_hash().unwrap()));
+            assert!(mempool.tx_lookup.contains_key(&A_3.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&C_3.tx_hash().unwrap().to_short()));
 
             // Check timestamp lookup
-            assert!(mempool.timestamp_lookup.contains_key(&A_3.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&B_2.tx_hash().unwrap()));
-            assert!(mempool.timestamp_lookup.contains_key(&C_3.tx_hash().unwrap()));
+            assert!(mempool.timestamp_lookup.contains_key(&A_3.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.timestamp_lookup.contains_key(&C_3.tx_hash().unwrap().to_short()));
             
             // Check timestamp reverse lookup
-            let A_3_ts = mempool.timestamp_lookup.get(&A_3.tx_hash().unwrap()).unwrap().clone();
-            let B_2_ts = mempool.timestamp_lookup.get(&B_2.tx_hash().unwrap()).unwrap().clone();
-            let C_3_ts = mempool.timestamp_lookup.get(&C_3.tx_hash().unwrap()).unwrap().clone();
+            let A_3_ts = mempool.timestamp_lookup.get(&A_3.tx_hash().unwrap().to_short()).unwrap().clone();
+            let B_2_ts = mempool.timestamp_lookup.get(&B_2.tx_hash().unwrap().to_short()).unwrap().clone();
+            let C_3_ts = mempool.timestamp_lookup.get(&C_3.tx_hash().unwrap().to_short()).unwrap().clone();
 
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&A_3_ts).unwrap(), &A_3.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&B_2_ts).unwrap(), &B_2.tx_hash().unwrap());
-            assert_eq!(mempool.timestamp_reverse_lookup.get(&C_3_ts).unwrap(), &C_3.tx_hash().unwrap());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&A_3_ts).unwrap(), &A_3.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&B_2_ts).unwrap(), &B_2.tx_hash().unwrap().to_short());
+            assert_eq!(mempool.timestamp_reverse_lookup.get(&C_3_ts).unwrap(), &C_3.tx_hash().unwrap().to_short());
 
             // Check order of timestamps
             let (_, is_valid) = stage_3
@@ -806,11 +806,11 @@ mod tests {
                     }
 
                     if last.is_none() {
-                        let ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap()).unwrap().clone();
+                        let ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap().to_short()).unwrap().clone();
                         (Some(ts), true)
                     } else {
                         let last = last.unwrap();
-                        let cur_ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap()).unwrap().clone();
+                        let cur_ts = mempool.timestamp_lookup.get(&cur.tx_hash().unwrap().to_short()).unwrap().clone();
 
                         if last < cur_ts {
                             (Some(cur_ts), true)
@@ -832,21 +832,21 @@ mod tests {
             }
 
             // Check orphan pool
-            assert!(!mempool.orphan_set.contains(&A_1.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&A_2.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&C_1.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&B_1.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&B_2.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&B_4.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&B_5.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&C_3.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&C_4.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&C_5.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&A_4.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&A_5.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&A_3.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&B_2.tx_hash().unwrap()));
-            assert!(!mempool.orphan_set.contains(&C_3.tx_hash().unwrap()));
+            assert!(!mempool.orphan_set.contains(&A_1.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_2.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&C_1.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_1.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_2.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&C_3.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&C_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&C_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_3.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_2.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&C_3.tx_hash().unwrap().to_short()));
 
             true
         }

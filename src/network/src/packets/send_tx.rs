@@ -20,6 +20,10 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
+use crate::protocol_flow::transaction_propagation::Pair;
+use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
+use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
+use crate::validation::receiver::Receiver;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
@@ -31,8 +35,8 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendTx {
-    tx: Arc<Tx>,
-    nonce: u64,
+    pub(crate) tx: Arc<Tx>,
+    pub(crate) nonce: u64,
 }
 
 impl SendTx {
@@ -118,7 +122,44 @@ impl Packet for SendTx {
         packet: &SendTx,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        unimplemented!();
+        debug!(
+            "Received SendTx packet from {} with nonce {}",
+            addr, packet.nonce
+        );
+
+        let nonce = packet.nonce;
+
+        // Retrieve pairs map
+        let pairs = {
+            let peers = network.peers();
+            let peers = peers.read();
+            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
+
+            peer.validator.transaction_propagation.pairs.clone()
+        };
+
+        let receiver = {
+            if let Some(pair) = pairs.get(&packet.nonce) {
+                pair.receiver.clone()
+            } else {
+                return Err(NetworkErr::AckErr)
+            }
+        };
+
+        // Attempt to receive packet
+        let packet = {
+            let mut receiver = receiver.lock();
+            let packet = OutboundPacket::SendTx(Arc::new(packet.clone()));
+            receiver.receive(network as &N, addr, &packet)?
+        };
+
+        // Delete pair
+        pairs.remove(&nonce);
+
+        match packet {
+            InboundPacket::RejectTx(_) | InboundPacket::RequestTx(_) => unreachable!(), 
+            InboundPacket::None => Ok(())
+        }
     }
 }
 

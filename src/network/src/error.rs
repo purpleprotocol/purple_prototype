@@ -74,6 +74,9 @@ pub enum NetworkErr {
     /// The sender is in an invalid state for this operation
     SenderStateErr,
 
+    /// The receiver is in an invalid state for this operation
+    ReceiverStateErr,
+
     /// The peer's session has expired
     SessionExpired,
 

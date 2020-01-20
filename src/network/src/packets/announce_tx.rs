@@ -20,6 +20,10 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
+use crate::protocol_flow::transaction_propagation::Pair;
+use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
+use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
+use crate::validation::receiver::Receiver;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
@@ -31,8 +35,8 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnounceTx {
-    tx_hash: ShortHash,
-    nonce: u64,
+    pub(crate) tx_hash: ShortHash,
+    pub(crate) nonce: u64,
 }
 
 impl AnnounceTx {
@@ -110,7 +114,62 @@ impl Packet for AnnounceTx {
         packet: &AnnounceTx,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        unimplemented!();
+        debug!(
+            "Received AnnounceTx packet from {} with nonce {}",
+            addr, packet.nonce
+        );
+
+        // Retrieve pairs map
+        let pairs = {
+            let peers = network.peers();
+            let peers = peers.read();
+            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
+
+            peer.validator.transaction_propagation.pairs.clone()
+        };
+
+        let receiver = {
+            if let Some(pair) = pairs.get(&packet.nonce) {
+                pair.receiver.clone()
+            } else {
+                let pair = Pair::default();
+                pairs.insert(packet.nonce, pair.clone());
+                pair.receiver.clone()
+            }
+        };
+
+        // Attempt to receive packet
+        let packet = {
+            let mut receiver = receiver.lock();
+            let packet = OutboundPacket::AnnounceTx(Arc::new(packet.clone()));
+            receiver.receive(network as &N, addr, &packet)?
+        };
+
+        match packet {
+            InboundPacket::RejectTx(packet) => {
+                debug!("Sending RejectTx packet to {}", addr);
+
+                // Send `RejectTx` packet back to peer
+                network.send_to_peer(addr, packet.to_bytes())?;
+
+                debug!("RejectTx packet sent to {}", addr);
+
+                Ok(())
+            }
+
+            InboundPacket::RequestTx(packet) => {
+                debug!("Sending RequestTx packet to {}", addr);
+
+                // Send `RequestTx` packet back to peer
+                network.send_to_peer(addr, packet.to_bytes())?;
+
+                debug!("RequestTx packet sent to {}", addr);
+
+                Ok(())
+            }
+
+            InboundPacket::None => unreachable!()
+        }
     }
 }
 

@@ -40,6 +40,10 @@ impl Receiver<Ping, Pong> for PingPongReceiver {
         }
     }
 
+    fn done(&self) -> bool {
+        unimplemented!();
+    }
+
     /// Returns true if the receiver is able to receive packets.
     fn can_receive(&self) -> bool {
         true

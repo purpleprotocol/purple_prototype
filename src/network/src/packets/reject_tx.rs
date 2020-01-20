@@ -20,6 +20,9 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
+use crate::protocol_flow::transaction_propagation::Pair;
+use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
+use crate::validation::sender::Sender;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
@@ -30,14 +33,15 @@ use std::sync::Arc;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum TxRejectStatus {
+    NoMempool,
     MempoolFull,
     Witnessed,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RejectTx {
-    nonce: u64,
-    status: TxRejectStatus,
+    pub(crate) nonce: u64,
+    pub(crate) status: TxRejectStatus,
 }
 
 impl RejectTx {
@@ -58,6 +62,7 @@ impl Packet for RejectTx {
         let status = match self.status {
             TxRejectStatus::Witnessed => 0,
             TxRejectStatus::MempoolFull => 1,
+            TxRejectStatus::NoMempool => 2,
         };
 
         // Packet structure:
@@ -88,6 +93,7 @@ impl Packet for RejectTx {
             match result {
                 0 => TxRejectStatus::Witnessed,
                 1 => TxRejectStatus::MempoolFull,
+                2 => TxRejectStatus::NoMempool,
                 _ => return Err(NetworkErr::BadFormat)
             }
         } else {
@@ -116,7 +122,40 @@ impl Packet for RejectTx {
         packet: &RejectTx,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        unimplemented!();
+        debug!(
+            "Received RejectTx packet from {} with nonce {}",
+            addr, packet.nonce
+        );
+
+        // Retrieve pairs map
+        let pairs = {
+            let peers = network.peers();
+            let peers = peers.read();
+            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
+
+            peer.validator.transaction_propagation.pairs.clone()
+        };
+
+        let sender = {
+            if let Some(pair) = pairs.get(&packet.nonce) {
+                pair.sender.clone()
+            } else {
+                return Err(NetworkErr::AckErr);
+            }
+        };
+
+        debug!("Acking RejectTx {}", packet.nonce);
+
+        // Ack packet
+        {
+            let packet = InboundPacket::RejectTx(Arc::new(packet.clone()));
+            let mut sender = sender.lock();
+            sender.acknowledge(&packet)?;
+        }
+
+        debug!("RejectTx {} acked!", packet.nonce);
+
+        Ok(())
     }
 }
 
@@ -137,11 +176,12 @@ impl Arbitrary for RejectTx {
 impl Arbitrary for TxRejectStatus {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> TxRejectStatus {
         let mut rng = rand::thread_rng();
-        let num = rng.gen_range(0, 2);
+        let num = rng.gen_range(0, 3);
 
         match num {
             0 => TxRejectStatus::Witnessed,
             1 => TxRejectStatus::MempoolFull,
+            2 => TxRejectStatus::NoMempool,
             _ => panic!(),
         }
     }

@@ -55,6 +55,7 @@ extern crate persistence;
 extern crate rocksdb;
 extern crate tokio;
 extern crate miner;
+extern crate mempool;
 
 use slog::Drain;
 use clap::{App, Arg};
@@ -64,6 +65,8 @@ use futures::future::ok;
 use futures::sync::mpsc::channel;
 use futures::Future;
 use hashdb::HashDB;
+use parking_lot::RwLock;
+use mempool::Mempool;
 use network::bootstrap::cache::BootstrapCache;
 use network::*;
 use persistence::PersistentDb;
@@ -173,6 +176,17 @@ fn main() {
 
     info!("Database initialization was successful!");
 
+    let mempool: Option<Arc<RwLock<Mempool>>> = if argv.no_mempool {
+        None
+    } else {
+        info!("Initializing mempool...");
+        let main_cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME).to_short();
+        let mempool = Arc::new(RwLock::new(Mempool::new(pow_chain.clone(), argv.mempool_size, vec![main_cur_hash], 80)));
+        info!("Mempool initialization was successful!");
+
+        Some(mempool)
+    };
+
     let (pow_tx, pow_rx) = channel(10000);
 
     info!("Setting up the network...");
@@ -211,6 +225,7 @@ fn main() {
         pow_tx,
         pow_chain.clone(),
         bootstrap_cache,
+        mempool,
         accept_connections.clone(),
         Some(our_ip),
     );
@@ -225,6 +240,7 @@ fn main() {
         pow_tx,
         pow_chain.clone(),
         bootstrap_cache,
+        mempool,
         accept_connections.clone(),
         None,
     );
