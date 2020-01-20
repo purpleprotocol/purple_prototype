@@ -18,23 +18,21 @@
 
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
-use crate::packets::{Ping, Pong};
-use crate::protocol_flow::ping_pong::receiver_state::PingPongReceiverState;
+use crate::protocol_flow::transaction_propagation::receiver_state::TxReceiverState;
+use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
+use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
 use crate::validation::receiver::Receiver;
 use std::net::SocketAddr;
 
 #[derive(Debug, Default)]
-pub struct PingPongReceiver {
-    state: PingPongReceiverState,
+pub struct TxReceiver {
+    state: TxReceiverState,
 }
 
-impl Receiver<Ping, Pong> for PingPongReceiver {
-    /// Attempts to receive a packet and outputs a new packet
-    /// to be sent back if the receiver is able to receive a
-    /// packet.
-    fn receive<N: NetworkInterface>(&mut self, _network: &N, _sender: &SocketAddr, packet: &Ping) -> Result<Pong, NetworkErr> {
-        if let PingPongReceiverState::Ready = self.state {
-            Ok(Pong::new(packet.nonce))
+impl Receiver<OutboundPacket, InboundPacket> for TxReceiver {
+    fn receive<N: NetworkInterface>(&mut self, _network: &N, _sender: &SocketAddr, packet: &OutboundPacket) -> Result<InboundPacket, NetworkErr> {
+        if let TxReceiverState::Ready = self.state {
+            unimplemented!();
         } else {
             unreachable!();
         }
@@ -44,7 +42,6 @@ impl Receiver<Ping, Pong> for PingPongReceiver {
         unimplemented!();
     }
 
-    /// Returns true if the receiver is able to receive packets.
     fn can_receive(&self) -> bool {
         true
     }

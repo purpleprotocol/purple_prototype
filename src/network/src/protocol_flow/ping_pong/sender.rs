@@ -55,6 +55,10 @@ impl Sender<Ping, Pong, ()> for PingPongSender {
         }
     }
 
+    fn done(&self) -> bool {
+        unimplemented!();
+    }
+
     fn can_send(&self) -> bool {
         self.state == PingPongSenderState::Ready
     }

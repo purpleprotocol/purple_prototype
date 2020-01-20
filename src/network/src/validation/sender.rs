@@ -33,6 +33,9 @@ pub trait Sender<O, I, D> {
     /// Returns true if the `Sender` is able to send a packet.
     fn can_send(&self) -> bool;
 
+    /// Returns true if the state of the machine is final.
+    fn done(&self) -> bool;
+
     /// Resets the `Sender` to its default state.
     fn reset(&mut self);
 }

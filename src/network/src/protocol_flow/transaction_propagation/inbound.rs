@@ -16,6 +16,12 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod ping_pong;
-pub mod request_peers;
-pub mod transaction_propagation;
+use crate::packets::*;
+use std::sync::Arc;
+
+#[derive(Clone, Debug, PartialEq)]
+/// Wrapper over an inbound packet in this hierarchical state-machine.
+pub enum InboundPacket {
+    RequestTx(Arc<RequestTx>),
+    RejectTx(Arc<RejectTx>),
+}

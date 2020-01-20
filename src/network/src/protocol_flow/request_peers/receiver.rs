@@ -79,6 +79,10 @@ impl Receiver<RequestPeers, SendPeers> for RequestPeersReceiver {
         }
     }
 
+    fn done(&self) -> bool {
+        unimplemented!();
+    }
+
     /// Returns true if the receiver is able to receive packets.
     fn can_receive(&self) -> bool {
         true

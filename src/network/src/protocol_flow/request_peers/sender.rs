@@ -55,6 +55,10 @@ impl Sender<RequestPeers, SendPeers, u8> for RequestPeersSender {
         }
     }
 
+    fn done(&self) -> bool {
+        unimplemented!();
+    }
+
     fn can_send(&self) -> bool {
         self.state == RequestPeersSenderState::Ready
     }

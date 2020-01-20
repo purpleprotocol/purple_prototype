@@ -16,6 +16,21 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod ping_pong;
-pub mod request_peers;
-pub mod transaction_propagation;
+use std::default::Default;
+#[derive(Debug, Clone, PartialEq)]
+pub enum TxSenderState {
+    /// The `Sender` is ready to send an `AnnounceTx` packet.
+    Ready,
+
+    /// The `Sender` is waiting for a `RequestTx` or `RejectTx` packet.
+    WaitingResponse(u64),
+
+    /// The state-machine is done.
+    Done,
+}
+
+impl Default for TxSenderState {
+    fn default() -> Self {
+        TxSenderState::Ready
+    }
+}
