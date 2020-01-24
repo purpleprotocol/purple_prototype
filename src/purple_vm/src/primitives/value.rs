@@ -21,6 +21,8 @@ use std::fmt;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub};
 use std::{f32, f64};
 use crate::VmError;
+use num_traits::cast::ToPrimitive;
+//use num::ToPrimitive;
 
 // TODO: When the const generics feature (https://github.com/rust-lang/rfcs/blob/master/text/2000-const-generics.md) 
 // gets to a stable version remove the conversions done on arrays with length greather than 32
@@ -146,6 +148,22 @@ impl VmValue {
             VmValue::f64Array64(val) => val.iter().all(|&v| v >= 0.0),
             VmValue::f64Array128(val) => val.iter().all(|&v| v >= 0.0),
             VmValue::f64Array256(val) => val.iter().all(|&v| v >= 0.0),
+        }
+    }
+
+    pub fn i32trunc_signedf32(&self) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::F32(val) => {
+                println!("before cast {:?} -> {:?}", val, val.to_be_bytes());
+                match val.to_i32() {
+                    Some(res) => {
+                        println!("after cast {:?} -> {:?}", res, res.to_be_bytes());
+                        Ok(VmValue::I32(res))
+                    },
+                    None => Err(VmError::UnsafeCast)
+                }
+            }
+            _ => return Err(VmError::InvalidOperand)
         }
     }
 

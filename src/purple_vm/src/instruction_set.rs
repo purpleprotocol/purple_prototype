@@ -170,7 +170,7 @@ pub enum Instruction {
     // Datatype conversions
     i32Wrapi64            = 0x86,
     i32TruncSignedf32     = 0x87,
-    i32TrunsUnsignedf32   = 0x88,
+    i32TruncUnsignedf32   = 0x88,
     i32TruncSignedf64     = 0x89,
     i32TruncUnsignedf64   = 0x8a,
     i64ExtendSignedi32    = 0x8b,
@@ -325,7 +325,7 @@ impl Instruction {
             // Datatype conversions
             Instruction::i32Wrapi64             => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::i32TruncSignedf32      => DEFAULT_TRANSITIONS.to_vec(),
-            Instruction::i32TrunsUnsignedf32    => DEFAULT_TRANSITIONS.to_vec(),
+            Instruction::i32TruncUnsignedf32    => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::i32TruncSignedf64      => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::i32TruncUnsignedf64    => DEFAULT_TRANSITIONS.to_vec(),
             Instruction::i64ExtendSignedi32     => DEFAULT_TRANSITIONS.to_vec(),
@@ -515,7 +515,7 @@ pub const OPS_LIST: &'static [Instruction] = &[
     // Datatype conversions
     Instruction::i32Wrapi64            ,
     Instruction::i32TruncSignedf32     ,
-    Instruction::i32TrunsUnsignedf32   ,
+    Instruction::i32TruncUnsignedf32   ,
     Instruction::i32TruncSignedf64     ,
     Instruction::i32TruncUnsignedf64   ,
     Instruction::i64ExtendSignedi32    ,

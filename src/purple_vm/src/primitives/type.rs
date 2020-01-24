@@ -165,6 +165,7 @@ impl VmType {
         }
     }
 
+    // TODO: Continue for arrays greather than 8
     /// Returns the byte size of the type.
     pub fn byte_size(&self) -> usize {
         match *self {

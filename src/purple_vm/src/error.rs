@@ -56,5 +56,8 @@ pub enum VmError {
     InvalidOperator,
 
     /// An invalid operand has been used for an operator
-    InvalidOperand
+    InvalidOperand,
+
+    /// A cast which returns a different value than the original 
+    UnsafeCast
 }
