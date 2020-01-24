@@ -18,5 +18,6 @@
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum IBLTError {
-
+    /// One of the given parameters is invalid
+    BadParameter,
 }

@@ -31,12 +31,40 @@ pub struct PurpleIBLT {
 
 impl PurpleIBLT {
     pub fn new(table_size: usize, value_size: u16, hash_functions: u8) -> Result<PurpleIBLT, IBLTError> {
+        if hash_functions == 0 {
+            return Err(IBLTError::BadParameter);
+        }
+        
         Ok(PurpleIBLT {
             table: Vec::with_capacity(table_size),
             value_size,
             hash_functions,
         })
     } 
+
+    pub fn insert(&mut self, k: u64, val: &[u8]) -> Result<(), IBLTError> {
+        unimplemented!();
+    }
+
+    pub fn remove(&mut self, k: u64, val: &[u8]) -> Result<(), IBLTError> {
+        unimplemented!();
+    }
+
+    pub fn get(&self, k: u64) -> Option<Vec<u8>> {
+        unimplemented!();
+    }
+
+    pub fn subtract(&mut self, other: &PurpleIBLT) {
+        unimplemented!();
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        unimplemented!();
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<PurpleIBLT, IBLTError> {
+        unimplemented!();
+    }
 }
 
 struct TableEntry {
