@@ -574,6 +574,7 @@ dependencies = [
  "hashdb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "merkle_light 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "purple_iblt 0.1.0",
  "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1845,6 +1846,10 @@ dependencies = [
  "transactions 0.1.0",
  "unwrap 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "purple_iblt"
+version = "0.1.0"
 
 [[package]]
 name = "purple_vm"
