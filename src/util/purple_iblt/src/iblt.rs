@@ -14,10 +14,20 @@
 
   You should have received a copy of the GNU General Public License
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
+
+  Rust implementation of IBLT data-structure based on the following implementation
+  by Gavin Andresen: https://github.com/gavinandresen/IBLT_Cplusplus
 */
 
-use crate::error::IBLTError;
+#[allow(unused)]
 
+use crate::error::IBLTError;
+use crc32fast::Hasher;
+use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian, LittleEndian};
+
+const HASH_CHECK: u8 = 11;
+
+#[derive(Clone)]
 pub struct PurpleIBLT {
     /// IBLT table
     table: Vec<TableEntry>,
@@ -34,27 +44,31 @@ impl PurpleIBLT {
         if hash_functions == 0 {
             return Err(IBLTError::BadParameter);
         }
+
+        if table_size % hash_functions as usize != 0 {
+            return Err(IBLTError::BadParameter);
+        }
         
         Ok(PurpleIBLT {
-            table: Vec::with_capacity(table_size),
+            table: vec![TableEntry::new(value_size as usize); table_size],
             value_size,
             hash_functions,
         })
     } 
 
     pub fn insert(&mut self, k: u64, val: &[u8]) -> Result<(), IBLTError> {
-        unimplemented!();
+        self.insert_or_delete(k, val, 1)
     }
 
     pub fn remove(&mut self, k: u64, val: &[u8]) -> Result<(), IBLTError> {
-        unimplemented!();
+        self.insert_or_delete(k, val, -1)
     }
 
     pub fn get(&self, k: u64) -> Option<Vec<u8>> {
         unimplemented!();
     }
 
-    pub fn subtract(&mut self, other: &PurpleIBLT) {
+    pub fn subtract(&mut self, other: &PurpleIBLT) -> Result<(), IBLTError> {
         unimplemented!();
     }
 
@@ -65,11 +79,65 @@ impl PurpleIBLT {
     pub fn from_bytes(bytes: &[u8]) -> Result<PurpleIBLT, IBLTError> {
         unimplemented!();
     }
+
+    fn insert_or_delete(&mut self, k: u64, val: &[u8], insert_or_delete: i32) -> Result<(), IBLTError> {
+        if val.len() != self.value_size as usize {
+            return Err(IBLTError::BadParameter);
+        }
+
+        let buckets = self.table.len() / self.hash_functions as usize;
+        
+        for i in 0..self.hash_functions {
+            let start_idx = (i as usize) * buckets;
+            
+            // Hash value
+            let hash = hash_value(i, val);
+
+            // Update entry
+            let mut entry = &mut self.table[start_idx + ((hash as usize) % buckets)];
+            entry.count += insert_or_delete;
+            entry.key_sum ^= k;
+            entry.key_check ^= hash_value(HASH_CHECK, &encode_le_u32!(hash));
+        
+            if entry.is_empty() {
+                entry.value_sum = vec![0; self.value_size as usize];
+            } else {
+                for i in 0..self.value_size as usize {
+                    entry.value_sum[i] ^= val[i];
+                }
+            }
+        }
+
+        Ok(())
+    } 
 }
 
+fn hash_value(i: u8, val: &[u8]) -> u32 {
+    let mut hasher = Hasher::new();
+    hasher.update(&[i]);
+    hasher.update(val);
+    hasher.finalize()
+}
+
+#[derive(Clone)]
 struct TableEntry {
-    count: u32,
+    count: i32,
     key_check: u32,
     key_sum: u64,
     value_sum: Vec<u8>,
+}
+
+impl TableEntry {
+    pub fn new(value_size: usize) -> TableEntry {
+        TableEntry {
+            count: 0,
+            key_check: 0,
+            key_sum: 0,
+            value_sum: vec![0; value_size]
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.count == 0 && self.key_sum == 0 && self.key_check == 0
+    }
 }
