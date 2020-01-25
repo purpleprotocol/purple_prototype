@@ -19,7 +19,7 @@
   by Gavin Andresen: https://github.com/gavinandresen/IBLT_Cplusplus
 */
 
-#[allow(unused)]
+#![allow(unused, clippy::needless_range_loop)]
 
 use crate::error::IBLTError;
 use crc32fast::Hasher;
