@@ -65,7 +65,32 @@ impl PurpleIBLT {
     }
 
     pub fn get(&self, k: u64) -> Option<Vec<u8>> {
-        unimplemented!();
+        let mut result = Vec::new();
+        let buckets = self.table.len() / self.hash_functions as usize;
+
+        for i in 0..self.hash_functions {
+            let start_idx = (i as usize) * buckets;
+
+            // Hash key
+            let hash = hash_value(i, &encode_le_u64!(k));
+
+            let entry = &self.table[start_idx + ((hash as usize) % buckets)];
+
+            if entry.is_empty() {
+                return None;
+            } else if entry.is_pure() {
+                if entry.key_sum == k {
+                    result = entry.value_sum.clone();
+                    return Some(result);
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        }
+
+        None
     }
 
     pub fn subtract(&mut self, other: &PurpleIBLT) -> Result<(), IBLTError> {
@@ -90,14 +115,14 @@ impl PurpleIBLT {
         for i in 0..self.hash_functions {
             let start_idx = (i as usize) * buckets;
             
-            // Hash value
-            let hash = hash_value(i, val);
+            // Hash key
+            let hash = hash_value(i, &encode_le_u64!(k));
 
             // Update entry
             let mut entry = &mut self.table[start_idx + ((hash as usize) % buckets)];
             entry.count += insert_or_delete;
             entry.key_sum ^= k;
-            entry.key_check ^= hash_value(HASH_CHECK, &encode_le_u32!(hash));
+            entry.key_check ^= hash_value(HASH_CHECK, &encode_le_u64!(k));
         
             if entry.is_empty() {
                 entry.value_sum = vec![0; self.value_size as usize];
@@ -139,5 +164,42 @@ impl TableEntry {
 
     pub fn is_empty(&self) -> bool {
         self.count == 0 && self.key_sum == 0 && self.key_check == 0
+    }
+
+    pub fn is_pure(&self) -> bool {
+        if self.count == 1 || self.count == -1 {
+            let check = hash_value(HASH_CHECK, &encode_le_u64!(self.key_sum));
+            return self.key_check == check;
+        }
+
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn insert_get() {
+        let mut iblt = PurpleIBLT::new(20, 8, 4).unwrap();
+        let k = 34;
+        let v = 3243;
+        let v_le = encode_le_u64!(v);
+
+        assert!(iblt.insert(k, &v_le).is_ok());
+        assert_eq!(iblt.get(k), Some(v_le.clone()));
+    }
+
+    #[test]
+    fn insert_remove_get() {
+        let mut iblt = PurpleIBLT::new(20, 8, 4).unwrap();
+        let k = 34;
+        let v = 3243;
+        let v_le = encode_le_u64!(v);
+
+        assert!(iblt.insert(k, &v_le).is_ok());
+        assert!(iblt.remove(k, &v_le).is_ok());
+        assert!(iblt.get(k).is_none());
     }
 }
