@@ -624,10 +624,103 @@ impl Vm {
                         ip.increment();
                     }
                     Some(Instruction::i32Wrapi64) => {
-                        unimplemented!();
+                        perform_data_conversion(Instruction::i32Wrapi64, &mut self.operand_stack)?;
+                        ip.increment();
                     }
                     Some(Instruction::i32TruncSignedf32) => {
                         perform_data_conversion(Instruction::i32TruncSignedf32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::i32TruncUnsignedf32) => {
+                        perform_data_conversion(Instruction::i32TruncUnsignedf32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::i32TruncSignedf64) => {
+                        perform_data_conversion(Instruction::i32TruncSignedf64, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::i32TruncUnsignedf64) => {
+                        perform_data_conversion(Instruction::i32TruncUnsignedf64, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::i64ExtendSignedi32) => {
+                        perform_data_conversion(Instruction::i64ExtendSignedi32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::i64ExtendUnsignedi32) => {
+                        perform_data_conversion(Instruction::i64ExtendUnsignedi32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::i64TruncSignedf32) => {
+                        perform_data_conversion(Instruction::i64TruncSignedf32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::i64TruncUnsignedf32) => {
+                        perform_data_conversion(Instruction::i64TruncUnsignedf32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::i64TruncSignedf64) => {
+                        perform_data_conversion(Instruction::i64TruncSignedf64, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::i64TruncUnsignedf64) => {
+                        perform_data_conversion(Instruction::i64TruncUnsignedf64, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f32ConvertSignedi32) => {
+                        perform_data_conversion(Instruction::f32ConvertSignedi32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f32ConvertUnsignedi32) => {
+                        perform_data_conversion(Instruction::f32ConvertUnsignedi32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f32ConvertSignedi64) => {
+                        perform_data_conversion(Instruction::f32ConvertSignedi64, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f32ConvertUnsignedi64) => {
+                        perform_data_conversion(Instruction::f32ConvertUnsignedi64, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f32Demotef64) => {
+                        perform_data_conversion(Instruction::f32Demotef64, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f64ConvertSignedi32) => {
+                        perform_data_conversion(Instruction::f64ConvertSignedi32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f64ConvertUnsignedi32) => {
+                        perform_data_conversion(Instruction::f64ConvertUnsignedi32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f64ConvertSignedi64) => {
+                        perform_data_conversion(Instruction::f64ConvertSignedi64, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f64ConvertUnsignedi64) => {
+                        perform_data_conversion(Instruction::f64ConvertUnsignedi64, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f64Promotef32) => {
+                        perform_data_conversion(Instruction::f64Promotef32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::i32Reinterpretf32) => {
+                        perform_data_conversion(Instruction::i32Reinterpretf32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::i64Reinterpretf64) => {
+                        perform_data_conversion(Instruction::i64Reinterpretf64, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f32Reinterpreti32) => {
+                        perform_data_conversion(Instruction::f32Reinterpreti32, &mut self.operand_stack)?;
+                        ip.increment();
+                    }
+                    Some(Instruction::f64Reinterpreti64) => {
+                        perform_data_conversion(Instruction::f64Reinterpreti64, &mut self.operand_stack)?;
                         ip.increment();
                     }
                     Some(Instruction::i32Store)
@@ -3730,22 +3823,246 @@ fn is_type_integer(operand: VmValue) -> bool {
 }  
 
 fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
-    // TODO: check the length of the operands allowed
     let len = operand_stack.len();
-    let operand = operand_stack.pop();
-    let result:VmValue;
+    let mut buf: Vec<VmValue> = Vec::with_capacity(len);
+
+    if len < 1 {
+        panic!("Cannot perform cast on less than 1 operand");
+    }
 
     match op{
         Instruction::i32Wrapi64 => {
+            for _ in 0..len {
+                match operand_stack.pop().i32_wrapi64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
         }
         Instruction::i32TruncSignedf32 => {
-            result = match operand.i32trunc_signedf32(){
-                Ok(res) => res,
-                Err(err) => return Err(err)
-            };
-            println!("{:?}", result);
+            for _ in 0..len {
+                match operand_stack.pop().i32trunc_f32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i32TruncUnsignedf32 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.i32trunc_f32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i32TruncSignedf64 => {
+            for _ in 0..len {
+                match operand_stack.pop().i32trunc_f64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i32TruncUnsignedf64 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.i32trunc_f64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i64ExtendSignedi32 => {
+            for _ in 0..len {
+                match operand_stack.pop().i64extend_i32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i64ExtendUnsignedi32 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.i64extend_i32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i64TruncSignedf32 => {
+            for _ in 0..len {
+                match operand_stack.pop().i64trunc_f32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i64TruncUnsignedf32 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.i64trunc_f32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i64TruncSignedf64 => {
+            for _ in 0..len {
+                match operand_stack.pop().i64trunc_f64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i64TruncUnsignedf64 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.i64trunc_f64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f32ConvertSignedi32 => {
+            for _ in 0..len {
+                match operand_stack.pop().f32convert_i32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f32ConvertUnsignedi32 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.f32convert_i32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f32ConvertSignedi64 => {
+            for _ in 0..len {
+                match operand_stack.pop().f32convert_i64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f32ConvertUnsignedi64 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.f32convert_i64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f32Demotef64 => {
+            for _ in 0..len {
+                match operand_stack.pop().f32demote_f64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f64ConvertSignedi32 => {
+            for _ in 0..len {
+                match operand_stack.pop().f64convert_i32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f64ConvertUnsignedi32 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.f64convert_i32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f64ConvertSignedi64 => {
+            for _ in 0..len {
+                match operand_stack.pop().f64convert_i64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f64ConvertUnsignedi64 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.f64convert_i64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f64Promotef32 => {
+            for _ in 0..len {
+                match operand_stack.pop().f64promote_f32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i32Reinterpretf32 => {
+            unimplemented!();
+        }
+        Instruction::i64Reinterpretf64 => {
+            unimplemented!();
+        }
+        Instruction::f32Reinterpreti32 => {
+            unimplemented!();
+        }
+        Instruction::f64Reinterpreti64 => {
+            unimplemented!();
         }
         _ => panic!(format!("No valid data conversion instruction was passed. Got {:?}", op))
+    }
+
+    // Reverse the buffer and push back data to operand stack
+    buf.reverse();
+    for val in buf.iter() {
+        operand_stack.push(*val);
     }
 
     Ok(())
