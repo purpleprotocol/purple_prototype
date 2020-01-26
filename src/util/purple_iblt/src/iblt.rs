@@ -91,8 +91,8 @@ impl PurpleIBLT {
         None
     }
 
-    /// Subtracts `other` from `self` returning a new IBLT.
-    pub fn subtract(&self, other: &PurpleIBLT) -> Result<PurpleIBLT, IBLTError> {
+    /// Returns a new IBLT with the symmetric difference of `self` and `other`.
+    pub fn symmetric_diff(&self, other: &PurpleIBLT) -> Result<PurpleIBLT, IBLTError> {
         if self.hash_functions != other.hash_functions {
             return Err(IBLTError::BadParameter);
         }
@@ -111,13 +111,13 @@ impl PurpleIBLT {
             let mut e1 = &mut result.table[i];
             let e2 = &other.table[i];
 
+            e1.count -= e2.count;
+            e1.key_sum ^= e2.key_sum;
+            e1.key_check ^= e2.key_check;
+
             if e1.is_empty() {
                 e1.value_sum = vec![0; self.value_size as usize];
             } else {
-                e1.count -= e2.count;
-                e1.key_sum ^= e2.key_sum;
-                e1.key_check ^= e2.key_check;
-            
                 for i in 0..self.value_size as usize {
                     e1.value_sum[i] ^= e2.value_sum[i];
                 }
@@ -234,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn subtract() {
+    fn symmetric_diff() {
         let mut iblt1 = PurpleIBLT::new(20, 8, 4).unwrap();
         let mut iblt2 = PurpleIBLT::new(20, 8, 4).unwrap();
         let k_1 = 342;
@@ -258,9 +258,9 @@ mod tests {
         assert!(iblt2.get(k_2).is_none());
         assert!(iblt2.get(k_3).is_some());
 
-        let result = iblt1.subtract(&iblt2).unwrap();
+        let result = iblt1.symmetric_diff(&iblt2).unwrap();
         assert!(result.get(k_1).is_none());
         assert!(result.get(k_2).is_some());
-        assert!(result.get(k_3).is_none());
+        assert!(result.get(k_3).is_some());
     }
 }
