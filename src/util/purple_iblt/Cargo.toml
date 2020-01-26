@@ -10,3 +10,6 @@ edition = "2018"
 crc32fast = "1.2.0"
 byteorder = "1.2.7"
 bin-tools = { path = "../bin-tools" }
+
+[dev-dependencies]
+quickcheck = "0.7.2"

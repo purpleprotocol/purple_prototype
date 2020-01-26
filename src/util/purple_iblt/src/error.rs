@@ -20,4 +20,7 @@
 pub enum IBLTError {
     /// One of the given parameters is invalid
     BadParameter,
+
+    /// Could not deserialize the IBLT from binary
+    ParseError,
 }

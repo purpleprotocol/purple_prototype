@@ -24,10 +24,11 @@
 use crate::error::IBLTError;
 use crc32fast::Hasher;
 use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian, LittleEndian};
+use std::io::Cursor;
 
 const HASH_CHECK: u8 = 11;
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PurpleIBLT {
     /// IBLT table
     table: Vec<TableEntry>,
@@ -128,11 +129,103 @@ impl PurpleIBLT {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        unimplemented!();
+        let mut buf = Vec::new();
+
+        buf.write_u8(self.hash_functions);
+        buf.write_u16::<BigEndian>(self.value_size);
+        buf.write_u32::<BigEndian>(self.table.len() as u32);
+
+        // Write entries
+        for entry in self.table.iter() {
+            buf.write_i32::<BigEndian>(entry.count);
+            buf.write_u32::<BigEndian>(entry.key_check);
+            buf.write_u64::<BigEndian>(entry.key_sum);
+            buf.extend_from_slice(&entry.value_sum);
+        }
+
+        buf
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<PurpleIBLT, IBLTError> {
-        unimplemented!();
+        let mut rdr = Cursor::new(bytes.to_vec());
+
+        let hash_functions = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err(IBLTError::ParseError);
+        };
+
+        rdr.set_position(1);
+
+        let value_size = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+            result
+        } else {
+            return Err(IBLTError::ParseError);
+        };
+
+        rdr.set_position(3);
+
+        let table_size = if let Ok(result) = rdr.read_u32::<BigEndian>() {
+            result
+        } else {
+            return Err(IBLTError::ParseError);
+        };
+
+        let mut iblt = PurpleIBLT::new(table_size as usize, value_size, hash_functions)?;
+
+        // Consume cursor
+        let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..7).collect();
+        let mut idx = 0;
+        
+        // Decode entries
+        while buf.len() != 0 {
+            if buf.len() >= (4 + 4 + 8 + value_size as usize) {
+                let mut rdr = Cursor::new(buf);
+                
+                let count = if let Ok(result) = rdr.read_i32::<BigEndian>() {
+                    result
+                } else {
+                    return Err(IBLTError::ParseError);
+                };
+
+                rdr.set_position(4);
+
+                let key_check = if let Ok(result) = rdr.read_u32::<BigEndian>() {
+                    result
+                } else {
+                    return Err(IBLTError::ParseError);
+                };
+
+                rdr.set_position(8);
+
+                let key_sum = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+                    result
+                } else {
+                    return Err(IBLTError::ParseError);
+                };
+
+                // Consume cursor
+                let mut buffer: Vec<u8> = rdr.into_inner();
+                let _: Vec<u8> = buffer.drain(..16).collect();
+                let value_sum = buffer.drain(..(value_size as usize)).collect();
+
+                let entry = TableEntry {
+                    count,
+                    key_check,
+                    key_sum,
+                    value_sum,
+                };
+
+                iblt.table[idx] = entry;
+                idx += 1;
+                buf = buffer;
+            } else {
+                return Err(IBLTError::ParseError);
+            };
+        }
+
+        Ok(iblt)
     }
 
     fn insert_or_delete(&mut self, k: u64, val: &[u8], insert_or_delete: i32) -> Result<(), IBLTError> {
@@ -174,7 +267,7 @@ fn hash_value(i: u8, val: &[u8]) -> u32 {
     hasher.finalize()
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct TableEntry {
     count: i32,
     key_check: u32,
@@ -207,8 +300,30 @@ impl TableEntry {
 }
 
 #[cfg(test)]
+use quickcheck::Arbitrary;
+
+#[cfg(test)]
+impl Arbitrary for PurpleIBLT {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> PurpleIBLT {
+        let mut iblt = PurpleIBLT::new(20, 8, 4).unwrap();
+
+        // Insert 100 random `(k, v)` pairs
+        for _ in 0..100 {
+            let k: u64 = Arbitrary::arbitrary(g);
+            let v: u64 = Arbitrary::arbitrary(g);
+            let v_le = encode_le_u64!(v);
+            
+            iblt.insert(k, &v_le).unwrap();
+        }
+
+        iblt
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck::*;
 
     #[test]
     fn insert_get() {
@@ -262,5 +377,11 @@ mod tests {
         assert!(result.get(k_1).is_none());
         assert!(result.get(k_2).is_some());
         assert!(result.get(k_3).is_some());
+    }
+
+    quickcheck! {
+        fn serialize_deserialize(iblt: PurpleIBLT) -> bool {
+            iblt == PurpleIBLT::from_bytes(&PurpleIBLT::to_bytes(&iblt)).unwrap()
+        }
     }
 }
