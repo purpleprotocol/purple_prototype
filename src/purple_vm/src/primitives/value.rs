@@ -296,14 +296,14 @@ impl VmValue {
 
     pub fn i32trunc_f32(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::F32(val) => VmValue::safe_f32_to_i32(*self),
+            VmValue::F32(_) => VmValue::safe_f32_to_i32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn i32trunc_f64(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::F64(val) => VmValue::safe_f64_to_i32(*self),
+            VmValue::F64(_) => VmValue::safe_f64_to_i32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
@@ -323,49 +323,49 @@ impl VmValue {
 
     pub fn i64trunc_f32(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::F32(val) => VmValue::safe_f32_to_i64(*self),
+            VmValue::F32(_) => VmValue::safe_f32_to_i64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
     
     pub fn i64trunc_f64(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::F64(val) => VmValue::safe_f64_to_i64(*self),
+            VmValue::F64(_) => VmValue::safe_f64_to_i64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn f32convert_i32(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::I32(val) => VmValue::safe_i32_to_f32(*self),
+            VmValue::I32(_) => VmValue::safe_i32_to_f32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn f32convert_i64(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::I64(val) => VmValue::safe_i64_to_f32(*self),
+            VmValue::I64(_) => VmValue::safe_i64_to_f32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
     
     pub fn f32demote_f64(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::F64(val) => VmValue::safe_f64_to_f32(*self),
+            VmValue::F64(_) => VmValue::safe_f64_to_f32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn f64convert_i32(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::I32(val) => VmValue::safe_i32_to_f64(*self),
+            VmValue::I32(_) => VmValue::safe_i32_to_f64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn f64convert_i64(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::I64(val) => VmValue::safe_i64_to_f64(*self),
+            VmValue::I64(_) => VmValue::safe_i64_to_f64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
