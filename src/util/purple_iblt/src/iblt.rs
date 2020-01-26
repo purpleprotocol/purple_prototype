@@ -65,7 +65,6 @@ impl PurpleIBLT {
     }
 
     pub fn get(&self, k: u64) -> Option<Vec<u8>> {
-        let mut result = Vec::new();
         let buckets = self.table.len() / self.hash_functions as usize;
 
         for i in 0..self.hash_functions {
@@ -80,8 +79,7 @@ impl PurpleIBLT {
                 return None;
             } else if entry.is_pure() {
                 if entry.key_sum == k {
-                    result = entry.value_sum.clone();
-                    return Some(result);
+                    return Some(entry.value_sum.clone());
                 } else {
                     return None;
                 }
@@ -93,8 +91,40 @@ impl PurpleIBLT {
         None
     }
 
-    pub fn subtract(&mut self, other: &PurpleIBLT) -> Result<(), IBLTError> {
-        unimplemented!();
+    /// Subtracts `other` from `self` returning a new IBLT.
+    pub fn subtract(&self, other: &PurpleIBLT) -> Result<PurpleIBLT, IBLTError> {
+        if self.hash_functions != other.hash_functions {
+            return Err(IBLTError::BadParameter);
+        }
+
+        if self.value_size != other.value_size {
+            return Err(IBLTError::BadParameter);
+        }
+
+        if self.table.len() != other.table.len() {
+            return Err(IBLTError::BadParameter);
+        }
+
+        let mut result = self.clone();
+
+        for i in 0..self.table.len() {
+            let mut e1 = &mut result.table[i];
+            let e2 = &other.table[i];
+
+            if e1.is_empty() {
+                e1.value_sum = vec![0; self.value_size as usize];
+            } else {
+                e1.count -= e2.count;
+                e1.key_sum ^= e2.key_sum;
+                e1.key_check ^= e2.key_check;
+            
+                for i in 0..self.value_size as usize {
+                    e1.value_sum[i] ^= e2.value_sum[i];
+                }
+            }
+        }
+
+        Ok(result)
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -201,5 +231,36 @@ mod tests {
         assert!(iblt.insert(k, &v_le).is_ok());
         assert!(iblt.remove(k, &v_le).is_ok());
         assert!(iblt.get(k).is_none());
+    }
+
+    #[test]
+    fn subtract() {
+        let mut iblt1 = PurpleIBLT::new(20, 8, 4).unwrap();
+        let mut iblt2 = PurpleIBLT::new(20, 8, 4).unwrap();
+        let k_1 = 342;
+        let v_1 = 3244323;
+        let v_1_le = encode_le_u64!(v_1);
+        let k_2 = 34;
+        let v_2 = 3243;
+        let v_2_le = encode_le_u64!(v_2);
+        let k_3 = 37;
+        let v_3 = 32463;
+        let v_3_le = encode_le_u64!(v_3);
+
+        assert!(iblt1.insert(k_1, &v_1_le).is_ok());
+        assert!(iblt2.insert(k_1, &v_1_le).is_ok());
+        assert!(iblt1.insert(k_2, &v_2_le).is_ok());
+        assert!(iblt2.insert(k_3, &v_3_le).is_ok());
+        assert!(iblt1.get(k_1).is_some());
+        assert!(iblt1.get(k_2).is_some());
+        assert!(iblt1.get(k_3).is_none());
+        assert!(iblt2.get(k_1).is_some());
+        assert!(iblt2.get(k_2).is_none());
+        assert!(iblt2.get(k_3).is_some());
+
+        let result = iblt1.subtract(&iblt2).unwrap();
+        assert!(result.get(k_1).is_none());
+        assert!(result.get(k_2).is_some());
+        assert!(result.get(k_3).is_none());
     }
 }
