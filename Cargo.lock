@@ -1854,6 +1854,7 @@ dependencies = [
  "bin-tools 0.1.0",
  "byteorder 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "crc32fast 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)",
  "quickcheck 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

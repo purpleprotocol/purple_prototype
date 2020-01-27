@@ -24,6 +24,7 @@
 use crate::error::IBLTError;
 use crc32fast::Hasher;
 use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian, LittleEndian};
+use hashbrown::HashMap;
 use std::io::Cursor;
 
 const HASH_CHECK: u8 = 11;
@@ -228,6 +229,46 @@ impl PurpleIBLT {
         Ok(iblt)
     }
 
+    pub fn list_entries_non_destructive(&self, positive: &mut HashMap<u64, Vec<u8>>, negative: &mut HashMap<u64, Vec<u8>>) -> bool {
+        self.clone().list_entries_destructive(positive, negative)
+    }
+
+    pub fn list_entries_destructive(&mut self, positive: &mut HashMap<u64, Vec<u8>>, negative: &mut HashMap<u64, Vec<u8>>) -> bool {        
+        let mut erased = 1;
+
+        while erased > 0 {
+            let mut to_delete: Vec<(u64, Vec<u8>, i32)> = Vec::new();
+            erased = 0;
+
+            for entry in self.table.iter() {
+                if entry.is_pure() {
+                    if entry.count == 1 {
+                        positive.insert(entry.key_sum, entry.value_sum.clone());
+                    } else {
+                        negative.insert(entry.key_sum, entry.value_sum.clone());
+                    }
+
+                    to_delete.push((entry.key_sum, entry.value_sum.clone(), entry.count));
+                }
+            }
+
+            for (key_sum, value_sum, count) in to_delete {
+                self.insert_or_delete(key_sum, &value_sum, -count);
+                erased += 1;
+            }
+        }
+
+        let r = self.table.len() / (self.hash_functions as usize);
+
+        for i in 0..r {
+            if !self.table[i].is_empty() {
+                return false;
+            }
+        }
+
+        true
+    }
+
     fn insert_or_delete(&mut self, k: u64, val: &[u8], insert_or_delete: i32) -> Result<(), IBLTError> {
         if val.len() != self.value_size as usize {
             return Err(IBLTError::BadParameter);
@@ -377,6 +418,48 @@ mod tests {
         assert!(result.get(k_1).is_none());
         assert!(result.get(k_2).is_some());
         assert!(result.get(k_3).is_some());
+    }
+
+    #[test]
+    fn list_entries() {
+        let mut iblt1 = PurpleIBLT::new(20, 8, 4).unwrap();
+        let mut iblt2 = PurpleIBLT::new(20, 8, 4).unwrap();
+        let k_1 = 342;
+        let v_1 = 3244323;
+        let v_1_le = encode_le_u64!(v_1);
+        let k_2 = 34;
+        let v_2 = 3243;
+        let v_2_le = encode_le_u64!(v_2);
+        let k_3 = 37;
+        let v_3 = 32463;
+        let v_3_le = encode_le_u64!(v_3);
+
+        assert!(iblt1.insert(k_1, &v_1_le).is_ok());
+        assert!(iblt2.insert(k_1, &v_1_le).is_ok());
+        assert!(iblt1.insert(k_2, &v_2_le).is_ok());
+        assert!(iblt2.insert(k_3, &v_3_le).is_ok());
+        assert!(iblt1.get(k_1).is_some());
+        assert!(iblt1.get(k_2).is_some());
+        assert!(iblt1.get(k_3).is_none());
+        assert!(iblt2.get(k_1).is_some());
+        assert!(iblt2.get(k_2).is_none());
+        assert!(iblt2.get(k_3).is_some());
+
+        let mut result = iblt1.symmetric_diff(&iblt2).unwrap();
+        assert!(result.get(k_1).is_none());
+        assert!(result.get(k_2).is_some());
+        assert!(result.get(k_3).is_some());
+
+        let mut positive = HashMap::new();
+        let mut negative = HashMap::new();
+        result.list_entries_destructive(&mut positive, &mut negative);
+
+        assert!(positive.get(&k_1).is_none());
+        assert!(positive.get(&k_2).is_some());
+        assert!(positive.get(&k_3).is_none());
+        assert!(negative.get(&k_1).is_none());
+        assert!(negative.get(&k_2).is_none());
+        assert!(negative.get(&k_3).is_some());
     }
 
     quickcheck! {

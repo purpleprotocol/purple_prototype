@@ -10,6 +10,7 @@ edition = "2018"
 crc32fast = "1.2.0"
 byteorder = "1.2.7"
 bin-tools = { path = "../bin-tools" }
+hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
 
 [dev-dependencies]
 quickcheck = "0.7.2"
