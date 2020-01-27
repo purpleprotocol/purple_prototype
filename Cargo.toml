@@ -16,6 +16,8 @@ members = [
     "src/purple_vm",
     "src/transactions",
     "src/mempool",
+    "src/util/purple_iblt",
+    "src/util/bloom",
 ]
 
 [dependencies]
