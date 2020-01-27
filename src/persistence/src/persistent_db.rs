@@ -15,6 +15,7 @@
   You should have received a copy of the GNU General Public License
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
+
 use crypto::Hash;
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
