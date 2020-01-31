@@ -36,7 +36,7 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait + Sized {
 
     /// Maximum orphans allowed.
     #[cfg(not(test))]
-    const MAX_ORPHANS: usize = 100;
+    const MAX_ORPHANS: usize = 200;
 
     #[cfg(test)]
     const MAX_ORPHANS: usize = 20;
@@ -52,25 +52,25 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait + Sized {
 
     /// Blocks with height below the canonical height minus
     /// this number will be rejected.
-    const MIN_HEIGHT: u64 = 10;
+    const MIN_HEIGHT: u64 = 60;
 
     /// Blocks with height above the canonical height plus
     /// this number will be rejected.
-    const MAX_HEIGHT: u64 = 10;
+    const MAX_HEIGHT: u64 = 60;
 
     /// The number of blocks after which a state checkpoint will be made.
     ///
     /// This number **MUST** be less or equal than the minimum accepted height.
-    const CHECKPOINT_INTERVAL: usize = 5;
+    const CHECKPOINT_INTERVAL: usize = 20;
 
     /// Max checkpoints to keep. This number must be less or equal
     /// than `(MAX_HEIGHT + MIN_HEIGHT) / CHECKPOINT_INTERVAL`.
-    const MAX_CHECKPOINTS: usize = 4;
+    const MAX_CHECKPOINTS: usize = 6;
 
     /// How many blocks to keep behind the canonical
     /// chain tip when pruning is enabled. This number should
     /// be equal to `CHECKPOINT_INTERVAL * MAX_CHECKPOINTS`.
-    const BLOCKS_TO_KEEP: usize = 100;
+    const BLOCKS_TO_KEEP: usize = 120;
 
     /// Returns the genesis block.
     fn genesis() -> Arc<Self>;

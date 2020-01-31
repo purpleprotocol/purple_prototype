@@ -19,6 +19,9 @@
 #[macro_use]
 extern crate serde_derive;
 
+#[macro_use]
+extern crate bin_tools;
+
 pub extern crate crc32fast;
 pub use blake_hasher::*;
 pub use hash::*;

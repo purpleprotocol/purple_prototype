@@ -21,7 +21,7 @@ use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{BlakeDbHasher, Codec};
+use persistence::{DbHasher, Codec};
 use rand::Rng;
 use std::io::Cursor;
 
@@ -71,12 +71,12 @@ impl CreateUnique {
     pub const TX_TYPE: u8 = 9;
 
     /// Validates the transaction against the provided state.
-    pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&self, trie: &TrieDB<DbHasher, Codec>) -> bool {
         unimplemented!();
     }
 
     /// Applies the burn transaction to the provided database.
-    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+    pub fn apply(&self, trie: &mut TrieDBMut<DbHasher, Codec>) {
         unimplemented!();
     }
 
@@ -444,7 +444,7 @@ impl CreateUnique {
     }
 
     /// Returns a random valid transaction for the provided state.
-    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Self {
+    pub fn arbitrary_valid(trie: &mut TrieDBMut<DbHasher, Codec>, sk: Sk) -> Self {
         unimplemented!();
     }
 

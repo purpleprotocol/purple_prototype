@@ -18,7 +18,7 @@
 
 use crate::chain::ChainErr;
 use account::Address;
-use crypto::Hash;
+use crypto::ShortHash;
 use transactions::Tx;
 use std::sync::Arc;
 use std::fmt::Debug;
@@ -123,7 +123,7 @@ where
 /// once generics are removed in the `Chain`.
 pub trait StateInterface {
     /// Returns the current state root that is stored in the state
-    fn state_root(&self) -> Hash;
+    fn state_root(&self) -> ShortHash;
 
     /// Returns the nonce of the account with the given address
     /// if it exists.

@@ -20,7 +20,7 @@ use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{BlakeDbHasher, Codec};
+use persistence::{DbHasher, Codec};
 use rand::Rng;
 use std::io::Cursor;
 use std::str;
@@ -43,7 +43,7 @@ impl Send {
     pub const TX_TYPE: u8 = 3;
 
     /// Validates the transaction against the provided state.
-    pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&self, trie: &TrieDB<DbHasher, Codec>) -> bool {
         let zero = Balance::zero();
 
         // You cannot send 0 coins
@@ -176,7 +176,7 @@ impl Send {
     /// Applies the send transaction to the provided database.
     ///
     /// This function will panic if the `from` account does not exist.
-    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+    pub fn apply(&self, trie: &mut TrieDBMut<DbHasher, Codec>) {
         let bin_from = &self.from.0;
         let bin_to = &self.to.to_bytes();
         let bin_asset_hash = &self.asset_hash.0;
@@ -655,7 +655,7 @@ impl Send {
     }
 
     /// Returns a random valid transaction for the provided state.
-    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Self {
+    pub fn arbitrary_valid(trie: &mut TrieDBMut<DbHasher, Codec>, sk: Sk) -> Self {
         unimplemented!();
     }
 
@@ -733,10 +733,10 @@ mod tests {
         let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize sender balance
             test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
@@ -761,7 +761,7 @@ mod tests {
         tx.sign(from_id.skey().clone());
         tx.compute_hash();
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
         assert!(tx.validate(&trie));
     }
 
@@ -776,10 +776,10 @@ mod tests {
         let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize sender balance
             test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10.0");
@@ -804,7 +804,7 @@ mod tests {
         tx.sign(from_id.skey().clone());
         tx.compute_hash();
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
         assert!(!tx.validate(&trie));
     }
 
@@ -820,10 +820,10 @@ mod tests {
         let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize sender balance
             test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
@@ -849,7 +849,7 @@ mod tests {
         tx.sign(from_id.skey().clone());
         tx.compute_hash();
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
         assert!(tx.validate(&trie));
     }
 
@@ -865,10 +865,10 @@ mod tests {
         let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize sender balance
             test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10.0");
@@ -894,7 +894,7 @@ mod tests {
         tx.sign(from_id.skey().clone());
         tx.compute_hash();
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
         assert!(!tx.validate(&trie));
     }
 
@@ -910,10 +910,10 @@ mod tests {
         let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize sender balance
             test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10.0");
@@ -939,7 +939,7 @@ mod tests {
         tx.sign(from_id.skey().clone());
         tx.compute_hash();
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
         assert!(!tx.validate(&trie));
     }
 
@@ -954,10 +954,10 @@ mod tests {
         let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize sender balance
             test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
@@ -982,7 +982,7 @@ mod tests {
         tx.sign(from_id.skey().clone());
         tx.compute_hash();
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
         assert!(!tx.validate(&trie));
     }
 
@@ -997,10 +997,10 @@ mod tests {
         let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize sender balance
             test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
@@ -1025,7 +1025,7 @@ mod tests {
         tx.sign(from_id.skey().clone());
         tx.compute_hash();
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
         assert!(!tx.validate(&trie));
     }
 
@@ -1042,10 +1042,10 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize sender balance
             test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
@@ -1070,7 +1070,7 @@ mod tests {
             tx.apply(&mut trie);
         }
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
 
         let from_nonce_key = [from_addr.as_bytes(), &b".n"[..]].concat();
         let to_nonce_key = [to_addr.as_bytes(), &b".n"[..]].concat();
@@ -1125,10 +1125,10 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize sender and receiver balances
             test_helpers::init_balance(&mut trie, from_addr.clone(), asset_hash, b"10000.0");
@@ -1154,7 +1154,7 @@ mod tests {
             tx.apply(&mut trie);
         }
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
 
         let from_nonce_key = [from_addr.as_bytes(), &b".n"[..]].concat();
         let to_nonce_key = [to_addr.as_bytes(), &b".n"[..]].concat();

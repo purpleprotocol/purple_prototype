@@ -20,7 +20,7 @@ use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{BlakeDbHasher, Codec};
+use persistence::{DbHasher, Codec};
 use rand::Rng;
 use std::io::Cursor;
 
@@ -59,7 +59,7 @@ impl ChangeMinter {
     pub const TX_TYPE: u8 = 8;
 
     /// Validates the transaction against the provided state.
-    pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&self, trie: &TrieDB<DbHasher, Codec>) -> bool {
         let zero = Balance::zero();
 
         if !self.verify_sig() {
@@ -153,7 +153,7 @@ impl ChangeMinter {
     }
 
     /// Applies the change minter transaction to the provided database.
-    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+    pub fn apply(&self, trie: &mut TrieDBMut<DbHasher, Codec>) {
         let bin_new_minter = self.new_minter.as_bytes();
         let bin_asset_hash = &self.asset_hash.0;
         let bin_fee_hash = &self.fee_hash.0;
@@ -486,7 +486,7 @@ impl ChangeMinter {
     }
 
     /// Returns a random valid transaction for the provided state.
-    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Self {
+    pub fn arbitrary_valid(trie: &mut TrieDBMut<DbHasher, Codec>, sk: Sk) -> Self {
         unimplemented!();
     }
 
@@ -565,10 +565,10 @@ mod tests {
         let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize minter balance
             test_helpers::init_balance(&mut trie, minter_address.clone(), fee_hash, b"100.0");
@@ -612,7 +612,7 @@ mod tests {
         tx.sign(id3.skey().clone());
         tx.compute_hash();
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
         assert!(tx.validate(&trie));
     }
 
@@ -630,10 +630,10 @@ mod tests {
         let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize minter balance
             test_helpers::init_balance(&mut trie, minter_address.clone(), fee_hash, b"100.0");
@@ -677,7 +677,7 @@ mod tests {
         tx.sign(id3.skey().clone());
         tx.compute_hash();
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
         assert!(!tx.validate(&trie));
     }
 
@@ -695,10 +695,10 @@ mod tests {
         let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize minter balance
             test_helpers::init_balance(&mut trie, minter_address.clone(), fee_hash, b"100.0");
@@ -742,7 +742,7 @@ mod tests {
         tx.sign(id3.skey().clone());
         tx.compute_hash();
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
         assert!(!tx.validate(&trie));
     }
 
@@ -756,8 +756,8 @@ mod tests {
         let next_address = NormalAddress::from_pkey(id3.pkey());
 
         let db = test_helpers::init_tempdb();
-        let root = Hash::NULL_RLP;
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let root = ShortHash::NULL_RLP;
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
 
         let asset_hash = crypto::hash_slice(b"Test currency 1").to_short();
         let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
@@ -797,10 +797,10 @@ mod tests {
         let fee = Balance::from_bytes(b"10.0").unwrap();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
+        let mut root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
             // Manually initialize creator balance
             test_helpers::init_balance(&mut trie, minter_address.clone(), fee_hash, b"100.0");
@@ -834,7 +834,7 @@ mod tests {
         let new_minter_addr = Address::normal_from_pkey(id5.pkey());
 
         {
-            let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+            let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
 
             // Check minter address
             assert_eq!(
@@ -849,7 +849,7 @@ mod tests {
         }
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::from_existing(&mut db, &mut root).unwrap();
+            let mut trie = TrieDBMut::<DbHasher, Codec>::from_existing(&mut db, &mut root).unwrap();
             let mut tx = ChangeMinter {
                 minter: id3.pkey().clone(),
                 new_minter: new_minter_addr.clone(),
@@ -869,7 +869,7 @@ mod tests {
             tx.apply(&mut trie);
         }
 
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&db, &root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
 
         // Check minter address
         assert_ne!(

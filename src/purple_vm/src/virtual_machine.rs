@@ -30,7 +30,7 @@ use crate::address::Address;
 use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt};
 use patricia_trie::TrieDBMut;
-use persistence::{BlakeDbHasher, Codec};
+use persistence::{DbHasher, Codec};
 use std::io::Cursor;
 
 const MAX_OP_ARITY: u8 = 8;
@@ -85,7 +85,7 @@ impl Vm {
     /// of gas that was consumed.
     pub fn execute(
         &mut self,
-        trie: &mut TrieDBMut<BlakeDbHasher, Codec>,
+        trie: &mut TrieDBMut<DbHasher, Codec>,
         module_idx: usize,
         fun_idx: usize,
         argv: &[VmValue],
@@ -3795,7 +3795,7 @@ fn perform_integer_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crypto::Hash;
+    use crypto::{ShortHash, Hash};
 
     #[test]
     #[rustfmt::skip]
@@ -3803,8 +3803,8 @@ mod tests {
     fn it_fails_with_first_loop_instruction() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
         let block: Vec<u8> = vec![
             Instruction::Loop.repr(),
@@ -3822,7 +3822,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![function],
             imports: vec![]
         };
@@ -3837,8 +3837,8 @@ mod tests {
     fn it_fails_with_first_begin_arity_other_than_zero() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
         let block: Vec<u8> = vec![
             Instruction::Loop.repr(),
@@ -3856,7 +3856,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![function],
             imports: vec![]
         };
@@ -3870,8 +3870,8 @@ mod tests {
     fn it_executes_correctly() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
@@ -3950,7 +3950,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![function],
             imports: vec![]
         };
@@ -3966,8 +3966,8 @@ mod tests {
     fn it_executes_correctly_with_loops() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
         let mut bitmask: u8 = 0;
 
         bitmask.set(0, true);
@@ -4082,7 +4082,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![function],
             imports: vec![]
         };
@@ -4098,8 +4098,8 @@ mod tests {
     fn it_breaks_loops_from_nested_scopes1() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
         let mut bitmask: u8 = 0;
         
         bitmask.set(0, true);
@@ -4226,7 +4226,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![function],
             imports: vec![]
         };
@@ -4242,8 +4242,8 @@ mod tests {
     fn it_breaks_loops_from_nested_scopes2() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
         let mut bitmask: u8 = 0;
 
         bitmask.set(0, true);
@@ -4365,7 +4365,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![function],
             imports: vec![]
         };
@@ -4381,8 +4381,8 @@ mod tests {
     fn it_works_with_if_else_arguments() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
         let mut bitmask: u8 = 0;
 
         bitmask.set(0, true);
@@ -4500,7 +4500,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![function],
             imports: vec![],
         };
@@ -4517,8 +4517,8 @@ mod tests {
     fn it_executes_correctly_with_calls_and_returns() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
         let mut bitmask: u8 = 0;
 
         bitmask.set(0, true);
@@ -4601,7 +4601,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![f1, f2],
             imports: vec![],
         };
@@ -4618,8 +4618,8 @@ mod tests {
     fn it_executes_correctly_with_return_from_nested_block() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
         let mut bitmask: u8 = 0;
 
         bitmask.set(0, true);
@@ -4705,7 +4705,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![f1, f2],
             imports: vec![],
         };
@@ -4722,8 +4722,8 @@ mod tests {
     fn it_executes_correctly_with_loading_heap_value_set_from_fun_call() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
         let mut bitmask: u8 = 0;
 
         bitmask.set(0, true);
@@ -4824,7 +4824,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![f1, f2],
             imports: vec![],
         };
@@ -4841,8 +4841,8 @@ mod tests {
     fn it_executes_correctly_with_lower_sized_integer_interpretations() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
         let mut bitmask: u8 = 0;
 
         bitmask.set(0, true);
@@ -4943,7 +4943,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![f1, f2],
             imports: vec![],
         };
@@ -4960,8 +4960,8 @@ mod tests {
     fn it_returns_correctly_on_overflow_1() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
@@ -4991,7 +4991,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![function],
             imports: vec![]
         };
@@ -5007,8 +5007,8 @@ mod tests {
     fn it_returns_correctly_on_overflow_2() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
@@ -5038,7 +5038,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![function],
             imports: vec![]
         };
@@ -5054,8 +5054,8 @@ mod tests {
     fn it_returns_correctly_on_overflow_3() {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
@@ -5089,7 +5089,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![function],
             imports: vec![]
         };
@@ -5104,8 +5104,8 @@ mod tests {
     fn execute_vm_code_common(block: Vec<u8>) -> Result<Gas, VmError> {
         let mut vm = Vm::new();
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
         let function = Function {
             arity: 0,
@@ -5116,7 +5116,7 @@ mod tests {
         };
 
         let module = Module {
-            module_hash: Hash::NULL_RLP,
+            module_hash: Hash::NULL,
             functions: vec![function],
             imports: vec![],
         };

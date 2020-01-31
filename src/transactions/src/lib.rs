@@ -56,7 +56,7 @@ pub use crate::send::*;
 use account::{Address, NormalAddress, Balance};
 use crypto::{ShortHash, Hash, SecretKey, PublicKey, FromBase58, Identity};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{BlakeDbHasher, Codec};
+use persistence::{DbHasher, Codec};
 use quickcheck::Arbitrary;
 use rand::Rng;
 
@@ -74,7 +74,7 @@ pub enum Tx {
 }
 
 impl Tx {
-    pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&self, trie: &TrieDB<DbHasher, Codec>) -> bool {
         match *self {
             Tx::Call(ref tx, _) => tx.validate(trie),
             Tx::OpenContract(ref tx, _) => tx.validate(trie),
@@ -88,7 +88,7 @@ impl Tx {
         }
     }
 
-    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+    pub fn apply(&self, trie: &mut TrieDBMut<DbHasher, Codec>) {
         match *self {
             Tx::Call(ref tx, _) => tx.apply(trie),
             Tx::OpenContract(ref tx, _) => tx.apply(trie),
@@ -265,7 +265,7 @@ impl Tx {
         }
     }
 
-    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>) -> Tx {
+    pub fn arbitrary_valid(trie: &mut TrieDBMut<DbHasher, Codec>) -> Tx {
         let mut rng = rand::thread_rng();
         let random = rng.gen_range(0, 8);
         let id = Identity::new();

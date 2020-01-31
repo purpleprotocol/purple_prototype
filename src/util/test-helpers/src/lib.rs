@@ -28,7 +28,7 @@ extern crate tempdir;
 use account::{NormalAddress, Balance};
 use crypto::ShortHash;
 use patricia_trie::{TrieDBMut, TrieMut};
-use persistence::{BlakeDbHasher, Codec, PersistentDb};
+use persistence::{DbHasher, Codec, PersistentDb};
 use quicksort::*;
 use std::sync::Arc;
 use tempdir::TempDir;
@@ -40,7 +40,7 @@ pub fn init_tempdb() -> PersistentDb {
 }
 
 pub fn init_balance(
-    trie: &mut TrieDBMut<BlakeDbHasher, Codec>,
+    trie: &mut TrieDBMut<DbHasher, Codec>,
     address: NormalAddress,
     asset_hash: ShortHash,
     amount: &[u8],

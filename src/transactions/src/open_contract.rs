@@ -20,7 +20,7 @@ use account::{Address, Balance, ContractAddress, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{BlakeDbHasher, Codec};
+use persistence::{DbHasher, Codec};
 use rand::Rng;
 use std::io::Cursor;
 use std::str;
@@ -49,7 +49,7 @@ impl OpenContract {
     pub const TX_TYPE: u8 = 2;
 
     /// Validates the transaction against the provided state.
-    pub fn validate(&self, trie: &TrieDB<BlakeDbHasher, Codec>) -> bool {
+    pub fn validate(&self, trie: &TrieDB<DbHasher, Codec>) -> bool {
         unimplemented!();
     }
 
@@ -57,7 +57,7 @@ impl OpenContract {
     ///
     /// This function will panic if the `creator` account does not exist
     /// or if the account address already exists in the ledger.
-    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+    pub fn apply(&self, trie: &mut TrieDBMut<DbHasher, Codec>) {
         let bin_address = self.address.as_ref().unwrap().as_bytes();
         let bin_asset_hash = &self.asset_hash.0;
         let bin_fee_hash = &self.fee_hash.0;
@@ -549,7 +549,7 @@ impl OpenContract {
     }
 
     /// Returns a random valid transaction for the provided state.
-    pub fn arbitrary_valid(trie: &mut TrieDBMut<BlakeDbHasher, Codec>, sk: Sk) -> Self {
+    pub fn arbitrary_valid(trie: &mut TrieDBMut<DbHasher, Codec>, sk: Sk) -> Self {
         unimplemented!();
     }
 
@@ -635,8 +635,8 @@ mod tests {
         let asset_hash = crypto::hash_slice(b"Test currency").to_short();
 
         let mut db = test_helpers::init_tempdb();
-        let mut root = Hash::NULL_RLP;
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut root);
+        let mut root = ShortHash::NULL_RLP;
+        let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize creator balance
         test_helpers::init_balance(

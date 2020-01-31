@@ -16,18 +16,26 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::{BlakeHasher, Hash, HASH_BYTES};
+use crypto::{BlakeHasher, ShortHash, SHORT_HASH_BYTES};
+use crc64fast::Digest;
 use hashdb::Hasher;
 
-pub struct BlakeDbHasher;
+pub struct DbHasher;
 
-impl Hasher for BlakeDbHasher {
-    const LENGTH: usize = HASH_BYTES;
+impl Hasher for DbHasher {
+    const LENGTH: usize = SHORT_HASH_BYTES;
 
-    type Out = Hash;
+    type Out = ShortHash;
     type StdHasher = BlakeHasher;
 
     fn hash(bytes: &[u8]) -> Self::Out {
-        crypto::hash_slice(bytes)
+        let mut c = Digest::new();
+        c.write(bytes);
+        let checksum = c.sum64();
+        let checksum = encode_le_u64!(checksum);
+        let mut hash_bytes = [0; SHORT_HASH_BYTES];
+        hash_bytes.copy_from_slice(&checksum);
+
+        ShortHash(hash_bytes)
     }
 }

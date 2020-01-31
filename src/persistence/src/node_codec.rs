@@ -19,19 +19,19 @@
   https://github.com/paritytech/parity-ethereum/blob/c313039526269f4690f6f3ea006b32f2d81ee6ab/util/patricia-trie-ethereum/src/rlp_node_codec.rs
 */
 
-use crypto::Hash;
+use crypto::ShortHash;
 use elastic_array::ElasticArray128;
 use hashdb::Hasher;
 use patricia_trie::node::Node;
 use patricia_trie::{ChildReference, NibbleSlice, NodeCodec};
 use rlp::{DecoderError, Prototype, Rlp, RlpStream};
-use crate::BlakeDbHasher;
+use crate::DbHasher;
 
 pub struct Codec;
 
-impl NodeCodec<BlakeDbHasher> for Codec {
+impl NodeCodec<DbHasher> for Codec {
     type Error = DecoderError;
-    const HASHED_NULL_NODE: Hash = Hash::NULL_RLP;
+    const HASHED_NULL_NODE: ShortHash = ShortHash::NULL_RLP;
 
     fn decode(data: &[u8]) -> ::std::result::Result<Node, Self::Error> {
         let r = Rlp::new(data);
@@ -63,10 +63,10 @@ impl NodeCodec<BlakeDbHasher> for Codec {
         }
     }
 
-    fn try_decode_hash(data: &[u8]) -> Option<Hash> {
+    fn try_decode_hash(data: &[u8]) -> Option<ShortHash> {
         let r = Rlp::new(data);
 
-        if r.is_data() && r.size() == BlakeDbHasher::LENGTH {
+        if r.is_data() && r.size() == DbHasher::LENGTH {
             Some(r.as_val().unwrap())
         } else {
             None
@@ -92,7 +92,7 @@ impl NodeCodec<BlakeDbHasher> for Codec {
         stream.drain()
     }
 
-    fn ext_node(partial: &[u8], child_ref: ChildReference<Hash>) -> Vec<u8> {
+    fn ext_node(partial: &[u8], child_ref: ChildReference<ShortHash>) -> Vec<u8> {
         let mut stream = RlpStream::new_list(2);
 
         stream.append(&partial);
@@ -110,7 +110,7 @@ impl NodeCodec<BlakeDbHasher> for Codec {
 
     fn branch_node<I>(children: I, value: Option<ElasticArray128<u8>>) -> Vec<u8>
     where
-        I: IntoIterator<Item = Option<ChildReference<Hash>>>,
+        I: IntoIterator<Item = Option<ChildReference<ShortHash>>>,
     {
         let mut stream = RlpStream::new_list(17);
 

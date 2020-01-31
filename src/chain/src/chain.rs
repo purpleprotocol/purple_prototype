@@ -19,7 +19,7 @@
 use crate::block::*;
 use crate::types::*;
 use bin_tools::*;
-use crypto::Hash;
+use crypto::{ShortHash, Hash};
 use account::Address;
 use elastic_array::ElasticArray128;
 use hashbrown::{HashMap, HashSet};
@@ -110,13 +110,13 @@ pub enum AppendCondErr {
 
 lazy_static! {
     /// Canonical tip block key
-    static ref TIP_KEY: Hash = { crypto::hash_slice(b"canonical_tip") };
+    static ref TIP_KEY: &'static [u8] = { b"canonical_tip" };
 
     /// The key of the root block
-    static ref ROOT_KEY: Hash = { crypto::hash_slice(b"root_block") };
+    static ref ROOT_KEY: &'static [u8] = { b"root_block" };
 
     /// The key to the canonical height of the chain
-    static ref CANONICAL_HEIGHT_KEY: Hash = { crypto::hash_slice(b"canonical_height") };
+    static ref CANONICAL_HEIGHT_KEY: &'static [u8] = { b"canonical_height" };
 }
 
 #[derive(Clone)]
@@ -256,7 +256,7 @@ impl<B: Block> ChainRef<B> {
         chain.canonical_tip_state.inner_ref().get_account_nonce(address)
     }
 
-    pub fn get_db_and_state_root(&self) -> (PersistentDb, Hash) {
+    pub fn get_db_and_state_root(&self) -> (PersistentDb, ShortHash) {
         let chain = self.chain.read();
         (chain.db.clone(), chain.canonical_tip_state.inner_ref().state_root().clone())
     }
@@ -337,27 +337,21 @@ impl<B: Block> Chain<B> {
         root_state: B::ChainState,
         archival_mode: bool,
     ) -> Chain<B> {
-        let tip_db_res = db_ref.get(&TIP_KEY);
+        let tip_db_res = db_ref.retrieve(&TIP_KEY);
         let found_tip = tip_db_res.is_some();
         let canonical_tip = match tip_db_res {
             Some(tip) => {
-                let mut buf = [0; 32];
-                buf.copy_from_slice(&tip);
-
-                let block_bytes = db_ref.get(&Hash(buf)).unwrap();
+                let block_bytes = db_ref.retrieve(&tip).unwrap();
                 B::from_bytes(&block_bytes).unwrap()
             }
             None => B::genesis(),
         };
 
         let root_state = FlushedChainState::new(root_state);
-        let root_db_res = db_ref.get(&ROOT_KEY);
+        let root_db_res = db_ref.retrieve(&ROOT_KEY);
         let root_block = match root_db_res {
             Some(tip) => {
-                let mut buf = [0; 32];
-                buf.copy_from_slice(&tip);
-
-                let block_bytes = db_ref.get(&Hash(buf)).unwrap();
+                let block_bytes = db_ref.retrieve(&tip).unwrap();
                 B::from_bytes(&block_bytes).unwrap()
             }
             None => B::genesis(),
@@ -387,7 +381,7 @@ impl<B: Block> Chain<B> {
                     break;
                 }
 
-                let block_res = db_ref.get(&block_hash).unwrap();
+                let block_res = db_ref.retrieve(&block_hash.0).unwrap();
                 let block = B::from_bytes(&block_res).unwrap();
 
                 block_hash = block.parent_hash();
@@ -422,14 +416,14 @@ impl<B: Block> Chain<B> {
             state
         };
 
-        let height = match db_ref.get(&CANONICAL_HEIGHT_KEY) {
+        let height = match db_ref.retrieve(&CANONICAL_HEIGHT_KEY) {
             Some(height) => decode_be_u64!(&height).unwrap(),
             None => {
                 if !found_tip {
                     // Set 0 height
-                    db_ref.emplace(
-                        CANONICAL_HEIGHT_KEY.clone(),
-                        ElasticArray128::<u8>::from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]),
+                    db_ref.put(
+                        &CANONICAL_HEIGHT_KEY,
+                        &[0, 0, 0, 0, 0, 0, 0, 0],
                     );
                 }
 
@@ -468,7 +462,7 @@ impl<B: Block> Chain<B> {
         let genesis = B::genesis();
         let new_tip = if *block_hash == genesis.block_hash().unwrap() {
             genesis
-        } else if let Some(new_tip) = self.db.get(block_hash) {
+        } else if let Some(new_tip) = self.db.retrieve(&block_hash.0) {
             B::from_bytes(&new_tip).unwrap()
         } else {
             return Err(ChainErr::NoSuchBlock);
@@ -485,11 +479,11 @@ impl<B: Block> Chain<B> {
 
         // Remove canonical tip from the chain
         // and mark it as a valid chain tip.
-        self.db.remove(&current.block_hash().unwrap());
+        self.db.delete(&current.block_hash().unwrap().0);
 
         // Remove current height entry
         let current_height_key = crypto::hash_slice(&encode_be_u64!(current.height()));
-        self.db.remove(&current_height_key);
+        self.db.delete(&current_height_key.0);
 
         // Add the old tip to the orphan pool
         self.orphan_pool
@@ -525,18 +519,18 @@ impl<B: Block> Chain<B> {
             if parent_hash == *block_hash {
                 break;
             } else {
-                let parent = B::from_bytes(&self.db.get(&parent_hash).unwrap()).unwrap();
+                let parent = B::from_bytes(&self.db.retrieve(&parent_hash.0).unwrap()).unwrap();
                 let cur_height = parent.height();
 
                 // Remove parent from db
-                self.db.remove(&parent_hash);
+                self.db.delete(&parent_hash.0);
 
                 // Remove parent state from state mappings
                 self.heights_state_mapping.remove(&parent.height());
 
                 // Remove current height entry
                 let current_height_key = crypto::hash_slice(&encode_be_u64!(cur_height));
-                self.db.remove(&current_height_key);
+                self.db.delete(&current_height_key.0);
 
                 // Add the parent to the orphan pool
                 self.orphan_pool
@@ -574,9 +568,9 @@ impl<B: Block> Chain<B> {
         self.canonical_tip = new_tip;
 
         // Write tip key
-        self.db.emplace(
-            TIP_KEY.clone(),
-            ElasticArray128::<u8>::from_slice(&new_tip_hash.0),
+        self.db.put(
+            &TIP_KEY,
+            &new_tip_hash.0,
         );
 
         // Flush changes
@@ -588,7 +582,7 @@ impl<B: Block> Chain<B> {
     /// Returns true if there is any canonical block in the chain
     /// with the given `Hash`.
     pub fn is_canonical(&self, block_hash: &Hash) -> bool {
-        self.db.get(block_hash).is_some()
+        self.db.retrieve(&block_hash.0).is_some()
     }
 
     fn update_max_orphan_height(&mut self, new_height: u64) {
@@ -618,19 +612,19 @@ impl<B: Block> Chain<B> {
         );
 
         // Place block in the ledger
-        self.db.emplace(
-            block_hash.clone(),
-            ElasticArray128::<u8>::from_slice(&block.to_bytes()),
+        self.db.put(
+            &block_hash.0,
+            &block.to_bytes(),
         );
 
         // Set new tip block
         self.canonical_tip = block.clone();
-        let mut height = decode_be_u64!(self.db.get(&CANONICAL_HEIGHT_KEY).unwrap()).unwrap();
+        let mut height = decode_be_u64!(self.db.retrieve(&CANONICAL_HEIGHT_KEY).unwrap()).unwrap();
 
         // Write tip key
-        self.db.emplace(
-            TIP_KEY.clone(),
-            ElasticArray128::<u8>::from_slice(&block_hash.0),
+        self.db.put(
+            &TIP_KEY,
+            &block_hash.0,
         );
 
         // Increment height
@@ -647,15 +641,15 @@ impl<B: Block> Chain<B> {
         // Write block height
         let block_height_key = Self::compute_height_key(&block_hash);
 
-        self.db.emplace(
-            block_height_key,
-            ElasticArray128::<u8>::from_slice(&encoded_height),
+        self.db.put(
+            &block_height_key.0,
+            &encoded_height,
         );
 
         // Write height mapping
-        self.db.emplace(
-            crypto::hash_slice(&encoded_height),
-            ElasticArray128::<u8>::from_slice(&block_hash.0),
+        self.db.put(
+            &crypto::hash_slice(&encoded_height).0,
+            &block_hash.0,
         );
 
         self.orphan_pool.remove(&block_hash);
@@ -719,9 +713,9 @@ impl<B: Block> Chain<B> {
             }
 
             // Write new root block
-            self.db.emplace(
-                ROOT_KEY.clone(),
-                ElasticArray128::<u8>::from_slice(&cur_block.block_hash().unwrap().0),
+            self.db.put(
+                &ROOT_KEY,
+                &cur_block.block_hash().unwrap().0,
             );
 
             self.root_state = cur_state.flush().unwrap();
@@ -738,9 +732,9 @@ impl<B: Block> Chain<B> {
 
     fn write_canonical_height(&mut self, height: u64) {
         let encoded_height = encode_be_u64!(height);
-        self.db.emplace(
-            CANONICAL_HEIGHT_KEY.clone(),
-            ElasticArray128::<u8>::from_slice(&encoded_height),
+        self.db.put(
+            &CANONICAL_HEIGHT_KEY,
+            &encoded_height,
         );
     }
 
@@ -1043,7 +1037,7 @@ impl<B: Block> Chain<B> {
 
             // Traverse parents until we find a canonical block
             loop {
-                if self.db.get(&current).is_some() {
+                if self.db.retrieve(&current.0).is_some() {
                     break;
                 }
 
@@ -1436,7 +1430,7 @@ impl<B: Block> Chain<B> {
 
     /// Queries the database for the block with the given hash.
     pub fn query(&self, hash: &Hash) -> Option<Arc<B>> {
-        let stored = self.db.get(hash)?;
+        let stored = self.db.retrieve(&hash.0)?;
         Some(B::from_bytes(&stored).unwrap())
     }
 
@@ -1463,7 +1457,7 @@ impl<B: Block> Chain<B> {
     pub fn query_by_height(&self, height: u64) -> Option<Arc<B>> {
         let encoded_height = encode_be_u64!(height);
         let key = crypto::hash_slice(&encoded_height);
-        let result = self.db.get(&key)?;
+        let result = self.db.retrieve(&key.0)?;
         let mut block_hash = [0; 32];
         block_hash.copy_from_slice(&result);
         let block_hash = Hash(block_hash);
@@ -1490,7 +1484,7 @@ impl<B: Block> Chain<B> {
         let block_hash = block.block_hash().unwrap();
 
         // Check for existence
-        if self.orphan_pool.get(&block_hash).is_some() || self.db.get(&block_hash).is_some() {
+        if self.orphan_pool.get(&block_hash).is_some() || self.db.retrieve(&block_hash.0).is_some() {
             return Err(ChainErr::AlreadyInChain);
         }
 
@@ -1548,7 +1542,7 @@ impl<B: Block> Chain<B> {
             // tip this means that this block is represents a
             // potential fork in the chain so we add it to the
             // orphan pool.
-            match self.db.get(&parent_hash) {
+            match self.db.retrieve(&parent_hash.0) {
                 Some(parent_block) => {
                     let height = block.height();
                     let parent_height = B::from_bytes(&parent_block).unwrap().height();
@@ -1799,7 +1793,7 @@ impl<B: Block> Chain<B> {
 
                                             visited_stack.push(cur.clone());
 
-                                            if self.db.get(&parent_hash).is_some() {
+                                            if self.db.retrieve(&parent_hash.0).is_some() {
                                                 current = parent_hash;
                                                 break;
                                             }
@@ -1807,7 +1801,7 @@ impl<B: Block> Chain<B> {
                                             current = parent_hash;
                                         }
 
-                                        B::from_bytes(&self.db.get(&current).unwrap()).unwrap()
+                                        B::from_bytes(&self.db.retrieve(&current.0).unwrap()).unwrap()
                                     };
 
                                     // Retrieve state associated with the head's parent
@@ -2015,13 +2009,10 @@ impl<B: Block> Chain<B> {
             loop {
                 // Retrieve block key via height
                 let height_key = crypto::hash_slice(&encode_be_u64!(cur_height));
-                let block_hash = self.db.get(&height_key).unwrap();
-                let mut hash = [0; 32];
-                hash.copy_from_slice(&block_hash);
+                let block_hash = self.db.retrieve(&height_key.0).unwrap();
 
                 // Retrieve block
-                let hash = Hash(hash);
-                let block = B::from_bytes(&self.db.get(&hash).unwrap()).unwrap();
+                let block = B::from_bytes(&self.db.retrieve(&block_hash).unwrap()).unwrap();
 
                 // Compute next state
                 state = B::append_condition(block, state.clone(), BranchType::Canonical).unwrap();
@@ -2157,7 +2148,7 @@ pub mod tests {
     }
 
     impl StateInterface for DummyState {
-        fn state_root(&self) -> Hash {
+        fn state_root(&self) -> ShortHash {
             unimplemented!();
         }
 
@@ -2214,6 +2205,28 @@ pub mod tests {
     }
 
     impl Block for DummyBlock {
+        /// Blocks with height below the canonical height minus
+        /// this number will be rejected.
+        const MIN_HEIGHT: u64 = 10;
+
+        /// Blocks with height above the canonical height plus
+        /// this number will be rejected.
+        const MAX_HEIGHT: u64 = 10;
+
+        /// The number of blocks after which a state checkpoint will be made.
+        ///
+        /// This number **MUST** be less or equal than the minimum accepted height.
+        const CHECKPOINT_INTERVAL: usize = 5;
+
+        /// Max checkpoints to keep. This number must be less or equal
+        /// than `(MAX_HEIGHT + MIN_HEIGHT) / CHECKPOINT_INTERVAL`.
+        const MAX_CHECKPOINTS: usize = 4;
+
+        /// How many blocks to keep behind the canonical
+        /// chain tip when pruning is enabled. This number should
+        /// be equal to `CHECKPOINT_INTERVAL * MAX_CHECKPOINTS`.
+        const BLOCKS_TO_KEEP: usize = 100;
+        
         type ChainState = DummyState;
 
         fn genesis() -> Arc<Self> {
@@ -2423,31 +2436,31 @@ pub mod tests {
         pow_chain.append_block(G.clone()).unwrap();
 
         assert_eq!(
-            pow_chain.db.get(&height_1_key).unwrap().to_vec(),
+            pow_chain.db.retrieve(&height_1_key.0).unwrap().to_vec(),
             A.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            pow_chain.db.get(&height_2_key).unwrap().to_vec(),
+            pow_chain.db.retrieve(&height_2_key.0).unwrap().to_vec(),
             B.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            pow_chain.db.get(&height_3_key).unwrap().to_vec(),
+            pow_chain.db.retrieve(&height_3_key.0).unwrap().to_vec(),
             C.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            pow_chain.db.get(&height_4_key).unwrap().to_vec(),
+            pow_chain.db.retrieve(&height_4_key.0).unwrap().to_vec(),
             D.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            pow_chain.db.get(&height_5_key).unwrap().to_vec(),
+            pow_chain.db.retrieve(&height_5_key.0).unwrap().to_vec(),
             E.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            pow_chain.db.get(&height_6_key).unwrap().to_vec(),
+            pow_chain.db.retrieve(&height_6_key.0).unwrap().to_vec(),
             F.block_hash().unwrap().0.to_vec()
         );
         assert_eq!(
-            pow_chain.db.get(&height_7_key).unwrap().to_vec(),
+            pow_chain.db.retrieve(&height_7_key.0).unwrap().to_vec(),
             G.block_hash().unwrap().0.to_vec()
         );
 
@@ -2485,13 +2498,13 @@ pub mod tests {
             .is_some());
 
         // Check for heights cleanup
-        assert!(pow_chain.db.get(&height_1_key).is_none());
-        assert!(pow_chain.db.get(&height_2_key).is_none());
-        assert!(pow_chain.db.get(&height_3_key).is_none());
-        assert!(pow_chain.db.get(&height_4_key).is_none());
-        assert!(pow_chain.db.get(&height_5_key).is_none());
-        assert!(pow_chain.db.get(&height_6_key).is_none());
-        assert!(pow_chain.db.get(&height_7_key).is_none());
+        assert!(pow_chain.db.retrieve(&height_1_key.0).is_none());
+        assert!(pow_chain.db.retrieve(&height_2_key.0).is_none());
+        assert!(pow_chain.db.retrieve(&height_3_key.0).is_none());
+        assert!(pow_chain.db.retrieve(&height_4_key.0).is_none());
+        assert!(pow_chain.db.retrieve(&height_5_key.0).is_none());
+        assert!(pow_chain.db.retrieve(&height_6_key.0).is_none());
+        assert!(pow_chain.db.retrieve(&height_7_key.0).is_none());
     }
 
     #[test]
