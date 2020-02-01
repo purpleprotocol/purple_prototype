@@ -21,9 +21,9 @@ use crate::types::*;
 use crate::pow_chain::block::GENESIS_HASH_KEY;
 use transactions::Genesis;
 use patricia_trie::{TrieDB, TrieDBMut, Trie, TrieMut};
-use persistence::{PersistentDb, BlakeDbHasher, Codec};
+use persistence::{PersistentDb, DbHasher, Codec};
 use account::Address;
-use crypto::{Hash, NodeId};
+use crypto::{Hash, ShortHash, NodeId};
 use hashbrown::{HashMap, HashSet};
 use transactions::Tx;
 use std::sync::Arc;
@@ -63,7 +63,7 @@ pub struct PowChainState {
     pub(crate) txs_blocks_left: Option<u32>,
 
     /// Root hash of the state trie
-    pub(crate) state_root: Hash,
+    pub(crate) state_root: ShortHash,
 
     /// Hash of the last checkpoint block.
     pub last_checkpoint: Hash,
@@ -82,10 +82,10 @@ impl PowChainState {
         debug!("Applying genesis transaction...");
 
         let genesis = Genesis::default();
-        let mut state_root = Hash::NULL_RLP;
+        let mut state_root = ShortHash::NULL_RLP;
 
         {
-            let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::new(&mut db, &mut state_root);
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut state_root);
 
             // Apply the genesis transaction to the state
             genesis.apply(&mut trie);
@@ -117,8 +117,8 @@ impl PowChainState {
         let encoded_edge_bits = db.retrieve(Self::EDGE_BITS_KEY).ok_or("Could not retrieve edge bits from disk!")?;
         let edge_bits = decode_u8!(encoded_edge_bits).map_err(|_| "Invalid edge bits stored on disk!")?;
         let last_checkpoint = db.retrieve(Self::LAST_CHECKPOINT_KEY).ok_or("Could not retrieve last checkpoint from disk!")?;
-        let last_checkpoint = if last_checkpoint.len() == 32 {
-            let mut hash = [0; 32];
+        let last_checkpoint = if last_checkpoint.len() == crypto::HASH_BYTES {
+            let mut hash = [0; crypto::HASH_BYTES];
             hash.copy_from_slice(&last_checkpoint);
             Hash(hash)
         } else {
@@ -126,10 +126,10 @@ impl PowChainState {
         };
 
         let state_root = db.retrieve(PersistentDb::ROOT_HASH_KEY).ok_or("Could not retrieve state root from disk!")?;
-        let state_root = if state_root.len() == 32 {
-            let mut hash = [0; 32];
+        let state_root = if state_root.len() == crypto::SHORT_HASH_BYTES {
+            let mut hash = [0; crypto::SHORT_HASH_BYTES];
             hash.copy_from_slice(&state_root);
-            Hash(hash)
+            ShortHash(hash)
         } else {
             return Err("Invalid state root stored on disk!");
         };
@@ -209,12 +209,12 @@ impl Flushable for PowChainState {
 }
 
 impl StateInterface for PowChainState {
-    fn state_root(&self) -> Hash {
+    fn state_root(&self) -> ShortHash {
         self.state_root.clone()
     }
 
     fn get_account_nonce(&self, address: &Address) -> Option<u64> {
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&self.db, &self.state_root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&self.db, &self.state_root).unwrap();
 
         // Calculate nonce key
         //
@@ -227,12 +227,12 @@ impl StateInterface for PowChainState {
     }
 
     fn validate_tx(&self, tx: Arc<Tx>) -> bool {
-        let trie = TrieDB::<BlakeDbHasher, Codec>::new(&self.db, &self.state_root).unwrap();
+        let trie = TrieDB::<DbHasher, Codec>::new(&self.db, &self.state_root).unwrap();
         tx.validate(&trie)
     }
 
     fn apply_tx(&mut self, tx: Arc<Tx>) {
-        let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::from_existing(&mut self.db, &mut self.state_root).unwrap();
+        let mut trie = TrieDBMut::<DbHasher, Codec>::from_existing(&mut self.db, &mut self.state_root).unwrap();
         tx.apply(&mut trie);
     }
 }
@@ -251,7 +251,7 @@ mod tests {
         chain_state.height = 10;
         chain_state.difficulty = 6;
         chain_state.edge_bits = 29;
-        chain_state.state_root = crypto::hash_slice(b"random_state_root");
+        chain_state.state_root = crypto::crc64_hash_slice(b"random_state_root");
         chain_state.last_checkpoint = crypto::hash_slice(b"random_checkpoint");
 
         // Flush values
@@ -273,7 +273,7 @@ mod tests {
         chain_state.height = 10;
         chain_state.difficulty = 6;
         chain_state.edge_bits = 29;
-        chain_state.state_root = crypto::hash_slice(b"random_state_root");
+        chain_state.state_root = crypto::crc64_hash_slice(b"random_state_root");
         chain_state.last_checkpoint = crypto::hash_slice(b"random_checkpoint");
         chain_state.current_validator = Some(node_id);
         chain_state.txs_blocks_left = Some(7);

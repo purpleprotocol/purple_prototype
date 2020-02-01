@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::Hash;
+use crypto::ShortHash;
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
 use hashdb::{AsHashDB, HashDB};
@@ -26,7 +26,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
-use crate::BlakeDbHasher;
+use hashdb::Hasher as HasherTrait;
+use crate::DbHasher;
 
 pub fn cf_options() -> Options {
     let mut opts = Options::default();
@@ -174,7 +175,7 @@ impl PersistentDb {
                 None => match self.get_db(key) {
                     Some(res) => Some(res),
                     None => match key {
-                        Self::ROOT_HASH_KEY => Some(Hash::NULL_RLP.0.to_vec()),
+                        Self::ROOT_HASH_KEY => Some(ShortHash::NULL_RLP.0.to_vec()),
                         _ => None,
                     },
                 },
@@ -291,13 +292,13 @@ impl PartialEq for PersistentDb {
     }
 }
 
-impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
-    fn keys(&self) -> std::collections::HashMap<Hash, i32> {
+impl HashDB<DbHasher, ElasticArray128<u8>> for PersistentDb {
+    fn keys(&self) -> std::collections::HashMap<ShortHash, i32> {
         unimplemented!();
     }
 
-    fn get(&self, key: &Hash) -> Option<ElasticArray128<u8>> {
-        if key == &Hash::NULL_RLP {
+    fn get(&self, key: &ShortHash) -> Option<ElasticArray128<u8>> {
+        if key == &ShortHash::NULL_RLP {
             return Some(ElasticArray128::from_slice(&NULL_RLP));
         }
 
@@ -308,35 +309,35 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
         }
     }
 
-    fn insert(&mut self, val: &[u8]) -> Hash {
+    fn insert(&mut self, val: &[u8]) -> ShortHash {
         if val == &NULL_RLP {
-            return Hash::NULL_RLP;
+            return ShortHash::NULL_RLP;
         }
 
-        let val_hash = crypto::hash_slice(val);
+        let val_hash = DbHasher::hash(val);
         self.put(&val_hash.0, val);
 
         val_hash
     }
 
-    fn contains(&self, key: &Hash) -> bool {
-        if key == &Hash::NULL_RLP {
+    fn contains(&self, key: &ShortHash) -> bool {
+        if key == &ShortHash::NULL_RLP {
             return true;
         }
 
         self.retrieve(&key.0).is_some()
     }
 
-    fn emplace(&mut self, key: Hash, val: ElasticArray128<u8>) {
-        if key == Hash::NULL_RLP {
+    fn emplace(&mut self, key: ShortHash, val: ElasticArray128<u8>) {
+        if key == ShortHash::NULL_RLP {
             return;
         }
 
         self.put(&key.0, &val);
     }
 
-    fn remove(&mut self, key: &Hash) {
-        if key == &Hash::NULL_RLP {
+    fn remove(&mut self, key: &ShortHash) {
+        if key == &ShortHash::NULL_RLP {
             return;
         }
 
@@ -344,11 +345,11 @@ impl HashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
     }
 }
 
-impl AsHashDB<BlakeDbHasher, ElasticArray128<u8>> for PersistentDb {
-    fn as_hashdb(&self) -> &HashDB<BlakeDbHasher, ElasticArray128<u8>> {
+impl AsHashDB<DbHasher, ElasticArray128<u8>> for PersistentDb {
+    fn as_hashdb(&self) -> &HashDB<DbHasher, ElasticArray128<u8>> {
         self
     }
-    fn as_hashdb_mut(&mut self) -> &mut HashDB<BlakeDbHasher, ElasticArray128<u8>> {
+    fn as_hashdb_mut(&mut self) -> &mut HashDB<DbHasher, ElasticArray128<u8>> {
         self
     }
 }
@@ -450,7 +451,7 @@ mod tests {
         let db_ref = Arc::new(db);
         let mut persistent_db = PersistentDb::new(db_ref, None);
         let db2 = persistent_db.clone();
-        let key = crypto::hash_slice(b"the_key");
+        let key = crypto::hash_slice(b"the_key").to_short();
         let data = b"Hello world";
 
         persistent_db.emplace(key, ElasticArray128::from_slice(data));

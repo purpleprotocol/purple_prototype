@@ -307,7 +307,7 @@ fn fetch_credentials(db: &mut PersistentDb) -> (NodeId, Sk) {
     let node_id_key = crypto::hash_slice(b"node_id");
     let node_skey_key = crypto::hash_slice(b"node_skey");
 
-    match (db.get(&node_id_key), db.get(&node_skey_key)) {
+    match (db.retrieve(&node_id_key.0), db.retrieve(&node_skey_key.0)) {
         (Some(id), Some(skey)) => {
             let mut id_buf = [0; 32];
             let mut skey_buf = [0; 64];
@@ -324,8 +324,8 @@ fn fetch_credentials(db: &mut PersistentDb) -> (NodeId, Sk) {
             let bin_pkey = identity.pkey().0;
             let bin_skey = identity.skey().0;
 
-            db.emplace(node_id_key, ElasticArray128::<u8>::from_slice(&bin_pkey));
-            db.emplace(node_skey_key, ElasticArray128::<u8>::from_slice(&bin_skey));
+            db.put(&node_id_key.0, &bin_pkey);
+            db.put(&node_skey_key.0, &bin_skey);
 
             (NodeId::new(bin_pkey), identity.skey().clone())
         }

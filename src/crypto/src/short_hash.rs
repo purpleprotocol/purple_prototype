@@ -18,6 +18,8 @@
 
 use crate::hash::Hash;
 use crc32fast::Hasher as CrcHasher;
+use crc64fast::Digest;
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use quickcheck::Arbitrary;
 use rand::Rng;
 use std::default::Default;
@@ -29,6 +31,9 @@ pub const SHORT_HASH_BYTES: usize = 8;
 pub struct ShortHash(pub [u8; SHORT_HASH_BYTES]);
 
 impl ShortHash {
+    pub const NULL: ShortHash = ShortHash([0; SHORT_HASH_BYTES]);
+    pub const NULL_RLP: ShortHash = ShortHash([27, 48, 224, 179, 230, 246, 193, 214]);
+
     pub fn from_hash(hash: &Hash) -> ShortHash {
         let mut short_hash = [0; SHORT_HASH_BYTES];
         let short_bytes = &hash.0[..SHORT_HASH_BYTES];
@@ -39,9 +44,7 @@ impl ShortHash {
 
     /// Converts the `ShortHash` to an unique integer representation.
     pub fn to_u64(&self) -> u64 {
-        let mut hasher = CrcHasher::new();
-        hasher.update(&self.0);
-        hasher.finalize() as u64
+        decode_le_u64!(&self.0).unwrap()
     }
 
     pub fn to_vec(&self) -> Vec<u8> {
@@ -85,6 +88,50 @@ impl std::fmt::Display for ShortHash {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", hex::encode(self.0))
     }
+}
+
+impl Encodable for ShortHash {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        stream.append(&self.0.to_vec());
+    }
+}
+
+impl Decodable for ShortHash {
+    fn decode(bytes: &Rlp) -> Result<ShortHash, DecoderError> {
+        match bytes.data() {
+            Ok(data) => {
+                let mut result = [0; SHORT_HASH_BYTES];
+                result.copy_from_slice(data);
+
+                Ok(ShortHash(result))
+            }
+            _ => Err(DecoderError::Custom("Invalid rlp data")),
+        }
+    }
+}
+
+impl AsMut<[u8]> for ShortHash {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut()
+    }
+}
+
+impl AsRef<[u8]> for ShortHash {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+#[inline]
+pub fn crc64_hash_slice(val: &[u8]) -> ShortHash {
+    let mut c = Digest::new();
+    c.write(val);
+    let checksum = c.sum64();
+    let checksum = encode_le_u64!(checksum);
+    let mut hash_bytes = [0; SHORT_HASH_BYTES];
+    hash_bytes.copy_from_slice(&checksum);
+
+    ShortHash(hash_bytes)
 }
 
 impl Arbitrary for ShortHash {

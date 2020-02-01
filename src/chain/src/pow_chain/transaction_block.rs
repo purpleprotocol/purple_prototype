@@ -29,11 +29,11 @@ use crypto::{NodeId, Signature, SecretKey as Sk};
 use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
-use crypto::Hash;
+use crypto::{ShortHash, Hash};
 use crypto::PublicKey;
 use lazy_static::*;
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{PersistentDb, BlakeDbHasher, Codec};
+use persistence::{PersistentDb, DbHasher, Codec};
 use miner::{Proof, PROOF_SIZE};
 use std::boxed::Box;
 use std::hash::Hash as HashTrait;
@@ -69,7 +69,7 @@ pub struct TransactionBlock {
     tx_root: Option<Hash>,
 
     /// Merkle root hash of the state trie
-    state_root: Option<Hash>,
+    state_root: Option<ShortHash>,
 
     /// Block transaction list. This is `None` if we only
     /// have the block header.
@@ -175,12 +175,12 @@ impl Block for TransactionBlock {
 
             for tx in transaction_set.iter() {
                 let validation_result = {
-                    let trie = TrieDB::<BlakeDbHasher, Codec>::new(&chain_state.db, &chain_state.state_root).unwrap();
+                    let trie = TrieDB::<DbHasher, Codec>::new(&chain_state.db, &chain_state.state_root).unwrap();
                     tx.validate(&trie)
                 };
 
                 if validation_result {
-                    let mut trie = TrieDBMut::<BlakeDbHasher, Codec>::from_existing(&mut chain_state.db, &mut chain_state.state_root).unwrap();
+                    let mut trie = TrieDBMut::<DbHasher, Codec>::from_existing(&mut chain_state.db, &mut chain_state.state_root).unwrap();
                     tx.apply(&mut trie);
                 } else {
                     return Err(ChainErr::BadAppendCondition(AppendCondErr::BadTx));
@@ -282,13 +282,13 @@ impl Block for TransactionBlock {
             return Err("Incorrect packet structure 4");
         };
 
-        let state_root = if buf.len() > 32 as usize {
-            let mut hash = [0; 32];
-            let hash_vec: Vec<u8> = buf.drain(..32).collect();
+        let state_root = if buf.len() > crypto::SHORT_HASH_BYTES as usize {
+            let mut hash = [0; crypto::SHORT_HASH_BYTES];
+            let hash_vec: Vec<u8> = buf.drain(..crypto::SHORT_HASH_BYTES).collect();
 
             hash.copy_from_slice(&hash_vec);
 
-            Hash(hash)
+            ShortHash(hash)
         } else {
             return Err("Incorrect packet structure 5");
         };

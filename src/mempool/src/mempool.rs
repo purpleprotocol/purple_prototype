@@ -27,7 +27,7 @@ use hashbrown::{HashSet, HashMap};
 use transactions::Tx;
 use std::collections::{VecDeque, BTreeMap};
 use patricia_trie::{TrieDB, Trie};
-use persistence::{BlakeDbHasher, Codec};
+use persistence::{DbHasher, Codec};
 use crypto::{ShortHash, Hash};
 use rand::Rng;
 use std::sync::Arc;

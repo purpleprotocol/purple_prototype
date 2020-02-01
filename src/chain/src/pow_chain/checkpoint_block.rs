@@ -43,7 +43,7 @@ use std::sync::Arc;
 #[cfg(not(test))]
 /// How many transaction blocks the validator is allowed to create
 /// for a successfully appended checkpoint block.
-pub const ALLOWED_TXS_BLOCKS: u32 = 40;
+pub const ALLOWED_TXS_BLOCKS: u32 = 25;
 
 #[cfg(test)]
 pub const ALLOWED_TXS_BLOCKS: u32 = 2;

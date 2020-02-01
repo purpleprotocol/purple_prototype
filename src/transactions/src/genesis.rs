@@ -19,7 +19,7 @@
 use account::{Balance, NormalAddress};
 use crypto::{ShortHash, Hash};
 use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{BlakeDbHasher, Codec};
+use persistence::{DbHasher, Codec};
 use std::default::Default;
 
 #[cfg(any(test, feature = "test"))]
@@ -55,7 +55,7 @@ impl Genesis {
     /// Applies the genesis transaction to the provided database.
     ///
     /// This function will panic if the treasury account already exists.
-    pub fn apply(&self, trie: &mut TrieDBMut<BlakeDbHasher, Codec>) {
+    pub fn apply(&self, trie: &mut TrieDBMut<DbHasher, Codec>) {
         let bin_asset_hash = &self.asset_hash.0;
         let coin_supply = Balance::from_u64(self.coin_supply).to_bytes();
         let mut coinbase_supply = COIN_SUPPLY;
