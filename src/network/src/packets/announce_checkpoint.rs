@@ -32,16 +32,16 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnounceCheckpoint {
-    pub(crate) tx_hash: ShortHash,
+    pub(crate) block_hash: ShortHash,
     pub(crate) nonce: u64,
 }
 
 impl AnnounceCheckpoint {
-    pub fn new(tx_hash: ShortHash) -> AnnounceCheckpoint {
+    pub fn new(block_hash: ShortHash) -> AnnounceCheckpoint {
         let mut rng = rand::thread_rng();
         
         AnnounceCheckpoint { 
-            tx_hash,
+            block_hash,
             nonce: rng.gen(),
         }
     }
@@ -57,10 +57,10 @@ impl Packet for AnnounceCheckpoint {
         // Packet structure:
         // 1) Packet type(11)  - 8bits
         // 2) Nonce            - 64bits
-        // 3) Block hash - 8bytes
+        // 3) Block hash       - 8bytes
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
-        buffer.extend_from_slice(&self.tx_hash.0);
+        buffer.extend_from_slice(&self.block_hash.0);
         buffer
     }
 
@@ -88,7 +88,7 @@ impl Packet for AnnounceCheckpoint {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..9).collect();
 
-        let tx_hash = if buf.len() == 8 as usize {
+        let block_hash = if buf.len() == 8 as usize {
             let mut hash = [0; 8];
             hash.copy_from_slice(&buf);
 
@@ -98,7 +98,7 @@ impl Packet for AnnounceCheckpoint {
         };
 
         let packet = AnnounceCheckpoint { 
-            tx_hash,
+            block_hash,
             nonce, 
         };
 
