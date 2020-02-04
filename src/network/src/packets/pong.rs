@@ -72,7 +72,7 @@ impl Packet for Pong {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = Vec::new();
+        let mut buffer: Vec<u8> = Vec::with_capacity(7);
 
         // Pong packet structure:
         // 1) Packet type(3)   - 8bits

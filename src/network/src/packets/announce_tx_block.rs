@@ -51,11 +51,11 @@ impl Packet for AnnounceTxBlock {
     const PACKET_TYPE: u8 = 12;
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = Vec::new();
+        let mut buffer: Vec<u8> = Vec::with_capacity(17);
         let packet_type: u8 = Self::PACKET_TYPE;
 
         // Packet structure:
-        // 1) Packet type(11)  - 8bits
+        // 1) Packet type(12)  - 8bits
         // 2) Nonce            - 64bits
         // 3) Block hash       - 8bytes
         buffer.write_u8(packet_type).unwrap();

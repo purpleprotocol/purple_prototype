@@ -47,7 +47,7 @@ impl Packet for RequestTx {
     const PACKET_TYPE: u8 = 8;
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = Vec::new();
+        let mut buffer: Vec<u8> = Vec::with_capacity(7);
         let packet_type: u8 = Self::PACKET_TYPE;
 
         // Packet structure:
