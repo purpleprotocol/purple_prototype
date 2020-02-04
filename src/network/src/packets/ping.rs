@@ -88,7 +88,7 @@ impl Packet for Ping {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = Vec::new();
+        let mut buffer: Vec<u8> = Vec::with_capacity(7);
 
         // Ping packet structure:
         // 1) Packet type(2)   - 8bits

@@ -19,64 +19,65 @@
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
-use crate::packets::SendPeers;
 use crate::peer::ConnectionType;
-use crate::validation::receiver::Receiver;
+use crate::validation::sender::Sender;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use rand::prelude::*;
+use chain::{Block, PowBlock};
+use crypto::NodeId;
+use crypto::{ShortHash, PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct RequestPeers {
-    /// Randomly generated nonce
-    pub(crate) nonce: u64,
-
-    /// The number of requested peers
-    pub(crate) requested_peers: u8,
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum BlockRejectStatus {
+    OrphanPoolFull,
+    Witnessed,
 }
 
-impl RequestPeers {
-    pub fn new(requested_peers: u8) -> RequestPeers {
-        let mut rng = rand::thread_rng();
+#[derive(Debug, Clone, PartialEq)]
+pub struct RejectBlock {
+    pub(crate) nonce: u64,
+    pub(crate) status: BlockRejectStatus,
+}
 
-        RequestPeers {
-            requested_peers,
-            nonce: rng.gen(),
+impl RejectBlock {
+    pub fn new(nonce: u64, status: BlockRejectStatus) -> RejectBlock {
+        RejectBlock { 
+            nonce,
+            status,
         }
     }
 }
 
-impl Packet for RequestPeers {
-    const PACKET_TYPE: u8 = 4;
+impl Packet for RejectBlock {
+    const PACKET_TYPE: u8 = 13;
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::with_capacity(10);
         let packet_type: u8 = Self::PACKET_TYPE;
+        let status = match self.status {
+            BlockRejectStatus::Witnessed => 0,
+            BlockRejectStatus::OrphanPoolFull => 1,
+        };
 
         // Packet structure:
-        // 1) Packet type(4)   - 8bits
-        // 2) Requested peers  - 8bits
-        // 3) Nonce            - 64bits
+        // 1) Packet type(13)  - 8bits
+        // 2) Reject status    - 8bits
+        // 2) Nonce            - 64bits
         buffer.write_u8(packet_type).unwrap();
-        buffer.write_u8(self.requested_peers).unwrap();
+        buffer.write_u8(status).unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
-
         buffer
     }
 
-    fn from_bytes(bytes: &[u8]) -> Result<Arc<RequestPeers>, NetworkErr> {
-        let mut rdr = Cursor::new(bytes.to_vec());
+    fn from_bytes(bin: &[u8]) -> Result<Arc<RejectBlock>, NetworkErr> {
+        let mut rdr = Cursor::new(bin.to_vec());
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
         } else {
             return Err(NetworkErr::BadFormat);
         };
-
-        if bytes.len() != 10 {
-            return Err(NetworkErr::BadFormat);
-        }
 
         if packet_type != Self::PACKET_TYPE {
             return Err(NetworkErr::BadFormat);
@@ -84,8 +85,12 @@ impl Packet for RequestPeers {
 
         rdr.set_position(1);
 
-        let requested_peers = if let Ok(result) = rdr.read_u8() {
-            result
+        let status = if let Ok(result) = rdr.read_u8() {
+            match result {
+                0 => BlockRejectStatus::Witnessed,
+                1 => BlockRejectStatus::OrphanPoolFull,
+                _ => return Err(NetworkErr::BadFormat)
+            }
         } else {
             return Err(NetworkErr::BadFormat);
         };
@@ -98,9 +103,9 @@ impl Packet for RequestPeers {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = RequestPeers {
-            nonce,
-            requested_peers,
+        let packet = RejectBlock { 
+            nonce, 
+            status,
         };
 
         Ok(Arc::new(packet))
@@ -109,37 +114,10 @@ impl Packet for RequestPeers {
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &RequestPeers,
+        packet: &RejectBlock,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        debug!(
-            "Received RequestPeers packet from {} with nonce {}",
-            addr, packet.nonce
-        );
-
-        // Retrieve receiver mutex
-        let receiver = {
-            let peers = network.peers();
-            let peers = peers.read();
-            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
-
-            peer.validator.request_peers.receiver.clone()
-        };
-
-        // Attempt to receive packet
-        let packet = {
-            let mut receiver = receiver.lock();
-            receiver.receive(network as &N, addr, packet)?
-        };
-
-        debug!("Sending SendPeers packet to {}", addr);
-
-        // Send `SendPeers` packet back to peer
-        network.send_to_peer(addr, packet.to_bytes())?;
-
-        debug!("SendPeers packet sent to {}", addr);
-        
-        Ok(())
+        unimplemented!();
     }
 }
 
@@ -147,16 +125,25 @@ impl Packet for RequestPeers {
 use quickcheck::Arbitrary;
 
 #[cfg(test)]
-use crypto::Identity;
+use rand::Rng;
 
 #[cfg(test)]
-impl Arbitrary for RequestPeers {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> RequestPeers {
-        let id = Identity::new();
+impl Arbitrary for RejectBlock {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> RejectBlock {
+        RejectBlock::new(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+    }
+}
 
-        RequestPeers {
-            nonce: Arbitrary::arbitrary(g),
-            requested_peers: Arbitrary::arbitrary(g),
+#[cfg(test)]
+impl Arbitrary for BlockRejectStatus {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> BlockRejectStatus {
+        let mut rng = rand::thread_rng();
+        let num = rng.gen_range(0, 2);
+
+        match num {
+            0 => BlockRejectStatus::Witnessed,
+            1 => BlockRejectStatus::OrphanPoolFull,
+            _ => panic!(),
         }
     }
 }
@@ -164,10 +151,11 @@ impl Arbitrary for RequestPeers {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chain::PowBlock;
 
     quickcheck! {
-        fn serialize_deserialize(tx: Arc<RequestPeers>) -> bool {
-            tx == RequestPeers::from_bytes(&RequestPeers::to_bytes(&tx)).unwrap()
+        fn serialize_deserialize(packet: Arc<RejectBlock>) -> bool {
+            packet == RejectBlock::from_bytes(&RejectBlock::to_bytes(&packet)).unwrap()
         }
     }
 }

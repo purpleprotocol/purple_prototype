@@ -57,7 +57,7 @@ impl Packet for RejectTx {
     const PACKET_TYPE: u8 = 10;
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = Vec::new();
+        let mut buffer: Vec<u8> = Vec::with_capacity(10);
         let packet_type: u8 = Self::PACKET_TYPE;
         let status = match self.status {
             TxRejectStatus::Witnessed => 0,
@@ -66,7 +66,7 @@ impl Packet for RejectTx {
         };
 
         // Packet structure:
-        // 1) Packet type(8)   - 8bits
+        // 1) Packet type(10)   - 8bits
         // 2) Reject status    - 8bits
         // 2) Nonce            - 64bits
         buffer.write_u8(packet_type).unwrap();

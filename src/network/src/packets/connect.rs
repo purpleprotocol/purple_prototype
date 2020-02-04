@@ -68,7 +68,7 @@ impl Packet for Connect {
     const PACKET_TYPE: u8 = 1;
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = Vec::new();
+        let mut buffer: Vec<u8> = Vec::with_capacity(129);
         let packet_type: u8 = Self::PACKET_TYPE;
         let signature = if let Some(signature) = &self.signature {
             signature.inner_bytes()
