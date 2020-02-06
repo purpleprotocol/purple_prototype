@@ -100,7 +100,7 @@ pub struct Mempool {
 
     /// The maximum amount of transactions that the
     /// mempool is allowed to store.
-    max_size: u64,
+    max_size: u32,
 
     /// Reference to the pow chain.
     chain_ref: PowChainRef,
@@ -115,7 +115,7 @@ pub struct Mempool {
 impl Mempool {
     pub fn new(
         chain_ref: PowChainRef,
-        max_size: u64, 
+        max_size: u32, 
         preferred_currencies: Vec<ShortHash>,
         preference_ratio: u8,
     ) -> Mempool {

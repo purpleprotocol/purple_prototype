@@ -215,6 +215,11 @@ pub fn handle_packet<N: NetworkInterface>(
             _ => Err(NetworkErr::PacketParseErr),
         },
 
+        RequestBlock::PACKET_TYPE => match RequestBlock::from_bytes(packet) {
+            Ok(packet) => RequestBlock::handle(network, peer_addr, &packet, conn_type),
+            _ => Err(NetworkErr::PacketParseErr),
+        },
+
         _ => {
             debug!("Could not parse packet with type {} from {}", packet_type, peer_addr);
             Err(NetworkErr::PacketParseErr)
