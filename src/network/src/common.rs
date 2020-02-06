@@ -152,6 +152,10 @@ pub fn handle_packet<N: NetworkInterface>(
     peer_addr: &SocketAddr,
     packet: &[u8],
 ) -> Result<(), NetworkErr> {
+    if packet.len() == 0 {
+        return Err(NetworkErr::PacketParseErr);
+    }
+
     let packet_type = packet[0];
 
     match packet_type {
@@ -217,6 +221,11 @@ pub fn handle_packet<N: NetworkInterface>(
 
         RequestBlock::PACKET_TYPE => match RequestBlock::from_bytes(packet) {
             Ok(packet) => RequestBlock::handle(network, peer_addr, &packet, conn_type),
+            _ => Err(NetworkErr::PacketParseErr),
+        },
+
+        ForwardCheckpointHeader::PACKET_TYPE => match ForwardCheckpointHeader::from_bytes(packet) {
+            Ok(packet) => ForwardCheckpointHeader::handle(network, peer_addr, &packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
