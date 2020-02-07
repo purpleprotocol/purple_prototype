@@ -30,6 +30,8 @@ persistence = { path = "../persistence" }
 quickcheck = "0.7.2"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["rayon", "serde"] }
 bin-tools = { path = "../util/bin-tools/" }
+bloom = { path = "../util/bloom/" }
+purple_iblt = { path = "../util/purple_iblt/" }
 
 [dev-dependencies.chain]
 path = "../chain"

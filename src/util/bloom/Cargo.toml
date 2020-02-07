@@ -9,7 +9,5 @@ edition = "2018"
 [dependencies]
 byteorder = "1.2.7"
 bloomfilter = "1.0.2"
-
-[dev-dependencies]
 quickcheck = "0.7.2"
 bin-tools = { path = "../bin-tools" }

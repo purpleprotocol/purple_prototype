@@ -340,10 +340,8 @@ impl TableEntry {
     }
 }
 
-#[cfg(test)]
 use quickcheck::Arbitrary;
 
-#[cfg(test)]
 impl Arbitrary for PurpleIBLT {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> PurpleIBLT {
         let mut iblt = PurpleIBLT::new(20, 8, 4).unwrap();
@@ -386,6 +384,16 @@ mod tests {
 
         assert!(iblt.insert(k, &v_le).is_ok());
         assert!(iblt.remove(k, &v_le).is_ok());
+        assert!(iblt.get(k).is_none());
+    }
+
+    #[test]
+    fn works_with_0_value_size() {
+        let mut iblt = PurpleIBLT::new(20, 0, 4).unwrap();
+        let k = 34;
+
+        assert!(iblt.insert(k, &[]).is_ok());
+        assert!(iblt.remove(k, &[]).is_ok());
         assert!(iblt.get(k).is_none());
     }
 
