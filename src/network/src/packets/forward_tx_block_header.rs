@@ -43,7 +43,7 @@ pub struct ForwardTxBlockHeader {
 }
 
 impl ForwardTxBlockHeader {
-    pub fn new(block: Arc<TransactionBlock>, mempool_size: u32) -> Result<ForwardTxBlockHeader, &'static str> {
+    pub fn new(block: Arc<TransactionBlock>, mempool_size: u32) -> Result<ForwardTxBlockHeader, &'static str> {    
         if let Some(txs) = &block.transactions {
             let txs = txs.read();
             let M: u32 = mempool_size;
@@ -79,15 +79,19 @@ impl ForwardTxBlockHeader {
             // Create IBLT
             let mut iblt = PurpleIBLT::new(
                 iblt_size as usize, 
-                crypto::SHORT_HASH_BYTES as u16, 
+                0, 
                 hash_funcs,
             ).map_err(|_| "Could not create IBLT")?;
 
-            // TODO: Add transactions to IBLT
-            unimplemented!();
+            // Insert transaction hashes in IBLT
+            for tx in txs.iter() {
+                let tx_hash = tx.tx_hash().unwrap().to_short();
+                let hash_le = decode_le_u64!(&tx_hash.0).unwrap();
+                iblt.insert(hash_le, &[]).unwrap();
+            }
 
             Ok(ForwardTxBlockHeader { 
-                block,
+                block: block.clone(),
                 bloom_filter,
                 iblt,
             })
