@@ -340,10 +340,8 @@ impl TableEntry {
     }
 }
 
-#[cfg(test)]
 use quickcheck::Arbitrary;
 
-#[cfg(test)]
 impl Arbitrary for PurpleIBLT {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> PurpleIBLT {
         let mut iblt = PurpleIBLT::new(20, 8, 4).unwrap();

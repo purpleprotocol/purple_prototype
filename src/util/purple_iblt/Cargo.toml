@@ -11,6 +11,4 @@ crc32fast = { version = "1.2.0", features = ["nightly"] }
 byteorder = "1.2.7"
 bin-tools = { path = "../bin-tools" }
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
-
-[dev-dependencies]
 quickcheck = "0.7.2"

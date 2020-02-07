@@ -199,10 +199,8 @@ impl fmt::Debug for Bloom {
     }
 }
 
-#[cfg(test)]
 use quickcheck::Arbitrary;
 
-#[cfg(test)]
 impl Arbitrary for Bloom {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Bloom {
         use bin_tools::*;
@@ -212,6 +210,23 @@ impl Arbitrary for Bloom {
         for _ in 0..100 {
             let v: u64 = Arbitrary::arbitrary(g);
             let v_le = encode_le_u64!(v);
+
+            #[cfg(not(test))]
+            let v_le = {
+                let mut buf = Vec::with_capacity(ITEM_SIZE);
+                
+                for byte in v_le.iter() {
+                    buf.push(*byte);
+                }
+
+                // Pad value with 24 bytes
+                for _ in 0..(ITEM_SIZE - 8) {
+                    buf.push(0x00)
+                }
+
+                buf
+            };
+
             let mut v = [0; ITEM_SIZE];
             v.copy_from_slice(&v_le);
             

@@ -51,32 +51,32 @@ pub const MAX_TX_SET_SIZE: usize = 204800; // 200kb
 /// A block belonging to the `PowChain`.
 pub struct TransactionBlock {
     /// The height of the block.
-    height: u64,
+    pub height: u64,
 
     /// The `NodeId` belonging to the miner.
-    miner_id: NodeId,
+    pub miner_id: NodeId,
 
     /// The `Signature` corresponding to the miner's id.
-    miner_signature: Option<Signature>,
+    pub miner_signature: Option<Signature>,
 
     /// The hash of the parent block.
-    parent_hash: Hash,
+    pub parent_hash: Hash,
 
     /// The hash of the block.
-    hash: Option<Hash>,
+    pub hash: Option<Hash>,
 
     /// Merkle root hash of all transactions in the block
-    tx_root: Option<Hash>,
+    pub tx_root: Option<Hash>,
 
     /// Merkle root hash of the state trie
-    state_root: Option<ShortHash>,
+    pub state_root: Option<ShortHash>,
 
     /// Block transaction list. This is `None` if we only
     /// have the block header.
-    transactions: Option<Arc<RwLock<Vec<Arc<Tx>>>>>,
+    pub transactions: Option<Arc<RwLock<Vec<Arc<Tx>>>>>,
 
     /// The timestamp of the block.
-    timestamp: DateTime<Utc>,
+    pub timestamp: DateTime<Utc>,
 }
 
 impl PartialEq for TransactionBlock {
