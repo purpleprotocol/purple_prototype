@@ -16,51 +16,69 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#![allow(non_snake_case)]
+
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
+use crate::validation::sender::Sender;
+use crate::packets::forward_tx_block_header::{IBLT_C_CONST, IBLT_R_CONST};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use chain::{Block, CheckpointBlock};
+use bloom::Bloom;
+use rand::Rng;
 use crypto::NodeId;
-use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::ShortHash;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ForwardCheckpointHeader {
-    block: Arc<CheckpointBlock>,
-    nonce: u64,
+pub struct RequestMissingTxs {
+    pub(crate) nonce: u64,
+    pub(crate) tx_filter: Bloom
 }
 
-impl ForwardCheckpointHeader {
-    pub fn new(block: Arc<CheckpointBlock>, nonce: u64) -> ForwardCheckpointHeader {
-        ForwardCheckpointHeader { block, nonce }
+impl RequestMissingTxs {
+    pub fn new(tx_ids: &[ShortHash]) -> RequestMissingTxs {
+        let mut rng = rand::thread_rng();
+
+        // One byte per tx id, keep it simple for now
+        let mut tx_filter = Bloom::new(tx_ids.len() as u32, tx_ids.len() as u32);
+
+        // Add missing tx ids to the bloom filter
+        for tx_hash in tx_ids {
+            tx_filter.set(&tx_hash.0);
+        }
+
+        RequestMissingTxs { 
+            nonce: rng.gen(),
+            tx_filter,
+        }
     }
 }
 
-impl Packet for ForwardCheckpointHeader {
-    const PACKET_TYPE: u8 = 15;
+impl Packet for RequestMissingTxs {
+    const PACKET_TYPE: u8 = 17;
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = Vec::new();
+        let mut buffer: Vec<u8> = Vec::with_capacity(11);
         let packet_type: u8 = Self::PACKET_TYPE;
-        let block = self.block.to_bytes();
+        let tx_filter = self.tx_filter.to_bytes();
 
         // Packet structure:
-        // 1) Packet type(15)  - 8bits
-        // 2) Block length     - 16bits
-        // 3) Nonce            - 64bits
-        // 4) Block            - Binary of block length
+        // 1) Packet type(17)   - 8bits
+        // 2) Bloom filter len  - 16bits
+        // 3) Nonce             - 64bits
+        // 4) Tx filter         - Binary of bloom filter length
         buffer.write_u8(packet_type).unwrap();
-        buffer.write_u16::<BigEndian>(block.len() as u16).unwrap();
+        buffer.write_u16::<BigEndian>(tx_filter.len() as u16).unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
-        buffer.extend_from_slice(&block);
+        buffer.extend_from_slice(&tx_filter);
         buffer
     }
 
-    fn from_bytes(bin: &[u8]) -> Result<Arc<ForwardCheckpointHeader>, NetworkErr> {
+    fn from_bytes(bin: &[u8]) -> Result<Arc<RequestMissingTxs>, NetworkErr> {
         let mut rdr = Cursor::new(bin.to_vec());
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
@@ -74,7 +92,7 @@ impl Packet for ForwardCheckpointHeader {
 
         rdr.set_position(1);
 
-        let block_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+        let tx_filter_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
             result
         } else {
             return Err(NetworkErr::BadFormat);
@@ -92,8 +110,8 @@ impl Packet for ForwardCheckpointHeader {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..11).collect();
 
-        let block = if buf.len() == block_len as usize {
-            match CheckpointBlock::from_bytes(&buf) {
+        let tx_filter = if buf.len() == tx_filter_len as usize {
+            match Bloom::from_bytes(&buf) {
                 Ok(result) => result,
                 _ => return Err(NetworkErr::BadFormat),
             }
@@ -101,14 +119,18 @@ impl Packet for ForwardCheckpointHeader {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = ForwardCheckpointHeader { block, nonce };
+        let packet = RequestMissingTxs { 
+            nonce, 
+            tx_filter,
+        };
+
         Ok(Arc::new(packet))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &ForwardCheckpointHeader,
+        packet: &RequestMissingTxs,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         unimplemented!();
@@ -119,23 +141,25 @@ impl Packet for ForwardCheckpointHeader {
 use quickcheck::Arbitrary;
 
 #[cfg(test)]
-impl Arbitrary for ForwardCheckpointHeader {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> ForwardCheckpointHeader {
-        ForwardCheckpointHeader {
-            block: Arbitrary::arbitrary(g),
-            nonce: Arbitrary::arbitrary(g),
-        }
+impl Arbitrary for RequestMissingTxs {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> RequestMissingTxs {
+        let tx_ids: Vec<ShortHash> = (0..50)
+            .into_iter()
+            .map(|_| Arbitrary::arbitrary(g))
+            .collect();
+
+        RequestMissingTxs::new(&tx_ids)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chain::CheckpointBlock;
+    use chain::PowBlock;
 
     quickcheck! {
-        fn serialize_deserialize(tx: Arc<ForwardCheckpointHeader>) -> bool {
-            tx == ForwardCheckpointHeader::from_bytes(&ForwardCheckpointHeader::to_bytes(&tx)).unwrap()
+        fn serialize_deserialize(packet: Arc<RequestMissingTxs>) -> bool {
+            packet == RequestMissingTxs::from_bytes(&RequestMissingTxs::to_bytes(&packet)).unwrap()
         }
     }
 }
