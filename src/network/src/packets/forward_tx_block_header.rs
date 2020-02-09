@@ -40,10 +40,11 @@ pub struct ForwardTxBlockHeader {
     block: Arc<TransactionBlock>,
     bloom_filter: Bloom,
     iblt: PurpleIBLT,
+    nonce: u64,
 }
 
 impl ForwardTxBlockHeader {
-    pub fn new(block: Arc<TransactionBlock>, mempool_size: u32) -> Result<ForwardTxBlockHeader, &'static str> {    
+    pub fn new(block: Arc<TransactionBlock>, nonce: u64, mempool_size: u32) -> Result<ForwardTxBlockHeader, &'static str> {    
         if let Some(txs) = &block.transactions {
             let txs = txs.read();
             let M: u32 = mempool_size;
@@ -58,7 +59,7 @@ impl ForwardTxBlockHeader {
 
             // Add transaction hashes to the bloom filter
             for tx in txs.iter() {
-                let tx_hash = tx.tx_hash().unwrap();
+                let tx_hash = tx.tx_hash().unwrap().to_short();
                 bloom_filter.set(&tx_hash.0);
             }
 
@@ -94,6 +95,7 @@ impl ForwardTxBlockHeader {
                 block: block.clone(),
                 bloom_filter,
                 iblt,
+                nonce,
             })
         } else {
             Err("There are no attached transactions to the block header!")
@@ -116,13 +118,15 @@ impl Packet for ForwardTxBlockHeader {
         // 2) Block length        - 16bits
         // 3) Bloom filter length - 16bits
         // 4) IBLT length         - 16bits
-        // 5) Bloom filter        - Binary of bloom filter length
-        // 6) IBLT                - Binary of IBLT length
-        // 7) Block               - Binary of block length
+        // 5) Nonce               - 64bits
+        // 6) Bloom filter        - Binary of bloom filter length
+        // 7) IBLT                - Binary of IBLT length
+        // 8) Block               - Binary of block length
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u16::<BigEndian>(block.len() as u16).unwrap();
         buffer.write_u16::<BigEndian>(bloom.len() as u16).unwrap();
         buffer.write_u16::<BigEndian>(iblt.len() as u16).unwrap();
+        buffer.write_u64::<BigEndian>(self.nonce).unwrap();
         buffer.extend_from_slice(&bloom);
         buffer.extend_from_slice(&iblt);
         buffer.extend_from_slice(&block);
@@ -165,9 +169,17 @@ impl Packet for ForwardTxBlockHeader {
             return Err(NetworkErr::BadFormat);
         };
 
+        rdr.set_position(7);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
         // Consume cursor
         let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..7).collect();
+        let _: Vec<u8> = buf.drain(..15).collect();
 
         let bloom_filter = if buf.len() > bloom_len as usize {
             let buf: Vec<u8> = buf.drain(..(bloom_len as usize)).collect();
@@ -205,6 +217,7 @@ impl Packet for ForwardTxBlockHeader {
             block,
             bloom_filter,
             iblt,
+            nonce,
         };
         Ok(Arc::new(packet))
     }
@@ -229,6 +242,7 @@ impl Arbitrary for ForwardTxBlockHeader {
             block: Arbitrary::arbitrary(g),
             bloom_filter: Arbitrary::arbitrary(g),
             iblt: Arbitrary::arbitrary(g),
+            nonce: Arbitrary::arbitrary(g),
         }
     }
 }

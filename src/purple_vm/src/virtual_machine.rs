@@ -116,11 +116,16 @@ impl Vm {
                 let fun = &module.functions[ip.fun_idx];
                 let op = fun.fetch(ip.ip);
 
-                if let Some(op) = Instruction::from_repr(op) {
-                    println!("DEBUG OP: {:?}", op);
+                if cfg!(test) {
+                    if let Some(op) = Instruction::from_repr(op) {
+                        println!("DEBUG OP: {:?}", op);
+                    }
                 }
 
-                println!("DEBUG IP: {}, FUN IDX: {}", ip.ip, ip.fun_idx);
+                if cfg!(test) {
+                    println!("DEBUG IP: {}, FUN IDX: {}", ip.ip, ip.fun_idx);
+                }
+                
                 match Instruction::from_repr(op) {
                     Some(Instruction::Halt) => {
                         break;
