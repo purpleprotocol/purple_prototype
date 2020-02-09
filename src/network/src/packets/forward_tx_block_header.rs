@@ -56,6 +56,13 @@ impl ForwardTxBlockHeader {
                 // Calculate bloom filter table size based on the receiver's mempool size
                 let bloom_table_size = ((A as f32) / (M - N) as f32).trunc() as u32;
 
+                // Fallback to txs count if the calculation results in 0
+                let bloom_table_size = if bloom_table_size == 0 {
+                    txs.len() as u32
+                } else {
+                    bloom_table_size
+                };
+
                 // Create bloom filter
                 let mut bloom_filter = Bloom::new(bloom_table_size, txs.len() as u32);
 
@@ -68,9 +75,20 @@ impl ForwardTxBlockHeader {
                 // Calculate IBLT size
                 let iblt_size = (IBLT_R_CONST * (A as f32)).trunc() as u32;
 
+                // Fallback to txs count if the calculation results in 0
+                let iblt_size = if iblt_size == 0 {
+                    txs.len() as u32
+                } else {
+                    iblt_size 
+                };
+
                 // Dynamically find a suitable hash functions value 
                 let hash_funcs = {
-                    let mut result: u8 = 4;
+                    let mut result: u8 = if iblt_size >= 4 {
+                        4
+                    } else {
+                        1
+                    };
 
                     while iblt_size % (result as u32) != 0 {
                         result += 1;
