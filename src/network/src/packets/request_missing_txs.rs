@@ -36,11 +36,12 @@ use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestMissingTxs {
     pub(crate) nonce: u64,
+    pub(crate) block_hash: ShortHash,
     pub(crate) tx_filter: Bloom
 }
 
 impl RequestMissingTxs {
-    pub fn new(tx_ids: &[ShortHash]) -> RequestMissingTxs {
+    pub fn new(block_hash: ShortHash, tx_ids: &[ShortHash]) -> RequestMissingTxs {
         let mut rng = rand::thread_rng();
 
         // One byte per tx id, keep it simple for now
@@ -54,6 +55,7 @@ impl RequestMissingTxs {
         RequestMissingTxs { 
             nonce: rng.gen(),
             tx_filter,
+            block_hash,
         }
     }
 }
@@ -70,10 +72,12 @@ impl Packet for RequestMissingTxs {
         // 1) Packet type(17)   - 8bits
         // 2) Bloom filter len  - 16bits
         // 3) Nonce             - 64bits
+        // 4) Block hash        - 8bytes
         // 4) Tx filter         - Binary of bloom filter length
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u16::<BigEndian>(tx_filter.len() as u16).unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
+        buffer.extend_from_slice(&self.block_hash.0);
         buffer.extend_from_slice(&tx_filter);
         buffer
     }
@@ -110,6 +114,17 @@ impl Packet for RequestMissingTxs {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..11).collect();
 
+        let block_hash = if buf.len() > 8 as usize {
+            let buf: Vec<u8> = buf.drain(..8).collect();
+
+            let mut hash = [0; 8];
+            hash.copy_from_slice(&buf);
+
+            ShortHash(hash)
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
         let tx_filter = if buf.len() == tx_filter_len as usize {
             match Bloom::from_bytes(&buf) {
                 Ok(result) => result,
@@ -122,6 +137,7 @@ impl Packet for RequestMissingTxs {
         let packet = RequestMissingTxs { 
             nonce, 
             tx_filter,
+            block_hash,
         };
 
         Ok(Arc::new(packet))
@@ -148,7 +164,7 @@ impl Arbitrary for RequestMissingTxs {
             .map(|_| Arbitrary::arbitrary(g))
             .collect();
 
-        RequestMissingTxs::new(&tx_ids)
+        RequestMissingTxs::new(Arbitrary::arbitrary(g), &tx_ids)
     }
 }
 

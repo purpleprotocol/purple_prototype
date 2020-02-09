@@ -38,8 +38,8 @@ pub const IBLT_R_CONST: f32 = 16.5;
 #[derive(Debug, Clone, PartialEq)]
 pub struct ForwardTxBlockHeader {
     block: Arc<TransactionBlock>,
-    bloom_filter: Bloom,
-    iblt: PurpleIBLT,
+    bloom_filter: Option<Bloom>,
+    iblt: Option<PurpleIBLT>,
     nonce: u64,
 }
 
@@ -47,56 +47,66 @@ impl ForwardTxBlockHeader {
     pub fn new(block: Arc<TransactionBlock>, nonce: u64, mempool_size: u32) -> Result<ForwardTxBlockHeader, &'static str> {    
         if let Some(txs) = &block.transactions {
             let txs = txs.read();
-            let M: u32 = mempool_size;
-            let N: u32 = txs.len() as u32;
-            let A: u32 = ((N as f32) / (IBLT_C_CONST * IBLT_R_CONST)).trunc() as u32;
-            
-            // Calculate bloom filter table size based on the receiver's mempool size
-            let bloom_table_size = ((A as f32) / (M - N) as f32).trunc() as u32;
 
-            // Create bloom filter
-            let mut bloom_filter = Bloom::new(bloom_table_size, txs.len() as u32);
+            if !txs.is_empty() {
+                let M: u32 = mempool_size;
+                let N: u32 = txs.len() as u32;
+                let A: u32 = ((N as f32) / (IBLT_C_CONST * IBLT_R_CONST)).trunc() as u32;
+                
+                // Calculate bloom filter table size based on the receiver's mempool size
+                let bloom_table_size = ((A as f32) / (M - N) as f32).trunc() as u32;
 
-            // Add transaction hashes to the bloom filter
-            for tx in txs.iter() {
-                let tx_hash = tx.tx_hash().unwrap().to_short();
-                bloom_filter.set(&tx_hash.0);
+                // Create bloom filter
+                let mut bloom_filter = Bloom::new(bloom_table_size, txs.len() as u32);
+
+                // Add transaction hashes to the bloom filter
+                for tx in txs.iter() {
+                    let tx_hash = tx.tx_hash().unwrap().to_short();
+                    bloom_filter.set(&tx_hash.0);
+                }
+
+                // Calculate IBLT size
+                let iblt_size = (IBLT_R_CONST * (A as f32)).trunc() as u32;
+
+                // Dynamically find a suitable hash functions value 
+                let hash_funcs = {
+                    let mut result: u8 = 4;
+
+                    while iblt_size % (result as u32) != 0 {
+                        result += 1;
+                    } 
+
+                    result
+                };
+
+                // Create IBLT
+                let mut iblt = PurpleIBLT::new(
+                    iblt_size as usize, 
+                    0, 
+                    hash_funcs,
+                ).map_err(|_| "Could not create IBLT")?;
+
+                // Insert transaction hashes in IBLT
+                for tx in txs.iter() {
+                    let tx_hash = tx.tx_hash().unwrap().to_short();
+                    let hash_le = decode_le_u64!(&tx_hash.0).unwrap();
+                    iblt.insert(hash_le, &[]).unwrap();
+                }
+
+                Ok(ForwardTxBlockHeader { 
+                    block: block.clone(),
+                    bloom_filter: Some(bloom_filter),
+                    iblt: Some(iblt),
+                    nonce,
+                })
+            } else {
+                Ok(ForwardTxBlockHeader { 
+                    block: block.clone(),
+                    bloom_filter: None,
+                    iblt: None,
+                    nonce,
+                })
             }
-
-            // Calculate IBLT size
-            let iblt_size = (IBLT_R_CONST * (A as f32)).trunc() as u32;
-
-            // Dynamically find a suitable hash functions value 
-            let hash_funcs = {
-                let mut result: u8 = 4;
-
-                while iblt_size % (result as u32) != 0 {
-                    result += 1;
-                } 
-
-                result
-            };
-
-            // Create IBLT
-            let mut iblt = PurpleIBLT::new(
-                iblt_size as usize, 
-                0, 
-                hash_funcs,
-            ).map_err(|_| "Could not create IBLT")?;
-
-            // Insert transaction hashes in IBLT
-            for tx in txs.iter() {
-                let tx_hash = tx.tx_hash().unwrap().to_short();
-                let hash_le = decode_le_u64!(&tx_hash.0).unwrap();
-                iblt.insert(hash_le, &[]).unwrap();
-            }
-
-            Ok(ForwardTxBlockHeader { 
-                block: block.clone(),
-                bloom_filter,
-                iblt,
-                nonce,
-            })
         } else {
             Err("There are no attached transactions to the block header!")
         }        
@@ -110,27 +120,39 @@ impl Packet for ForwardTxBlockHeader {
         let mut buffer: Vec<u8> = Vec::new();
         let packet_type: u8 = Self::PACKET_TYPE;
         let block = self.block.to_bytes();
-        let bloom = self.bloom_filter.to_bytes();
-        let iblt = self.iblt.to_bytes();
 
         // Packet structure:
         // 1) Packet type(16)     - 8bits
+        // 2) Is empty            - 1byte
         // 2) Block length        - 16bits
-        // 3) Bloom filter length - 16bits
-        // 4) IBLT length         - 16bits
-        // 5) Nonce               - 64bits
-        // 6) Bloom filter        - Binary of bloom filter length
-        // 7) IBLT                - Binary of IBLT length
+        // 3) Bloom filter length - 16bits (Optional)
+        // 4) IBLT length         - 16bits (Optional)
+        // 5) Nonce               - 64bits 
+        // 6) Bloom filter        - Binary of bloom filter length (Optional)
+        // 7) IBLT                - Binary of IBLT length (Optional)
         // 8) Block               - Binary of block length
-        buffer.write_u8(packet_type).unwrap();
-        buffer.write_u16::<BigEndian>(block.len() as u16).unwrap();
-        buffer.write_u16::<BigEndian>(bloom.len() as u16).unwrap();
-        buffer.write_u16::<BigEndian>(iblt.len() as u16).unwrap();
-        buffer.write_u64::<BigEndian>(self.nonce).unwrap();
-        buffer.extend_from_slice(&bloom);
-        buffer.extend_from_slice(&iblt);
-        buffer.extend_from_slice(&block);
-        buffer
+        if let (Some(bloom), Some(iblt)) = (&self.bloom_filter, &self.iblt) {
+            let bloom = bloom.to_bytes();
+            let iblt = iblt.to_bytes();
+
+            buffer.write_u8(packet_type).unwrap();
+            buffer.write_u8(1).unwrap();
+            buffer.write_u16::<BigEndian>(block.len() as u16).unwrap();
+            buffer.write_u16::<BigEndian>(bloom.len() as u16).unwrap();
+            buffer.write_u16::<BigEndian>(iblt.len() as u16).unwrap();
+            buffer.write_u64::<BigEndian>(self.nonce).unwrap();
+            buffer.extend_from_slice(&bloom);
+            buffer.extend_from_slice(&iblt);
+            buffer.extend_from_slice(&block);
+            buffer
+        } else {
+            buffer.write_u8(packet_type).unwrap();
+            buffer.write_u8(0).unwrap();
+            buffer.write_u16::<BigEndian>(block.len() as u16).unwrap();
+            buffer.write_u64::<BigEndian>(self.nonce).unwrap();
+            buffer.extend_from_slice(&block);
+            buffer
+        }
     }
 
     fn from_bytes(bin: &[u8]) -> Result<Arc<ForwardTxBlockHeader>, NetworkErr> {
@@ -147,79 +169,130 @@ impl Packet for ForwardTxBlockHeader {
 
         rdr.set_position(1);
 
-        let block_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
-            result
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
-        rdr.set_position(3);
-
-        let bloom_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
-            result
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
-        rdr.set_position(5);
-
-        let iblt_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
-            result
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
-        rdr.set_position(7);
-
-        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
-            result
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
-        // Consume cursor
-        let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..15).collect();
-
-        let bloom_filter = if buf.len() > bloom_len as usize {
-            let buf: Vec<u8> = buf.drain(..(bloom_len as usize)).collect();
-
-            match Bloom::from_bytes(&buf) {
-                Ok(result) => result,
+        let is_empty = if let Ok(result) = rdr.read_u8() {
+            match result {
+                0 => true,
+                1 => false,
                 _ => return Err(NetworkErr::BadFormat),
             }
         } else {
             return Err(NetworkErr::BadFormat);
         };
 
-        let iblt = if buf.len() > iblt_len as usize {
-            let buf: Vec<u8> = buf.drain(..(iblt_len as usize)).collect();
+        rdr.set_position(2);
 
-            match PurpleIBLT::from_bytes(&buf) {
-                Ok(result) => result,
-                _ => return Err(NetworkErr::BadFormat),
-            }
+        if !is_empty {
+            let block_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+                result
+            } else {
+                return Err(NetworkErr::BadFormat);
+            };
+
+            rdr.set_position(4);
+
+            let bloom_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+                result
+            } else {
+                return Err(NetworkErr::BadFormat);
+            };
+
+            rdr.set_position(6);
+
+            let iblt_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+                result
+            } else {
+                return Err(NetworkErr::BadFormat);
+            };
+
+            rdr.set_position(8);
+
+            let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+                result
+            } else {
+                return Err(NetworkErr::BadFormat);
+            };
+
+            // Consume cursor
+            let mut buf: Vec<u8> = rdr.into_inner();
+            let _: Vec<u8> = buf.drain(..16).collect();
+
+            let bloom_filter = if buf.len() > bloom_len as usize {
+                let buf: Vec<u8> = buf.drain(..(bloom_len as usize)).collect();
+
+                match Bloom::from_bytes(&buf) {
+                    Ok(result) => result,
+                    _ => return Err(NetworkErr::BadFormat),
+                }
+            } else {
+                return Err(NetworkErr::BadFormat);
+            };
+
+            let iblt = if buf.len() > iblt_len as usize {
+                let buf: Vec<u8> = buf.drain(..(iblt_len as usize)).collect();
+
+                match PurpleIBLT::from_bytes(&buf) {
+                    Ok(result) => result,
+                    _ => return Err(NetworkErr::BadFormat),
+                }
+            } else {
+                return Err(NetworkErr::BadFormat);
+            };
+
+
+            let block = if buf.len() == block_len as usize {
+                match TransactionBlock::from_bytes(&buf) {
+                    Ok(result) => result,
+                    _ => return Err(NetworkErr::BadFormat),
+                }
+            } else {
+                return Err(NetworkErr::BadFormat);
+            };
+
+            let packet = ForwardTxBlockHeader { 
+                block,
+                bloom_filter: Some(bloom_filter),
+                iblt: Some(iblt),
+                nonce,
+            };
+
+            Ok(Arc::new(packet))
         } else {
-            return Err(NetworkErr::BadFormat);
-        };
+            let block_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+                result
+            } else {
+                return Err(NetworkErr::BadFormat);
+            };
 
+            rdr.set_position(4);
 
-        let block = if buf.len() == block_len as usize {
-            match TransactionBlock::from_bytes(&buf) {
-                Ok(result) => result,
-                _ => return Err(NetworkErr::BadFormat),
-            }
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
+            let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+                result
+            } else {
+                return Err(NetworkErr::BadFormat);
+            };
 
-        let packet = ForwardTxBlockHeader { 
-            block,
-            bloom_filter,
-            iblt,
-            nonce,
-        };
-        Ok(Arc::new(packet))
+            // Consume cursor
+            let mut buf: Vec<u8> = rdr.into_inner();
+            let _: Vec<u8> = buf.drain(..12).collect();
+
+            let block = if buf.len() == block_len as usize {
+                match TransactionBlock::from_bytes(&buf) {
+                    Ok(result) => result,
+                    _ => return Err(NetworkErr::BadFormat),
+                }
+            } else {
+                return Err(NetworkErr::BadFormat);
+            };
+
+            let packet = ForwardTxBlockHeader { 
+                block,
+                bloom_filter: None,
+                iblt: None,
+                nonce,
+            };
+
+            Ok(Arc::new(packet))
+        }
     }
 
     fn handle<N: NetworkInterface>(
@@ -236,12 +309,24 @@ impl Packet for ForwardTxBlockHeader {
 use quickcheck::Arbitrary;
 
 #[cfg(test)]
+use rand::Rng;
+
+#[cfg(test)]
 impl Arbitrary for ForwardTxBlockHeader {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> ForwardTxBlockHeader {
+        let mut rng = rand::thread_rng();
+        let random = rng.gen_range(0, 2);
+
+        let (bloom_filter, iblt) = if random == 0 {
+            (Some(Arbitrary::arbitrary(g)), Some(Arbitrary::arbitrary(g)))
+        } else {
+            (None, None)
+        };
+
         ForwardTxBlockHeader {
             block: Arbitrary::arbitrary(g),
-            bloom_filter: Arbitrary::arbitrary(g),
-            iblt: Arbitrary::arbitrary(g),
+            bloom_filter,
+            iblt,
             nonce: Arbitrary::arbitrary(g),
         }
     }
