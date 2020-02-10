@@ -116,16 +116,11 @@ impl Packet for SendPeers {
             if rlp.is_list() {
                 for bytes in rlp.iter() {
                     if bytes.is_data() {
-                        match bytes.data() {
-                            Ok(bytes) => match str::from_utf8(bytes) {
-                                Ok(result) => match SocketAddr::from_str(result) {
-                                    Ok(addr) => peers.push(addr),
-                                    Err(_) => return Err(NetworkErr::BadFormat),
-                                },
-                                _ => return Err(NetworkErr::BadFormat),
-                            },
-                            _ => return Err(NetworkErr::BadFormat),
-                        }
+                        let data = bytes.data().map_err(|_| NetworkErr::BadFormat)?;
+                        let data = str::from_utf8(&data).map_err(|_| NetworkErr::BadFormat)?;
+                        let addr = SocketAddr::from_str(&data).map_err(|_| NetworkErr::BadFormat)?;
+
+                        peers.push(addr);
                     } else {
                         return Err(NetworkErr::BadFormat);
                     }
