@@ -25,9 +25,6 @@ use crate::bootstrap::cache::BootstrapCache;
 use crate::connection::*;
 use crate::peer::ConnectionType;
 use crate::validation::sender::Sender as SenderTrait;
-use tokio_timer::Interval;
-use tokio::prelude::future::ok;
-use tokio::prelude::*;
 use chain::*;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
@@ -44,7 +41,7 @@ use std::time::Duration;
 use crossbeam_channel::Sender;
 
 #[cfg(not(test))]
-use futures::sync::mpsc::Sender;
+use tokio::sync::mpsc::Sender;
 
 #[derive(Clone)]
 pub struct Network {

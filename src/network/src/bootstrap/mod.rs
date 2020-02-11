@@ -19,9 +19,6 @@
 use crate::network::Network;
 use crate::connection::*;
 use crate::interface::NetworkInterface;
-use futures::stream;
-use futures::Future;
-use futures::Stream;
 use persistence::PersistentDb;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;

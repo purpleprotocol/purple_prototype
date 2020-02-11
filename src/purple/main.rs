@@ -44,7 +44,6 @@ extern crate slog_envlogger;
 extern crate slog_term;
 extern crate slog_scope;
 extern crate slog_async;
-extern crate futures;
 extern crate hashdb;
 extern crate itc;
 extern crate jsonrpc_core;

@@ -20,13 +20,11 @@ use crate::packet::Packet;
 use crate::packets::ForwardBlock;
 use crate::{Network, NetworkInterface};
 use chain::*;
-use futures::future::ok;
-use futures::prelude::*;
-use futures::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Receiver;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::timer::Interval;
+use tokio::time::Interval;
 
 /// Listens for blocks on chain receivers and
 /// forwards them to their respective chains.
@@ -35,10 +33,9 @@ pub fn start_block_listeners(
     pow_chain: PowChainRef,
     pow_receiver: Receiver<(SocketAddr, Arc<PowBlock>)>,
 ) {
-    let loop_fut_pow = pow_receiver
-        .fold(
-            (network.clone(), pow_chain),
-            |(network, pow_chain), (addr, block)| {
+    let loop_fut_pow = async {
+        loop {
+            if let Some((addr, block)) = pow_receiver.recv().await {
                 debug!("Received PowBlock {:?}", block.block_hash().unwrap());
                 let chain_result = {
                     let mut chain = pow_chain.chain.write();
@@ -61,11 +58,12 @@ pub fn start_block_listeners(
                         err
                     ),
                 }
-
-                ok((network, pow_chain))
-            },
-        )
-        .and_then(|_| ok(()));
+            } else {
+                info!("PowReceiver closed!");
+                break;
+            }
+        }
+    };
 
     tokio::spawn(loop_fut_pow);
 }

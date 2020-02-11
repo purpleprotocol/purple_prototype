@@ -34,8 +34,7 @@ slog-scope = "4"
 slog-term = "2.4.1"
 slog-async = "2.3.0"
 parking_lot = "0.7.1"
-tokio = "0.1.22"
-futures = "0.1.25"
+tokio = { version = "0.2.11", features = ["full"] } 
 dirs = "1.0.4"
 elastic-array = "0.10.0"
 jsonrpc-core = "9.0.0"
@@ -53,7 +52,7 @@ chain = { path = "src/chain" }
 miner = { path = "src/miner" }
 mempool = { path = "src/mempool" }
 reqwest = "0.9.21"
-mimalloc = "0.1.12"
+mimalloc = "0.1.13"
 
 ['cfg(test)'.chain]
 path = "src/chain"
