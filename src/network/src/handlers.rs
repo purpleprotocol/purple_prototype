@@ -31,9 +31,9 @@ use tokio::time::Interval;
 pub fn start_block_listeners(
     network: Network,
     pow_chain: PowChainRef,
-    pow_receiver: Receiver<(SocketAddr, Arc<PowBlock>)>,
+    mut pow_receiver: Receiver<(SocketAddr, Arc<PowBlock>)>,
 ) {
-    let loop_fut_pow = async {
+    let loop_fut_pow = async move {
         loop {
             if let Some((addr, block)) = pow_receiver.recv().await {
                 debug!("Received PowBlock {:?}", block.block_hash().unwrap());

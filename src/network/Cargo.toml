@@ -11,6 +11,7 @@ serde_derive = "1.0.59"
 rand = "0.6.0"
 byteorder = "1.2.7"
 bytes = "0.5.4"
+futures = "0.3.4"
 chrono = "0.4.6"
 tokio = { version = "0.2.11", features = ["full"] } 
 tokio-io-timeout = "0.4.0"

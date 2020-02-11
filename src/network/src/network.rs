@@ -31,6 +31,7 @@ use crypto::SecretKey as Sk;
 use hashbrown::{HashMap, HashSet};
 use parking_lot::RwLock;
 use mempool::Mempool;
+use tokio::time;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -378,9 +379,15 @@ impl NetworkInterface for Network {
         let addr_clone2 = addr.clone();
 
         // Spawn a repeating task at a given interval for this peer
-        let peer_interval = Interval::new_interval(Duration::from_millis(crate::connection::TIMER_INTERVAL))
-            .take_while(move |_| ok(network_clone.has_peer(&addr)))
-            .fold(0, move |mut times_denied, _| {
+        let peer_interval = async move {
+            let mut peer_interval = time::interval(Duration::from_millis(crate::connection::TIMER_INTERVAL));
+            let mut times_denied: usize = 0;
+
+            loop {
+                if network_clone.has_peer(&addr) {
+                    break;
+                }
+
                 let peers = peers_clone.clone();
                 let addr = addr_clone.clone();
                 let peers = peers.read();
@@ -413,18 +420,8 @@ impl NetworkInterface for Network {
                         }
                     }
                 }
-
-                ok(times_denied)
-            })
-            .map_err(move |e| {
-                warn!("Peer interval error for {}: {}", addr, e);
-                ()
-            })
-            .and_then(move |_| {
-                debug!("Peer interval timer for {} has finished!", addr_clone2);
-                Ok(())
-            });
-    
+            }
+        };
     
         tokio::spawn(peer_interval);
     }
