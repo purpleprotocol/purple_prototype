@@ -16,7 +16,19 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod ping_pong;
-pub mod request_peers;
-pub mod transaction_propagation;
-pub mod block_propagation;
+use crypto::ShortHash;
+use std::default::Default;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BlockReceiverState {
+    /// The `Receiver` is ready to receive an `AnnounceCheckpoint` or `AnnounceTxBlock` packet.
+    Ready,
+    /// The transaction has been rejected and this state-machine is done.
+    Done,
+}
+
+impl Default for BlockReceiverState {
+    fn default() -> Self {
+        BlockReceiverState::Ready
+    }
+}

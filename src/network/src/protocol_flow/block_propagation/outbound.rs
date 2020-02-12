@@ -16,7 +16,15 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod ping_pong;
-pub mod request_peers;
-pub mod transaction_propagation;
-pub mod block_propagation;
+use crate::packets::*;
+use std::sync::Arc;
+
+#[derive(Clone, Debug, PartialEq)]
+/// Wrapper over an outbound packet in this state-machine.
+pub enum OutboundPacket {
+    AnnounceCheckpoint(Arc<AnnounceCheckpoint>),
+    AnnounceTxBlock(Arc<AnnounceTxBlock>),
+    ForwardCheckpointHeader(Arc<ForwardCheckpointHeader>),
+    ForwardTxBlockHeader(Arc<ForwardTxBlockHeader>),
+    SendMissingTxs(Arc<SendMissingTxs>),
+}
