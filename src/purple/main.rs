@@ -33,36 +33,10 @@ extern crate slog;
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
 extern crate reqwest;
 
-extern crate account;
-extern crate chain;
-extern crate clap;
-extern crate crypto;
-extern crate dirs;
-extern crate elastic_array;
-extern crate slog_stdlog;
-extern crate slog_envlogger;
-extern crate slog_term;
-extern crate slog_scope;
-extern crate slog_async;
-extern crate hashdb;
-extern crate itc;
-extern crate jsonrpc_core;
-extern crate jump;
-extern crate network;
-extern crate parking_lot;
-extern crate persistence;
-extern crate rocksdb;
-extern crate tokio;
-extern crate miner;
-extern crate mempool;
-
 use slog::Drain;
 use clap::{App, Arg};
 use crypto::{Identity, NodeId, SecretKey as Sk};
 use elastic_array::ElasticArray128;
-use futures::future::ok;
-use futures::sync::mpsc::channel;
-use futures::Future;
 use hashdb::HashDB;
 use parking_lot::RwLock;
 use mempool::Mempool;
@@ -87,9 +61,6 @@ use std::alloc::System;
 #[cfg(not(feature = "mimalloc-allocator"))]
 #[global_allocator]
 static GLOBAL: System = System;
-
-#[cfg(feature = "mimalloc-allocator")]
-extern crate mimalloc;
 
 #[cfg(feature = "mimalloc-allocator")]
 use mimalloc::MiMalloc;
@@ -186,7 +157,7 @@ fn main() {
         Some(mempool)
     };
 
-    let (pow_tx, pow_rx) = channel(10000);
+    let (pow_tx, pow_rx) = tokio::sync::mpsc::channel(10000);
 
     info!("Setting up the network...");
 
@@ -195,10 +166,9 @@ fn main() {
 
     // Set up runtime
     let mut runtime = Builder::new()
-        .blocking_threads(10)
-        .name_prefix("purple-runtime-")
-        // Unwind all panics
-        .panic_handler(|err| std::panic::resume_unwind(err))
+        .thread_name("purple-runtime-")
+        .threaded_scheduler()
+        .enable_all()
         .build()
         .unwrap();
 
@@ -245,7 +215,7 @@ fn main() {
     );
 
     // Start the tokio runtime
-    runtime.spawn(ok(()).and_then(move |_| {
+    runtime.block_on(async move {
         // Start listening for blocks
         start_block_listeners(network.clone(), pow_chain.clone(), pow_rx);
 
@@ -261,7 +231,7 @@ fn main() {
             argv.bootnodes.clone(),
             argv.port,
             true,
-        );
+        ).await;
 
         // Start miner related jobs
         #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
@@ -278,18 +248,14 @@ fn main() {
             }
         }
 
-        Ok(())
-    }));
-
-    // Block the current thread
-    runtime.shutdown_on_idle()
-        .wait().unwrap();
+        network::jobs::start_periodic_jobs().await;
+    });
 }
 
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
 /// Returns our ip address
 fn fetch_ip(mut runtime: Runtime) -> (IpAddr, Runtime) {
-    let fut = reqwest::async::Client::new()
+    let fut = reqwest::r#async::Client::new()
         .get("https://api.ipify.org?format=json")
         .send()
         .and_then(|mut resp| resp.json());

@@ -26,7 +26,7 @@ use std::sync::Arc;
 use futures::future::FutureExt;
 use rand::prelude::IteratorRandom;
 
-pub fn bootstrap(
+pub async fn bootstrap(
     network: Network,
     accept_connections: Arc<AtomicBool>,
     db: PersistentDb,
@@ -85,7 +85,7 @@ pub fn bootstrap(
             }
         };
 
-        tokio::spawn(fut);
+        fut.await;
     } else {
         debug!("Bootstrap cache is empty! Connecting to bootnodes...");
 
@@ -115,7 +115,7 @@ pub fn bootstrap(
             }
         };
 
-        tokio::spawn(fut);
+        fut.await;
     }
 }
 

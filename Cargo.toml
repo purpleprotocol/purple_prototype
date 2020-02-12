@@ -3,6 +3,7 @@ name = "purple"
 version = "0.0.1"
 license = "GPL-3.0"
 publish = false
+edition = "2018"
 
 [workspace]
 members = [

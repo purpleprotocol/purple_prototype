@@ -17,3 +17,13 @@
 */
 
 #![allow(unused)]
+
+use std::time::Duration;
+
+/// Starts jobs that are executed once every ~1 second.
+pub async fn start_periodic_jobs() {
+    loop {
+        debug!("Executing periodic jobs...");
+        tokio::time::delay_for(Duration::from_secs(1)).await;
+    }
+}

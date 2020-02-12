@@ -103,7 +103,7 @@ pub fn connect_to_peer(
     let connect = async move {
         match TcpStream::connect(addr).await {
             Ok(s) => process_connection(network, s, accept_connections, ConnectionType::Client),
-            Err(err) => warn!("Failed to connect to peer {:?}! Reason: {:?}", addr, err),
+            Err(err) => warn!("Failed to connect to peer {}! Reason: {:?}", addr, err),
         }
     };
 
@@ -157,7 +157,10 @@ fn process_connection(
         let addr_clone1 = addr.clone();
         let addr_clone2 = addr.clone();
 
+        // Spawn reader and writer futures under a select! macro,
+        // terminating both when any of them terminates.
         tokio::select! {
+            // Writer future
             _ = async move {
                 let mut writer = BufWriter::new(writer);
                 let connect = {
@@ -225,6 +228,7 @@ fn process_connection(
                 debug!("Writer for {} closed", addr_clone1);
             }
             
+            // Reader future
             _ = async move {
                 let reader = BufReader::new(reader);
                 let network = network_clone2;
