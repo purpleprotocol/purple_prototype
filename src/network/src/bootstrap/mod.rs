@@ -19,17 +19,14 @@
 use crate::network::Network;
 use crate::connection::*;
 use crate::interface::NetworkInterface;
-use futures::stream;
-use futures::Future;
-use futures::Stream;
 use persistence::PersistentDb;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use tokio::executor::Spawn;
+use futures::future::FutureExt;
 use rand::prelude::IteratorRandom;
 
-pub fn bootstrap(
+pub async fn bootstrap(
     network: Network,
     accept_connections: Arc<AtomicBool>,
     db: PersistentDb,
@@ -37,55 +34,58 @@ pub fn bootstrap(
     bootnodes: Vec<SocketAddr>,
     port: u16,
     start_interval: bool,
-) -> Spawn {
+) {
     info!("Bootstrapping...");
 
     // Try to first connect to the nodes in the bootstrap cache.
     if !network.bootstrap_cache.is_empty() {
-        let peers_to_connect: Vec<SocketAddr> = network.bootstrap_cache
-            .entries()
-            .map(|e| e.to_socket_addr(port))
-            .choose_multiple(&mut rand::thread_rng(), max_peers as usize);
+        let fut = async move {
+            let mut network = network.clone();
 
-        let mut network = network.clone();
-        let network_clone = network.clone();
-        let network_clone2 = network.clone();
-        let network_clone3 = network.clone();
-        let accept_connections = accept_connections.clone();
-        let accept_connections_clone = accept_connections.clone();
-        let accept_connections_clone2 = accept_connections.clone();
-        let bootnodes_clone = bootnodes.clone();
+            let peers_to_connect: Vec<SocketAddr> = network.bootstrap_cache
+                .entries()
+                .map(|e| e.to_socket_addr(port))
+                .choose_multiple(&mut rand::thread_rng(), max_peers as usize);
 
-        let fut = stream::iter_ok(peers_to_connect)
-            .for_each(move |addr| {
-                Ok(network.connect(&addr).unwrap_or(()))
-            })
-            .and_then(move |_| {
-                // Connect to bootstrap nodes if we haven't
-                // yet reached the maximum amount of peers.
-                if network_clone.peer_count() < max_peers {
-                    let mut network = network_clone.clone();
+            let network_clone = network.clone();
+            let network_clone2 = network.clone();
+            let accept_connections = accept_connections.clone();
+            let accept_connections_clone = accept_connections.clone();
+            let bootnodes_clone = bootnodes.clone();
 
-                    let fut = stream::iter_ok(bootnodes).for_each(move |addr| {
-                        Ok(network.connect(&addr).unwrap_or(()))
-                    });
+            let mut futures = vec![];
 
-                    tokio::spawn(fut);
-                    info!("Finished bootstrap");
-                    Ok(())
-                } else {
-                    info!("Finished bootstrap");
-                    Ok(())
-                }
-            });
-
-        tokio::spawn(fut.and_then(move |_| {
-            if start_interval {
-                start_peer_list_refresh_interval(network_clone3, accept_connections_clone2, db.clone(), max_peers, bootnodes_clone, port);
+            for addr in peers_to_connect.iter() {
+                futures.push(try_connect_to_peer(network.clone(), addr).boxed());
             }
 
-            Ok(())
-        }))
+            // Try to connect to all previously encountered peers
+            futures::future::join_all(futures).await;
+
+            // Connect to bootstrap nodes if we haven't
+            // yet reached the maximum amount of peers.
+            if network_clone.peer_count() < max_peers {
+                let network = network_clone.clone();
+                let mut futures = vec![];
+
+                for addr in bootnodes.iter() {
+                    futures.push(try_connect_to_peer(network.clone(), addr).boxed());
+                }
+
+                // Try to connect to bootnodes
+                futures::future::join_all(futures).await;
+
+                info!("Finished bootstrap");
+            } else {
+                info!("Finished bootstrap");
+            }
+
+            if start_interval {
+                start_peer_list_refresh_interval(network_clone, accept_connections_clone, db.clone(), max_peers, bootnodes_clone, port);
+            }
+        };
+
+        fut.await;
     } else {
         debug!("Bootstrap cache is empty! Connecting to bootnodes...");
 
@@ -100,18 +100,30 @@ pub fn bootstrap(
         let network = network.clone();
         let network_clone = network.clone();
 
-        let fut = stream::iter_ok(peers_to_connect).for_each(move |addr| {
-            connect_to_peer(network.clone(), accept_connections.clone(), &addr)
-        });
+        let fut = async move {
+            let mut futures = vec![];
 
-        tokio::spawn(fut.and_then(move |_| {
+            for addr in peers_to_connect.iter() {
+                futures.push(try_connect_to_peer(network.clone(), addr).boxed());
+            }
+
+            // Try to connect to all previously encountered peers
+            futures::future::join_all(futures).await;
+
             if start_interval {
                 start_peer_list_refresh_interval(network_clone, accept_connections_clone, db.clone(), max_peers, bootnodes, port);
             }
+        };
 
-            Ok(())
-        }))
+        fut.await;
     }
+}
+
+async fn try_connect_to_peer(mut network: Network, addr: &SocketAddr) {
+    network
+        .connect(&addr)
+        .map_err(|err| warn!("Could not connect to {:?}: {:?}", addr, err))
+        .unwrap_or(());
 }
 
 pub mod cache;

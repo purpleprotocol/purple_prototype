@@ -18,8 +18,8 @@ cfg-if = "0.1"
 libc = "0.2.55"
 rand = "0.6.0"
 failure = "0.1.5"
-lazy_static = "1.2.0"
-serde = "1.0.91"
+lazy_static = "1.4.0"
+serde = "1.0.104"
 num = "0.2"
 bin-tools = { path = "../util/bin-tools" }
 crypto = { path = "../crypto" }

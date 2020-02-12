@@ -6,16 +6,16 @@ edition = "2018"
 publish = false
 
 [dependencies]
-serde = "1.0.59"
-serde_derive = "1.0.59"
+serde = "1.0.104"
+serde_derive = "1.0.104"
 rand = "0.6.0"
 byteorder = "1.2.7"
+bytes = "0.5.4"
+futures = "0.3.4"
 chrono = "0.4.6"
-tokio = "0.1.11"
-tokio-timer = "0.2.8"
-tokio-io-timeout = "0.3.1"
+tokio = { version = "0.2.11", features = ["full"] } 
+tokio-io-timeout = "0.4.0"
 dashmap = "3.2.1"
-futures = "0.1.25"
 rlp = "0.3.0"
 log = "0.4.0"
 crossbeam-channel = "0.4.0"

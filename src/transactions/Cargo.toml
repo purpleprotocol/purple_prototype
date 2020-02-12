@@ -6,15 +6,15 @@ authors = []
 publish = false
 
 [dependencies]
-serde = "1.0.59"
-serde_derive = "1.0.59"
+serde = "1.0.104"
+serde_derive = "1.0.104"
 byteorder = "1.2.7"
 unwrap = "1.2.0"
 hex = "0.3.2"
 rlp = "0.3.0"
 hashdb = "0.3.0"
 patricia-trie = "0.3.0"
-lazy_static = "1.2.0"
+lazy_static = "1.4.0"
 elastic-array = "0.10.0"
 rand = "0.6.0"
 rocksdb = "0.13.0"

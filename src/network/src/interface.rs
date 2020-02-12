@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 #[cfg(not(test))]
-use futures::sync::mpsc::Sender;
+use tokio::sync::mpsc::Sender;
 
 #[cfg(test)]
 use crossbeam_channel::Sender;

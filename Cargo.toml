@@ -3,6 +3,7 @@ name = "purple"
 version = "0.0.1"
 license = "GPL-3.0"
 publish = false
+edition = "2018"
 
 [workspace]
 members = [
@@ -25,7 +26,7 @@ clap = "2.32.0"
 unwrap = "1.2.0"
 hex = "0.3.2"
 itc = "0.1.2"
-lazy_static = "1.2.0"
+lazy_static = "1.4.0"
 log = "0.4.0"
 slog = "2.5.2"
 slog-stdlog = "4.0.0"
@@ -34,8 +35,7 @@ slog-scope = "4"
 slog-term = "2.4.1"
 slog-async = "2.3.0"
 parking_lot = "0.7.1"
-tokio = "0.1.22"
-futures = "0.1.25"
+tokio = { version = "0.2.11", features = ["full"] } 
 dirs = "1.0.4"
 elastic-array = "0.10.0"
 jsonrpc-core = "9.0.0"
@@ -52,8 +52,8 @@ transactions = { path = "src/transactions" }
 chain = { path = "src/chain" }
 miner = { path = "src/miner" }
 mempool = { path = "src/mempool" }
-reqwest = "0.9.21"
-mimalloc = "0.1.12"
+reqwest = { version = "0.10.1", features = ["cookies", "json"] }
+mimalloc = "0.1.13"
 
 ['cfg(test)'.chain]
 path = "src/chain"
