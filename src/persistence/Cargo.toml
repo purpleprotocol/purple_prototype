@@ -13,7 +13,7 @@ rlp = "0.3.0"
 parking_lot = "0.7.1"
 rocksdb = "0.13.0"
 num_cpus = "1.10.1"
-lazy_static = "1.2.0"
+lazy_static = "1.4.0"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
 crypto = { path = "../crypto" }
 crc64fast = "0.1.0"

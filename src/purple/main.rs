@@ -255,12 +255,18 @@ fn main() {
 #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
 /// Returns our ip address
 fn fetch_ip(mut runtime: Runtime) -> (IpAddr, Runtime) {
-    let fut = reqwest::r#async::Client::new()
-        .get("https://api.ipify.org?format=json")
-        .send()
-        .and_then(|mut resp| resp.json());
+    let fut = async {
+        let resp = reqwest::get("https://api.ipify.org?format=json")
+            .await
+            .expect("Could not retrieve external ip address! Please re-start the core to try again!");
+        
+            resp
+                .json::<HashMap<String, String>>()
+                .await
+                .expect("Could not parse external ip address! Please re-start the core to try again!")
+    };
 
-    let resp: HashMap<String, String> = runtime.block_on(fut).expect("Could not retrieve external ip address! Please re-start the core to try again!");
+    let resp: HashMap<String, String> = runtime.block_on(fut);
     let ip_str = resp.get("ip").expect("Could not parse external ip address! Please re-start the core to try again!");
     let ip = IpAddr::from_str(&ip_str).expect("Could not parse external ip address! Please re-start the core to try again!");
 

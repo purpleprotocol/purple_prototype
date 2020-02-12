@@ -6,9 +6,9 @@ authors = ["Octavian Oncescu <octavonce@gmail.com>"]
 publish = false
 
 [dependencies]
-serde = "1.0.59"
-serde_derive = "1.0.59"
-lazy_static = "1.2.0"
+serde = "1.0.104"
+serde_derive = "1.0.104"
+lazy_static = "1.4.0"
 regex = "1"
 enum-repr = "0.2.2"
 byteorder = "1.2.7"
