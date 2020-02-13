@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use chain::PowBlock;
 use std::default::Default;
 use std::sync::Arc;
 
@@ -23,6 +24,13 @@ use std::sync::Arc;
 pub enum BlockSenderState {
     /// The `Sender` is ready to send an `AnnounceCheckpoint` or `AnnounceTxBlock` packet.
     Ready,
+
+    /// The `Sender` is waiting for a `RequestBlock` or `RejectBlock` packet.
+    WaitingResponse(u64, Arc<PowBlock>),
+
+    /// The `Sender` has forwarded the header of a block and is now waiting 
+    /// to be requested transaction data.
+    ForwardedHeader(u64, Arc<PowBlock>),
 
     /// The state-machine is done.
     Done,

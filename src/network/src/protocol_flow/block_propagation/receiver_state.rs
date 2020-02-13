@@ -23,6 +23,16 @@ use std::default::Default;
 pub enum BlockReceiverState {
     /// The `Receiver` is ready to receive an `AnnounceCheckpoint` or `AnnounceTxBlock` packet.
     Ready,
+
+    /// We are waiting for a `ForwardCheckpointHeader` packet.
+    WaitingCheckpoint(ShortHash, u64),
+
+    /// We are waiting for a `ForwardTxBlockHeader` packet.
+    WaitingTxBlock(ShortHash, u64),
+
+    /// We are waiting for a `SendMissingTxs` packet.
+    WaitingTxs(u64),
+
     /// The transaction has been rejected and this state-machine is done.
     Done,
 }
