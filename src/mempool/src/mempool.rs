@@ -146,6 +146,11 @@ impl Mempool {
         self.tx_lookup.get(tx_hash).is_some()
     }
 
+    /// Returns the number of transactions in the mempool.
+    pub fn count(&self) -> usize {
+        self.tx_lookup.len()
+    }
+
     /// Removes the transaction with the given `Hash` from the 
     /// mempool and returns it. Returns `None` if there is no 
     /// such transaction in the mempool.
