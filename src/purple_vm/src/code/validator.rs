@@ -271,6 +271,39 @@ impl Validator {
 
                                 DEFAULT_TRANSITIONS.to_vec()
                             }
+                            Instruction::i64Wrapi32
+                            | Instruction::f32TruncSignedi32
+                            | Instruction::f32TruncUnsignedi32
+                            | Instruction::f64TruncSignedi32
+                            | Instruction::f64TruncUnsignedi32
+                            | Instruction::i32ExtendSignedi64
+                            | Instruction::i32ExtendUnsignedi64
+                            | Instruction::f32TruncSignedi64
+                            | Instruction::f32TruncUnsignedi64
+                            | Instruction::f64TruncSignedi64
+                            | Instruction::f64TruncUnsignedi64
+                            | Instruction::i32ConvertSignedf32
+                            | Instruction::i32ConvertUnsignedf32
+                            | Instruction::i64ConvertSignedf32
+                            | Instruction::i64ConvertUnsignedf32
+                            | Instruction::f64Demotef32
+                            | Instruction::i32ConvertSignedf64
+                            | Instruction::i32ConvertUnsignedf64
+                            | Instruction::i64ConvertSignedf64
+                            | Instruction::i64ConvertUnsignedf64
+                            | Instruction::f32Promotef64
+                            | Instruction::i32Reinterpretf32
+                            | Instruction::i64Reinterpretf64
+                            | Instruction::f32Reinterpreti32
+                            | Instruction::f64Reinterpreti64 => {
+                                let len = self.operand_stack.len();
+                                if len > OPERAND_STACK_SIZE || len < 1 {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
+
+                                DEFAULT_TRANSITIONS.to_vec()
+                            }
                             _ => op.transitions(),
                         };
 
@@ -2618,5 +2651,40 @@ mod tests {
     fn it_fails_if_operands_number_differs_from_2_higher_for_rotr() {
         let block: Vec<u8> = get_common_block_3_operands_integer(Instruction::Rotr);
         assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_any_data_type_conversion_instruction() {
+        let conversions: Vec<Instruction> = vec![Instruction::i64Wrapi32,
+        Instruction::f32TruncSignedi32,
+        Instruction::f32TruncUnsignedi32,
+        Instruction::f64TruncSignedi32,
+        Instruction::f64TruncUnsignedi32,
+        Instruction::i32ExtendSignedi64,
+        Instruction::i32ExtendUnsignedi64,
+        Instruction::f32TruncSignedi64,
+        Instruction::f32TruncUnsignedi64,
+        Instruction::f64TruncSignedi64,
+        Instruction::f64TruncUnsignedi64,
+        Instruction::i32ConvertSignedf32,
+        Instruction::i32ConvertUnsignedf32,
+        Instruction::i64ConvertSignedf32,
+        Instruction::i64ConvertUnsignedf32,
+        Instruction::f64Demotef32,
+        Instruction::i32ConvertSignedf64,
+        Instruction::i32ConvertUnsignedf64,
+        Instruction::i64ConvertSignedf64,
+        Instruction::i64ConvertUnsignedf64,
+        Instruction::f32Promotef64,
+        Instruction::i32Reinterpretf32,
+        Instruction::i64Reinterpretf64,
+        Instruction::f32Reinterpreti32,
+        Instruction::f64Reinterpreti64];
+
+        for i in conversions {
+            let block: Vec<u8> = get_no_operands_block(i);
+            assert!(!is_valid(block));
+        }
     }
 }

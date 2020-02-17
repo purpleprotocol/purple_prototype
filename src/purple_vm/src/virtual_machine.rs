@@ -623,88 +623,88 @@ impl Vm {
                         perform_integer_common(Instruction::Rotr, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::i32Wrapi64) => {
-                        perform_data_conversion(Instruction::i32Wrapi64, &mut self.operand_stack)?;
+                    Some(Instruction::i64Wrapi32) => {
+                        perform_data_conversion(Instruction::i64Wrapi32, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::i32TruncSignedf32) => {
-                        perform_data_conversion(Instruction::i32TruncSignedf32, &mut self.operand_stack)?;
+                    Some(Instruction::f32TruncSignedi32) => {
+                        perform_data_conversion(Instruction::f32TruncSignedi32, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::i32TruncUnsignedf32) => {
-                        perform_data_conversion(Instruction::i32TruncUnsignedf32, &mut self.operand_stack)?;
+                    Some(Instruction::f32TruncUnsignedi32) => {
+                        perform_data_conversion(Instruction::f32TruncUnsignedi32, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::i32TruncSignedf64) => {
-                        perform_data_conversion(Instruction::i32TruncSignedf64, &mut self.operand_stack)?;
+                    Some(Instruction::f64TruncSignedi32) => {
+                        perform_data_conversion(Instruction::f64TruncSignedi32, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::i32TruncUnsignedf64) => {
-                        perform_data_conversion(Instruction::i32TruncUnsignedf64, &mut self.operand_stack)?;
+                    Some(Instruction::f64TruncUnsignedi32) => {
+                        perform_data_conversion(Instruction::f64TruncUnsignedi32, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::i64ExtendSignedi32) => {
-                        perform_data_conversion(Instruction::i64ExtendSignedi32, &mut self.operand_stack)?;
+                    Some(Instruction::i32ExtendSignedi64) => {
+                        perform_data_conversion(Instruction::i32ExtendSignedi64, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::i64ExtendUnsignedi32) => {
-                        perform_data_conversion(Instruction::i64ExtendUnsignedi32, &mut self.operand_stack)?;
+                    Some(Instruction::i32ExtendUnsignedi64) => {
+                        perform_data_conversion(Instruction::i32ExtendUnsignedi64, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::i64TruncSignedf32) => {
-                        perform_data_conversion(Instruction::i64TruncSignedf32, &mut self.operand_stack)?;
+                    Some(Instruction::f32TruncSignedi64) => {
+                        perform_data_conversion(Instruction::f32TruncSignedi64, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::i64TruncUnsignedf32) => {
-                        perform_data_conversion(Instruction::i64TruncUnsignedf32, &mut self.operand_stack)?;
+                    Some(Instruction::f32TruncUnsignedi64) => {
+                        perform_data_conversion(Instruction::f32TruncUnsignedi64, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::i64TruncSignedf64) => {
-                        perform_data_conversion(Instruction::i64TruncSignedf64, &mut self.operand_stack)?;
+                    Some(Instruction::f64TruncSignedi64) => {
+                        perform_data_conversion(Instruction::f64TruncSignedi64, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::i64TruncUnsignedf64) => {
-                        perform_data_conversion(Instruction::i64TruncUnsignedf64, &mut self.operand_stack)?;
+                    Some(Instruction::f64TruncUnsignedi64) => {
+                        perform_data_conversion(Instruction::f64TruncUnsignedi64, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::f32ConvertSignedi32) => {
-                        perform_data_conversion(Instruction::f32ConvertSignedi32, &mut self.operand_stack)?;
+                    Some(Instruction::i32ConvertSignedf32) => {
+                        perform_data_conversion(Instruction::i32ConvertSignedf32, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::f32ConvertUnsignedi32) => {
-                        perform_data_conversion(Instruction::f32ConvertUnsignedi32, &mut self.operand_stack)?;
+                    Some(Instruction::i32ConvertUnsignedf32) => {
+                        perform_data_conversion(Instruction::i32ConvertUnsignedf32, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::f32ConvertSignedi64) => {
-                        perform_data_conversion(Instruction::f32ConvertSignedi64, &mut self.operand_stack)?;
+                    Some(Instruction::i64ConvertSignedf32) => {
+                        perform_data_conversion(Instruction::i64ConvertSignedf32, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::f32ConvertUnsignedi64) => {
-                        perform_data_conversion(Instruction::f32ConvertUnsignedi64, &mut self.operand_stack)?;
+                    Some(Instruction::i64ConvertUnsignedf32) => {
+                        perform_data_conversion(Instruction::i64ConvertUnsignedf32, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::f32Demotef64) => {
-                        perform_data_conversion(Instruction::f32Demotef64, &mut self.operand_stack)?;
+                    Some(Instruction::f64Demotef32) => {
+                        perform_data_conversion(Instruction::f64Demotef32, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::f64ConvertSignedi32) => {
-                        perform_data_conversion(Instruction::f64ConvertSignedi32, &mut self.operand_stack)?;
+                    Some(Instruction::i32ConvertSignedf64) => {
+                        perform_data_conversion(Instruction::i32ConvertSignedf64, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::f64ConvertUnsignedi32) => {
-                        perform_data_conversion(Instruction::f64ConvertUnsignedi32, &mut self.operand_stack)?;
+                    Some(Instruction::i32ConvertUnsignedf64) => {
+                        perform_data_conversion(Instruction::i32ConvertUnsignedf64, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::f64ConvertSignedi64) => {
-                        perform_data_conversion(Instruction::f64ConvertSignedi64, &mut self.operand_stack)?;
+                    Some(Instruction::i64ConvertSignedf64) => {
+                        perform_data_conversion(Instruction::i64ConvertSignedf64, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::f64ConvertUnsignedi64) => {
-                        perform_data_conversion(Instruction::f64ConvertUnsignedi64, &mut self.operand_stack)?;
+                    Some(Instruction::i64ConvertUnsignedf64) => {
+                        perform_data_conversion(Instruction::i64ConvertUnsignedf64, &mut self.operand_stack)?;
                         ip.increment();
                     }
-                    Some(Instruction::f64Promotef32) => {
-                        perform_data_conversion(Instruction::f64Promotef32, &mut self.operand_stack)?;
+                    Some(Instruction::f32Promotef64) => {
+                        perform_data_conversion(Instruction::f32Promotef64, &mut self.operand_stack)?;
                         ip.increment();
                     }
                     Some(Instruction::i32Reinterpretf32) => {
@@ -1807,7 +1807,7 @@ fn fetch_argv(
                     let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                     let mut cursor = Cursor::new(&bytes);
                     let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
-
+                    
                     argv.push(VmValue::F64(val));
                 }
             }
@@ -3831,230 +3831,250 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
     }
 
     match op{
-        Instruction::i32Wrapi64 => {
+        Instruction::i64Wrapi32 => {
             for _ in 0..len {
-                match operand_stack.pop().i32_wrapi64() {
+                match operand_stack.pop().i64_wrapi32() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::i32TruncSignedf32 => {
+        Instruction::f32TruncSignedi32 => {
             for _ in 0..len {
-                match operand_stack.pop().i32trunc_f32() {
+                match operand_stack.pop().f32trunc_i32() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::i32TruncUnsignedf32 => {
+        Instruction::f32TruncUnsignedi32 => {
             for _ in 0..len {
                 let value: VmValue = operand_stack.pop();
                 if !value.is_positive() {
                     return Err(VmError::UnsignedOperationSignedOperand);
                 }
 
-                match value.i32trunc_f32() {
+                match value.f32trunc_i32() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::i32TruncSignedf64 => {
+        Instruction::f64TruncSignedi32 => {
             for _ in 0..len {
-                match operand_stack.pop().i32trunc_f64() {
+                match operand_stack.pop().f64trunc_i32() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::i32TruncUnsignedf64 => {
-            for _ in 0..len {
-                let value: VmValue = operand_stack.pop();
-                if !value.is_positive() {
-                    return Err(VmError::UnsignedOperationSignedOperand);
-                }
-
-                match value.i32trunc_f64() {
-                    Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
-                }
-            }
-        }
-        Instruction::i64ExtendSignedi32 => {
-            for _ in 0..len {
-                match operand_stack.pop().i64extend_i32() {
-                    Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
-                }
-            }
-        }
-        Instruction::i64ExtendUnsignedi32 => {
+        Instruction::f64TruncUnsignedi32 => {
             for _ in 0..len {
                 let value: VmValue = operand_stack.pop();
                 if !value.is_positive() {
                     return Err(VmError::UnsignedOperationSignedOperand);
                 }
 
-                match value.i64extend_i32() {
+                match value.f64trunc_i32() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::i64TruncSignedf32 => {
+        Instruction::i32ExtendSignedi64 => {
             for _ in 0..len {
-                match operand_stack.pop().i64trunc_f32() {
+                match operand_stack.pop().i32extend_i64() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::i64TruncUnsignedf32 => {
-            for _ in 0..len {
-                let value: VmValue = operand_stack.pop();
-                if !value.is_positive() {
-                    return Err(VmError::UnsignedOperationSignedOperand);
-                }
-
-                match value.i64trunc_f32() {
-                    Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
-                }
-            }
-        }
-        Instruction::i64TruncSignedf64 => {
-            for _ in 0..len {
-                match operand_stack.pop().i64trunc_f64() {
-                    Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
-                }
-            }
-        }
-        Instruction::i64TruncUnsignedf64 => {
+        Instruction::i32ExtendUnsignedi64 => {
             for _ in 0..len {
                 let value: VmValue = operand_stack.pop();
                 if !value.is_positive() {
                     return Err(VmError::UnsignedOperationSignedOperand);
                 }
 
-                match value.i64trunc_f64() {
+                match value.i32extend_i64() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::f32ConvertSignedi32 => {
+        Instruction::f32TruncSignedi64 => {
             for _ in 0..len {
-                match operand_stack.pop().f32convert_i32() {
+                match operand_stack.pop().f32trunc_i64() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::f32ConvertUnsignedi32 => {
-            for _ in 0..len {
-                let value: VmValue = operand_stack.pop();
-                if !value.is_positive() {
-                    return Err(VmError::UnsignedOperationSignedOperand);
-                }
-
-                match value.f32convert_i32() {
-                    Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
-                }
-            }
-        }
-        Instruction::f32ConvertSignedi64 => {
-            for _ in 0..len {
-                match operand_stack.pop().f32convert_i64() {
-                    Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
-                }
-            }
-        }
-        Instruction::f32ConvertUnsignedi64 => {
+        Instruction::f32TruncUnsignedi64 => {
             for _ in 0..len {
                 let value: VmValue = operand_stack.pop();
                 if !value.is_positive() {
                     return Err(VmError::UnsignedOperationSignedOperand);
                 }
 
-                match value.f32convert_i64() {
+                match value.f32trunc_i64() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::f32Demotef64 => {
+        Instruction::f64TruncSignedi64 => {
             for _ in 0..len {
-                match operand_stack.pop().f32demote_f64() {
+                match operand_stack.pop().f64trunc_i64() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::f64ConvertSignedi32 => {
-            for _ in 0..len {
-                match operand_stack.pop().f64convert_i32() {
-                    Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
-                }
-            }
-        }
-        Instruction::f64ConvertUnsignedi32 => {
+        Instruction::f64TruncUnsignedi64 => {
             for _ in 0..len {
                 let value: VmValue = operand_stack.pop();
                 if !value.is_positive() {
                     return Err(VmError::UnsignedOperationSignedOperand);
                 }
 
-                match value.f64convert_i32() {
+                match value.f64trunc_i64() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::f64ConvertSignedi64 => {
+        Instruction::i32ConvertSignedf32 => {
             for _ in 0..len {
-                match operand_stack.pop().f64convert_i64() {
+                match operand_stack.pop().i32convert_f32() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::f64ConvertUnsignedi64 => {
+        Instruction::i32ConvertUnsignedf32 => {
             for _ in 0..len {
                 let value: VmValue = operand_stack.pop();
                 if !value.is_positive() {
                     return Err(VmError::UnsignedOperationSignedOperand);
                 }
 
-                match value.f64convert_i64() {
+                match value.i32convert_f32() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
-        Instruction::f64Promotef32 => {
+        Instruction::i64ConvertSignedf32 => {
             for _ in 0..len {
-                match operand_stack.pop().f64promote_f32() {
+                match operand_stack.pop().i64convert_f32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i64ConvertUnsignedf32 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.i64convert_f32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f64Demotef32 => {
+            for _ in 0..len {
+                match operand_stack.pop().f64demote_f32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i32ConvertSignedf64 => {
+            for _ in 0..len {
+                match operand_stack.pop().i32convert_f64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i32ConvertUnsignedf64 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.i32convert_f64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i64ConvertSignedf64 => {
+            for _ in 0..len {
+                match operand_stack.pop().i64convert_f64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::i64ConvertUnsignedf64 => {
+            for _ in 0..len {
+                let value: VmValue = operand_stack.pop();
+                if !value.is_positive() {
+                    return Err(VmError::UnsignedOperationSignedOperand);
+                }
+
+                match value.i64convert_f64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
+        }
+        Instruction::f32Promotef64 => {
+            for _ in 0..len {
+                match operand_stack.pop().f32promote_f64() {
                     Ok(val) => buf.push(val),
                     Err(err) => return Err(err)
                 }
             }
         }
         Instruction::i32Reinterpretf32 => {
-            unimplemented!();
+            for _ in 0..len {
+                match operand_stack.pop().i32reinterpret_f32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
         }
         Instruction::i64Reinterpretf64 => {
-            unimplemented!();
+            for _ in 0..len {
+                match operand_stack.pop().i64reinterpret_f64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
         }
         Instruction::f32Reinterpreti32 => {
-            unimplemented!();
+            for _ in 0..len {
+                match operand_stack.pop().f32reinterpret_i32() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
         }
         Instruction::f64Reinterpreti64 => {
-            unimplemented!();
+            for _ in 0..len {
+                match operand_stack.pop().f64reinterpret_i64() {
+                    Ok(val) => buf.push(val),
+                    Err(err) => return Err(err)
+                }
+            }
         }
         _ => panic!(format!("No valid data conversion instruction was passed. Got {:?}", op))
     }
@@ -10547,7 +10567,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_i32wrapi64_cast(){
+    fn it_performs_i64wrapi32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10564,7 +10584,7 @@ mod tests {
             0xff,
             0xff,
             0xff,
-            Instruction::i32Wrapi64.repr(),
+            Instruction::i64Wrapi32.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -10583,7 +10603,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_i32wrapi64_cast(){
+    fn it_fails_on_unsafe_i64wrapi32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10600,7 +10620,7 @@ mod tests {
             0xff,
             0xff,
             0xff,
-            Instruction::i32Wrapi64.repr(),
+            Instruction::i64Wrapi32.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -10610,7 +10630,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_i32trunc_signedf32_cast(){
+    fn it_performs_f32trunc_signedi32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10623,7 +10643,7 @@ mod tests {
             0x20,
             0x00,
             0x00,
-            Instruction::i32TruncSignedf32.repr(),
+            Instruction::f32TruncSignedi32.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -10642,7 +10662,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_i32trunc_signedf32_cast(){
+    fn it_fails_on_unsafe_f32trunc_signedi32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10655,7 +10675,7 @@ mod tests {
             0x24,
             0x00,
             0x00,
-            Instruction::i32TruncSignedf32.repr(),
+            Instruction::f32TruncSignedi32.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -10665,7 +10685,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_i32trunc_unsignedf32_cast(){
+    fn it_performs_f32trunc_unsignedi32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10678,7 +10698,7 @@ mod tests {
             0x20,
             0x00,
             0x00,
-            Instruction::i32TruncUnsignedf32.repr(),
+            Instruction::f32TruncUnsignedi32.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -10697,7 +10717,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_i32trunc_unsignedf32_cast(){
+    fn it_fails_on_unsafe_f32trunc_unsignedi32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10710,7 +10730,7 @@ mod tests {
             0x24,
             0x00,
             0x00,
-            Instruction::i32TruncUnsignedf32.repr(),
+            Instruction::f32TruncUnsignedi32.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -10720,7 +10740,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_i32trunc_signedf64_cast(){
+    fn it_performs_f64trunc_signedi32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10737,7 +10757,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            Instruction::i32TruncSignedf64.repr(),
+            Instruction::f64TruncSignedi32.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -10756,7 +10776,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_i32trunc_signedf64_cast(){
+    fn it_fails_on_unsafe_f64trunc_signedi32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10773,7 +10793,7 @@ mod tests {
             0x22,
             0xd0,
             0xe5,
-            Instruction::i32TruncSignedf64.repr(),
+            Instruction::f64TruncSignedi32.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -10783,7 +10803,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_i32trunc_unsignedf64_cast(){
+    fn it_performs_f64trunc_unsignedi32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10800,7 +10820,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            Instruction::i32TruncUnsignedf64.repr(),
+            Instruction::f64TruncUnsignedi32.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -10819,7 +10839,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_i32trunc_unsignedf64_cast(){
+    fn it_fails_on_unsafe_f64trunc_unsignedi32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10836,7 +10856,7 @@ mod tests {
             0x22,
             0xd0,
             0xe5,
-            Instruction::i32TruncUnsignedf64.repr(),
+            Instruction::f64TruncUnsignedi32.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -10846,7 +10866,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_i64extend_signedi32_cast(){
+    fn it_performs_i32extend_signedi64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10859,7 +10879,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            Instruction::i64ExtendSignedi32.repr(),
+            Instruction::i32ExtendSignedi64.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -10880,9 +10900,13 @@ mod tests {
         assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
     }
 
+
+
+
+
     #[test]
     #[rustfmt::skip]
-    fn it_performs_i64extend_unsignedi32_cast(){
+    fn it_performs_i32extend_unsignedi64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10895,7 +10919,7 @@ mod tests {
             0xff,
             0xff,
             0xff,
-            Instruction::i64ExtendUnsignedi32.repr(),
+            Instruction::i32ExtendUnsignedi64.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -10918,7 +10942,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_i64trunc_signedf32_cast(){
+    fn it_performs_f32trunc_signedi64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10931,7 +10955,7 @@ mod tests {
             0x15,
             0x02,
             0xf9,
-            Instruction::i64TruncSignedf32.repr(),
+            Instruction::f32TruncSignedi64.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -10954,7 +10978,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_i64trunc_signedf32_cast(){
+    fn it_fails_on_unsafe_f32trunc_signedi64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10967,7 +10991,7 @@ mod tests {
             0x24,
             0x00,
             0x00,
-            Instruction::i64TruncSignedf32.repr(),
+            Instruction::f32TruncSignedi64.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -10977,7 +11001,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_i64trunc_unsignedf32_cast(){
+    fn it_performs_f32trunc_unsignedi64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -10990,7 +11014,7 @@ mod tests {
             0x20,
             0x00,
             0x00,
-            Instruction::i64TruncUnsignedf32.repr(),
+            Instruction::f32TruncUnsignedi64.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -11013,7 +11037,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_i64trunc_unsignedf32_cast(){
+    fn it_fails_on_unsafe_f32trunc_unsignedi64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11026,7 +11050,7 @@ mod tests {
             0x24,
             0x00,
             0x00,
-            Instruction::i64TruncUnsignedf32.repr(),
+            Instruction::f32TruncUnsignedi64.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -11036,7 +11060,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_i64trunc_signedf64_cast(){
+    fn it_performs_f64trunc_signedi64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11053,19 +11077,19 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            Instruction::i64TruncSignedf64.repr(),
+            Instruction::f64TruncSignedi64.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
             Instruction::i64Const.repr(),
-            0xc0,                             // -10
-            0x24,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xff,
+            0xf6,
             Instruction::Eq.repr(),          // Assert that operands are equal
             Instruction::Nop.repr(),
             Instruction::End.repr()
@@ -11076,7 +11100,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_i64trunc_signedf64_cast(){
+    fn it_fails_on_unsafe_f64trunc_signedi64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11093,7 +11117,7 @@ mod tests {
             0x22,
             0xd0,
             0xe5,
-            Instruction::i64TruncSignedf64.repr(),
+            Instruction::f64TruncSignedi64.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -11103,7 +11127,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_i64trunc_unsignedf64_cast(){
+    fn it_performs_f64trunc_unsignedi64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11120,7 +11144,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            Instruction::i64TruncUnsignedf64.repr(),
+            Instruction::f64TruncUnsignedi64.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -11143,7 +11167,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_i64trunc_unsignedf64_cast(){
+    fn it_fails_on_unsafe_f64trunc_unsignedi64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11160,7 +11184,7 @@ mod tests {
             0x22,
             0xd0,
             0xe5,
-            Instruction::i64TruncUnsignedf64.repr(),
+            Instruction::f64TruncUnsignedi64.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -11170,7 +11194,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_f32convert_signedi32_cast(){
+    fn it_performs_i32convert_signedf32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11179,11 +11203,11 @@ mod tests {
             0x01,
             0x00,
             Instruction::i32Const.repr(),
-            0xce,                             // -2147480000
-            0xff,
-            0xff,
-            0xe4,
-            Instruction::f32ConvertSignedi32.repr(),
+            0x80,                             // -2147480000
+            0x00,
+            0x0e,
+            0x40,
+            Instruction::i32ConvertSignedf32.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -11201,8 +11225,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_f32convert_signedi32_cast(){
+    fn it_fails_on_unsafe_i32convert_signedf32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11215,7 +11240,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            Instruction::f32ConvertSignedi32.repr(),
+            Instruction::i32ConvertSignedf32.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -11225,7 +11250,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_f32convert_unsignedi32_cast(){
+    fn it_performs_i32convert_unsignedf32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11234,11 +11259,11 @@ mod tests {
             0x01,
             0x00,
             Instruction::i32Const.repr(),
-            0x4e,                             // 2147480000
+            0x7f,                             // 2147480000
             0xff,
-            0xff,
-            0xe4,
-            Instruction::f32ConvertUnsignedi32.repr(),
+            0xf1,
+            0xc0,
+            Instruction::i32ConvertUnsignedf32.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -11256,8 +11281,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_f32convert_unsignedi32_cast(){
+    fn it_fails_on_unsafe_i32convert_unsignedf32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11270,7 +11296,7 @@ mod tests {
             0xff,
             0xff,
             0xff,
-            Instruction::f32ConvertUnsignedi32.repr(),
+            Instruction::i32ConvertUnsignedf32.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -11280,7 +11306,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_f32convert_signedi64_cast(){
+    fn it_performs_i64convert_signedf32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11297,7 +11323,7 @@ mod tests {
             0xff,
             0xd8,
             0xf0,
-            Instruction::f32ConvertSignedi64.repr(),
+            Instruction::i64ConvertSignedf32.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -11315,8 +11341,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_f32convert_signedi64_cast(){
+    fn it_fails_on_unsafe_i64convert_signedf32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11333,7 +11360,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            Instruction::f32ConvertSignedi64.repr(),
+            Instruction::i64ConvertSignedf32.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -11343,7 +11370,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_f32convert_unsignedi64_cast(){
+    fn it_performs_i64convert_unsignedf32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11360,7 +11387,7 @@ mod tests {
             0x00,
             0x27,
             0x10,
-            Instruction::f32ConvertUnsignedi64.repr(),
+            Instruction::i64ConvertUnsignedf32.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -11378,8 +11405,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_f32convert_unsignedi64_cast(){
+    fn it_fails_on_unsafe_i64convert_unsignedf32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11396,7 +11424,7 @@ mod tests {
             0xff,
             0xff,
             0xff,
-            Instruction::f32ConvertUnsignedi64.repr(),
+            Instruction::i64ConvertUnsignedf32.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -11406,7 +11434,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_f32demotef64_cast(){
+    fn it_performs_f64demotef32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11423,7 +11451,7 @@ mod tests {
             0x22,
             0xd0,
             0xe5,
-            Instruction::f32Demotef64.repr(),
+            Instruction::f64Demotef32.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -11441,8 +11469,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_f32demotef64_cast(){
+    fn it_fails_on_unsafe_f64demotef32_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11459,7 +11488,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            Instruction::f32Demotef64.repr(),
+            Instruction::f64Demotef32.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -11469,7 +11498,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_f64convert_signedi32_cast(){
+    fn it_performs_i32convert_signedf64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11478,11 +11507,11 @@ mod tests {
             0x01,
             0x00,
             Instruction::i32Const.repr(),
-            0xce,                             // -2147480000
-            0xff,
-            0xff,
-            0xe4,
-            Instruction::f64ConvertSignedi32.repr(),
+            0x80,                             // -2147480000
+            0x00,
+            0x0e,
+            0x40,
+            Instruction::i32ConvertSignedf64.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -11505,7 +11534,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_f64convert_unsignedi32_cast(){
+    fn it_performs_i32convert_unsignedf64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11518,7 +11547,7 @@ mod tests {
             0xff,
             0xff,
             0xff,
-            Instruction::f64ConvertUnsignedi32.repr(),
+            Instruction::i32ConvertUnsignedf64.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -11541,7 +11570,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_f64convert_signedi64_cast(){
+    fn it_performs_i64convert_signedf64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11558,7 +11587,7 @@ mod tests {
             0xff,
             0xd8,
             0xf0,
-            Instruction::f64ConvertSignedi64.repr(),
+            Instruction::i64ConvertSignedf64.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -11580,8 +11609,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_f64convert_signedi64_cast(){
+    fn it_fails_on_unsafe_i64convert_signedf64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11598,7 +11628,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            Instruction::f64ConvertSignedi64.repr(),
+            Instruction::i64ConvertSignedf64.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -11608,7 +11638,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn it_performs_f64convert_unsignedi64_cast(){
+    fn it_performs_i64convert_unsignedf64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11625,7 +11655,7 @@ mod tests {
             0x00,
             0x27,
             0x10,
-            Instruction::f64ConvertUnsignedi64.repr(),
+            Instruction::i64ConvertUnsignedf64.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
@@ -11647,8 +11677,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[rustfmt::skip]
-    fn it_fails_on_unsafe_f64convert_unsignedi64_cast(){
+    fn it_fails_on_unsafe_i64convert_unsignedf64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11665,7 +11696,7 @@ mod tests {
             0xff,
             0xff,
             0xff,
-            Instruction::f64ConvertUnsignedi64.repr(),
+            Instruction::i64ConvertUnsignedf64.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
         ];
@@ -11674,8 +11705,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[rustfmt::skip]
-    fn it_performs_f64promotef32_cast(){
+    fn it_performs_f32promotef64_cast(){
         let block: Vec<u8> = vec![
             Instruction::Begin.repr(),
             0x00,                             // 0 Arity
@@ -11684,23 +11716,167 @@ mod tests {
             0x01,
             0x00,
             Instruction::f32Const.repr(),
-            0x41,                             // 10.1235
+            0x41,                             // 10.12
             0x21,
-            0xf9,
-            0xae,
-            Instruction::f64Promotef32.repr(),
+            0xeb,
+            0x85,
+            Instruction::f32Promotef64.repr(),
             Instruction::PushOperand.repr(),
             0x01,
             0x00,
             Instruction::f64Const.repr(),
-            0x40,                             // 10.1235
+            0x40,                             // 10.12
             0x24,
-            0x3f,
-            0x3b,
-            0x64,
-            0x5a,
-            0x1c,
-            0xac,
+            0x3d,
+            0x70,
+            0xa3,
+            0xd7,
+            0x0a,
+            0x3d,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_i32reinterpretf32_cast(){
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xfe,
+            0xdc,
+            0xba,
+            0x98,
+            Instruction::i32Reinterpretf32.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0xfe,
+            0xdc,
+            0xba,
+            0x98,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_f32reinterpreti32_cast(){
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0xfe,
+            0xdc,
+            0xba,
+            0x98,
+            Instruction::f32Reinterpreti32.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0xfe,
+            0xdc,
+            0xba,
+            0x98,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_i64reinterpretf64_cast(){
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0xfe,
+            0xdc,
+            0xba,
+            0x98,
+            0x76,
+            0x54,
+            0x32,
+            0x10,
+            Instruction::i64Reinterpretf64.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f64Const.repr(),
+            0xfe,
+            0xdc,
+            0xba,
+            0x98,
+            0x76,
+            0x54,
+            0x32,
+            0x10,
+            Instruction::Eq.repr(),          // Assert that operands are equal
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_f64reinterpreti64_cast(){
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f64Const.repr(),
+            0xfe,
+            0xdc,
+            0xba,
+            0x98,
+            0x76,
+            0x54,
+            0x32,
+            0x10,
+            Instruction::f64Reinterpreti64.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0xfe,
+            0xdc,
+            0xba,
+            0x98,
+            0x76,
+            0x54,
+            0x32,
+            0x10,
             Instruction::Eq.repr(),          // Assert that operands are equal
             Instruction::Nop.repr(),
             Instruction::End.repr()

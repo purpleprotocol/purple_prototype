@@ -22,7 +22,6 @@ use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub};
 use std::{f32, f64};
 use crate::VmError;
 use num_traits::cast::ToPrimitive;
-//use num::ToPrimitive;
 
 // TODO: When the const generics feature (https://github.com/rust-lang/rfcs/blob/master/text/2000-const-generics.md) 
 // gets to a stable version remove the conversions done on arrays with length greather than 32
@@ -151,7 +150,6 @@ impl VmValue {
         }
     }
 
-    // TODO: Check + test for each safe fn the scenario when value cannot fit in MIN-MAX range of the destination type
     fn safe_i64_to_i32(operand: VmValue) -> Result<VmValue, VmError> {
         match operand{
             VmValue::I64(val) => {
@@ -159,6 +157,150 @@ impl VmValue {
                     Some(res) => Ok(VmValue::I32(res)),
                     None => return Err(VmError::UnsafeCast)
                 }
+            }
+            VmValue::i64Array2(val) => {
+                let mut result: [i32; 2] = [0; 2];
+                let src = val.iter().map(|a| {
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array2(result))
+            }
+            VmValue::i64Array4(val) => {
+                let mut result: [i32; 4] = [0; 4];
+                let src = val.iter().map(|a| {
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array4(result))
+            }
+            VmValue::i64Array8(val) => {
+                let mut result: [i32; 8] = [0; 8];
+                let src = val.iter().map(|a| {
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array8(result))
+            }
+            VmValue::i64Array16(val) => {
+                let mut result: [i32; 16] = [0; 16];
+                let src = val.iter().map(|a| {
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array16(result))
+            }
+            VmValue::i64Array32(val) => {
+                let mut result: [i32; 32] = [0; 32];
+                let src = val.iter().map(|a| {
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array32(result))
+            }
+            VmValue::i64Array64(val) => {
+                let mut result: [i32; 64] = [0; 64];
+                let src = val.iter().map(|a| {
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array64(result))
+            }
+            VmValue::i64Array128(val) => {
+                let mut result: [i32; 128] = [0; 128];
+                let src = val.iter().map(|a| {
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array128(result))
+            }
+            VmValue::i64Array256(val) => {
+                let mut result: [i32; 256] = [0; 256];
+                let src = val.iter().map(|a| {
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array256(result))
             }
             _ => return Err(VmError::InvalidOperand)
         }
@@ -218,7 +360,7 @@ impl VmValue {
                 if val.fract() != 0.0 {
                     return Err(VmError::UnsafeCast);
                 }
-
+                
                 match val.to_i64() {
                     Some(res) => Ok(VmValue::I64(res)),
                     None => return Err(VmError::UnsafeCast) 
@@ -252,7 +394,6 @@ impl VmValue {
         }
     }
 
-    // TODO: Check + test if value fits + check .fract() for equality if ToPrimitive doesn't handle
     fn safe_f64_to_f32(operand: VmValue) -> Result<VmValue, VmError> {
         match operand {
             VmValue::F64(val) => {
@@ -290,25 +431,25 @@ impl VmValue {
     }
 
     // TODO: Extend for arrays
-    pub fn i32_wrapi64 (&self) -> Result<VmValue, VmError> {
+    pub fn i64_wrapi32 (&self) -> Result<VmValue, VmError> {
         VmValue::safe_i64_to_i32(*self)
     }
 
-    pub fn i32trunc_f32(&self) -> Result<VmValue, VmError> {
+    pub fn f32trunc_i32(&self) -> Result<VmValue, VmError> {
         match *self {
             VmValue::F32(_) => VmValue::safe_f32_to_i32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
-    pub fn i32trunc_f64(&self) -> Result<VmValue, VmError> {
+    pub fn f64trunc_i32(&self) -> Result<VmValue, VmError> {
         match *self {
             VmValue::F64(_) => VmValue::safe_f64_to_i32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
-    pub fn i64extend_i32(&self) -> Result<VmValue, VmError> {
+    pub fn i32extend_i64(&self) -> Result<VmValue, VmError> {
         // Always safe
         match *self {
             VmValue::I32(val) => {
@@ -321,56 +462,56 @@ impl VmValue {
         }
     }
 
-    pub fn i64trunc_f32(&self) -> Result<VmValue, VmError> {
+    pub fn f32trunc_i64(&self) -> Result<VmValue, VmError> {
         match *self {
             VmValue::F32(_) => VmValue::safe_f32_to_i64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
-    
-    pub fn i64trunc_f64(&self) -> Result<VmValue, VmError> {
+
+    pub fn f64trunc_i64(&self) -> Result<VmValue, VmError> {
         match *self {
             VmValue::F64(_) => VmValue::safe_f64_to_i64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
-    pub fn f32convert_i32(&self) -> Result<VmValue, VmError> {
+    pub fn i32convert_f32(&self) -> Result<VmValue, VmError> {
         match *self {
             VmValue::I32(_) => VmValue::safe_i32_to_f32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
-    pub fn f32convert_i64(&self) -> Result<VmValue, VmError> {
+    pub fn i64convert_f32(&self) -> Result<VmValue, VmError> {
         match *self {
             VmValue::I64(_) => VmValue::safe_i64_to_f32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
-    
-    pub fn f32demote_f64(&self) -> Result<VmValue, VmError> {
+
+    pub fn f64demote_f32(&self) -> Result<VmValue, VmError> {
         match *self {
             VmValue::F64(_) => VmValue::safe_f64_to_f32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
-    pub fn f64convert_i32(&self) -> Result<VmValue, VmError> {
+    pub fn i32convert_f64(&self) -> Result<VmValue, VmError> {
         match *self {
             VmValue::I32(_) => VmValue::safe_i32_to_f64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
-    pub fn f64convert_i64(&self) -> Result<VmValue, VmError> {
+    pub fn i64convert_f64(&self) -> Result<VmValue, VmError> {
         match *self {
             VmValue::I64(_) => VmValue::safe_i64_to_f64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
-    pub fn f64promote_f32(&self) -> Result<VmValue, VmError> {
+    pub fn f32promote_f64(&self) -> Result<VmValue, VmError> {
         // Always safe
         match *self{
             VmValue::F32(val) => {
@@ -383,11 +524,45 @@ impl VmValue {
         }
     }
 
-    // TODO - continue
-    // i32Reinterpretf32     = 0x9b,
-    // i64Reinterpretf64     = 0x9c,
-    // f32Reinterpreti32     = 0x9d,
-    // f64Reinterpreti64     = 0x9e,
+    pub fn i32reinterpret_f32(&self) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::I32(val) => {
+                let bytes: [u8; 4] = val.to_be_bytes();
+                return Ok(VmValue::F32(f32::from_be_bytes(bytes)));
+            }
+            _ => return Err(VmError::InvalidOperand)
+        }
+    }
+
+    pub fn i64reinterpret_f64(&self) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::I64(val) => {
+                let bytes: [u8; 8] = val.to_be_bytes();
+                return Ok(VmValue::F64(f64::from_be_bytes(bytes)));
+            }
+            _ => return Err(VmError::InvalidOperand)
+        }
+    }
+
+    pub fn f32reinterpret_i32(&self) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::F32(val) => {
+                let bytes: [u8; 4] = val.to_be_bytes();
+                return Ok(VmValue::I32(i32::from_be_bytes(bytes)));
+            }
+            _ => return Err(VmError::InvalidOperand)
+        }
+    }
+
+    pub fn f64reinterpret_i64(&self) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::F64(val) => {
+                let bytes: [u8; 8] = val.to_be_bytes();
+                return Ok(VmValue::I64(i64::from_be_bytes(bytes)));
+            }
+            _ => return Err(VmError::InvalidOperand)
+        }
+    }
 
     fn check_f32_infinite(val: f32) -> Option<f32> {
         if val.is_infinite() {
