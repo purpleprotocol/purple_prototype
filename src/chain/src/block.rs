@@ -32,7 +32,7 @@ pub trait Block: Debug + PartialEq + Eq + HashTrait + Sized {
     type ChainState: Clone + Debug + Flushable + StateInterface;
 
     /// Size of the block cache.
-    const BLOCK_CACHE_SIZE: usize = 20;
+    const BLOCK_CACHE_SIZE: usize = 100;
 
     /// Maximum orphans allowed.
     #[cfg(not(test))]

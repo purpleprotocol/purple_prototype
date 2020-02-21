@@ -21,6 +21,9 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
 use crate::validation::receiver::Receiver;
+use crate::protocol_flow::block_propagation::Pair;
+use crate::protocol_flow::block_propagation::outbound::OutboundPacket;
+use crate::protocol_flow::block_propagation::inbound::InboundPacket;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
@@ -111,7 +114,62 @@ impl Packet for AnnounceTxBlock {
         packet: &AnnounceTxBlock,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        unimplemented!();   
+        debug!(
+            "Received AnnounceTxBlock packet from {} with nonce {}",
+            addr, packet.nonce
+        );
+
+        // Retrieve pairs map
+        let pairs = {
+            let peers = network.peers();
+            let peers = peers.read();
+            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
+
+            peer.validator.block_propagation.pairs.clone()
+        };
+
+        let receiver = {
+            if let Some(pair) = pairs.get(&packet.nonce) {
+                pair.receiver.clone()
+            } else {
+                let pair = Pair::default();
+                pairs.insert(packet.nonce, pair.clone());
+                pair.receiver.clone()
+            }
+        };
+
+        // Attempt to receive packet
+        let packet = {
+            let mut receiver = receiver.lock();
+            let packet = OutboundPacket::AnnounceTxBlock(Arc::new(packet.clone()));
+            receiver.receive(network as &N, addr, &packet)?
+        };
+
+        match packet {
+            InboundPacket::RejectBlock(packet) => {
+                debug!("Sending RejectBlock packet to {}", addr);
+
+                // Send `RejectBlock` packet back to peer
+                network.send_to_peer(addr, packet.to_bytes())?;
+
+                debug!("RejectBlock packet sent to {}", addr);
+
+                Ok(())
+            }
+
+            InboundPacket::RequestBlock(packet) => {
+                debug!("Sending RequestBlock packet to {}", addr);
+
+                // Send `RequestBlock` packet back to peer
+                network.send_to_peer(addr, packet.to_bytes())?;
+
+                debug!("RequestBlock packet sent to {}", addr);
+
+                Ok(())
+            }
+
+            _ => unreachable!()
+        }    
     }
 }
 

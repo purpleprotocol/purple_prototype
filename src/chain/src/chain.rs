@@ -126,7 +126,7 @@ pub struct ChainRef<B: Block> {
     pub chain: Arc<RwLock<Chain<B>>>,
 
     /// Block lookup cache.
-    block_cache: Arc<Mutex<LruCache<Hash, Arc<B>>>>,
+    block_cache: Arc<Mutex<LruCache<ShortHash, Arc<B>>>>,
 }
 
 impl<B: Block> ChainRef<B> {
@@ -142,6 +142,43 @@ impl<B: Block> ChainRef<B> {
     /// it from the database.
     pub fn query(&self, hash: &Hash) -> Option<Arc<B>> {
         let cache_result = {
+            let hash = hash.to_short();
+            let mut cache = self.block_cache.lock();
+
+            if let Some(result) = cache.get(&hash) {
+                Some(result.clone())
+            } else {
+                None
+            }
+        };
+
+        if let Some(result) = cache_result {
+            Some(result)
+        } else {
+            let chain_result = {
+                let chain = self.chain.read();
+                chain.query(hash)
+            };
+
+            if let Some(result) = chain_result {
+                let hash = hash.to_short();
+                let mut cache = self.block_cache.lock();
+
+                if cache.get(&hash).is_none() {
+                    // Cache result and then return it
+                    cache.put(hash, result.clone());
+                }
+
+                Some(result)
+            } else {
+                None
+            }
+        }
+    }
+
+    /// Queries for a block using a `ShortHash` instead of a `Hash`.
+    pub fn query_short_hash(&self, hash: &ShortHash) -> Option<Arc<B>> {
+        let cache_result = {
             let mut cache = self.block_cache.lock();
 
             if let Some(result) = cache.get(hash) {
@@ -154,28 +191,19 @@ impl<B: Block> ChainRef<B> {
         if let Some(result) = cache_result {
             Some(result)
         } else {
-            let chain_result = {
+            let result = {
                 let chain = self.chain.read();
+                chain.query_short_hash(hash)
+            }?;
 
-                if let Some(result) = chain.query(hash) {
-                    Some(result)
-                } else {
-                    None
-                }
-            };
+            let mut cache = self.block_cache.lock();
 
-            if let Some(result) = chain_result {
-                let mut cache = self.block_cache.lock();
-
-                if cache.get(hash).is_none() {
-                    // Cache result and then return it
-                    cache.put(hash.clone(), result.clone());
-                }
-
-                Some(result)
-            } else {
-                None
+            if cache.get(hash).is_none() {
+                // Cache result and then return it
+                cache.put(hash.clone(), result.clone());
             }
+
+            Some(result)
         }
     }
 
@@ -209,6 +237,41 @@ impl<B: Block> ChainRef<B> {
     /// it from the orphan pool.
     pub fn query_orphan(&self, hash: &Hash) -> Option<Arc<B>> {
         let cache_result = {
+            let hash = hash.to_short();
+            let mut cache = self.block_cache.lock();
+
+            if let Some(result) = cache.get(&hash) {
+                Some(result.clone())
+            } else {
+                None
+            }
+        };
+
+        if let Some(result) = cache_result {
+            Some(result)
+        } else {
+            let result = {
+                let chain = self.chain.read();
+                chain.query_orphan(hash)
+            }?;
+
+            let hash = hash.to_short();
+            let mut cache = self.block_cache.lock();
+
+            if cache.get(&hash).is_none() {
+                // Cache result and then return it
+                cache.put(hash, result.clone());
+            }
+
+            Some(result)
+        }
+    }
+
+    /// Attempts to fetch a block by its hash from the cache
+    /// and if it doesn't succeed it then attempts to retrieve
+    /// it from the orphan pool.
+    pub fn query_orphan_short_hash(&self, hash: &ShortHash) -> Option<Arc<B>> {
+        let cache_result = {
             let mut cache = self.block_cache.lock();
 
             if let Some(result) = cache.get(hash) {
@@ -221,28 +284,19 @@ impl<B: Block> ChainRef<B> {
         if let Some(result) = cache_result {
             Some(result)
         } else {
-            let chain_result = {
+            let result = {
                 let chain = self.chain.read();
+                chain.query_orphan_short_hash(hash)
+            }?;
 
-                if let Some(result) = chain.query_orphan(hash) {
-                    Some(result)
-                } else {
-                    None
-                }
-            };
+            let mut cache = self.block_cache.lock();
 
-            if let Some(result) = chain_result {
-                let mut cache = self.block_cache.lock();
-
-                if cache.get(hash).is_none() {
-                    // Cache result and then return it
-                    cache.put(hash.clone(), result.clone());
-                }
-
-                Some(result)
-            } else {
-                None
+            if cache.get(&hash).is_none() {
+                // Cache result and then return it
+                cache.put(hash.clone(), result.clone());
             }
+
+            Some(result)
         }
     }
 
@@ -286,6 +340,9 @@ pub struct Chain<B: Block> {
 
     /// Memory pool of blocks that are not in the canonical chain.
     orphan_pool: HashMap<Hash, Arc<B>>,
+
+    /// Mapping between block short hashes and full-length hashes
+    short_mappings: HashMap<ShortHash, Hash>,
 
     /// The biggest height of all orphans
     max_orphan_height: Option<u64>,
@@ -440,6 +497,7 @@ impl<B: Block> Chain<B> {
             last_checkpoint_height,
             heights_state_mapping,
             orphan_pool: HashMap::with_capacity(B::MAX_ORPHANS),
+            short_mappings: HashMap::with_capacity(B::MAX_ORPHANS),
             heights_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
             validations_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
             disconnected_heads_mapping: HashMap::with_capacity(B::MAX_ORPHANS),
@@ -617,6 +675,13 @@ impl<B: Block> Chain<B> {
             &block.to_bytes(),
         );
 
+        // Write short hash mapping
+        let short = block_hash.to_short();
+        self.db.put(
+            &short.0,
+            &block_hash.0,
+        );
+
         // Set new tip block
         self.canonical_tip = block.clone();
         let mut height = decode_be_u64!(self.db.retrieve(&CANONICAL_HEIGHT_KEY).unwrap()).unwrap();
@@ -653,6 +718,7 @@ impl<B: Block> Chain<B> {
         );
 
         self.orphan_pool.remove(&block_hash);
+        self.short_mappings.remove(&block_hash.to_short());
         self.validations_mapping.remove(&block_hash);
 
         // Remove from height mappings
@@ -760,6 +826,9 @@ impl<B: Block> Chain<B> {
 
         // Write to orphan pool
         self.orphan_pool.insert(orphan_hash.clone(), orphan.clone());
+
+        // Write to short mappings
+        self.short_mappings.insert(orphan_hash.to_short(), orphan_hash.clone());
 
         // Set max orphan height if this is the case
         self.update_max_orphan_height(height);
@@ -1434,8 +1503,21 @@ impl<B: Block> Chain<B> {
         Some(B::from_bytes(&stored).unwrap())
     }
 
+    /// Queries the database for the block with the given `ShortHash`.
+    pub fn query_short_hash(&self, hash: &ShortHash) -> Option<Arc<B>> {
+        let hash = self.db.retrieve(&hash.0)?;
+        let stored = self.db.retrieve(&hash)?;
+        Some(B::from_bytes(&stored).unwrap())
+    }
+
     /// Queries the current orphans for the block with the given hash.
     pub fn query_orphan(&self, hash: &Hash) -> Option<Arc<B>> {
+        self.orphan_pool.get(hash).cloned()
+    }
+
+    /// Queries the current orphans for the block with the given `ShortHash`.
+    pub fn query_orphan_short_hash(&self, hash: &ShortHash) -> Option<Arc<B>> {
+        let hash = self.short_mappings.get(hash)?;
         self.orphan_pool.get(hash).cloned()
     }
 
@@ -1887,6 +1969,9 @@ impl<B: Block> Chain<B> {
                         // Add block to orphan pool
                         self.orphan_pool.insert(block_hash.clone(), block.clone());
 
+                        // Write to short mappings
+                        self.short_mappings.insert(block_hash.to_short(), block_hash.clone());
+
                         let status =
                             self.attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
                         let mut found_match = None;
@@ -2034,6 +2119,7 @@ impl<B: Block> Chain<B> {
     fn cleanup_paths(&mut self, start: &Hash) {
         // Remove start block and initialize height and previous set
         let start_block = self.orphan_pool.remove(start).unwrap();
+        self.short_mappings.remove(&start.to_short());
         let start_height = start_block.height();
         let mut height = start_height + 1;
         let mut previous_set: HashSet<Hash> = HashSet::new();
@@ -2081,6 +2167,7 @@ impl<B: Block> Chain<B> {
 
         // Remove any information related to the block.
         self.orphan_pool.remove(block_hash);
+        self.short_mappings.remove(&block_hash.to_short());
         self.disconnected_heads_heights.remove(block_hash);
         self.disconnected_tips_mapping.remove(block_hash);
         self.validations_mapping.remove(block_hash);

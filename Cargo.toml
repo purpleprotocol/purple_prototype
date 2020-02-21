@@ -53,7 +53,7 @@ chain = { path = "src/chain" }
 miner = { path = "src/miner" }
 mempool = { path = "src/mempool" }
 reqwest = { version = "0.10.1", features = ["cookies", "json"] }
-mimalloc = "0.1.13"
+mimalloc = "0.1.17"
 
 ['cfg(test)'.chain]
 path = "src/chain"

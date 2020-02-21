@@ -45,7 +45,13 @@ features = ["test"]
 tempdir = "0.3.7"
 rayon = "1.2.0"
 timer = "0.2.0"
+criterion = "0.2.1"
 test-helpers = { path = "../util/test-helpers" }
+
+[[bench]]
+name = "packets_benchmark"
+path = "bench/packets_bench.rs"
+harness = false
 
 [features]
 miner = []

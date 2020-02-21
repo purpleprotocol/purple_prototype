@@ -16,7 +16,28 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod ping_pong;
-pub mod request_peers;
-pub mod transaction_propagation;
-pub mod block_propagation;
+use chain::PowBlock;
+use std::default::Default;
+use std::sync::Arc;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BlockSenderState {
+    /// The `Sender` is ready to send an `AnnounceCheckpoint` or `AnnounceTxBlock` packet.
+    Ready,
+
+    /// The `Sender` is waiting for a `RequestBlock` or `RejectBlock` packet.
+    WaitingResponse(u64, Arc<PowBlock>),
+
+    /// The `Sender` has forwarded the header of a block and is now waiting 
+    /// to be requested transaction data.
+    ForwardedHeader(u64, Arc<PowBlock>),
+
+    /// The state-machine is done.
+    Done,
+}
+
+impl Default for BlockSenderState {
+    fn default() -> Self {
+        BlockSenderState::Ready
+    }
+}
