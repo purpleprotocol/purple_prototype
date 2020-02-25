@@ -23,6 +23,7 @@ use crate::packet::Packet;
 use crate::packets::connect::Connect;
 use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
 use crate::validation::sender::Sender;
+use crate::priority::NetworkPriority;
 use persistence::PersistentDb;
 use crypto::{Nonce, Signature};
 use std::iter;
@@ -307,7 +308,7 @@ pub fn start_peer_list_refresh_interval(
 
                     if let Ok(packet) = result {
                         network
-                            .send_to_peer(&peer_addr, packet.to_bytes())
+                            .send_to_peer(&peer_addr, packet.to_bytes(), NetworkPriority::Medium)
                             .map_err(|err| warn!("Could not send packet to {}, reason: {:?}", peer_addr, err))
                             .unwrap_or(());
                     }

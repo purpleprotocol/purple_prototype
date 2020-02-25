@@ -203,6 +203,7 @@ mod tests {
     use super::*;
     use crate::interface::NetworkInterface;
     use crate::packets::RequestPeers;
+    use crate::priority::NetworkPriority;
     use std::thread;
     use std::time::Duration;
 
@@ -268,7 +269,7 @@ mod tests {
 
             let mut sender = sender.lock();
             let packet = sender.send(3).unwrap();
-            network.send_to_peer(&addr1, packet.to_bytes()).unwrap();
+            network.send_to_peer(&addr1, packet.to_bytes(), NetworkPriority::Medium).unwrap();
         }
 
         // Pause main thread for a bit before

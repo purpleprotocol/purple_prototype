@@ -21,6 +21,7 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
 use crate::validation::receiver::Receiver;
+use crate::priority::NetworkPriority;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use rand::prelude::*;
 use std::io::Cursor;
@@ -80,7 +81,7 @@ impl Packet for Ping {
         debug!("Sending Pong packet to {}", addr);
 
         // Send `Pong` packet back to peer
-        network.send_to_peer(addr, pong.to_bytes())?;
+        network.send_to_peer(addr, pong.to_bytes(), NetworkPriority::Low)?;
 
         debug!("Pong packet sent to {}", addr);
 

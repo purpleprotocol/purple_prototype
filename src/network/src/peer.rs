@@ -19,6 +19,7 @@
 use crate::error::NetworkErr;
 use crate::validation::validator::ProtocolValidator;
 use crate::bootstrap::cache::BootstrapCache;
+use crate::priority::NetworkPriority;
 use crypto::{Hash, NodeId};
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use std::default::Default;
@@ -157,7 +158,7 @@ impl Peer {
     }
 
     /// Attempts to place a packet in the outbound buffer of a `Peer`.
-    pub fn send_packet(&self, packet: Vec<u8>) -> Result<(), NetworkErr> {
+    pub fn send_packet(&self, packet: Vec<u8>, priority: NetworkPriority) -> Result<(), NetworkErr> {
         let mut sender = self.outbound_buffer.as_ref().unwrap().clone();
         sender
             .try_send(packet)
