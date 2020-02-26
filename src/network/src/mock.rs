@@ -88,7 +88,7 @@ impl NetworkInterface for MockNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, None, None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
@@ -237,7 +237,7 @@ impl NetworkInterface for MockNetwork {
             if peers.get(addr).is_none() {
                 peers.insert(
                     addr.clone(),
-                    Peer::new(None, addr.clone(), ConnectionType::Server, None, self.bootstrap_cache.clone()),
+                    Peer::new(None, addr.clone(), ConnectionType::Server, None, None, None, self.bootstrap_cache.clone()),
                 );
             }
 
@@ -375,7 +375,7 @@ impl MockNetwork {
     pub fn connect_no_ping(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, None, None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
