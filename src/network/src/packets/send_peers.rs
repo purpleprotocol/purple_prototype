@@ -203,6 +203,7 @@ mod tests {
     use super::*;
     use crate::interface::NetworkInterface;
     use crate::packets::RequestPeers;
+    use crate::priority::NetworkPriority;
     use std::thread;
     use std::time::Duration;
 
@@ -252,7 +253,7 @@ mod tests {
             network2_c.lock().connect(&addr1).unwrap();
         }
 
-        thread::sleep(Duration::from_millis(1600));
+        thread::sleep(Duration::from_millis(1000));
 
         // Send request peers packet from Peer2 to Peer1
         {
@@ -268,12 +269,12 @@ mod tests {
 
             let mut sender = sender.lock();
             let packet = sender.send(3).unwrap();
-            network.send_to_peer(&addr1, packet.to_bytes()).unwrap();
+            network.send_to_peer(&addr1, packet.to_bytes(), NetworkPriority::Medium).unwrap();
         }
 
         // Pause main thread for a bit before
         // making assertions.
-        thread::sleep(Duration::from_millis(600));
+        thread::sleep(Duration::from_millis(300));
 
         let network1 = network1_cc.lock();
         let network2 = network2_cc.lock();

@@ -23,6 +23,7 @@ use crate::packet::Packet;
 use crate::packets::connect::Connect;
 use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
 use crate::validation::sender::Sender;
+use crate::priority::NetworkPriority;
 use persistence::PersistentDb;
 use crypto::{Nonce, Signature};
 use std::iter;
@@ -36,6 +37,7 @@ use tokio_io_timeout::*;
 use tokio::time;
 use tokio::net::tcp::ReadHalf;
 use tokio::io::{self, BufWriter, BufReader, AsyncReadExt, AsyncWriteExt};
+use tokio::sync::mpsc::error::TryRecvError;
 use rand::prelude::IteratorRandom;
 use bytes::{Bytes, BytesMut};
 
@@ -135,11 +137,21 @@ fn process_connection(
             ConnectionType::Server => info!("Received connection request from {}", addr),
         };
 
-        // Create outbound channel
-        let (outbound_sender, mut outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
+        // Create outbound channels
+        let (low_outbound_sender, mut low_outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
+        let (medium_outbound_sender, mut medium_outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
+        let (high_outbound_sender, mut high_outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
 
         // Create new peer and add it to the peer table
-        let peer = Peer::new(None, addr, client_or_server, Some(outbound_sender), network.bootstrap_cache.clone());
+        let peer = Peer::new(
+            None, 
+            addr, 
+            client_or_server, 
+            Some(low_outbound_sender), 
+            Some(medium_outbound_sender),
+            Some(high_outbound_sender),
+            network.bootstrap_cache.clone()
+        );
 
         let (node_id, skey) = {
             if let Err(NetworkErr::MaximumPeersReached) = network.add_peer(addr, peer.clone()) {
@@ -201,19 +213,63 @@ fn process_connection(
                     }
                 }
         
+                // Poll outbound channels in the order of their priority
                 loop {
-                    match outbound_receiver.recv().await {
-                        Some(packet) => {
+                    match high_outbound_receiver.try_recv() {
+                        Ok(packet) => {
                             if let Err(err) = writer.write(&packet).await {
                                 warn!("Write to {:?} failed: {:?}", addr, err)
                             }
+                            
+                            tokio::task::yield_now().await;
+                            continue;
                         }
         
-                        None => {
+                        Err(TryRecvError::Closed) => {
                             debug!("Write half of {} closed", addr);
                             break;
                         }
+
+                        Err(TryRecvError::Empty) => { } // Do nothing
                     }
+
+                    match medium_outbound_receiver.try_recv() {
+                        Ok(packet) => {
+                            if let Err(err) = writer.write(&packet).await {
+                                warn!("Write to {:?} failed: {:?}", addr, err)
+                            }
+                            
+                            tokio::task::yield_now().await;
+                            continue;
+                        }
+        
+                        Err(TryRecvError::Closed) => {
+                            debug!("Write half of {} closed", addr);
+                            break;
+                        }
+
+                        Err(TryRecvError::Empty) => { } // Do nothing
+                    }
+
+                    match low_outbound_receiver.try_recv() {
+                        Ok(packet) => {
+                            if let Err(err) = writer.write(&packet).await {
+                                warn!("Write to {:?} failed: {:?}", addr, err)
+                            }
+
+                            tokio::task::yield_now().await;
+                            continue;
+                        }
+        
+                        Err(TryRecvError::Closed) => {
+                            debug!("Write half of {} closed", addr);
+                            break;
+                        }
+
+                        Err(TryRecvError::Empty) => { } // Do nothing
+                    }
+
+                    tokio::task::yield_now().await;
                 }
             } => {
                 let network = network_clone3;
@@ -307,7 +363,7 @@ pub fn start_peer_list_refresh_interval(
 
                     if let Ok(packet) = result {
                         network
-                            .send_to_peer(&peer_addr, packet.to_bytes())
+                            .send_to_peer(&peer_addr, packet.to_bytes(), NetworkPriority::Medium)
                             .map_err(|err| warn!("Could not send packet to {}, reason: {:?}", peer_addr, err))
                             .unwrap_or(());
                     }

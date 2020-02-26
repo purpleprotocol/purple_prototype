@@ -27,7 +27,7 @@ use parking_lot::RwLock;
 use chain::{PowBlock, CheckpointBlock, Block, PowChainRef};
 use network::{Network, NetworkInterface};
 use network::packets::ForwardBlock;
-use network::Packet;
+use network::{Packet, NetworkPriority};
 use account::NormalAddress;
 use std::net::SocketAddr;
 use std::borrow::BorrowMut;
@@ -152,7 +152,7 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
                                 debug!("Sending block...");
 
                                 // Send block to all of our peers
-                                network.send_to_all(&packet).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
+                                network.send_to_all(&packet, NetworkPriority::Medium).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
 
                                 // Wait a bit for buffers to flush
                                 thread::sleep_ms(150);

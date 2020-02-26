@@ -19,6 +19,7 @@
 use crate::packet::Packet;
 use crate::packets::ForwardBlock;
 use crate::{Network, NetworkInterface};
+use crate::priority::NetworkPriority;
 use chain::*;
 use tokio::sync::mpsc::Receiver;
 use std::net::SocketAddr;
@@ -48,7 +49,7 @@ pub fn start_block_listeners(
                         let packet =
                             ForwardBlock::new(block);
                         network
-                            .send_to_all_except(&addr, &packet.to_bytes())
+                            .send_to_all_except(&addr, &packet.to_bytes(), NetworkPriority::Medium)
                             .unwrap();
                     }
                     Err(err) => info!( // TODO: Handle chain errors

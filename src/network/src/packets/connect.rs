@@ -20,6 +20,7 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
+use crate::priority::NetworkPriority;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use crypto::NodeId;
 use crypto::{KxPublicKey as KxPk, PublicKey as Pk, SecretKey as Sk, Signature};
@@ -206,7 +207,7 @@ impl Packet for Connect {
                 debug!("Sending connect packet to {}", addr);
                 let mut packet = Connect::new(our_node_id, our_pk.unwrap());
                 packet.sign(network.secret_key());
-                network.send_raw(addr, &packet.to_bytes())?;
+                network.send_raw(addr, &packet.to_bytes(), NetworkPriority::High)?;
             }
 
             // Execute after connect callback

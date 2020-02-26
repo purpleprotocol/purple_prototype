@@ -22,6 +22,7 @@ use crate::packet::Packet;
 use crate::packets::SendPeers;
 use crate::peer::ConnectionType;
 use crate::validation::receiver::Receiver;
+use crate::priority::NetworkPriority;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use rand::prelude::*;
 use std::io::Cursor;
@@ -135,7 +136,7 @@ impl Packet for RequestPeers {
         debug!("Sending SendPeers packet to {}", addr);
 
         // Send `SendPeers` packet back to peer
-        network.send_to_peer(addr, packet.to_bytes())?;
+        network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
 
         debug!("SendPeers packet sent to {}", addr);
         

@@ -44,6 +44,7 @@ mod packet;
 mod peer;
 mod protocol_flow;
 mod validation;
+mod priority;
 
 pub use crate::bootstrap::*;
 pub use crate::connection::*;
@@ -53,6 +54,7 @@ pub use crate::interface::*;
 pub use crate::network::*;
 pub use crate::packet::*;
 pub use crate::peer::*;
+pub use crate::priority::*;
 
 #[cfg(test)]
 use tempdir::TempDir;

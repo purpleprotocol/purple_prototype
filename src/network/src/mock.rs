@@ -23,6 +23,7 @@ use crate::packets::*;
 use crate::peer::{ConnectionType, Peer};
 use crate::validation::sender::Sender as SenderTrait;
 use crate::bootstrap::cache::BootstrapCache;
+use crate::priority::NetworkPriority;
 use persistence::PersistentDb;
 use mempool::Mempool;
 use chain::*;
@@ -87,7 +88,7 @@ impl NetworkInterface for MockNetwork {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, None, None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
@@ -99,7 +100,7 @@ impl NetworkInterface for MockNetwork {
             peers.insert(address.clone(), peer);
         }
 
-        self.send_raw(address, &connect).unwrap();
+        self.send_raw(address, &connect, NetworkPriority::High).unwrap();
         Ok(())
     }
 
@@ -128,7 +129,7 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
-    fn send_to_peer(&self, peer: &SocketAddr, packet: Vec<u8>) -> Result<(), NetworkErr> {
+    fn send_to_peer(&self, peer: &SocketAddr, packet: Vec<u8>, _priority: NetworkPriority) -> Result<(), NetworkErr> {
         let id = if let Some(id) = self.address_mappings.get(peer) {
             id
         } else {
@@ -152,7 +153,7 @@ impl NetworkInterface for MockNetwork {
         }
     }
 
-    fn send_raw(&self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+    fn send_raw(&self, peer: &SocketAddr, packet: &[u8], _priority: NetworkPriority) -> Result<(), NetworkErr> {
         let id = if let Some(id) = self.address_mappings.get(peer) {
             id
         } else {
@@ -167,7 +168,7 @@ impl NetworkInterface for MockNetwork {
         }
     }
 
-    fn send_to_all(&self, packet: &[u8]) -> Result<(), NetworkErr> {
+    fn send_to_all(&self, packet: &[u8], _priority: NetworkPriority) -> Result<(), NetworkErr> {
         if self.mailboxes.is_empty() {
             return Err(NetworkErr::NoPeers);
         }
@@ -186,7 +187,7 @@ impl NetworkInterface for MockNetwork {
         Ok(())
     }
 
-    fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
+    fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8], _priority: NetworkPriority) -> Result<(), NetworkErr> {
         if self.mailboxes.is_empty() {
             return Err(NetworkErr::NoPeers);
         }
@@ -236,7 +237,7 @@ impl NetworkInterface for MockNetwork {
             if peers.get(addr).is_none() {
                 peers.insert(
                     addr.clone(),
-                    Peer::new(None, addr.clone(), ConnectionType::Server, None, self.bootstrap_cache.clone()),
+                    Peer::new(None, addr.clone(), ConnectionType::Server, None, None, None, self.bootstrap_cache.clone()),
                 );
             }
 
@@ -374,7 +375,7 @@ impl MockNetwork {
     pub fn connect_no_ping(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {:?}", address);
 
-        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, self.bootstrap_cache.clone());
+        let mut peer = Peer::new(None, address.clone(), ConnectionType::Client, None, None, None, self.bootstrap_cache.clone());
         let mut connect_packet = Connect::new(self.node_id.clone(), peer.pk.clone());
         connect_packet.sign(&self.secret_key);
         let connect = connect_packet.to_bytes();
@@ -387,7 +388,7 @@ impl MockNetwork {
             peers.insert(address.clone(), peer);
         }
 
-        self.send_raw(address, &connect).unwrap();
+        self.send_raw(address, &connect, NetworkPriority::Low).unwrap();
         Ok(())
     }
 
@@ -430,7 +431,7 @@ impl MockNetwork {
                             let mut packet =
                                 ForwardBlock::new(block);
                             network
-                                .send_to_all_except(&addr, &packet.to_bytes())
+                                .send_to_all_except(&addr, &packet.to_bytes(), NetworkPriority::Low)
                                 .unwrap();
                         }
                         Err(err) => info!(
@@ -474,7 +475,7 @@ impl MockNetwork {
                 network
                     .clone()
                     .lock()
-                    .send_to_peer(&addr, p.to_vec())
+                    .send_to_peer(&addr, p.to_vec(), NetworkPriority::Low)
                     .unwrap()
             });
         }

@@ -23,6 +23,7 @@ use crate::peer::ConnectionType;
 use crate::protocol_flow::transaction_propagation::Pair;
 use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
 use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
+use crate::priority::NetworkPriority;
 use crate::validation::receiver::Receiver;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
@@ -150,7 +151,7 @@ impl Packet for AnnounceTx {
                 debug!("Sending RejectTx packet to {}", addr);
 
                 // Send `RejectTx` packet back to peer
-                network.send_to_peer(addr, packet.to_bytes())?;
+                network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
 
                 debug!("RejectTx packet sent to {}", addr);
 
@@ -161,7 +162,7 @@ impl Packet for AnnounceTx {
                 debug!("Sending RequestTx packet to {}", addr);
 
                 // Send `RequestTx` packet back to peer
-                network.send_to_peer(addr, packet.to_bytes())?;
+                network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
 
                 debug!("RequestTx packet sent to {}", addr);
 

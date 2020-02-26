@@ -24,6 +24,7 @@ use crate::validation::receiver::Receiver;
 use crate::protocol_flow::block_propagation::Pair;
 use crate::protocol_flow::block_propagation::outbound::OutboundPacket;
 use crate::protocol_flow::block_propagation::inbound::InboundPacket;
+use crate::priority::NetworkPriority;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
@@ -150,7 +151,7 @@ impl Packet for AnnounceCheckpoint {
                 debug!("Sending RejectBlock packet to {}", addr);
 
                 // Send `RejectBlock` packet back to peer
-                network.send_to_peer(addr, packet.to_bytes())?;
+                network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
 
                 debug!("RejectBlock packet sent to {}", addr);
 
@@ -161,7 +162,7 @@ impl Packet for AnnounceCheckpoint {
                 debug!("Sending RequestBlock packet to {}", addr);
 
                 // Send `RequestBlock` packet back to peer
-                network.send_to_peer(addr, packet.to_bytes())?;
+                network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
 
                 debug!("RequestBlock packet sent to {}", addr);
 
