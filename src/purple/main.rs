@@ -53,6 +53,7 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::net::IpAddr;
+use std::time::Duration;
 use std::str::FromStr;
 
 #[cfg(not(feature = "mimalloc-allocator"))]
@@ -214,6 +215,15 @@ fn main() {
         None,
     );
 
+    // Fetch default panic hook
+    let hook = std::panic::take_hook();
+
+    // Exit process after panicking
+    std::panic::set_hook(Box::new(move |err| {
+        hook(err);
+        std::process::exit(1);
+    }));
+
     // Start the tokio runtime
     runtime.block_on(async move {
         // Start listening for blocks
@@ -248,7 +258,8 @@ fn main() {
             }
         }
 
-        network::jobs::start_periodic_jobs().await;
+        // Start periodic jobs
+        network::jobs::start_periodic_jobs(network.clone()).await;
     });
 }
 
