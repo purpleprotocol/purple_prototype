@@ -53,7 +53,6 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::net::IpAddr;
-use std::time::Duration;
 use std::str::FromStr;
 
 #[cfg(not(feature = "mimalloc-allocator"))]
