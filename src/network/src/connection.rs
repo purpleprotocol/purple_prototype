@@ -434,6 +434,29 @@ async fn socket_reader(mut network: Network, addr: SocketAddr, mut reader: BufRe
         // Read packet from socket
         let mut packet_buf = BytesMut::with_capacity(header.packet_len as usize);
         reader.read_exact(&mut packet_buf).await?;
+        
+        let bytes_read = packet_buf.len();
+        let network_clone = network.clone();  
+        let addr_clone = addr.clone();
+
+        // Account bytes read
+        tokio::spawn(async move {
+            let bytes_read = bytes_read + crate::common::HEADER_SIZE;
+            let acc = {
+                let peers = network_clone.peers();
+                let peers = peers.read();
+                
+                if let Some(peer) = peers.get(&addr_clone) {
+                    peer.bytes_read.clone()
+                } else {
+                    warn!("Could not find peer {}", addr);
+                    return;
+                }
+            };
+            
+            debug!("Finished reading {} bytes from {}", bytes_read, addr_clone);
+            acc.fetch_add(bytes_read as u64, Ordering::SeqCst);
+        });
 
         // Verify packet CRC32
         async {

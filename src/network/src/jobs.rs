@@ -18,12 +18,33 @@
 
 #![allow(unused)]
 
+use crate::network::Network;
+use crate::interface::NetworkInterface;
 use std::time::Duration;
+use std::sync::atomic::Ordering;
 
 /// Starts jobs that are executed once every ~1 second.
-pub async fn start_periodic_jobs() {
+pub async fn start_periodic_jobs(network: Network) {
     loop {
         debug!("Executing periodic jobs...");
+        tokio::spawn(account_bytes_read_for_peers(network.clone()));
         tokio::time::delay_for(Duration::from_secs(1)).await;
+    }
+}
+
+/// Traverses each peer and sets the amount of bytes read for the last second
+async fn account_bytes_read_for_peers(network: Network) {
+    let peers = network.peers();
+    let peers = peers.read();
+
+    for (_, peer) in peers.iter() {
+        let bytes_read = peer.bytes_read.clone();
+        let past_bytes_read = peer.past_bytes_read.clone();
+
+        tokio::spawn(async move {
+            // Set past bytes read as the current accumulated value
+            let bytes_read = bytes_read.swap(0, Ordering::SeqCst);
+            past_bytes_read.store(bytes_read, Ordering::SeqCst);
+        });
     }
 }
