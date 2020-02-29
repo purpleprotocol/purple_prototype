@@ -22,6 +22,8 @@
 extern crate test_helpers;
 
 #[macro_use]
+extern crate log;
+#[macro_use]
 extern crate quickcheck;
 #[macro_use]
 extern crate enum_repr;

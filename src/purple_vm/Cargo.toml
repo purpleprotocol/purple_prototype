@@ -21,6 +21,8 @@ bin-tools = { path = "../util/bin-tools/" }
 persistence = { path = "../persistence" }
 patricia-trie = "0.3.0"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde"] }
+num-traits = "0.2.11"
+log = "0.4.0"
 
 [dev-dependencies]
 test-helpers = { path = "../util/test-helpers" }

@@ -271,6 +271,40 @@ impl Validator {
 
                                 DEFAULT_TRANSITIONS.to_vec()
                             }
+                            Instruction::i64Wrapi32
+                            | Instruction::f32TruncSignedi32
+                            | Instruction::f32TruncUnsignedi32
+                            | Instruction::f64TruncSignedi32
+                            | Instruction::f64TruncUnsignedi32
+                            | Instruction::i32ExtendSignedi64
+                            | Instruction::i32ExtendUnsignedi64
+                            | Instruction::f32TruncSignedi64
+                            | Instruction::f32TruncUnsignedi64
+                            | Instruction::f64TruncSignedi64
+                            | Instruction::f64TruncUnsignedi64
+                            | Instruction::i32ConvertSignedf32
+                            | Instruction::i32ConvertUnsignedf32
+                            | Instruction::i64ConvertSignedf32
+                            | Instruction::i64ConvertUnsignedf32
+                            | Instruction::f64Demotef32
+                            | Instruction::i32ConvertSignedf64
+                            | Instruction::i32ConvertUnsignedf64
+                            | Instruction::i64ConvertSignedf64
+                            | Instruction::i64ConvertUnsignedf64
+                            | Instruction::f32Promotef64
+                            | Instruction::i32Reinterpretf32
+                            | Instruction::i64Reinterpretf64
+                            | Instruction::f32Reinterpreti32
+                            | Instruction::f64Reinterpreti64 => {
+                                if self.operand_stack.len() != 1
+                                    || !valid_operand_type(&self.operand_stack, op)
+                                {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
+
+                                DEFAULT_TRANSITIONS.to_vec()
+                            }
                             _ => op.transitions(),
                         };
 
@@ -872,6 +906,38 @@ impl Validator {
                 }
             }
         }
+    }
+}
+
+fn valid_operand_type(operand_stack: &Stack<VmType>, op: Instruction) -> bool {
+    let operand = operand_stack.peek();
+    match op {
+        Instruction::i32ExtendSignedi64
+        | Instruction::i32ExtendUnsignedi64
+        | Instruction::i32ConvertSignedf32
+        | Instruction::i32ConvertUnsignedf32
+        | Instruction::i32ConvertSignedf64
+        | Instruction::i32ConvertUnsignedf64
+        | Instruction::i32Reinterpretf32 => operand.is_i32(),
+        Instruction::i64Wrapi32
+        | Instruction::i64ConvertSignedf32
+        | Instruction::i64ConvertUnsignedf32
+        | Instruction::i64ConvertSignedf64
+        | Instruction::i64ConvertUnsignedf64
+        | Instruction::i64Reinterpretf64 => operand.is_i64(),
+        Instruction::f32TruncSignedi32
+        | Instruction::f32TruncUnsignedi32
+        | Instruction::f32TruncSignedi64
+        | Instruction::f32TruncUnsignedi64
+        | Instruction::f32Promotef64
+        | Instruction::f32Reinterpreti32 => operand.is_f32(),
+        Instruction::f64TruncSignedi32
+        | Instruction::f64TruncUnsignedi32
+        | Instruction::f64TruncSignedi64
+        | Instruction::f64TruncUnsignedi64
+        | Instruction::f64Demotef32
+        | Instruction::f64Reinterpreti64 => operand.is_f64(),
+        _ => panic!()
     }
 }
 
@@ -2618,5 +2684,313 @@ mod tests {
     fn it_fails_if_operands_number_differs_from_2_higher_for_rotr() {
         let block: Vec<u8> = get_common_block_3_operands_integer(Instruction::Rotr);
         assert!(!is_valid(block));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_no_operands_are_given_for_any_data_type_conversion_instruction() {
+        let conversions: Vec<Instruction> = vec![Instruction::i64Wrapi32,
+        Instruction::f32TruncSignedi32,
+        Instruction::f32TruncUnsignedi32,
+        Instruction::f64TruncSignedi32,
+        Instruction::f64TruncUnsignedi32,
+        Instruction::i32ExtendSignedi64,
+        Instruction::i32ExtendUnsignedi64,
+        Instruction::f32TruncSignedi64,
+        Instruction::f32TruncUnsignedi64,
+        Instruction::f64TruncSignedi64,
+        Instruction::f64TruncUnsignedi64,
+        Instruction::i32ConvertSignedf32,
+        Instruction::i32ConvertUnsignedf32,
+        Instruction::i64ConvertSignedf32,
+        Instruction::i64ConvertUnsignedf32,
+        Instruction::f64Demotef32,
+        Instruction::i32ConvertSignedf64,
+        Instruction::i32ConvertUnsignedf64,
+        Instruction::i64ConvertSignedf64,
+        Instruction::i64ConvertUnsignedf64,
+        Instruction::f32Promotef64,
+        Instruction::i32Reinterpretf32,
+        Instruction::i64Reinterpretf64,
+        Instruction::f32Reinterpreti32,
+        Instruction::f64Reinterpreti64];
+
+        for i in conversions {
+            let block: Vec<u8> = get_no_operands_block(i);
+            assert!(!is_valid(block));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_if_more_than_1_operand_is_given_for_any_data_type_conversion_instruction() {
+        let conversions: Vec<Instruction> = vec![Instruction::i64Wrapi32,
+        Instruction::f32TruncSignedi32,
+        Instruction::f32TruncUnsignedi32,
+        Instruction::f64TruncSignedi32,
+        Instruction::f64TruncUnsignedi32,
+        Instruction::i32ExtendSignedi64,
+        Instruction::i32ExtendUnsignedi64,
+        Instruction::f32TruncSignedi64,
+        Instruction::f32TruncUnsignedi64,
+        Instruction::f64TruncSignedi64,
+        Instruction::f64TruncUnsignedi64,
+        Instruction::i32ConvertSignedf32,
+        Instruction::i32ConvertUnsignedf32,
+        Instruction::i64ConvertSignedf32,
+        Instruction::i64ConvertUnsignedf32,
+        Instruction::f64Demotef32,
+        Instruction::i32ConvertSignedf64,
+        Instruction::i32ConvertUnsignedf64,
+        Instruction::i64ConvertSignedf64,
+        Instruction::i64ConvertUnsignedf64,
+        Instruction::f32Promotef64,
+        Instruction::i32Reinterpretf32,
+        Instruction::i64Reinterpretf64,
+        Instruction::f32Reinterpreti32,
+        Instruction::f64Reinterpreti64];
+
+        for i in conversions {
+            let block: Vec<u8> = get_no_operands_block(i);
+            assert!(!is_valid(block));
+        }
+    }
+
+    fn get_common_block_i32_operand(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            instruction.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
+    fn get_common_block_i64_operand(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x01,
+            0x01,
+            instruction.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
+    fn get_common_block_f32_operand(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            instruction.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
+    fn get_common_block_f64_operand(instruction: Instruction) -> Vec<u8> {
+        vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f64Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x01,
+            0x01,
+            instruction.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr(),
+        ]
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_validates_i32_conversions_with_i32_operand() {
+        let conversions: Vec<Instruction> = vec![Instruction::i32ExtendSignedi64,
+        Instruction::i32ExtendUnsignedi64,
+        Instruction::i32ConvertSignedf32,
+        Instruction::i32ConvertUnsignedf32,
+        Instruction::i32ConvertSignedf64,
+        Instruction::i32ConvertUnsignedf64,
+        Instruction::i32Reinterpretf32];
+
+        for i in conversions {
+            let block: Vec<u8> = get_common_block_i32_operand(i);
+            assert!(is_valid(block));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_i32_conversion_with_wrong_operand() {
+        let conversions: Vec<Instruction> = vec![Instruction::i32ExtendSignedi64,
+        Instruction::i32ExtendUnsignedi64,
+        Instruction::i32ConvertSignedf32,
+        Instruction::i32ConvertUnsignedf32,
+        Instruction::i32ConvertSignedf64,
+        Instruction::i32ConvertUnsignedf64,
+        Instruction::i32Reinterpretf32];
+
+        for i in conversions {
+            let block: Vec<u8> = get_common_block_i64_operand(i);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_block_f32_operand(i);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_block_f64_operand(i);
+            assert!(!is_valid(block));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_validates_i64_conversions_with_i64_operand() {
+        let conversions: Vec<Instruction> = vec![Instruction::i64Wrapi32,
+        Instruction::i64ConvertSignedf32,
+        Instruction::i64ConvertUnsignedf32,
+        Instruction::i64ConvertSignedf64,
+        Instruction::i64ConvertUnsignedf64,
+        Instruction::i64Reinterpretf64];
+
+        for i in conversions {
+            let block: Vec<u8> = get_common_block_i64_operand(i);
+            assert!(is_valid(block));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_i64_conversion_with_wrong_operand() {
+        let conversions: Vec<Instruction> = vec![Instruction::i64Wrapi32,
+        Instruction::i64ConvertSignedf32,
+        Instruction::i64ConvertUnsignedf32,
+        Instruction::i64ConvertSignedf64,
+        Instruction::i64ConvertUnsignedf64,
+        Instruction::i64Reinterpretf64];
+
+        for i in conversions {
+            let block: Vec<u8> = get_common_block_i32_operand(i);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_block_f32_operand(i);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_block_f64_operand(i);
+            assert!(!is_valid(block));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_validates_f32_conversions_with_f32_operand() {
+        let conversions: Vec<Instruction> = vec![Instruction::f32TruncSignedi32,
+        Instruction::f32TruncUnsignedi32,
+        Instruction::f32TruncSignedi64,
+        Instruction::f32TruncUnsignedi64,
+        Instruction::f32Promotef64,
+        Instruction::f32Reinterpreti32];
+
+        for i in conversions {
+            let block: Vec<u8> = get_common_block_f32_operand(i);
+            assert!(is_valid(block));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_f32_conversion_with_wrong_operand() {
+        let conversions: Vec<Instruction> = vec![Instruction::f32TruncSignedi32,
+        Instruction::f32TruncUnsignedi32,
+        Instruction::f32TruncSignedi64,
+        Instruction::f32TruncUnsignedi64,
+        Instruction::f32Promotef64,
+        Instruction::f32Reinterpreti32];
+
+        for i in conversions {
+            let block: Vec<u8> = get_common_block_i32_operand(i);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_block_i64_operand(i);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_block_f64_operand(i);
+            assert!(!is_valid(block));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_validates_f64_conversions_with_f64_operand() {
+        let conversions: Vec<Instruction> = vec![Instruction::f64TruncSignedi32,
+        Instruction::f64TruncUnsignedi32,
+        Instruction::f64TruncSignedi64,
+        Instruction::f64TruncUnsignedi64,
+        Instruction::f64Demotef32,
+        Instruction::f64Reinterpreti64];
+
+        for i in conversions {
+            let block: Vec<u8> = get_common_block_f64_operand(i);
+            assert!(is_valid(block));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_f64_conversion_with_wrong_operand() {
+        let conversions: Vec<Instruction> = vec![Instruction::f64TruncSignedi32,
+        Instruction::f64TruncUnsignedi32,
+        Instruction::f64TruncSignedi64,
+        Instruction::f64TruncUnsignedi64,
+        Instruction::f64Demotef32,
+        Instruction::f64Reinterpreti64];
+
+        for i in conversions {
+            let block: Vec<u8> = get_common_block_i32_operand(i);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_block_i64_operand(i);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_block_f32_operand(i);
+            assert!(!is_valid(block));
+        }
     }
 }
