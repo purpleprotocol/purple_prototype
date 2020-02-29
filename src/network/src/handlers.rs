@@ -18,13 +18,13 @@
 
 use crate::packet::Packet;
 use crate::packets::ForwardBlock;
-use crate::{Network, NetworkInterface};
 use crate::priority::NetworkPriority;
+use crate::{Network, NetworkInterface};
 use chain::*;
-use tokio::sync::mpsc::Receiver;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc::Receiver;
 use tokio::time::Interval;
 
 /// Listens for blocks on chain receivers and
@@ -46,13 +46,13 @@ pub fn start_block_listeners(
                 match chain_result {
                     Ok(()) => {
                         // Forward block
-                        let packet =
-                            ForwardBlock::new(block);
+                        let packet = ForwardBlock::new(block);
                         network
                             .send_to_all_except(&addr, &packet.to_bytes(), NetworkPriority::Medium)
                             .unwrap();
                     }
-                    Err(err) => info!( // TODO: Handle chain errors
+                    Err(err) => info!(
+                        // TODO: Handle chain errors
                         "Chain Error for block {:?} with height {}: {:?}",
                         block.block_hash().unwrap(),
                         block.height(),

@@ -19,9 +19,9 @@
 use account::{Address, Balance, NormalAddress};
 use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
-use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{DbHasher, Codec};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
+use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
+use persistence::{Codec, DbHasher};
 use rand::Rng;
 use std::io::Cursor;
 
@@ -34,7 +34,7 @@ pub struct CreateUnique {
     pub(crate) creator: Pk,
 
     /// The next address of the creator
-    pub(crate) next_address: NormalAddress, 
+    pub(crate) next_address: NormalAddress,
 
     /// The receiver of the asset
     pub(crate) receiver: Address,
@@ -61,9 +61,8 @@ pub struct CreateUnique {
     // Nonce
     pub(crate) nonce: u64,
 
-    
     pub(crate) hash: Option<Hash>,
-    
+
     pub(crate) signature: Option<Signature>,
 }
 
@@ -159,11 +158,7 @@ impl CreateUnique {
         let fee = self.fee.to_bytes();
         let fee_len = fee.len();
         let nonce = &self.nonce;
-        let currency_flag = if asset_hash == fee_hash {
-            1
-        } else {
-            0
-        };
+        let currency_flag = if asset_hash == fee_hash { 1 } else { 0 };
 
         // Write to buffer
         buf.write_u8(tx_type).unwrap();
@@ -248,7 +243,7 @@ impl CreateUnique {
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {
-                result 
+                result
             } else {
                 return Err("Bad currency flag value");
             }

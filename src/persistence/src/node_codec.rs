@@ -19,13 +19,13 @@
   https://github.com/paritytech/parity-ethereum/blob/c313039526269f4690f6f3ea006b32f2d81ee6ab/util/patricia-trie-ethereum/src/rlp_node_codec.rs
 */
 
+use crate::DbHasher;
 use crypto::ShortHash;
 use elastic_array::ElasticArray128;
 use hashdb::Hasher;
 use patricia_trie::node::Node;
 use patricia_trie::{ChildReference, NibbleSlice, NodeCodec};
 use rlp::{DecoderError, Prototype, Rlp, RlpStream};
-use crate::DbHasher;
 
 pub struct Codec;
 

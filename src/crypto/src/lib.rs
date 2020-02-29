@@ -25,7 +25,6 @@ extern crate bin_tools;
 pub extern crate crc32fast;
 pub use blake_hasher::*;
 pub use hash::*;
-pub use short_hash::*;
 pub use node_id::*;
 pub use rust_base58::base58::*;
 pub use rust_sodium::crypto::aead;
@@ -36,14 +35,14 @@ pub use rust_sodium::crypto::kx::{
     SessionKey,
 };
 pub use rust_sodium::crypto::sign::{gen_keypair, PublicKey, SecretKey};
-pub use signature::*;
 use rust_sodium::crypto::sign::{keypair_from_seed, Seed};
-
+pub use short_hash::*;
+pub use signature::*;
 
 mod blake_hasher;
 mod hash;
-mod short_hash;
 mod node_id;
+mod short_hash;
 mod signature;
 
 use rust_sodium::crypto::sign::{sign_detached, verify_detached};

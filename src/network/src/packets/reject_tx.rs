@@ -20,13 +20,13 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
-use crate::protocol_flow::transaction_propagation::Pair;
 use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
+use crate::protocol_flow::transaction_propagation::Pair;
 use crate::validation::sender::Sender;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
-use crypto::{ShortHash, PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -46,10 +46,7 @@ pub struct RejectTx {
 
 impl RejectTx {
     pub fn new(nonce: u64, status: TxRejectStatus) -> RejectTx {
-        RejectTx { 
-            nonce,
-            status,
-        }
+        RejectTx { nonce, status }
     }
 }
 
@@ -94,7 +91,7 @@ impl Packet for RejectTx {
                 0 => TxRejectStatus::Witnessed,
                 1 => TxRejectStatus::MempoolFull,
                 2 => TxRejectStatus::NoMempool,
-                _ => return Err(NetworkErr::BadFormat)
+                _ => return Err(NetworkErr::BadFormat),
             }
         } else {
             return Err(NetworkErr::BadFormat);
@@ -108,10 +105,7 @@ impl Packet for RejectTx {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = RejectTx { 
-            nonce, 
-            status,
-        };
+        let packet = RejectTx { nonce, status };
 
         Ok(Arc::new(packet))
     }

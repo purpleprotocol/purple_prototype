@@ -31,7 +31,7 @@ impl ContractAddress {
     pub fn new(addr: Hash) -> ContractAddress {
         let mut addr_bytes = [0; 33];
         let mut idx = 1;
-        
+
         addr_bytes[0] = Self::ADDR_TYPE;
 
         for byte in &addr.0 {
@@ -73,13 +73,14 @@ impl ContractAddress {
         }
     }
 
-
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.to_vec()
     }
 }
 
-fn unsize<T>(x: &[T]) -> &[T] { x }
+fn unsize<T>(x: &[T]) -> &[T] {
+    x
+}
 
 impl PartialEq for ContractAddress {
     fn eq(&self, other: &ContractAddress) -> bool {
@@ -87,7 +88,7 @@ impl PartialEq for ContractAddress {
     }
 }
 
-impl Eq for ContractAddress { }
+impl Eq for ContractAddress {}
 
 impl HashTrait for ContractAddress {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -114,7 +115,7 @@ impl Arbitrary for ContractAddress {
 
         let mut addr_bytes = [0; 33];
         let mut idx = 1;
-        
+
         addr_bytes[0] = Self::ADDR_TYPE;
 
         for byte in &bytes {

@@ -18,9 +18,9 @@
 
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
-use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{DbHasher, Codec};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
+use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
+use persistence::{Codec, DbHasher};
 use rand::Rng;
 use std::io::Cursor;
 use std::str;
@@ -51,7 +51,7 @@ impl Send {
             return false;
         }
 
-        // TODO: Signature verification should be done in batches 
+        // TODO: Signature verification should be done in batches
         // and happen before validation.
         if !self.verify_sig() {
             return false;
@@ -79,7 +79,7 @@ impl Send {
         // Calculate address mapping key
         //
         // An address mapping is a mapping between
-        // the account's signing address and an 
+        // the account's signing address and an
         // account's receiving address.
         //
         // They key of the address mapping has the following format:
@@ -93,9 +93,9 @@ impl Send {
             Err(err) => panic!(err),
         };
 
-        // Do not allow address re-usage 
+        // Do not allow address re-usage
         if self.next_address == permanent_addr {
-            return false
+            return false;
         }
 
         // Calculate nonce key
@@ -186,7 +186,7 @@ impl Send {
         // Calculate address mapping key
         //
         // An address mapping is a mapping between
-        // the account's signing address and an 
+        // the account's signing address and an
         // account's receiving address.
         //
         // They key of the address mapping has the following format:
@@ -264,7 +264,8 @@ impl Send {
 
                     // Update sender address mapping
                     trie.remove(&from_addr_mapping_key).unwrap();
-                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap();
+                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes())
+                        .unwrap();
                 } else {
                     // The transaction's fee is paid in a different currency
                     // than the one being transferred so we retrieve both balances.
@@ -310,7 +311,8 @@ impl Send {
 
                     // Update sender address mapping
                     trie.remove(&from_addr_mapping_key).unwrap();
-                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap();
+                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes())
+                        .unwrap();
                 }
             }
             Ok(None) => {
@@ -350,11 +352,13 @@ impl Send {
                         trie.insert(to_cur_key, &receiver_balance.to_bytes())
                             .unwrap();
                         trie.insert(&from_nonce_key, &from_nonce).unwrap();
-                        trie.insert(&to_addr_mapping_key, self.to.as_bytes()).unwrap();
+                        trie.insert(&to_addr_mapping_key, self.to.as_bytes())
+                            .unwrap();
 
                         // Update sender address mapping
                         trie.remove(&from_addr_mapping_key).unwrap();
-                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap();
+                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes())
+                            .unwrap();
                     } else {
                         // The transaction's fee is paid in a different currency
                         // than the one being transferred so we retrieve both balances.
@@ -394,11 +398,13 @@ impl Send {
                         trie.insert(to_cur_key, &receiver_balance.to_bytes())
                             .unwrap();
                         trie.insert(&from_nonce_key, &from_nonce).unwrap();
-                        trie.insert(&to_addr_mapping_key, self.to.as_bytes()).unwrap();
+                        trie.insert(&to_addr_mapping_key, self.to.as_bytes())
+                            .unwrap();
 
                         // Update sender address mapping
                         trie.remove(&from_addr_mapping_key).unwrap();
-                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes()).unwrap();
+                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes())
+                            .unwrap();
                     }
                 } else {
                     panic!("The receiving account does not exist and it's address is not a normal one!")
@@ -464,11 +470,7 @@ impl Send {
         let asset_hash = &self.asset_hash.0;
         let fee_hash = &self.fee_hash.0;
         let nonce = &self.nonce;
-        let currency_flag = if asset_hash == fee_hash {
-            1
-        } else {
-            0
-        };
+        let currency_flag = if asset_hash == fee_hash { 1 } else { 0 };
 
         let fee_len = fee.len();
         let amount_len = amount.len();
@@ -534,7 +536,7 @@ impl Send {
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {
-                result 
+                result
             } else {
                 return Err("Bad currency flag value");
             }

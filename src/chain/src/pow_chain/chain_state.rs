@@ -17,23 +17,23 @@
 */
 
 use crate::chain::ChainErr;
-use crate::types::*;
 use crate::pow_chain::block::GENESIS_HASH_KEY;
-use transactions::Genesis;
-use patricia_trie::{TrieDB, TrieDBMut, Trie, TrieMut};
-use persistence::{PersistentDb, DbHasher, Codec};
+use crate::types::*;
 use account::Address;
-use crypto::{Hash, ShortHash, NodeId};
+use crypto::{Hash, NodeId, ShortHash};
 use hashbrown::{HashMap, HashSet};
-use transactions::Tx;
-use std::sync::Arc;
+use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
+use persistence::{Codec, DbHasher, PersistentDb};
 use std::collections::VecDeque;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use transactions::Genesis;
+use transactions::Tx;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum BlockType {
     Checkpoint,
-    Transaction
+    Transaction,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -58,7 +58,7 @@ pub struct PowChainState {
     pub(crate) current_validator: Option<NodeId>,
 
     /// Number of transaction blocks left that the
-    /// current validator is allowed to append. This 
+    /// current validator is allowed to append. This
     /// field is `None` if we accept checkpoint blocks.
     pub(crate) txs_blocks_left: Option<u32>,
 
@@ -98,7 +98,7 @@ impl PowChainState {
             height: 0,
             difficulty: 0,
             edge_bits: miner::MIN_EDGE_BITS,
-            accepts: BlockType::Checkpoint, 
+            accepts: BlockType::Checkpoint,
             current_validator: None,
             txs_blocks_left: None,
             state_root,
@@ -110,13 +110,24 @@ impl PowChainState {
     /// from an existing `PersistentDb` instance
     pub fn reload(db: PersistentDb) -> Result<Self, &'static str> {
         let mut chain_state = Self::genesis(db.clone());
-        let encoded_height = db.retrieve(Self::HEIGHT_KEY).ok_or("Could not retrieve height from disk!")?;
-        let height = decode_be_u64!(encoded_height).map_err(|_| "Invalid height stored on disk!")?;
-        let encoded_difficulty = db.retrieve(Self::DIFFICULTY_KEY).ok_or("Could not retrieve difficulty from disk!")?;
-        let difficulty = decode_be_u64!(encoded_difficulty).map_err(|_| "Invalid difficulty stored on disk!")?;
-        let encoded_edge_bits = db.retrieve(Self::EDGE_BITS_KEY).ok_or("Could not retrieve edge bits from disk!")?;
-        let edge_bits = decode_u8!(encoded_edge_bits).map_err(|_| "Invalid edge bits stored on disk!")?;
-        let last_checkpoint = db.retrieve(Self::LAST_CHECKPOINT_KEY).ok_or("Could not retrieve last checkpoint from disk!")?;
+        let encoded_height = db
+            .retrieve(Self::HEIGHT_KEY)
+            .ok_or("Could not retrieve height from disk!")?;
+        let height =
+            decode_be_u64!(encoded_height).map_err(|_| "Invalid height stored on disk!")?;
+        let encoded_difficulty = db
+            .retrieve(Self::DIFFICULTY_KEY)
+            .ok_or("Could not retrieve difficulty from disk!")?;
+        let difficulty =
+            decode_be_u64!(encoded_difficulty).map_err(|_| "Invalid difficulty stored on disk!")?;
+        let encoded_edge_bits = db
+            .retrieve(Self::EDGE_BITS_KEY)
+            .ok_or("Could not retrieve edge bits from disk!")?;
+        let edge_bits =
+            decode_u8!(encoded_edge_bits).map_err(|_| "Invalid edge bits stored on disk!")?;
+        let last_checkpoint = db
+            .retrieve(Self::LAST_CHECKPOINT_KEY)
+            .ok_or("Could not retrieve last checkpoint from disk!")?;
         let last_checkpoint = if last_checkpoint.len() == crypto::HASH_BYTES {
             let mut hash = [0; crypto::HASH_BYTES];
             hash.copy_from_slice(&last_checkpoint);
@@ -125,7 +136,9 @@ impl PowChainState {
             return Err("Invalid last checkpoint stored on disk!");
         };
 
-        let state_root = db.retrieve(PersistentDb::ROOT_HASH_KEY).ok_or("Could not retrieve state root from disk!")?;
+        let state_root = db
+            .retrieve(PersistentDb::ROOT_HASH_KEY)
+            .ok_or("Could not retrieve state root from disk!")?;
         let state_root = if state_root.len() == crypto::SHORT_HASH_BYTES {
             let mut hash = [0; crypto::SHORT_HASH_BYTES];
             hash.copy_from_slice(&state_root);
@@ -134,14 +147,17 @@ impl PowChainState {
             return Err("Invalid state root stored on disk!");
         };
 
-        let current_validator = if let Some(validator_id) = db.retrieve(Self::CURRENT_VALIDATOR_KEY) {
+        let current_validator = if let Some(validator_id) = db.retrieve(Self::CURRENT_VALIDATOR_KEY)
+        {
             Some(NodeId::from_bytes(&validator_id)?)
         } else {
             None
         };
 
-        let txs_blocks_left = if let Some(txs_blocks_left) = db.retrieve(Self::TXS_BLOCKS_LEFT_KEY) {
-            let txs_blocks_left = decode_be_u32!(&txs_blocks_left).map_err(|_| "Invalid blocks left stored on disk!")?;
+        let txs_blocks_left = if let Some(txs_blocks_left) = db.retrieve(Self::TXS_BLOCKS_LEFT_KEY)
+        {
+            let txs_blocks_left = decode_be_u32!(&txs_blocks_left)
+                .map_err(|_| "Invalid blocks left stored on disk!")?;
             Some(txs_blocks_left)
         } else {
             None
@@ -179,23 +195,27 @@ impl Flushable for PowChainState {
     fn flush(&mut self) -> Result<(), ChainErr> {
         // Write chain state metadata to the `PersistentDb` instance
         self.db.put(Self::HEIGHT_KEY, &encode_be_u64!(self.height));
-        self.db.put(Self::DIFFICULTY_KEY, &encode_be_u64!(self.difficulty));
+        self.db
+            .put(Self::DIFFICULTY_KEY, &encode_be_u64!(self.difficulty));
         self.db.put(Self::EDGE_BITS_KEY, &[self.edge_bits]);
-        self.db.put(Self::LAST_CHECKPOINT_KEY, &self.last_checkpoint.0);
+        self.db
+            .put(Self::LAST_CHECKPOINT_KEY, &self.last_checkpoint.0);
         self.db.put(PersistentDb::ROOT_HASH_KEY, &self.state_root.0);
-        
+
         if let Some(current_validator) = &self.current_validator {
             assert_eq!(self.accepts, BlockType::Transaction);
-            self.db.put(Self::CURRENT_VALIDATOR_KEY, &(current_validator.0).0);
+            self.db
+                .put(Self::CURRENT_VALIDATOR_KEY, &(current_validator.0).0);
         }
 
         if let Some(txs_blocks_left) = &self.txs_blocks_left {
             assert_eq!(self.accepts, BlockType::Transaction);
-            self.db.put(Self::TXS_BLOCKS_LEFT_KEY, &encode_be_u32!(*txs_blocks_left));
+            self.db
+                .put(Self::TXS_BLOCKS_LEFT_KEY, &encode_be_u32!(*txs_blocks_left));
         }
 
         // Write reload flag which tells us if the underlying
-        // db instance is fresh or not i.e. the reload flag 
+        // db instance is fresh or not i.e. the reload flag
         // would be missing.
         if self.db.retrieve(PersistentDb::RELOAD_FLAG).is_none() {
             self.db.put(PersistentDb::RELOAD_FLAG, &[])
@@ -232,7 +252,9 @@ impl StateInterface for PowChainState {
     }
 
     fn apply_tx(&mut self, tx: Arc<Tx>) {
-        let mut trie = TrieDBMut::<DbHasher, Codec>::from_existing(&mut self.db, &mut self.state_root).unwrap();
+        let mut trie =
+            TrieDBMut::<DbHasher, Codec>::from_existing(&mut self.db, &mut self.state_root)
+                .unwrap();
         tx.apply(&mut trie);
     }
 }
@@ -246,7 +268,7 @@ mod tests {
     fn it_reloads_state_from_disk_no_validator() {
         let mut db = test_helpers::init_tempdb();
         let mut chain_state = PowChainState::genesis(db.clone());
-    
+
         // Override genesis values
         chain_state.height = 10;
         chain_state.difficulty = 6;
@@ -268,7 +290,7 @@ mod tests {
         let mut chain_state = PowChainState::genesis(db.clone());
         let identity = Identity::new();
         let node_id = NodeId(*identity.pkey());
-    
+
         // Override genesis values
         chain_state.height = 10;
         chain_state.difficulty = 6;

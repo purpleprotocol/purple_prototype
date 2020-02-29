@@ -19,9 +19,9 @@
 use crate::chain::ChainErr;
 use account::Address;
 use crypto::ShortHash;
-use transactions::Tx;
-use std::sync::Arc;
 use std::fmt::Debug;
+use std::sync::Arc;
+use transactions::Tx;
 
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub enum OrphanType {

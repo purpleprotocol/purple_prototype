@@ -18,11 +18,11 @@
 
 use account::{Address, Balance, ContractAddress, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
-use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{DbHasher, Codec};
-use rand::Rng;
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
+use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
+use persistence::{Codec, DbHasher};
 use purple_vm::Gas;
+use rand::Rng;
 use std::io::Cursor;
 use std::str;
 
@@ -123,11 +123,7 @@ impl Call {
         let fee = self.fee.to_bytes();
         let inputs = self.inputs.as_bytes();
         let nonce = &self.nonce;
-        let currency_flag = if asset_hash == fee_hash {
-            1
-        } else {
-            0
-        };
+        let currency_flag = if asset_hash == fee_hash { 1 } else { 0 };
 
         let gas_limit_len = gas_limit.len();
         let gas_price_len = gas_price.len();
@@ -227,7 +223,7 @@ impl Call {
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {
-                result 
+                result
             } else {
                 return Err("Bad currency flag value");
             }

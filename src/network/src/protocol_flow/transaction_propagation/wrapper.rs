@@ -17,13 +17,13 @@
 */
 
 use crate::protocol_flow::transaction_propagation::*;
-use parking_lot::Mutex;
 use dashmap::DashMap;
-use std::sync::Arc;
+use parking_lot::Mutex;
 use std::default::Default;
+use std::sync::Arc;
 
 /// The pairs buffer size. This number represents
-/// the maximum amount of transactions that can be 
+/// the maximum amount of transactions that can be
 /// concurrently propagated at the same time for one
 /// peer.
 pub const TX_PAIRS_BUFFER_SIZE: usize = 8000;

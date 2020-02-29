@@ -17,11 +17,11 @@
 */
 
 use crate::error::NetworkErr;
-use crate::packets::*;
 use crate::interface::NetworkInterface;
-use crate::protocol_flow::transaction_propagation::receiver_state::TxReceiverState;
-use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
+use crate::packets::*;
 use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
+use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
+use crate::protocol_flow::transaction_propagation::receiver_state::TxReceiverState;
 use crate::validation::receiver::Receiver;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -32,7 +32,12 @@ pub struct TxReceiver {
 }
 
 impl Receiver<OutboundPacket, InboundPacket> for TxReceiver {
-    fn receive<N: NetworkInterface>(&mut self, network: &N, _sender: &SocketAddr, packet: &OutboundPacket) -> Result<InboundPacket, NetworkErr> {
+    fn receive<N: NetworkInterface>(
+        &mut self,
+        network: &N,
+        _sender: &SocketAddr,
+        packet: &OutboundPacket,
+    ) -> Result<InboundPacket, NetworkErr> {
         match (&self.state, packet) {
             (TxReceiverState::Ready, OutboundPacket::AnnounceTx(packet)) => {
                 if let Some(mempool) = network.mempool_ref() {
@@ -43,7 +48,7 @@ impl Receiver<OutboundPacket, InboundPacket> for TxReceiver {
                         // Reject the transaction as it already exists in the mempool
                         let packet = RejectTx::new(packet.nonce, TxRejectStatus::Witnessed);
                         let packet = InboundPacket::RejectTx(Arc::new(packet));
-                    
+
                         self.state = TxReceiverState::Done;
                         Ok(packet)
                     } else {
@@ -53,7 +58,7 @@ impl Receiver<OutboundPacket, InboundPacket> for TxReceiver {
                         // Request the announce transaction
                         let packet = RequestTx::new(nonce);
                         let packet = InboundPacket::RequestTx(Arc::new(packet));
-                    
+
                         self.state = TxReceiverState::WaitingTx(nonce, tx_hash);
                         Ok(packet)
                     }
@@ -61,7 +66,7 @@ impl Receiver<OutboundPacket, InboundPacket> for TxReceiver {
                     // Reject the transaction as we have no mempool set
                     let packet = RejectTx::new(packet.nonce, TxRejectStatus::NoMempool);
                     let packet = InboundPacket::RejectTx(Arc::new(packet));
-                
+
                     self.state = TxReceiverState::Done;
                     Ok(packet)
                 }
@@ -74,12 +79,14 @@ impl Receiver<OutboundPacket, InboundPacket> for TxReceiver {
                     // Append the transaction to the mempool
                     let mempool = network.mempool_ref().unwrap();
                     let mut mempool = mempool.write();
-                    
+
                     mempool
                         .append_tx(packet.tx.clone())
-                        .map_err(|err| warn!("Could not append tx {:?}! Reason: {:?}", tx_hash, err))
+                        .map_err(|err| {
+                            warn!("Could not append tx {:?}! Reason: {:?}", tx_hash, err)
+                        })
                         .unwrap_or(());
- 
+
                     self.state = TxReceiverState::Done;
                     Ok(InboundPacket::None)
                 } else {

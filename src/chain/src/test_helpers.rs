@@ -23,7 +23,7 @@ use crate::pow_chain::block::*;
 use crate::pow_chain::chain::*;
 use crate::pow_chain::PowChainState;
 use account::NormalAddress;
-use crypto::{NodeId, Hash};
+use crypto::{Hash, NodeId};
 use graphlib::{Graph, VertexId};
 use hashbrown::{HashMap, HashSet};
 use miner::Proof;

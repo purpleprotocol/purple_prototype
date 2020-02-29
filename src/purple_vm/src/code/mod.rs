@@ -21,12 +21,12 @@ pub mod import;
 pub mod transition;
 mod validator;
 
+use self::validator::Validator;
 use crate::function::Function;
 use crate::import::Import;
 use crate::instruction_set::Instruction;
 use crate::module::Module;
 use crate::primitives::r#type::VmType;
-use self::validator::Validator;
 use byteorder::{BigEndian, ReadBytesExt};
 use hashbrown::HashSet;
 use std::hash::Hash;

@@ -21,14 +21,14 @@
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
+use crate::packets::forward_tx_block_header::{IBLT_C_CONST, IBLT_R_CONST};
 use crate::peer::ConnectionType;
 use crate::validation::sender::Sender;
-use crate::packets::forward_tx_block_header::{IBLT_C_CONST, IBLT_R_CONST};
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bloom::Bloom;
-use rand::Rng;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::NodeId;
 use crypto::ShortHash;
+use rand::Rng;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -37,7 +37,7 @@ use std::sync::Arc;
 pub struct RequestMissingTxs {
     pub(crate) nonce: u64,
     pub(crate) block_hash: ShortHash,
-    pub(crate) tx_filter: Bloom
+    pub(crate) tx_filter: Bloom,
 }
 
 impl RequestMissingTxs {
@@ -52,7 +52,7 @@ impl RequestMissingTxs {
             tx_filter.set(&tx_hash.0);
         }
 
-        RequestMissingTxs { 
+        RequestMissingTxs {
             nonce: rng.gen(),
             tx_filter,
             block_hash,
@@ -75,7 +75,9 @@ impl Packet for RequestMissingTxs {
         // 4) Block hash        - 8bytes
         // 4) Tx filter         - Binary of bloom filter length
         buffer.write_u8(packet_type).unwrap();
-        buffer.write_u16::<BigEndian>(tx_filter.len() as u16).unwrap();
+        buffer
+            .write_u16::<BigEndian>(tx_filter.len() as u16)
+            .unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
         buffer.extend_from_slice(&self.block_hash.0);
         buffer.extend_from_slice(&tx_filter);
@@ -134,8 +136,8 @@ impl Packet for RequestMissingTxs {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = RequestMissingTxs { 
-            nonce, 
+        let packet = RequestMissingTxs {
+            nonce,
             tx_filter,
             block_hash,
         };

@@ -32,7 +32,12 @@ impl Receiver<Ping, Pong> for PingPongReceiver {
     /// Attempts to receive a packet and outputs a new packet
     /// to be sent back if the receiver is able to receive a
     /// packet.
-    fn receive<N: NetworkInterface>(&mut self, _network: &N, _sender: &SocketAddr, packet: &Ping) -> Result<Pong, NetworkErr> {
+    fn receive<N: NetworkInterface>(
+        &mut self,
+        _network: &N,
+        _sender: &SocketAddr,
+        packet: &Ping,
+    ) -> Result<Pong, NetworkErr> {
         if let PingPongReceiverState::Ready = self.state {
             Ok(Pong::new(packet.nonce))
         } else {

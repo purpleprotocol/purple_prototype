@@ -21,7 +21,7 @@ pub mod normal;
 
 use addresses::contract::*;
 use addresses::normal::*;
-use crypto::{PublicKey, FromBase58};
+use crypto::{FromBase58, PublicKey};
 use std::fmt;
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]

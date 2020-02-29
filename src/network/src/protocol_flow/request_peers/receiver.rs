@@ -16,15 +16,15 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::bootstrap::cache::BootstrapCache;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packets::{RequestPeers, SendPeers};
 use crate::protocol_flow::request_peers::receiver_state::RequestPeersReceiverState;
 use crate::validation::receiver::Receiver;
-use crate::bootstrap::cache::BootstrapCache;
+use hashbrown::HashSet;
 use rand::prelude::IteratorRandom;
 use std::net::SocketAddr;
-use hashbrown::HashSet;
 
 #[derive(Debug)]
 pub struct RequestPeersReceiver {
@@ -45,13 +45,18 @@ impl Receiver<RequestPeers, SendPeers> for RequestPeersReceiver {
     /// Attempts to receive a packet and outputs a new packet
     /// to be sent back if the receiver is able to receive a
     /// packet.
-    fn receive<N: NetworkInterface>(&mut self, network: &N, sender: &SocketAddr, packet: &RequestPeers) -> Result<SendPeers, NetworkErr> {
+    fn receive<N: NetworkInterface>(
+        &mut self,
+        network: &N,
+        sender: &SocketAddr,
+        packet: &RequestPeers,
+    ) -> Result<SendPeers, NetworkErr> {
         if let RequestPeersReceiverState::Ready = self.state {
             // First attempt to send the peers we are connected to
             let connected_peers: Vec<SocketAddr> = {
                 let peers = network.peers();
                 let peers = peers.read();
-                
+
                 peers
                     .iter()
                     // Filter out the requester
@@ -65,11 +70,15 @@ impl Receiver<RequestPeers, SendPeers> for RequestPeersReceiver {
                 Ok(SendPeers::new(connected_peers, packet.nonce))
             } else {
                 let connected_set: HashSet<&SocketAddr> = connected_peers.iter().collect();
-                let mut peers = self.bootstrap_cache
+                let mut peers = self
+                    .bootstrap_cache
                     .entries()
                     .map(|e| e.to_socket_addr(network.port()))
                     .filter(|addr| !connected_set.contains(addr) && addr != sender)
-                    .choose_multiple(&mut rand::thread_rng(), (packet.requested_peers as usize) - connected_peers.len());
+                    .choose_multiple(
+                        &mut rand::thread_rng(),
+                        (packet.requested_peers as usize) - connected_peers.len(),
+                    );
 
                 peers.extend_from_slice(&connected_peers);
                 Ok(SendPeers::new(peers, packet.nonce))

@@ -29,16 +29,16 @@ use crate::shared_data::JobData;
 use crate::solver_instance::SolverInstance;
 use crate::verify::*;
 use cfg_if::*;
+use crossbeam_channel::unbounded;
+use crossbeam_channel::{Receiver, Sender};
+use crypto::Hash;
 use parking_lot::RwLock;
 use rand::Rng;
 use std::path::PathBuf;
 use std::ptr::NonNull;
-use crossbeam_channel::unbounded;
-use crossbeam_channel::{Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::time;
-use crypto::Hash;
 
 const SO_SUFFIX: &str = ".cuckooplugin";
 
@@ -190,28 +190,29 @@ impl PurpleMiner {
 
         let stop_fn = solver.lib.get_stop_solver_instance();
 
-        let builder = thread::Builder::new()
-            .name(format!("Stop handle thread {}", instance));
+        let builder = thread::Builder::new().name(format!("Stop handle thread {}", instance));
 
         // monitor whether to send a stop signal to the solver, which should
         // end the current solve attempt below
-        let stop_handle = builder.spawn(move || loop {
-            thread::sleep(time::Duration::from_micros(100));
+        let stop_handle = builder
+            .spawn(move || loop {
+                thread::sleep(time::Duration::from_micros(100));
 
-            let ctx_ptr = control_ctx.0.as_ptr();
-            while let Some(message) = control_rx.iter().next() {
-                match message {
-                    ControlMessage::Stop => {
-                        PluginLibrary::stop_solver_from_instance(stop_fn.clone(), ctx_ptr);
-                        return;
-                    }
-                    ControlMessage::Pause => {
-                        PluginLibrary::stop_solver_from_instance(stop_fn.clone(), ctx_ptr);
-                    }
-                    _ => {}
-                };
-            }
-        }).unwrap();
+                let ctx_ptr = control_ctx.0.as_ptr();
+                while let Some(message) = control_rx.iter().next() {
+                    match message {
+                        ControlMessage::Stop => {
+                            PluginLibrary::stop_solver_from_instance(stop_fn.clone(), ctx_ptr);
+                            return;
+                        }
+                        ControlMessage::Pause => {
+                            PluginLibrary::stop_solver_from_instance(stop_fn.clone(), ctx_ptr);
+                        }
+                        _ => {}
+                    };
+                }
+            })
+            .unwrap();
 
         // Mark solver as paused
         {
@@ -253,12 +254,7 @@ impl PurpleMiner {
                 let mut s = shared_data.write();
                 s.stats[instance].set_plugin_name(&solver.config.name);
             }
-            let (
-                header, 
-                height,
-                job_id,
-                target_difficulty, 
-            ) = {
+            let (header, height, job_id, target_difficulty) = {
                 let data = shared_data.read();
                 let header = data.header.clone();
                 let height = data.height.clone();
@@ -354,21 +350,22 @@ impl PurpleMiner {
             self.solver_loop_txs.push(solver_tx);
             self.solver_stopped_rxs.push(solver_stopped_rx);
             self.solver_states.push(solver_state);
-            
-            let builder = thread::Builder::new()
-                .name(format!("Solver thread {}", i));
 
-            builder.spawn(move || {
-                let _ = PurpleMiner::solver_thread(
-                    s,
-                    i,
-                    sd,
-                    control_rx,
-                    solver_rx,
-                    solver_stopped_tx,
-                    solver_state_clone,
-                );
-            }).unwrap();
+            let builder = thread::Builder::new().name(format!("Solver thread {}", i));
+
+            builder
+                .spawn(move || {
+                    let _ = PurpleMiner::solver_thread(
+                        s,
+                        i,
+                        sd,
+                        control_rx,
+                        solver_rx,
+                        solver_stopped_tx,
+                        solver_state_clone,
+                    );
+                })
+                .unwrap();
             i += 1;
         }
         self.miner_state = MinerState::Ready;
@@ -398,15 +395,19 @@ impl PurpleMiner {
         #[cfg(feature = "test")]
         {
             if let PluginType::Cuckoo0 = plugin {
-                info!("Mining header {} with height {} in test mode", hex::encode(header), height);
-        
+                info!(
+                    "Mining header {} with height {} in test mode",
+                    hex::encode(header),
+                    height
+                );
+
                 //sd.job_id = job_id;
                 sd.height = height;
                 sd.header = header.to_vec();
                 sd.difficulty = difficulty;
                 sd.solutions = vec![SolverSolutions::default()];
 
-                return Ok(())
+                return Ok(());
             }
         }
 
@@ -425,8 +426,12 @@ impl PurpleMiner {
             paused = true;
         }
 
-        info!("Mining header {} with height {}", hex::encode(header), height);
-        
+        info!(
+            "Mining header {} with height {}",
+            hex::encode(header),
+            height
+        );
+
         //sd.job_id = job_id;
         sd.height = height;
         sd.header = header.to_vec();
@@ -438,11 +443,11 @@ impl PurpleMiner {
     }
 
     /// Returns the current height of the header being mined.
-    /// 
+    ///
     /// Returns `None` if the miner is in stand-by.
     pub fn current_height(&self, plugin: PluginType) -> Option<u64> {
-        #[cfg(feature = "test")] 
-        { 
+        #[cfg(feature = "test")]
+        {
             // Don't check solver state in test mode
             if let PluginType::Cuckoo0 = plugin {
                 let sd = self.shared_data.read();
@@ -460,17 +465,17 @@ impl PurpleMiner {
         if *self.solver_states[plugin.repr()].read() == SolverState::Paused {
             return None;
         }
-        
+
         let sd = self.shared_data.read();
         Some(sd.height)
     }
 
     /// Returns the hash of the current header being mined.
-    /// 
+    ///
     /// Returns `None` if the miner is in stand-by.
     pub fn current_header_hash(&self, plugin: PluginType) -> Option<Hash> {
-        #[cfg(feature = "test")] 
-        { 
+        #[cfg(feature = "test")]
+        {
             // Don't check solver state in test mode
             if let PluginType::Cuckoo0 = plugin {
                 let sd = self.shared_data.read();
@@ -488,7 +493,7 @@ impl PurpleMiner {
         if *self.solver_states[plugin.repr()].read() == SolverState::Paused {
             return None;
         }
-        
+
         let sd = self.shared_data.read();
         Some(crypto::hash_slice(&sd.header))
     }
@@ -498,7 +503,7 @@ impl PurpleMiner {
         let has_solutions = {
             let s = self.shared_data.read();
             s.solutions.len() > 0
-        };  
+        };
 
         if has_solutions {
             let mut s = self.shared_data.write();

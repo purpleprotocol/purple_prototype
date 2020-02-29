@@ -16,8 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::protocol_flow::request_peers::*;
 use crate::bootstrap::cache::BootstrapCache;
+use crate::protocol_flow::request_peers::*;
 use parking_lot::Mutex;
 use std::sync::Arc;
 

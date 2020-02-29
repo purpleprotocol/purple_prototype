@@ -17,10 +17,10 @@
 */
 
 pub mod block;
-pub mod checkpoint_block;
-pub mod transaction_block;
 pub mod chain;
 pub mod chain_state;
+pub mod checkpoint_block;
+pub mod transaction_block;
 
 pub use self::chain_state::*;
 pub use self::checkpoint_block::*;

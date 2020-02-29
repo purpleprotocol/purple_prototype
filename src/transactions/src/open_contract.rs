@@ -18,9 +18,9 @@
 
 use account::{Address, Balance, ContractAddress, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
-use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{DbHasher, Codec};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
+use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
+use persistence::{Codec, DbHasher};
 use rand::Rng;
 use std::io::Cursor;
 use std::str;
@@ -37,11 +37,11 @@ pub struct OpenContract {
     pub(crate) fee_hash: ShortHash,
     pub(crate) self_payable: bool,
     pub(crate) nonce: u64,
-    
+
     pub(crate) address: Option<ContractAddress>,
-    
+
     pub(crate) hash: Option<Hash>,
-    
+
     pub(crate) signature: Option<Signature>,
 }
 
@@ -69,7 +69,7 @@ impl OpenContract {
         // Calculate address mapping key
         //
         // An address mapping is a mapping between
-        // the account's signing address and an 
+        // the account's signing address and an
         // account's receiving address.
         //
         // They key of the address mapping has the following format:
@@ -171,7 +171,8 @@ impl OpenContract {
 
             // Update creator address mapping
             trie.remove(&creator_addr_mapping_key).unwrap();
-            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
+            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes())
+                .unwrap();
         } else {
             // The transaction's fee is paid in a different currency
             // than the one being transferred so we retrieve both balances.
@@ -215,7 +216,8 @@ impl OpenContract {
 
             // Update creator address mapping
             trie.remove(&creator_addr_mapping_key).unwrap();
-            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
+            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes())
+                .unwrap();
         }
     }
 
@@ -308,11 +310,7 @@ impl OpenContract {
         let amount = self.amount.to_bytes();
         let fee = self.fee.to_bytes();
         let nonce = &self.nonce;
-        let currency_flag = if asset_hash == fee_hash {
-            1
-        } else {
-            0
-        };
+        let currency_flag = if asset_hash == fee_hash { 1 } else { 0 };
 
         let amount_len = amount.len();
         let fee_len = fee.len();
@@ -413,7 +411,7 @@ impl OpenContract {
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {
-                result 
+                result
             } else {
                 return Err("Bad currency flag value");
             }
@@ -639,12 +637,7 @@ mod tests {
         let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
 
         // Manually initialize creator balance
-        test_helpers::init_balance(
-            &mut trie,
-            creator_addr.clone(),
-            asset_hash,
-            b"10000.0",
-        );
+        test_helpers::init_balance(&mut trie, creator_addr.clone(), asset_hash, b"10000.0");
 
         let amount = Balance::from_bytes(b"30.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();
@@ -687,9 +680,11 @@ mod tests {
         let bin_receiver_nonce = &trie.get(&receiver_nonce_key).unwrap().unwrap();
 
         let bin_asset_hash = asset_hash.to_vec();
-        let creator_balance_key = [creator_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
+        let creator_balance_key =
+            [creator_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
 
-        let balance = Balance::from_bytes(&trie.get(&creator_balance_key).unwrap().unwrap()).unwrap();
+        let balance =
+            Balance::from_bytes(&trie.get(&creator_balance_key).unwrap().unwrap()).unwrap();
         let written_code = trie.get(&code_key).unwrap().unwrap();
         let written_state = trie.get(&state_key).unwrap().unwrap();
         let written_self_payable = trie.get(&self_payable_key).unwrap().unwrap();

@@ -17,11 +17,11 @@
 */
 
 use crate::error::NetworkErr;
-use crate::packets::*;
 use crate::interface::NetworkInterface;
-use crate::protocol_flow::block_propagation::receiver_state::BlockReceiverState;
-use crate::protocol_flow::block_propagation::outbound::OutboundPacket;
+use crate::packets::*;
 use crate::protocol_flow::block_propagation::inbound::InboundPacket;
+use crate::protocol_flow::block_propagation::outbound::OutboundPacket;
+use crate::protocol_flow::block_propagation::receiver_state::BlockReceiverState;
 use crate::validation::receiver::Receiver;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -32,17 +32,24 @@ pub struct BlockReceiver {
 }
 
 impl Receiver<OutboundPacket, InboundPacket> for BlockReceiver {
-    fn receive<N: NetworkInterface>(&mut self, network: &N, _sender: &SocketAddr, packet: &OutboundPacket) -> Result<InboundPacket, NetworkErr> {
+    fn receive<N: NetworkInterface>(
+        &mut self,
+        network: &N,
+        _sender: &SocketAddr,
+        packet: &OutboundPacket,
+    ) -> Result<InboundPacket, NetworkErr> {
         match (&self.state, packet) {
             (BlockReceiverState::Ready, OutboundPacket::AnnounceCheckpoint(packet)) => {
                 let chain = network.pow_chain_ref();
-                
+
                 // Check for existence
-                if chain.query_orphan_short_hash(&packet.block_hash).is_some() || chain.query_short_hash(&packet.block_hash).is_some() {
+                if chain.query_orphan_short_hash(&packet.block_hash).is_some()
+                    || chain.query_short_hash(&packet.block_hash).is_some()
+                {
                     // Reject the block as we have already witnessed it
                     let packet = RejectBlock::new(packet.nonce, BlockRejectStatus::Witnessed);
                     let packet = InboundPacket::RejectBlock(Arc::new(packet));
-                
+
                     self.state = BlockReceiverState::Done;
                     Ok(packet)
                 } else {
@@ -54,7 +61,7 @@ impl Receiver<OutboundPacket, InboundPacket> for BlockReceiver {
                         // Request the announced block
                         let packet = RequestBlock::new(nonce, mempool_count as u32);
                         let packet = InboundPacket::RequestBlock(Arc::new(packet));
-                    
+
                         self.state = BlockReceiverState::WaitingCheckpoint(block_hash, nonce);
                         Ok(packet)
                     } else {
@@ -65,13 +72,15 @@ impl Receiver<OutboundPacket, InboundPacket> for BlockReceiver {
 
             (BlockReceiverState::Ready, OutboundPacket::AnnounceTxBlock(packet)) => {
                 let chain = network.pow_chain_ref();
-                
+
                 // Check for existence
-                if chain.query_orphan_short_hash(&packet.block_hash).is_some() || chain.query_short_hash(&packet.block_hash).is_some() {
+                if chain.query_orphan_short_hash(&packet.block_hash).is_some()
+                    || chain.query_short_hash(&packet.block_hash).is_some()
+                {
                     // Reject the block as we have already witnessed it
                     let packet = RejectBlock::new(packet.nonce, BlockRejectStatus::Witnessed);
                     let packet = InboundPacket::RejectBlock(Arc::new(packet));
-                
+
                     self.state = BlockReceiverState::Done;
                     Ok(packet)
                 } else {
@@ -83,7 +92,7 @@ impl Receiver<OutboundPacket, InboundPacket> for BlockReceiver {
                         // Request the announced block
                         let packet = RequestBlock::new(nonce, mempool_count as u32);
                         let packet = InboundPacket::RequestBlock(Arc::new(packet));
-                    
+
                         self.state = BlockReceiverState::WaitingTxBlock(block_hash, nonce);
                         Ok(packet)
                     } else {
@@ -92,7 +101,7 @@ impl Receiver<OutboundPacket, InboundPacket> for BlockReceiver {
                 }
             }
 
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 

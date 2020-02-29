@@ -16,11 +16,11 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::bootstrap::cache::BootstrapCache;
+use crate::protocol_flow::block_propagation::BlockPropagation;
 use crate::protocol_flow::ping_pong::PingPong;
 use crate::protocol_flow::request_peers::RequestPeers;
 use crate::protocol_flow::transaction_propagation::TransactionPropagation;
-use crate::protocol_flow::block_propagation::BlockPropagation;
-use crate::bootstrap::cache::BootstrapCache;
 use std::default::Default;
 
 #[derive(Clone, Debug)]

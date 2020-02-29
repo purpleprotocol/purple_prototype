@@ -26,11 +26,11 @@ extern crate lazy_static;
 extern crate byteorder;
 extern crate crypto;
 extern crate hashbrown;
+extern crate hex;
 extern crate rand;
 extern crate regex;
 extern crate rlp;
 extern crate rust_decimal;
-extern crate hex;
 
 pub mod addresses;
 pub mod balance;

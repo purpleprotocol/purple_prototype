@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::{FromBase58, PublicKey, Hash, ToBase58};
+use crypto::{FromBase58, Hash, PublicKey, ToBase58};
 use quickcheck::Arbitrary;
 use rand::Rng;
 use std::fmt;
@@ -49,7 +49,7 @@ impl NormalAddress {
         let pkey_hash = crypto::hash_slice(pk_bytes);
         let mut addr_bytes = [0; 33];
         let mut idx = 1;
-        
+
         addr_bytes[0] = Self::ADDR_TYPE;
 
         for byte in &pkey_hash.0 {
@@ -84,7 +84,9 @@ impl NormalAddress {
     }
 }
 
-fn unsize<T>(x: &[T]) -> &[T] { x }
+fn unsize<T>(x: &[T]) -> &[T] {
+    x
+}
 
 impl PartialEq for NormalAddress {
     fn eq(&self, other: &NormalAddress) -> bool {
@@ -92,7 +94,7 @@ impl PartialEq for NormalAddress {
     }
 }
 
-impl Eq for NormalAddress { }
+impl Eq for NormalAddress {}
 
 impl HashTrait for NormalAddress {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -119,7 +121,7 @@ impl Arbitrary for NormalAddress {
 
         let mut addr_bytes = [0; 33];
         let mut idx = 1;
-        
+
         addr_bytes[0] = Self::ADDR_TYPE;
 
         for byte in &bytes {

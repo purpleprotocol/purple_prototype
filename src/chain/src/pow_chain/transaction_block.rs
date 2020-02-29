@@ -18,23 +18,22 @@
 
 use crate::block::Block;
 use crate::chain::*;
-use crate::pow_chain::PowChainState;
 use crate::pow_chain::chain_state::BlockType;
+use crate::pow_chain::PowChainState;
 use crate::types::*;
-use transactions::Tx;
-use hashbrown::HashSet;
-use parking_lot::RwLock;
 use account::NormalAddress;
-use crypto::{NodeId, Signature, SecretKey as Sk};
 use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
-use crypto::{ShortHash, Hash};
 use crypto::PublicKey;
+use crypto::{Hash, ShortHash};
+use crypto::{NodeId, SecretKey as Sk, Signature};
+use hashbrown::HashSet;
 use lazy_static::*;
-use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{PersistentDb, DbHasher, Codec};
 use miner::{Proof, PROOF_SIZE};
+use parking_lot::RwLock;
+use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
+use persistence::{Codec, DbHasher, PersistentDb};
 use std::boxed::Box;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
@@ -43,6 +42,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
+use transactions::Tx;
 
 /// The maximum size, in bytes, of a transaction set in a transaction block.
 pub const MAX_TX_SET_SIZE: usize = 204800; // 200kb
@@ -144,11 +144,13 @@ impl Block for TransactionBlock {
         // Verify the signature of the miner over the block
         if !block.verify_miner_sig() {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadMinerSig));
-        }  
+        }
 
         // Verify that we accept transaction blocks
         if !chain_state.accepts_tx() {
-            return Err(ChainErr::BadAppendCondition(AppendCondErr::DoesntAcceptBlockType));
+            return Err(ChainErr::BadAppendCondition(
+                AppendCondErr::DoesntAcceptBlockType,
+            ));
         }
 
         if block.height() != chain_state.height + 1 {
@@ -175,12 +177,18 @@ impl Block for TransactionBlock {
 
             for tx in transaction_set.iter() {
                 let validation_result = {
-                    let trie = TrieDB::<DbHasher, Codec>::new(&chain_state.db, &chain_state.state_root).unwrap();
+                    let trie =
+                        TrieDB::<DbHasher, Codec>::new(&chain_state.db, &chain_state.state_root)
+                            .unwrap();
                     tx.validate(&trie)
                 };
 
                 if validation_result {
-                    let mut trie = TrieDBMut::<DbHasher, Codec>::from_existing(&mut chain_state.db, &mut chain_state.state_root).unwrap();
+                    let mut trie = TrieDBMut::<DbHasher, Codec>::from_existing(
+                        &mut chain_state.db,
+                        &mut chain_state.state_root,
+                    )
+                    .unwrap();
                     tx.apply(&mut trie);
                 } else {
                     return Err(ChainErr::BadAppendCondition(AppendCondErr::BadTx));
@@ -375,7 +383,11 @@ impl TransactionBlock {
 
     pub fn verify_miner_sig(&self) -> bool {
         let message = self.compute_message();
-        crypto::verify(&message, self.miner_signature.as_ref().unwrap(), &self.miner_id.0)
+        crypto::verify(
+            &message,
+            self.miner_signature.as_ref().unwrap(),
+            &self.miner_id.0,
+        )
     }
 
     pub fn compute_hash(&mut self) {

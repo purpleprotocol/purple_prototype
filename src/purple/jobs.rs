@@ -18,53 +18,82 @@
 
 #![allow(deprecated, unused)]
 
-use std::sync::Arc;
-use std::rc::Rc;
-use std::cell::RefCell;
-use std::sync::atomic::{Ordering, AtomicBool};
-use std::thread;
-use parking_lot::RwLock;
-use chain::{PowBlock, CheckpointBlock, Block, PowChainRef};
-use network::{Network, NetworkInterface};
-use network::packets::ForwardBlock;
-use network::{Packet, NetworkPriority};
 use account::NormalAddress;
-use std::net::SocketAddr;
+use chain::{Block, CheckpointBlock, PowBlock, PowChainRef};
+use network::packets::ForwardBlock;
+use network::{Network, NetworkInterface};
+use network::{NetworkPriority, Packet};
+use parking_lot::RwLock;
 use std::borrow::BorrowMut;
+use std::cell::RefCell;
+use std::net::SocketAddr;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
-use miner::{PurpleMiner, PluginType, Proof};
+#[cfg(any(
+    feature = "miner-cpu",
+    feature = "miner-gpu",
+    feature = "miner-cpu-avx",
+    feature = "miner-test-mode"
+))]
+use miner::{PluginType, Proof, PurpleMiner};
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+#[cfg(any(
+    feature = "miner-cpu",
+    feature = "miner-gpu",
+    feature = "miner-cpu-avx",
+    feature = "miner-test-mode"
+))]
 lazy_static! {
     static ref MINER_IS_STARTED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
     static ref MINER_IS_PAUSED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 }
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+#[cfg(any(
+    feature = "miner-cpu",
+    feature = "miner-gpu",
+    feature = "miner-cpu-avx",
+    feature = "miner-test-mode"
+))]
 pub fn is_miner_paused() -> bool {
     MINER_IS_PAUSED.load(Ordering::Relaxed)
 }
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+#[cfg(any(
+    feature = "miner-cpu",
+    feature = "miner-gpu",
+    feature = "miner-cpu-avx",
+    feature = "miner-test-mode"
+))]
 pub fn unpause_miner() -> bool {
     let previous = MINER_IS_PAUSED.load(Ordering::Relaxed);
     MINER_IS_PAUSED.store(false, Ordering::Relaxed);
     previous
 }
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+#[cfg(any(
+    feature = "miner-cpu",
+    feature = "miner-gpu",
+    feature = "miner-cpu-avx",
+    feature = "miner-test-mode"
+))]
 /// Starts the mining process.
-pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, proof_delay: Option<u32>) -> Result<(), &'static str> {
+pub fn start_miner(
+    pow_chain: PowChainRef,
+    network: Network,
+    ip: SocketAddr,
+    proof_delay: Option<u32>,
+) -> Result<(), &'static str> {
     if MINER_IS_STARTED.load(Ordering::Relaxed) {
         return Err("The miner is already started!");
     }
 
     info!("Starting miner...");
 
-    let builder = thread::Builder::new()
-        .name("Miner main thread".to_owned());
-    
+    let builder = thread::Builder::new().name("Miner main thread".to_owned());
+
     builder.spawn(move || {
         let miner = PurpleMiner::new();
         let miner = Rc::new(RefCell::new(miner));
@@ -184,8 +213,17 @@ pub fn start_miner(pow_chain: PowChainRef, network: Network, ip: SocketAddr, pro
     Ok(())
 }
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
-fn try_notify(mut miner: Rc<RefCell<PurpleMiner>>, pow_chain: PowChainRef, plugin_type: PluginType) {
+#[cfg(any(
+    feature = "miner-cpu",
+    feature = "miner-gpu",
+    feature = "miner-cpu-avx",
+    feature = "miner-test-mode"
+))]
+fn try_notify(
+    mut miner: Rc<RefCell<PurpleMiner>>,
+    pow_chain: PowChainRef,
+    plugin_type: PluginType,
+) {
     let is_paused = MINER_IS_PAUSED.load(Ordering::Relaxed);
 
     if !is_paused {

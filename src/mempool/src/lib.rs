@@ -19,7 +19,7 @@
 #[macro_use]
 extern crate log;
 
-mod mempool;
 mod error;
+mod mempool;
 pub use crate::mempool::*;
 pub use error::*;

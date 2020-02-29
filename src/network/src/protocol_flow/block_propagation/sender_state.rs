@@ -28,7 +28,7 @@ pub enum BlockSenderState {
     /// The `Sender` is waiting for a `RequestBlock` or `RejectBlock` packet.
     WaitingResponse(u64, Arc<PowBlock>),
 
-    /// The `Sender` has forwarded the header of a block and is now waiting 
+    /// The `Sender` has forwarded the header of a block and is now waiting
     /// to be requested transaction data.
     ForwardedHeader(u64, Arc<PowBlock>),
 

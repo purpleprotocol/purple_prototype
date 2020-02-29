@@ -16,18 +16,18 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::DbHasher;
 use crypto::ShortHash;
 use elastic_array::ElasticArray128;
 use hashbrown::HashMap;
+use hashdb::Hasher as HasherTrait;
 use hashdb::{AsHashDB, HashDB};
 use rlp::NULL_RLP;
 use rocksdb::{ColumnFamily, DBCompactionStyle, Options, WriteBatch, DB};
-use std::path::Path;
-use std::sync::Arc;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
-use hashdb::Hasher as HasherTrait;
-use crate::DbHasher;
+use std::path::Path;
+use std::sync::Arc;
 
 pub fn cf_options() -> Options {
     let mut opts = Options::default();
@@ -207,29 +207,36 @@ impl PersistentDb {
     }
 
     /// Returns an iterator over entries with keys that have the provided prefix. Note that prefixes must be 64 bytes in length for maximum efficiency.
-    pub fn prefix_iterator<'a, P: 'a + AsRef<[u8]> + Clone>(&'a self, prefix: P) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
+    pub fn prefix_iterator<'a, P: 'a + AsRef<[u8]> + Clone>(
+        &'a self,
+        prefix: P,
+    ) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
         let prefix_clone = prefix.clone();
         let prefix_clone2 = prefix.clone();
-        let mem_db_iter = self.memory_db
+        let mem_db_iter = self
+            .memory_db
             .iter()
             .filter(move |(k, _v)| matches_prefix(k.as_ref(), prefix.clone()))
             .filter_map(|(k, op)| {
                 if let Operation::Put(value) = op {
-                    Some((k.clone().into_boxed_slice(), value.clone().into_boxed_slice()))
+                    Some((
+                        k.clone().into_boxed_slice(),
+                        value.clone().into_boxed_slice(),
+                    ))
                 } else {
                     None
                 }
             });
-        
+
         if let Some(db_ref) = &self.db_ref {
             let memory_db = &self.memory_db;
-            
+
             Box::new(
                 db_ref
                     .prefix_iterator(prefix_clone)
                     .filter(move |(k, _v)| matches_prefix(k.as_ref(), prefix_clone2.clone()))
                     .filter(move |(k, _v)| !memory_db.get(&k.to_vec()).is_some())
-                    .chain(mem_db_iter)
+                    .chain(mem_db_iter),
             )
         } else {
             Box::new(mem_db_iter)
@@ -276,7 +283,7 @@ fn matches_prefix<P: AsRef<[u8]>>(key: &[u8], prefix: P) -> bool {
         let key_digest = key_hasher.finish();
         let prefix_digest = prefix_hasher.finish();
 
-        key_digest == prefix_digest 
+        key_digest == prefix_digest
     }
 }
 
@@ -357,8 +364,8 @@ impl AsHashDB<DbHasher, ElasticArray128<u8>> for PersistentDb {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use tempdir::TempDir;
     use hashbrown::HashSet;
+    use tempdir::TempDir;
 
     #[test]
     fn prefix_iterator_flushed() {
@@ -387,7 +394,20 @@ mod tests {
 
         persistent_db.flush();
 
-        let oracle_set = set![(prefix1.as_bytes().to_vec().into_boxed_slice(), b"test_data1".to_vec().into_boxed_slice()), (prefix2.as_bytes().to_vec().into_boxed_slice(), b"test_data2".to_vec().into_boxed_slice()), (prefix3.as_bytes().to_vec().into_boxed_slice(), b"test_data3".to_vec().into_boxed_slice())];
+        let oracle_set = set![
+            (
+                prefix1.as_bytes().to_vec().into_boxed_slice(),
+                b"test_data1".to_vec().into_boxed_slice()
+            ),
+            (
+                prefix2.as_bytes().to_vec().into_boxed_slice(),
+                b"test_data2".to_vec().into_boxed_slice()
+            ),
+            (
+                prefix3.as_bytes().to_vec().into_boxed_slice(),
+                b"test_data3".to_vec().into_boxed_slice()
+            )
+        ];
         assert!(oracle_set == persistent_db.prefix_iterator(prefix.as_bytes()).collect());
     }
 
@@ -410,7 +430,24 @@ mod tests {
         persistent_db.put(b"prefix.4", b"test_data4");
         persistent_db.put(b"prefix.2", b"test_data5");
 
-        let oracle_set = set![(b"prefix.1".to_vec().into_boxed_slice(), b"test_data1".to_vec().into_boxed_slice()), (b"prefix.2".to_vec().into_boxed_slice(), b"test_data5".to_vec().into_boxed_slice()), (b"prefix.3".to_vec().into_boxed_slice(), b"test_data3".to_vec().into_boxed_slice()), (b"prefix.4".to_vec().into_boxed_slice(), b"test_data4".to_vec().into_boxed_slice())];
+        let oracle_set = set![
+            (
+                b"prefix.1".to_vec().into_boxed_slice(),
+                b"test_data1".to_vec().into_boxed_slice()
+            ),
+            (
+                b"prefix.2".to_vec().into_boxed_slice(),
+                b"test_data5".to_vec().into_boxed_slice()
+            ),
+            (
+                b"prefix.3".to_vec().into_boxed_slice(),
+                b"test_data3".to_vec().into_boxed_slice()
+            ),
+            (
+                b"prefix.4".to_vec().into_boxed_slice(),
+                b"test_data4".to_vec().into_boxed_slice()
+            )
+        ];
         assert!(oracle_set == persistent_db.prefix_iterator(b"prefix").collect());
     }
 
@@ -423,7 +460,20 @@ mod tests {
         persistent_db.put(b"prefix.2", b"test_data2");
         persistent_db.put(b"prefix.3", b"test_data3");
 
-        let oracle_set = set![(b"prefix.1".to_vec().into_boxed_slice(), b"test_data1".to_vec().into_boxed_slice()), (b"prefix.2".to_vec().into_boxed_slice(), b"test_data2".to_vec().into_boxed_slice()), (b"prefix.3".to_vec().into_boxed_slice(), b"test_data3".to_vec().into_boxed_slice())];
+        let oracle_set = set![
+            (
+                b"prefix.1".to_vec().into_boxed_slice(),
+                b"test_data1".to_vec().into_boxed_slice()
+            ),
+            (
+                b"prefix.2".to_vec().into_boxed_slice(),
+                b"test_data2".to_vec().into_boxed_slice()
+            ),
+            (
+                b"prefix.3".to_vec().into_boxed_slice(),
+                b"test_data3".to_vec().into_boxed_slice()
+            )
+        ];
         assert!(oracle_set == persistent_db.prefix_iterator(b"prefix").collect());
     }
 

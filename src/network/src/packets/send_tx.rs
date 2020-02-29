@@ -20,18 +20,18 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
-use crate::protocol_flow::transaction_propagation::Pair;
-use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
 use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
+use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
+use crate::protocol_flow::transaction_propagation::Pair;
 use crate::validation::receiver::Receiver;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
-use crypto::{ShortHash, PublicKey as Pk, SecretKey as Sk, Signature};
-use transactions::Tx;
+use crypto::{PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use transactions::Tx;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendTx {
@@ -41,10 +41,7 @@ pub struct SendTx {
 
 impl SendTx {
     pub fn new(nonce: u64, tx: Arc<Tx>) -> SendTx {
-        SendTx { 
-            tx,
-            nonce,
-        }
+        SendTx { tx, nonce }
     }
 }
 
@@ -108,10 +105,7 @@ impl Packet for SendTx {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = SendTx { 
-            tx,
-            nonce, 
-        };
+        let packet = SendTx { tx, nonce };
 
         Ok(Arc::new(packet))
     }
@@ -142,7 +136,7 @@ impl Packet for SendTx {
             if let Some(pair) = pairs.get(&packet.nonce) {
                 pair.receiver.clone()
             } else {
-                return Err(NetworkErr::AckErr)
+                return Err(NetworkErr::AckErr);
             }
         };
 
@@ -157,8 +151,8 @@ impl Packet for SendTx {
         pairs.remove(&nonce);
 
         match packet {
-            InboundPacket::RejectTx(_) | InboundPacket::RequestTx(_) => unreachable!(), 
-            InboundPacket::None => Ok(())
+            InboundPacket::RejectTx(_) | InboundPacket::RequestTx(_) => unreachable!(),
+            InboundPacket::None => Ok(()),
         }
     }
 }

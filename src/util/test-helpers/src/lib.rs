@@ -25,10 +25,10 @@ extern crate quicksort;
 extern crate rlp;
 extern crate tempdir;
 
-use account::{NormalAddress, Balance};
+use account::{Balance, NormalAddress};
 use crypto::ShortHash;
 use patricia_trie::{TrieDBMut, TrieMut};
-use persistence::{DbHasher, Codec, PersistentDb};
+use persistence::{Codec, DbHasher, PersistentDb};
 use quicksort::*;
 use std::sync::Arc;
 use tempdir::TempDir;
@@ -59,8 +59,8 @@ pub fn init_balance(
         trie.insert(&precision_key, &[18]).unwrap();
     }
 
-    trie.insert(&address_mapping_key, address.as_bytes()).unwrap();
-    trie.insert(&cur_key, &balance).unwrap();
-    trie.insert(&nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
+    trie.insert(&address_mapping_key, address.as_bytes())
         .unwrap();
+    trie.insert(&cur_key, &balance).unwrap();
+    trie.insert(&nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
 }

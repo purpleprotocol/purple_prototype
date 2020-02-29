@@ -24,12 +24,12 @@ use crate::validation::receiver::Receiver;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
-use crypto::{ShortHash, PublicKey as Pk, SecretKey as Sk, Signature};
-use transactions::Tx;
+use crypto::{PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use rlp::*;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use transactions::Tx;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendMissingTxs {
@@ -39,10 +39,7 @@ pub struct SendMissingTxs {
 
 impl SendMissingTxs {
     pub fn new(nonce: u64, txs: Vec<Arc<Tx>>) -> SendMissingTxs {
-        SendMissingTxs { 
-            txs,
-            nonce,
-        }
+        SendMissingTxs { txs, nonce }
     }
 }
 
@@ -132,10 +129,7 @@ impl Packet for SendMissingTxs {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = SendMissingTxs { 
-            txs,
-            nonce, 
-        };
+        let packet = SendMissingTxs { txs, nonce };
 
         Ok(Arc::new(packet))
     }

@@ -20,15 +20,15 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
-use crate::validation::receiver::Receiver;
-use crate::protocol_flow::block_propagation::Pair;
-use crate::protocol_flow::block_propagation::outbound::OutboundPacket;
-use crate::protocol_flow::block_propagation::inbound::InboundPacket;
 use crate::priority::NetworkPriority;
+use crate::protocol_flow::block_propagation::inbound::InboundPacket;
+use crate::protocol_flow::block_propagation::outbound::OutboundPacket;
+use crate::protocol_flow::block_propagation::Pair;
+use crate::validation::receiver::Receiver;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
-use crypto::{ShortHash, PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use rand::Rng;
 use std::io::Cursor;
 use std::net::SocketAddr;
@@ -43,8 +43,8 @@ pub struct AnnounceCheckpoint {
 impl AnnounceCheckpoint {
     pub fn new(block_hash: ShortHash) -> AnnounceCheckpoint {
         let mut rng = rand::thread_rng();
-        
-        AnnounceCheckpoint { 
+
+        AnnounceCheckpoint {
             block_hash,
             nonce: rng.gen(),
         }
@@ -101,10 +101,7 @@ impl Packet for AnnounceCheckpoint {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = AnnounceCheckpoint { 
-            block_hash,
-            nonce, 
-        };
+        let packet = AnnounceCheckpoint { block_hash, nonce };
 
         Ok(Arc::new(packet))
     }
@@ -169,8 +166,8 @@ impl Packet for AnnounceCheckpoint {
                 Ok(())
             }
 
-            _ => unreachable!()
-        }  
+            _ => unreachable!(),
+        }
     }
 }
 
