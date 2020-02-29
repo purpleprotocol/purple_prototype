@@ -20,8 +20,8 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
-use crate::protocol_flow::transaction_propagation::Pair;
 use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
+use crate::protocol_flow::transaction_propagation::Pair;
 use crate::validation::sender::Sender;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::NodeId;
@@ -37,9 +37,7 @@ pub struct RequestTx {
 
 impl RequestTx {
     pub fn new(nonce: u64) -> RequestTx {
-        RequestTx { 
-            nonce,
-        }
+        RequestTx { nonce }
     }
 }
 
@@ -78,9 +76,7 @@ impl Packet for RequestTx {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = RequestTx { 
-            nonce, 
-        };
+        let packet = RequestTx { nonce };
 
         Ok(Arc::new(packet))
     }

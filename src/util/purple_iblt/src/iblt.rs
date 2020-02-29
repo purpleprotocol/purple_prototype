@@ -22,8 +22,8 @@
 #![allow(unused, clippy::never_loop, clippy::needless_range_loop)]
 
 use crate::error::IBLTError;
+use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 use crc32fast::Hasher;
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian, LittleEndian};
 use hashbrown::HashMap;
 use std::io::Cursor;
 
@@ -34,7 +34,7 @@ pub struct PurpleIBLT {
     /// IBLT table
     table: Vec<TableEntry>,
 
-    /// The size of a value in the table 
+    /// The size of a value in the table
     value_size: u16,
 
     /// The number of hash functions performed on values i.e. the k parameter
@@ -42,7 +42,11 @@ pub struct PurpleIBLT {
 }
 
 impl PurpleIBLT {
-    pub fn new(table_size: usize, value_size: u16, hash_functions: u8) -> Result<PurpleIBLT, IBLTError> {
+    pub fn new(
+        table_size: usize,
+        value_size: u16,
+        hash_functions: u8,
+    ) -> Result<PurpleIBLT, IBLTError> {
         if hash_functions == 0 {
             return Err(IBLTError::BadParameter);
         }
@@ -50,13 +54,13 @@ impl PurpleIBLT {
         if table_size % hash_functions as usize != 0 {
             return Err(IBLTError::BadParameter);
         }
-        
+
         Ok(PurpleIBLT {
             table: vec![TableEntry::new(value_size as usize); table_size],
             value_size,
             hash_functions,
         })
-    } 
+    }
 
     pub fn insert(&mut self, k: u64, val: &[u8]) -> Result<(), IBLTError> {
         self.insert_or_delete(k, val, 1)
@@ -178,12 +182,12 @@ impl PurpleIBLT {
         let mut buf: Vec<u8> = rdr.into_inner();
         let _: Vec<u8> = buf.drain(..7).collect();
         let mut idx = 0;
-        
+
         // Decode entries
         while buf.len() != 0 {
             if buf.len() >= (4 + 4 + 8 + value_size as usize) {
                 let mut rdr = Cursor::new(buf);
-                
+
                 let count = if let Ok(result) = rdr.read_i32::<BigEndian>() {
                     result
                 } else {
@@ -229,11 +233,19 @@ impl PurpleIBLT {
         Ok(iblt)
     }
 
-    pub fn list_entries_non_destructive(&self, positive: &mut HashMap<u64, Vec<u8>>, negative: &mut HashMap<u64, Vec<u8>>) -> bool {
+    pub fn list_entries_non_destructive(
+        &self,
+        positive: &mut HashMap<u64, Vec<u8>>,
+        negative: &mut HashMap<u64, Vec<u8>>,
+    ) -> bool {
         self.clone().list_entries_destructive(positive, negative)
     }
 
-    pub fn list_entries_destructive(&mut self, positive: &mut HashMap<u64, Vec<u8>>, negative: &mut HashMap<u64, Vec<u8>>) -> bool {        
+    pub fn list_entries_destructive(
+        &mut self,
+        positive: &mut HashMap<u64, Vec<u8>>,
+        negative: &mut HashMap<u64, Vec<u8>>,
+    ) -> bool {
         let mut erased = 1;
 
         while erased > 0 {
@@ -269,16 +281,21 @@ impl PurpleIBLT {
         true
     }
 
-    fn insert_or_delete(&mut self, k: u64, val: &[u8], insert_or_delete: i32) -> Result<(), IBLTError> {
+    fn insert_or_delete(
+        &mut self,
+        k: u64,
+        val: &[u8],
+        insert_or_delete: i32,
+    ) -> Result<(), IBLTError> {
         if val.len() != self.value_size as usize {
             return Err(IBLTError::BadParameter);
         }
 
         let buckets = self.table.len() / self.hash_functions as usize;
-        
+
         for i in 0..self.hash_functions {
             let start_idx = (i as usize) * buckets;
-            
+
             // Hash key
             let hash = hash_value(i, &encode_le_u64!(k));
 
@@ -287,7 +304,7 @@ impl PurpleIBLT {
             entry.count += insert_or_delete;
             entry.key_sum ^= k;
             entry.key_check ^= hash_value(HASH_CHECK, &encode_le_u64!(k));
-        
+
             if entry.is_empty() {
                 entry.value_sum = vec![0; self.value_size as usize];
             } else {
@@ -298,7 +315,7 @@ impl PurpleIBLT {
         }
 
         Ok(())
-    } 
+    }
 }
 
 fn hash_value(i: u8, val: &[u8]) -> u32 {
@@ -322,7 +339,7 @@ impl TableEntry {
             count: 0,
             key_check: 0,
             key_sum: 0,
-            value_sum: vec![0; value_size]
+            value_sum: vec![0; value_size],
         }
     }
 
@@ -351,7 +368,7 @@ impl Arbitrary for PurpleIBLT {
             let k: u64 = Arbitrary::arbitrary(g);
             let v: u64 = Arbitrary::arbitrary(g);
             let v_le = encode_le_u64!(v);
-            
+
             iblt.insert(k, &v_le).unwrap();
         }
 

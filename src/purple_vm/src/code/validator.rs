@@ -937,7 +937,7 @@ fn valid_operand_type(operand_stack: &Stack<VmType>, op: Instruction) -> bool {
         | Instruction::f64TruncUnsignedi64
         | Instruction::f64Demotef32
         | Instruction::f64Reinterpreti64 => operand.is_f64(),
-        _ => panic!()
+        _ => panic!(),
     }
 }
 

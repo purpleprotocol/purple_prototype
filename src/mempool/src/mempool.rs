@@ -19,21 +19,21 @@
 #![allow(non_snake_case)]
 
 use crate::error::MempoolErr;
-use chain::{PowChainRef, PowChainState, MAX_TX_SET_SIZE};
+use account::{Address, Balance, NormalAddress};
 use chain::types::StateInterface;
-use account::{NormalAddress, Address, Balance};
+use chain::{PowChainRef, PowChainState, MAX_TX_SET_SIZE};
 use chrono::{DateTime, Utc};
-use hashbrown::{HashSet, HashMap};
-use transactions::Tx;
-use std::collections::{VecDeque, BTreeMap};
-use patricia_trie::{TrieDB, Trie};
-use persistence::{DbHasher, Codec};
-use crypto::{ShortHash, Hash};
+use crypto::{Hash, ShortHash};
+use hashbrown::{HashMap, HashSet};
+use patricia_trie::{Trie, TrieDB};
+use persistence::{Codec, DbHasher};
 use rand::Rng;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
+use transactions::Tx;
 
-/// How far into the future a transaction can be 
-/// in order to be accepted. 
+/// How far into the future a transaction can be
+/// in order to be accepted.
 const FUTURE_LIMIT: u64 = 10;
 
 /// Memory pool used to store valid yet not processed
@@ -52,20 +52,20 @@ pub struct Mempool {
     /// hashes.
     timestamp_reverse_lookup: BTreeMap<DateTime<Utc>, ShortHash>,
 
-    /// Set containing hashes of transactions that 
+    /// Set containing hashes of transactions that
     /// are currently orphans.
     orphan_set: HashSet<ShortHash>,
 
     /// Mapping between currency hashes and transaction
     /// fees. Note that orphan transactions are not stored
     /// in this map.
-    /// 
-    /// Each entry in the map is an ordered binary tree 
+    ///
+    /// Each entry in the map is an ordered binary tree
     /// map between transaction fees and transaction hashes.
     fee_map: HashMap<ShortHash, BTreeMap<Balance, VecDeque<ShortHash>>>,
 
-    /// Mapping between signing addresses that have issued 
-    /// transactions which are currently stored in the mempool 
+    /// Mapping between signing addresses that have issued
+    /// transactions which are currently stored in the mempool
     /// and their next addresses.
     address_mappings: HashMap<NormalAddress, NormalAddress>,
 
@@ -80,9 +80,9 @@ pub struct Mempool {
     /// Vector of preferred currencies. The element at
     /// index 0 in the vector is the first preferred,
     /// the one at index 1 is the second, etc.
-    /// 
+    ///
     /// When choosing transactions to take out of the
-    /// mempool, they will be taken in the order of 
+    /// mempool, they will be taken in the order of
     /// preference that is found in this vector, if
     /// there is no preferred currency, they will be
     /// taken out of all available currencies from
@@ -92,9 +92,9 @@ pub struct Mempool {
     /// Ratio of preferred transaction to include in a ready batch,
     /// for example if 50 preference ratio is given, 50% of the transactions
     /// taken from the mempool in one batch will be based on the preference
-    /// options, the rest will be taken from each stored currency equally 
+    /// options, the rest will be taken from each stored currency equally
     /// from the biggest fee to the lowest.
-    /// 
+    ///
     /// Must be a number between 50 and 100.
     preference_ratio: u8,
 
@@ -106,8 +106,8 @@ pub struct Mempool {
     chain_ref: PowChainRef,
 
     /// Cache set of next transactions to be added to a block.
-    /// 
-    /// TODO: Make this a queue of sets and cache subsequent 
+    ///
+    /// TODO: Make this a queue of sets and cache subsequent
     /// tx sets as well.
     next_tx_set_cache: Option<TxSet>,
 }
@@ -115,12 +115,15 @@ pub struct Mempool {
 impl Mempool {
     pub fn new(
         chain_ref: PowChainRef,
-        max_size: u32, 
+        max_size: u32,
         preferred_currencies: Vec<ShortHash>,
         preference_ratio: u8,
     ) -> Mempool {
         if preference_ratio < 50 || preference_ratio > 100 {
-            panic!(format!("Invalid preference ratio! Expected a number between 50 and 100! Got: {}", preference_ratio));
+            panic!(format!(
+                "Invalid preference ratio! Expected a number between 50 and 100! Got: {}",
+                preference_ratio
+            ));
         }
 
         Mempool {
@@ -151,10 +154,10 @@ impl Mempool {
         self.tx_lookup.len()
     }
 
-    /// Removes the transaction with the given `Hash` from the 
-    /// mempool and returns it. Returns `None` if there is no 
+    /// Removes the transaction with the given `Hash` from the
+    /// mempool and returns it. Returns `None` if there is no
     /// such transaction in the mempool.
-    /// 
+    ///
     /// This operation will orphan any transactions that depend
     /// on the given transaction. Use `Mempool::remove_branch()`
     /// to remove any dependent transactions as well.
@@ -165,12 +168,15 @@ impl Mempool {
         let fee_hash = tx.fee_hash();
         let mut remove_fee_map = false;
 
-        // Clean up from address mappings 
+        // Clean up from address mappings
         let mut next_address = self.address_mappings.remove(&signing_address)?;
 
         // Orphan any subsequent transactions
         while let Some(next_signing_address) = self.address_mappings.get(&next_address) {
-            let tx_hash = self.address_hash_mappings.get(&next_signing_address).unwrap(); 
+            let tx_hash = self
+                .address_hash_mappings
+                .get(&next_signing_address)
+                .unwrap();
             self.address_reverse_mappings.remove(&next_signing_address);
             if !self.orphan_set.remove(&tx_hash) {
                 break;
@@ -200,10 +206,10 @@ impl Mempool {
         }
 
         Some(tx)
-    }   
+    }
 
-    /// Removes the transaction with the given `Hash` from the 
-    /// mempool and any dependent transactions and returns them. 
+    /// Removes the transaction with the given `Hash` from the
+    /// mempool and any dependent transactions and returns them.
     /// Returns `None` if there is no such transaction in the mempool.
     pub fn remove_branch(&mut self, tx_hash: &ShortHash) -> Option<Vec<Arc<Tx>>> {
         unimplemented!();
@@ -237,7 +243,7 @@ impl Mempool {
 
         let account_nonce = self.get_account_nonce(&Address::Normal(tx_signing_addr));
 
-        // Validate transaction against the current state if 
+        // Validate transaction against the current state if
         // it directly follows the nonce listed in the state.
         if let Some(account_nonce) = account_nonce {
             if tx_nonce > account_nonce + FUTURE_LIMIT {
@@ -254,8 +260,8 @@ impl Mempool {
                     if cfg!(test) {
                         println!("DEBUG CHAIN STATE VALIDATION FAILED WITH EXISTING ACCOUNT");
                     }
-                    return Err(MempoolErr::BadTx); 
-                } 
+                    return Err(MempoolErr::BadTx);
+                }
 
                 is_orphan = false;
             }
@@ -274,7 +280,7 @@ impl Mempool {
                     if cfg!(test) {
                         println!("DEBUG CHAIN STATE VALIDATION FAILED WITH FIRST NONCE");
                     }
-                   return Err(MempoolErr::BadTx); 
+                    return Err(MempoolErr::BadTx);
                 }
 
                 is_orphan = false;
@@ -287,9 +293,11 @@ impl Mempool {
 
         // Place transaction in respective mappings
         self.tx_lookup.insert(tx_hash.clone(), tx.clone());
-        self.timestamp_lookup.insert(tx_hash.clone(), timestamp.clone());
-        self.timestamp_reverse_lookup.insert(timestamp, tx_hash.clone());
-        
+        self.timestamp_lookup
+            .insert(tx_hash.clone(), timestamp.clone());
+        self.timestamp_reverse_lookup
+            .insert(timestamp, tx_hash.clone());
+
         // Place transaction in fee mappings
         if let Some(cur_entry) = self.fee_map.get_mut(&tx_fee_cur) {
             if let Some(fee_entry) = cur_entry.get_mut(&tx_fee) {
@@ -311,14 +319,20 @@ impl Mempool {
         }
 
         // Place transaction in address mappings
-        self.address_mappings.insert(tx_signing_addr.clone(), tx_next_addr.clone());
-        self.address_hash_mappings.insert(tx_signing_addr, tx_hash.clone());
+        self.address_mappings
+            .insert(tx_signing_addr.clone(), tx_next_addr.clone());
+        self.address_hash_mappings
+            .insert(tx_signing_addr, tx_hash.clone());
 
         // Update orphans
         if !is_orphan {
             self.update_orphans(&tx_next_addr, tx_signing_addr.clone());
         } else {
-            if self.address_reverse_mappings.get(&tx_signing_addr).is_some() {
+            if self
+                .address_reverse_mappings
+                .get(&tx_signing_addr)
+                .is_some()
+            {
                 self.update_orphans(&tx_next_addr, tx_signing_addr.clone());
             } else {
                 self.orphan_set.insert(tx_hash);
@@ -328,11 +342,11 @@ impl Mempool {
         Ok(())
     }
 
-    /// Attempts to perform a prune on the transactions stored 
-    /// in the memory pool, removing the oldest transactions 
+    /// Attempts to perform a prune on the transactions stored
+    /// in the memory pool, removing the oldest transactions
     /// that have the lowest fees. The prune will be performed
     /// only if the mempool is more than 80% full.
-    /// 
+    ///
     /// This operation is idempotent.
     pub fn prune(&mut self) {
         unimplemented!();
@@ -356,7 +370,7 @@ impl Mempool {
         // Allocate a capacity of the maximum tx set size divided
         // by the average size of a transaction i.e. ~250 bytes.
         let capacity = MAX_TX_SET_SIZE / 250;
-        
+
         let mut cur_tx_set_size = 0;
         let mut taken_set: HashSet<ShortHash> = HashSet::with_capacity(capacity);
         let mut obsolete_set: HashSet<ShortHash> = HashSet::with_capacity(capacity);
@@ -366,9 +380,10 @@ impl Mempool {
         let mut exceeded_ratio_size_threshold = false;
 
         // TODO: Use decimals here instead of floats
-        let ratio_size_threshold = (self.preference_ratio as f32 / (100 as f32)) as usize * MAX_TX_SET_SIZE;
+        let ratio_size_threshold =
+            (self.preference_ratio as f32 / (100 as f32)) as usize * MAX_TX_SET_SIZE;
 
-        // For each preferred currency take valid 
+        // For each preferred currency take valid
         // transactions with the biggest fees.
         for cur_hash in self.preferred_currencies.iter() {
             if let Some(cur_entry) = self.fee_map.get(&cur_hash) {
@@ -389,7 +404,7 @@ impl Mempool {
 
                         if next_chain_state.validate_tx(tx.clone()) {
                             next_chain_state.apply_tx(tx.clone());
-                            
+
                             // Add to set
                             taken_set.insert(tx_hash.clone());
                             tx_set.push(tx.clone());
@@ -411,18 +426,16 @@ impl Mempool {
             }
         }
 
-        let fee_currencies: Vec<&ShortHash> = self.fee_map
-            .keys()
-            .collect();
+        let fee_currencies: Vec<&ShortHash> = self.fee_map.keys().collect();
 
         // Hack to break the loop when we cannot fill a tx set
-        // to its maximum size but we have exhausted all valid 
-        // transactions. 
-        // 
+        // to its maximum size but we have exhausted all valid
+        // transactions.
+        //
         // TODO: Find a better way to do this
         let mut iter_count = 0;
 
-        // Take transactions with the biggest fees 
+        // Take transactions with the biggest fees
         // from random fee currencies.
         loop {
             let mut rng = rand::thread_rng();
@@ -436,7 +449,11 @@ impl Mempool {
                     let mut iter = balance_entry
                         .iter()
                         // Filter orphans
-                        .filter(|tx_hash| !self.orphan_set.contains(&tx_hash) && !taken_set.contains(&tx_hash) && !obsolete_set.contains(&tx_hash))
+                        .filter(|tx_hash| {
+                            !self.orphan_set.contains(&tx_hash)
+                                && !taken_set.contains(&tx_hash)
+                                && !obsolete_set.contains(&tx_hash)
+                        })
                         .take(1);
 
                     if let Some(tx_hash) = iter.next() {
@@ -450,7 +467,7 @@ impl Mempool {
 
                         if next_chain_state.validate_tx(tx.clone()) {
                             next_chain_state.apply_tx(tx.clone());
-                            
+
                             // Add to set
                             taken_set.insert(tx_hash.clone());
                             tx_set.push(tx.clone());
@@ -522,14 +539,20 @@ impl Mempool {
         self.chain_ref.validate_tx(tx)
     }
 
-    fn update_orphans<'a>(&'a mut self, mut cur_addr: &'a NormalAddress, tx_signing_addr: NormalAddress) {
-        self.address_reverse_mappings.insert(cur_addr.clone(), tx_signing_addr);
+    fn update_orphans<'a>(
+        &'a mut self,
+        mut cur_addr: &'a NormalAddress,
+        tx_signing_addr: NormalAddress,
+    ) {
+        self.address_reverse_mappings
+            .insert(cur_addr.clone(), tx_signing_addr);
 
         while let Some(next_addr) = self.address_mappings.get(cur_addr) {
             let cur_hash = self.address_hash_mappings.get(cur_addr).unwrap();
             self.orphan_set.remove(cur_hash);
-            self.address_reverse_mappings.insert(next_addr.clone(), cur_addr.clone());
-            
+            self.address_reverse_mappings
+                .insert(next_addr.clone(), cur_addr.clone());
+
             if let Some(tx_hash) = self.address_hash_mappings.get(&next_addr) {
                 self.orphan_set.remove(tx_hash);
                 cur_addr = next_addr;
@@ -550,8 +573,8 @@ pub struct TxSet {
 mod tests {
     use super::*;
     use quickcheck::*;
-    use transactions::TestAccount;
     use rand::prelude::*;
+    use transactions::TestAccount;
 
     #[test]
     fn append_fails_on_tx_nonce_that_is_less_or_equal_to_account_nonce() {
@@ -559,7 +582,13 @@ mod tests {
         let state_db = test_helpers::init_tempdb();
         let chain = chain::init(chain_db, state_db, true);
         let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
-        let tx = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 0));
+        let tx = Arc::new(transactions::send_coins(
+            TestAccount::A,
+            TestAccount::B,
+            100,
+            10,
+            0,
+        ));
 
         assert_eq!(mempool.append_tx(tx), Err(MempoolErr::NonceLeq));
     }
@@ -568,10 +597,10 @@ mod tests {
         #[cfg(not(windows))]
         /// Append a set of transactions in 3 stages, checking
         /// the state of the mempool after each stage. Each stage's
-        /// transactions are shuffled such that regardless of the 
+        /// transactions are shuffled such that regardless of the
         /// order in which they are appended, they will yield the
         /// same state.
-        /// 
+        ///
         /// We use only `Send` transactions from 3 different accounts
         /// A, B and C.
         fn append_stress_test() -> bool {
@@ -601,7 +630,7 @@ mod tests {
             let C_3 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::B, 150, 10, 3));
             let C_4 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::B, 10, 10, 4));
             let C_5 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::A, 100, 10, 5));
-            
+
             let mut stage_1 = vec![A_1.clone(), A_2.clone(), B_2.clone(), C_1.clone(), C_3.clone(), A_5.clone()];
             let mut stage_2 = vec![A_4.clone(), B_1.clone(), B_5.clone(), C_5.clone(), C_4.clone(), B_4.clone()];
             let mut stage_3 = vec![A_3.clone(), C_2.clone(), B_3.clone()];
@@ -630,7 +659,7 @@ mod tests {
             assert!(mempool.timestamp_lookup.contains_key(&C_1.tx_hash().unwrap().to_short()));
             assert!(mempool.timestamp_lookup.contains_key(&C_3.tx_hash().unwrap().to_short()));
             assert!(mempool.timestamp_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
-            
+
             // Check timestamp reverse lookup
             let A_1_ts = mempool.timestamp_lookup.get(&A_1.tx_hash().unwrap().to_short()).unwrap().clone();
             let A_2_ts = mempool.timestamp_lookup.get(&A_2.tx_hash().unwrap().to_short()).unwrap().clone();
@@ -711,7 +740,7 @@ mod tests {
             assert!(mempool.timestamp_lookup.contains_key(&C_5.tx_hash().unwrap().to_short()));
             assert!(mempool.timestamp_lookup.contains_key(&C_4.tx_hash().unwrap().to_short()));
             assert!(mempool.timestamp_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
-            
+
             // Check timestamp reverse lookup
             let A_4_ts = mempool.timestamp_lookup.get(&A_4.tx_hash().unwrap().to_short()).unwrap().clone();
             let B_1_ts = mempool.timestamp_lookup.get(&B_1.tx_hash().unwrap().to_short()).unwrap().clone();
@@ -792,7 +821,7 @@ mod tests {
             assert!(mempool.timestamp_lookup.contains_key(&A_3.tx_hash().unwrap().to_short()));
             assert!(mempool.timestamp_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
             assert!(mempool.timestamp_lookup.contains_key(&C_3.tx_hash().unwrap().to_short()));
-            
+
             // Check timestamp reverse lookup
             let A_3_ts = mempool.timestamp_lookup.get(&A_3.tx_hash().unwrap().to_short()).unwrap().clone();
             let B_2_ts = mempool.timestamp_lookup.get(&B_2.tx_hash().unwrap().to_short()).unwrap().clone();

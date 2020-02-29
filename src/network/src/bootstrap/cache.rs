@@ -16,8 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::error::NetworkErr;
 use crate::bootstrap::entry::BootstrapCacheEntry;
+use crate::error::NetworkErr;
 use persistence::PersistentDb;
 use std::net::{IpAddr, SocketAddr};
 use std::str;
@@ -35,7 +35,7 @@ const ENTRIES_COUNT_KEY: &'static [u8] = b"entries_count";
 #[derive(Clone, Debug)]
 /// Interface to the bootstrap cache of the node. This stores
 /// previously encountered node ips to which we can connect to
-/// in the future. 
+/// in the future.
 pub struct BootstrapCache {
     /// The underlying database instance.
     db: PersistentDb,
@@ -46,10 +46,7 @@ pub struct BootstrapCache {
 
 impl BootstrapCache {
     pub fn new(db: PersistentDb, cache_size: u64) -> BootstrapCache {
-        BootstrapCache {
-            db,
-            cache_size,
-        }
+        BootstrapCache { db, cache_size }
     }
 
     /// Returns true if the given address's ip is stored in the bootstrap cache.
@@ -76,22 +73,31 @@ impl BootstrapCache {
                 entries_count += 1;
                 let mut idx = decode_be_u64!(idx).unwrap();
                 idx += 1;
-                let entry_key = format!("{}.{}", hex::encode(crypto::hash_slice(BOOTSTRAP_CACHE_PREFIX.as_bytes()).0), idx);
+                let entry_key = format!(
+                    "{}.{}",
+                    hex::encode(crypto::hash_slice(BOOTSTRAP_CACHE_PREFIX.as_bytes()).0),
+                    idx
+                );
                 let encoded_idx = encode_be_u64!(idx);
 
                 // Store entries count
-                self.db.put(ENTRIES_COUNT_KEY, &encode_be_u64!(entries_count));
+                self.db
+                    .put(ENTRIES_COUNT_KEY, &encode_be_u64!(entries_count));
 
                 // Store index
                 self.db.put(CURRENT_IDX_KEY, &encoded_idx);
 
-                // Store index mapping 
+                // Store index mapping
                 self.db.put(&ip_hash.0, &encoded_idx);
 
                 // Store address
                 self.db.put(entry_key.as_bytes(), ip_str.as_bytes());
             } else {
-                let entry_key = format!("{}.{}", hex::encode(crypto::hash_slice(BOOTSTRAP_CACHE_PREFIX.as_bytes()).0), 0);
+                let entry_key = format!(
+                    "{}.{}",
+                    hex::encode(crypto::hash_slice(BOOTSTRAP_CACHE_PREFIX.as_bytes()).0),
+                    0
+                );
 
                 // Store entries length
                 self.db.put(ENTRIES_COUNT_KEY, &[0, 0, 0, 0, 0, 0, 0, 1]);
@@ -99,7 +105,7 @@ impl BootstrapCache {
                 // Store first index
                 self.db.put(CURRENT_IDX_KEY, &[0, 0, 0, 0, 0, 0, 0, 0]);
 
-                // Store index mapping 
+                // Store index mapping
                 self.db.put(&ip_hash.0, &[0, 0, 0, 0, 0, 0, 0, 0]);
 
                 // Store address
@@ -124,7 +130,11 @@ impl BootstrapCache {
             let mut entries_count = decode_be_u64!(entries_count).unwrap();
             entries_count -= 1;
             let idx = decode_be_u64!(idx).unwrap();
-            let entry_key = format!("{}.{}", hex::encode(crypto::hash_slice(BOOTSTRAP_CACHE_PREFIX.as_bytes()).0), idx);
+            let entry_key = format!(
+                "{}.{}",
+                hex::encode(crypto::hash_slice(BOOTSTRAP_CACHE_PREFIX.as_bytes()).0),
+                idx
+            );
 
             // Remove index mapping
             self.db.delete(&ip_hash.0);
@@ -133,7 +143,8 @@ impl BootstrapCache {
             self.db.delete(entry_key.as_bytes());
 
             // Update entries count
-            self.db.put(ENTRIES_COUNT_KEY, &encode_be_u64!(entries_count));
+            self.db
+                .put(ENTRIES_COUNT_KEY, &encode_be_u64!(entries_count));
 
             // Flush changes
             self.db.flush();
@@ -148,15 +159,15 @@ impl BootstrapCache {
     pub fn entries<'a>(&'a self) -> Box<dyn Iterator<Item = BootstrapCacheEntry> + 'a> {
         Box::new(
             self.db
-                .prefix_iterator(hex::encode(crypto::hash_slice(BOOTSTRAP_CACHE_PREFIX.as_bytes()).0))
+                .prefix_iterator(hex::encode(
+                    crypto::hash_slice(BOOTSTRAP_CACHE_PREFIX.as_bytes()).0,
+                ))
                 .map(|(_k, v)| {
                     let ip_str = str::from_utf8(&v).unwrap();
                     let ip = IpAddr::from_str(&ip_str).unwrap();
 
-                    BootstrapCacheEntry {
-                        addr: ip
-                    }
-                })
+                    BootstrapCacheEntry { addr: ip }
+                }),
         )
     }
 
@@ -175,7 +186,7 @@ impl BootstrapCache {
 mod tests {
     use super::*;
     use hashbrown::HashSet;
-    
+
     #[test]
     fn store_address() {
         let db = test_helpers::init_tempdb();

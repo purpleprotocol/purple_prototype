@@ -24,7 +24,7 @@ use crate::validation::sender::Sender;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
-use crypto::{ShortHash, PublicKey as Pk, SecretKey as Sk, Signature};
+use crypto::{PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -43,10 +43,7 @@ pub struct RejectBlock {
 
 impl RejectBlock {
     pub fn new(nonce: u64, status: BlockRejectStatus) -> RejectBlock {
-        RejectBlock { 
-            nonce,
-            status,
-        }
+        RejectBlock { nonce, status }
     }
 }
 
@@ -89,7 +86,7 @@ impl Packet for RejectBlock {
             match result {
                 0 => BlockRejectStatus::Witnessed,
                 1 => BlockRejectStatus::OrphanPoolFull,
-                _ => return Err(NetworkErr::BadFormat)
+                _ => return Err(NetworkErr::BadFormat),
             }
         } else {
             return Err(NetworkErr::BadFormat);
@@ -103,10 +100,7 @@ impl Packet for RejectBlock {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = RejectBlock { 
-            nonce, 
-            status,
-        };
+        let packet = RejectBlock { nonce, status };
 
         Ok(Arc::new(packet))
     }

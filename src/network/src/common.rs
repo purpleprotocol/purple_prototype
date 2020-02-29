@@ -245,7 +245,10 @@ pub fn handle_packet<N: NetworkInterface>(
         },
 
         _ => {
-            debug!("Could not parse packet with type {} from {}", packet_type, peer_addr);
+            debug!(
+                "Could not parse packet with type {} from {}",
+                packet_type, peer_addr
+            );
             Err(NetworkErr::PacketParseErr)
         }
     }

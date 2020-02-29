@@ -19,9 +19,9 @@
 pub mod inbound;
 pub mod outbound;
 pub mod receiver;
+pub mod receiver_state;
 pub mod sender;
 pub mod sender_state;
-pub mod receiver_state;
 pub mod wrapper;
 
 pub use self::receiver::*;

@@ -198,7 +198,12 @@ impl Packet for Connect {
                 network
                     .bootstrap_cache()
                     .store_address(&peer.ip)
-                    .map_err(|err| warn!("Could not store address {} in the bootstrap cache, reason: {:?}", peer.ip, err))
+                    .map_err(|err| {
+                        warn!(
+                            "Could not store address {} in the bootstrap cache, reason: {:?}",
+                            peer.ip, err
+                        )
+                    })
                     .unwrap_or(());
             }
 

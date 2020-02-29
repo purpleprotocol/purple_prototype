@@ -16,28 +16,28 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::Peer;
+use crate::bootstrap::cache::BootstrapCache;
+use crate::connection::*;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
-use crate::bootstrap::cache::BootstrapCache;
-use crate::connection::*;
 use crate::peer::ConnectionType;
-use crate::validation::sender::Sender as SenderTrait;
 use crate::priority::NetworkPriority;
+use crate::validation::sender::Sender as SenderTrait;
+use crate::Peer;
 use chain::*;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
 use hashbrown::{HashMap, HashSet};
-use parking_lot::RwLock;
 use mempool::Mempool;
-use tokio::time;
+use parking_lot::RwLock;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Duration;
+use tokio::time;
 
 #[cfg(test)]
 use crossbeam_channel::Sender;
@@ -170,11 +170,7 @@ impl NetworkInterface for Network {
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr> {
         info!("Connecting to {}", address);
 
-        connect_to_peer(
-            self.clone(),
-            self.accept_connections.clone(),
-            address,
-        );
+        connect_to_peer(self.clone(), self.accept_connections.clone(), address);
 
         Ok(())
     }
@@ -208,7 +204,12 @@ impl NetworkInterface for Network {
         self.port
     }
 
-    fn send_to_peer(&self, peer: &SocketAddr, packet: Vec<u8>, priority: NetworkPriority) -> Result<(), NetworkErr> {
+    fn send_to_peer(
+        &self,
+        peer: &SocketAddr,
+        packet: Vec<u8>,
+        priority: NetworkPriority,
+    ) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
 
         if let Some(peer) = peers.get(peer) {
@@ -252,7 +253,12 @@ impl NetworkInterface for Network {
         Ok(())
     }
 
-    fn send_to_all_except(&self, exception: &SocketAddr, packet: &[u8], priority: NetworkPriority) -> Result<(), NetworkErr> {
+    fn send_to_all_except(
+        &self,
+        exception: &SocketAddr,
+        packet: &[u8],
+        priority: NetworkPriority,
+    ) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
 
         if peers.is_empty() {
@@ -278,7 +284,12 @@ impl NetworkInterface for Network {
         Ok(())
     }
 
-    fn send_raw(&self, peer: &SocketAddr, packet: &[u8], priority: NetworkPriority) -> Result<(), NetworkErr> {
+    fn send_raw(
+        &self,
+        peer: &SocketAddr,
+        packet: &[u8],
+        priority: NetworkPriority,
+    ) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
 
         if let Some(peer) = peers.get(peer) {
@@ -381,7 +392,8 @@ impl NetworkInterface for Network {
 
         // Spawn a repeating task at a given interval for this peer
         let peer_interval = async move {
-            let mut peer_interval = time::interval(Duration::from_millis(crate::connection::TIMER_INTERVAL));
+            let mut peer_interval =
+                time::interval(Duration::from_millis(crate::connection::TIMER_INTERVAL));
             let mut times_denied: usize = 0;
 
             loop {
@@ -394,8 +406,12 @@ impl NetworkInterface for Network {
                 let peers = peers.read();
                 let peer = peers.get(&addr).unwrap();
 
-                let _ = peer.last_seen.fetch_add(crate::connection::TIMER_INTERVAL, Ordering::SeqCst);
-                let last_ping = peer.last_ping.fetch_add(crate::connection::TIMER_INTERVAL, Ordering::SeqCst);
+                let _ = peer
+                    .last_seen
+                    .fetch_add(crate::connection::TIMER_INTERVAL, Ordering::SeqCst);
+                let last_ping = peer
+                    .last_ping
+                    .fetch_add(crate::connection::TIMER_INTERVAL, Ordering::SeqCst);
 
                 if last_ping > crate::connection::PING_INTERVAL {
                     let mut sender = peer.validator.ping_pong.sender.lock();
@@ -423,7 +439,7 @@ impl NetworkInterface for Network {
                 }
             }
         };
-    
+
         tokio::spawn(peer_interval);
     }
 }

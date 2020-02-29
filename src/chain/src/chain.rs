@@ -18,13 +18,12 @@
 
 use crate::block::*;
 use crate::types::*;
-use bin_tools::*;
-use crypto::{ShortHash, Hash};
 use account::Address;
+use bin_tools::*;
+use crypto::{Hash, ShortHash};
 use elastic_array::ElasticArray128;
 use hashbrown::{HashMap, HashSet};
 use hashdb::HashDB;
-use transactions::Tx;
 use lazy_static::*;
 use lru::LruCache;
 use parking_lot::{Mutex, RwLock};
@@ -32,6 +31,7 @@ use persistence::PersistentDb;
 use std::collections::VecDeque;
 use std::hash::Hash as HashTrait;
 use std::sync::Arc;
+use transactions::Tx;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ChainErr {
@@ -220,7 +220,7 @@ impl<B: Block> ChainRef<B> {
         chain.is_canonical(block_hash)
     }
 
-    /// Returns the current tip of the canonical chain. 
+    /// Returns the current tip of the canonical chain.
     pub fn canonical_tip(&self) -> Arc<B> {
         let chain = self.chain.read();
         chain.canonical_tip.clone()
@@ -307,12 +307,18 @@ impl<B: Block> ChainRef<B> {
 
     pub fn get_account_nonce(&self, address: &Address) -> Option<u64> {
         let chain = self.chain.read();
-        chain.canonical_tip_state.inner_ref().get_account_nonce(address)
+        chain
+            .canonical_tip_state
+            .inner_ref()
+            .get_account_nonce(address)
     }
 
     pub fn get_db_and_state_root(&self) -> (PersistentDb, ShortHash) {
         let chain = self.chain.read();
-        (chain.db.clone(), chain.canonical_tip_state.inner_ref().state_root().clone())
+        (
+            chain.db.clone(),
+            chain.canonical_tip_state.inner_ref().state_root().clone(),
+        )
     }
 }
 
@@ -478,10 +484,7 @@ impl<B: Block> Chain<B> {
             None => {
                 if !found_tip {
                     // Set 0 height
-                    db_ref.put(
-                        &CANONICAL_HEIGHT_KEY,
-                        &[0, 0, 0, 0, 0, 0, 0, 0],
-                    );
+                    db_ref.put(&CANONICAL_HEIGHT_KEY, &[0, 0, 0, 0, 0, 0, 0, 0]);
                 }
 
                 0
@@ -626,10 +629,7 @@ impl<B: Block> Chain<B> {
         self.canonical_tip = new_tip;
 
         // Write tip key
-        self.db.put(
-            &TIP_KEY,
-            &new_tip_hash.0,
-        );
+        self.db.put(&TIP_KEY, &new_tip_hash.0);
 
         // Flush changes
         self.db.flush();
@@ -670,27 +670,18 @@ impl<B: Block> Chain<B> {
         );
 
         // Place block in the ledger
-        self.db.put(
-            &block_hash.0,
-            &block.to_bytes(),
-        );
+        self.db.put(&block_hash.0, &block.to_bytes());
 
         // Write short hash mapping
         let short = block_hash.to_short();
-        self.db.put(
-            &short.0,
-            &block_hash.0,
-        );
+        self.db.put(&short.0, &block_hash.0);
 
         // Set new tip block
         self.canonical_tip = block.clone();
         let mut height = decode_be_u64!(self.db.retrieve(&CANONICAL_HEIGHT_KEY).unwrap()).unwrap();
 
         // Write tip key
-        self.db.put(
-            &TIP_KEY,
-            &block_hash.0,
-        );
+        self.db.put(&TIP_KEY, &block_hash.0);
 
         // Increment height
         height += 1;
@@ -706,16 +697,11 @@ impl<B: Block> Chain<B> {
         // Write block height
         let block_height_key = Self::compute_height_key(&block_hash);
 
-        self.db.put(
-            &block_height_key.0,
-            &encoded_height,
-        );
+        self.db.put(&block_height_key.0, &encoded_height);
 
         // Write height mapping
-        self.db.put(
-            &crypto::hash_slice(&encoded_height).0,
-            &block_hash.0,
-        );
+        self.db
+            .put(&crypto::hash_slice(&encoded_height).0, &block_hash.0);
 
         self.orphan_pool.remove(&block_hash);
         self.short_mappings.remove(&block_hash.to_short());
@@ -779,10 +765,7 @@ impl<B: Block> Chain<B> {
             }
 
             // Write new root block
-            self.db.put(
-                &ROOT_KEY,
-                &cur_block.block_hash().unwrap().0,
-            );
+            self.db.put(&ROOT_KEY, &cur_block.block_hash().unwrap().0);
 
             self.root_state = cur_state.flush().unwrap();
             self.root_block = cur_block;
@@ -798,10 +781,7 @@ impl<B: Block> Chain<B> {
 
     fn write_canonical_height(&mut self, height: u64) {
         let encoded_height = encode_be_u64!(height);
-        self.db.put(
-            &CANONICAL_HEIGHT_KEY,
-            &encoded_height,
-        );
+        self.db.put(&CANONICAL_HEIGHT_KEY, &encoded_height);
     }
 
     fn write_orphan(&mut self, orphan: Arc<B>, orphan_type: OrphanType, inverse_height: u64) {
@@ -828,7 +808,8 @@ impl<B: Block> Chain<B> {
         self.orphan_pool.insert(orphan_hash.clone(), orphan.clone());
 
         // Write to short mappings
-        self.short_mappings.insert(orphan_hash.to_short(), orphan_hash.clone());
+        self.short_mappings
+            .insert(orphan_hash.to_short(), orphan_hash.clone());
 
         // Set max orphan height if this is the case
         self.update_max_orphan_height(height);
@@ -864,8 +845,7 @@ impl<B: Block> Chain<B> {
 
                         // If the orphan directly follows the canonical
                         // tip, write it to the chain.
-                        if orphan.parent_hash() == self.canonical_tip.block_hash().unwrap()
-                        {
+                        if orphan.parent_hash() == self.canonical_tip.block_hash().unwrap() {
                             // Verify append condition
                             let append_condition = match B::append_condition(
                                 orphan.clone(),
@@ -1144,7 +1124,11 @@ impl<B: Block> Chain<B> {
 
     /// Attempts to attach a disconnected chain tip to other
     /// disconnected chains. Returns the final status of the tip.
-    fn attempt_attach(&mut self, tip_hash: &Hash, initial_status: OrphanType) -> Result<OrphanType, ChainErr> {
+    fn attempt_attach(
+        &mut self,
+        tip_hash: &Hash,
+        initial_status: OrphanType,
+    ) -> Result<OrphanType, ChainErr> {
         let tip_height = {
             let tip = self.orphan_pool.get(tip_hash).unwrap();
             tip.height()
@@ -1566,7 +1550,8 @@ impl<B: Block> Chain<B> {
         let block_hash = block.block_hash().unwrap();
 
         // Check for existence
-        if self.orphan_pool.get(&block_hash).is_some() || self.db.retrieve(&block_hash.0).is_some() {
+        if self.orphan_pool.get(&block_hash).is_some() || self.db.retrieve(&block_hash.0).is_some()
+        {
             return Err(ChainErr::AlreadyInChain);
         }
 
@@ -1634,26 +1619,24 @@ impl<B: Block> Chain<B> {
                         return Err(ChainErr::BadHeight);
                     }
 
-                    let parent_state: UnflushedChainState<B::ChainState> = if let (
-                        Some(earliest_checkpoint_height),
-                        Some(last_checkpoint_height),
-                    ) =
-                        (self.earliest_checkpoint_height, self.last_checkpoint_height)
-                    {
-                        if parent_height == last_checkpoint_height {
-                            // Simply retrieve checkpointed state in this case
-                            self.heights_state_mapping
-                                .get(&parent_height)
-                                .unwrap()
-                                .clone()
-                        } else if parent_height > last_checkpoint_height {
-                            self.fetch_next_state(last_checkpoint_height, parent_height)
+                    let parent_state: UnflushedChainState<B::ChainState> =
+                        if let (Some(earliest_checkpoint_height), Some(last_checkpoint_height)) =
+                            (self.earliest_checkpoint_height, self.last_checkpoint_height)
+                        {
+                            if parent_height == last_checkpoint_height {
+                                // Simply retrieve checkpointed state in this case
+                                self.heights_state_mapping
+                                    .get(&parent_height)
+                                    .unwrap()
+                                    .clone()
+                            } else if parent_height > last_checkpoint_height {
+                                self.fetch_next_state(last_checkpoint_height, parent_height)
+                            } else {
+                                self.search_fetch_next_state(parent_height)
+                            }
                         } else {
                             self.search_fetch_next_state(parent_height)
-                        }
-                    } else {
-                        self.search_fetch_next_state(parent_height)
-                    };
+                        };
 
                     let tip_state = B::append_condition(
                         block.clone(),
@@ -1696,8 +1679,7 @@ impl<B: Block> Chain<B> {
                             return Err(ChainErr::BadHeight);
                         }
 
-                        let parent_status =
-                            self.validations_mapping.get_mut(&parent_hash).unwrap();
+                        let parent_status = self.validations_mapping.get_mut(&parent_hash).unwrap();
 
                         match parent_status {
                             OrphanType::DisconnectedTip => {
@@ -1706,8 +1688,7 @@ impl<B: Block> Chain<B> {
                                     .get(&parent_hash)
                                     .unwrap()
                                     .clone();
-                                let tips =
-                                    self.disconnected_heads_mapping.get_mut(&head).unwrap();
+                                let tips = self.disconnected_heads_mapping.get_mut(&head).unwrap();
                                 let (largest_height, _) =
                                     self.disconnected_heads_heights.get(&head).unwrap();
 
@@ -1722,22 +1703,16 @@ impl<B: Block> Chain<B> {
 
                                 // Replace largest height if this is the case
                                 if block.height() > *largest_height {
-                                    self.disconnected_heads_heights.insert(
-                                        head.clone(),
-                                        (block.height(), block_hash.clone()),
-                                    );
+                                    self.disconnected_heads_heights
+                                        .insert(head.clone(), (block.height(), block_hash.clone()));
                                 }
 
-                                self.write_orphan(
-                                    block.clone(),
-                                    OrphanType::DisconnectedTip,
-                                    0,
-                                );
+                                self.write_orphan(block.clone(), OrphanType::DisconnectedTip, 0);
 
                                 self.disconnected_tips_mapping
                                     .insert(block_hash.clone(), head.clone());
-                                let status = self
-                                    .attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
+                                let status =
+                                    self.attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
 
                                 if let OrphanType::DisconnectedTip = status {
                                     self.traverse_inverse(block, 0, false);
@@ -1804,11 +1779,7 @@ impl<B: Block> Chain<B> {
                                 self.attempt_switch(tip);
                             }
                             OrphanType::BelongsToDisconnected => {
-                                self.write_orphan(
-                                    block.clone(),
-                                    OrphanType::DisconnectedTip,
-                                    0,
-                                );
+                                self.write_orphan(block.clone(), OrphanType::DisconnectedTip, 0);
 
                                 let head = {
                                     // Traverse parents until we find the head block
@@ -1816,11 +1787,7 @@ impl<B: Block> Chain<B> {
                                     let mut result = None;
 
                                     loop {
-                                        if self
-                                            .disconnected_heads_mapping
-                                            .get(&current)
-                                            .is_some()
-                                        {
+                                        if self.disconnected_heads_mapping.get(&current).is_some() {
                                             result = Some(current);
                                             break;
                                         }
@@ -1836,15 +1803,14 @@ impl<B: Block> Chain<B> {
                                 };
 
                                 // Add to disconnected mappings
-                                let tips =
-                                    self.disconnected_heads_mapping.get_mut(&head).unwrap();
+                                let tips = self.disconnected_heads_mapping.get_mut(&head).unwrap();
 
                                 tips.insert(block_hash.clone());
                                 self.disconnected_tips_mapping
                                     .insert(block_hash.clone(), head.clone());
 
-                                let status = self
-                                    .attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
+                                let status =
+                                    self.attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
 
                                 if let OrphanType::DisconnectedTip = status {
                                     self.disconnected_tips_mapping
@@ -1883,7 +1849,8 @@ impl<B: Block> Chain<B> {
                                             current = parent_hash;
                                         }
 
-                                        B::from_bytes(&self.db.retrieve(&current.0).unwrap()).unwrap()
+                                        B::from_bytes(&self.db.retrieve(&current.0).unwrap())
+                                            .unwrap()
                                     };
 
                                     // Retrieve state associated with the head's parent
@@ -1970,7 +1937,8 @@ impl<B: Block> Chain<B> {
                         self.orphan_pool.insert(block_hash.clone(), block.clone());
 
                         // Write to short mappings
-                        self.short_mappings.insert(block_hash.to_short(), block_hash.clone());
+                        self.short_mappings
+                            .insert(block_hash.to_short(), block_hash.clone());
 
                         let status =
                             self.attempt_attach(&block_hash, OrphanType::DisconnectedTip)?;
@@ -1987,7 +1955,7 @@ impl<B: Block> Chain<B> {
                                     self.cleanup_paths(&block_hash);
                                     return Err(ChainErr::BadHeight);
                                 }
-                                
+
                                 found_match = Some(tip);
                                 break;
                             }
@@ -2246,7 +2214,7 @@ pub mod tests {
         fn validate_tx(&self, tx: Arc<Tx>) -> bool {
             unimplemented!();
         }
-    
+
         fn apply_tx(&mut self, tx: Arc<Tx>) {
             unimplemented!();
         }
@@ -2313,7 +2281,7 @@ pub mod tests {
         /// chain tip when pruning is enabled. This number should
         /// be equal to `CHECKPOINT_INTERVAL * MAX_CHECKPOINTS`.
         const BLOCKS_TO_KEEP: usize = 100;
-        
+
         type ChainState = DummyState;
 
         fn genesis() -> Arc<Self> {
@@ -2445,15 +2413,30 @@ pub mod tests {
 
         // Now the state should flush with each added block
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(1)).inner());
+        assert_eq!(
+            chain.root_state.clone().inner(),
+            FlushedChainState::new(DummyState::new(1)).inner()
+        );
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(2)).inner());
+        assert_eq!(
+            chain.root_state.clone().inner(),
+            FlushedChainState::new(DummyState::new(2)).inner()
+        );
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(3)).inner());
+        assert_eq!(
+            chain.root_state.clone().inner(),
+            FlushedChainState::new(DummyState::new(3)).inner()
+        );
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(4)).inner());
+        assert_eq!(
+            chain.root_state.clone().inner(),
+            FlushedChainState::new(DummyState::new(4)).inner()
+        );
         chain.append_block(blocks.remove(0)).unwrap();
-        assert_eq!(chain.root_state.clone().inner(), FlushedChainState::new(DummyState::new(5)).inner());
+        assert_eq!(
+            chain.root_state.clone().inner(),
+            FlushedChainState::new(DummyState::new(5)).inner()
+        );
     }
 
     #[test]

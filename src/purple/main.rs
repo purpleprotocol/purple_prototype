@@ -27,33 +27,38 @@ extern crate unwrap;
 #[macro_use]
 extern crate jsonrpc_macros;
 
-#[macro_use(slog_error, slog_info, slog_trace, slog_log, slog_o)] 
+#[macro_use(slog_error, slog_info, slog_trace, slog_log, slog_o)]
 extern crate slog;
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+#[cfg(any(
+    feature = "miner-cpu",
+    feature = "miner-gpu",
+    feature = "miner-cpu-avx",
+    feature = "miner-test-mode"
+))]
 extern crate reqwest;
 
-use slog::Drain;
 use clap::{App, Arg};
 use crypto::{Identity, NodeId, SecretKey as Sk};
 use elastic_array::ElasticArray128;
 use hashdb::HashDB;
-use parking_lot::RwLock;
 use mempool::Mempool;
 use network::bootstrap::cache::BootstrapCache;
 use network::*;
+use parking_lot::RwLock;
 use persistence::PersistentDb;
-use tokio::runtime::{Runtime, Builder};
-use std::thread;
+use slog::Drain;
 use std::collections::HashMap;
 use std::fs;
+use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::net::IpAddr;
-use std::str::FromStr;
+use std::thread;
+use tokio::runtime::{Builder, Runtime};
 
 #[cfg(not(feature = "mimalloc-allocator"))]
 use std::alloc::System;
@@ -70,30 +75,23 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 const DEFAULT_NETWORK_NAME: &'static str = "purple-testnet";
-const BOOTNODES: &'static [&'static str] = &[
-    "95.179.130.222:44034",
-    "45.32.111.18:44034",
-];
+const BOOTNODES: &'static [&'static str] = &["95.179.130.222:44034", "45.32.111.18:44034"];
 
 fn main() {
-    let drain =
-        slog_async::Async::default(
-        slog_envlogger::new(
-        slog_term::CompactFormat::new(
-            slog_term::TermDecorator::new()
-            .stderr().build()
-            ).build().fuse()
-        ));
+    let drain = slog_async::Async::default(slog_envlogger::new(
+        slog_term::CompactFormat::new(slog_term::TermDecorator::new().stderr().build())
+            .build()
+            .fuse(),
+    ));
 
-    let root_logger = slog::Logger::root(drain.fuse(),
-                                         slog_o!("build" => "8jdkj2df", "version" => "0.1.5"));
+    let root_logger = slog::Logger::root(
+        drain.fuse(),
+        slog_o!("build" => "8jdkj2df", "version" => "0.1.5"),
+    );
 
     let _guard = slog_envlogger::init().unwrap();
 
-    slog_scope::scope(
-        &root_logger,
-        || {}
-    );
+    slog_scope::scope(&root_logger, || {});
 
     let argv = parse_cli_args();
     let storage_path = get_storage_path(&argv.network_name);
@@ -112,7 +110,7 @@ fn main() {
     let storage_db_path = db_path.join("node_storage");
     let pow_chain_db_path = db_path.join("pow_chain_db");
     let state_db_path = db_path.join("state_db");
-    let bootstrap_cache_db_path = bootstrap_cache_path.join("bootstrap_cache_db"); 
+    let bootstrap_cache_db_path = bootstrap_cache_path.join("bootstrap_cache_db");
 
     let storage_wal_path = db_path.join("node_storage_wal");
     let pow_chain_wal_path = db_path.join("pow_chain_db_wal");
@@ -127,10 +125,7 @@ fn main() {
         &pow_chain_db_path,
         &pow_chain_wal_path,
     ));
-    let state_db = Arc::new(persistence::open_database(
-        &state_db_path,
-        &state_wal_path,
-    ));
+    let state_db = Arc::new(persistence::open_database(&state_db_path, &state_wal_path));
     let bootstrap_cache_db = Arc::new(persistence::open_database(
         &bootstrap_cache_db_path,
         &bootstrap_cache_wal_path,
@@ -141,8 +136,7 @@ fn main() {
     let bootstrap_cache_db = PersistentDb::new(bootstrap_cache_db, None);
     let bootstrap_cache = BootstrapCache::new(bootstrap_cache_db, argv.bootstrap_cache_size);
 
-    let pow_chain =
-        chain::init(pow_chain_db, state_db, argv.archival_mode);
+    let pow_chain = chain::init(pow_chain_db, state_db, argv.archival_mode);
 
     info!("Database initialization was successful!");
 
@@ -151,7 +145,12 @@ fn main() {
     } else {
         info!("Initializing mempool...");
         let main_cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME).to_short();
-        let mempool = Arc::new(RwLock::new(Mempool::new(pow_chain.clone(), argv.mempool_size, vec![main_cur_hash], 80)));
+        let mempool = Arc::new(RwLock::new(Mempool::new(
+            pow_chain.clone(),
+            argv.mempool_size,
+            vec![main_cur_hash],
+            80,
+        )));
         info!("Mempool initialization was successful!");
 
         Some(mempool)
@@ -172,7 +171,12 @@ fn main() {
         .build()
         .unwrap();
 
-    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+    #[cfg(any(
+        feature = "miner-cpu",
+        feature = "miner-gpu",
+        feature = "miner-cpu-avx",
+        feature = "miner-test-mode"
+    ))]
     let (our_ip, mut runtime) = {
         debug!("Retrieving external ip...");
 
@@ -184,7 +188,12 @@ fn main() {
         (our_ip, runtime)
     };
 
-    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+    #[cfg(any(
+        feature = "miner-cpu",
+        feature = "miner-gpu",
+        feature = "miner-cpu-avx",
+        feature = "miner-test-mode"
+    ))]
     let network = Network::new(
         node_id,
         argv.port,
@@ -199,7 +208,12 @@ fn main() {
         Some(our_ip),
     );
 
-    #[cfg(not(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode")))]
+    #[cfg(not(any(
+        feature = "miner-cpu",
+        feature = "miner-gpu",
+        feature = "miner-cpu-avx",
+        feature = "miner-test-mode"
+    )))]
     let network = Network::new(
         node_id,
         argv.port,
@@ -240,10 +254,16 @@ fn main() {
             argv.bootnodes.clone(),
             argv.port,
             true,
-        ).await;
+        )
+        .await;
 
         // Start miner related jobs
-        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+        #[cfg(any(
+            feature = "miner-cpu",
+            feature = "miner-gpu",
+            feature = "miner-cpu-avx",
+            feature = "miner-test-mode"
+        ))]
         {
             if argv.start_mining {
                 #[cfg(feature = "miner-test-mode")]
@@ -253,7 +273,8 @@ fn main() {
                 let proof_delay = None;
 
                 // Start mining
-                crate::jobs::start_miner(pow_chain, network.clone(), our_ip, proof_delay).expect("Could not start miner");
+                crate::jobs::start_miner(pow_chain, network.clone(), our_ip, proof_delay)
+                    .expect("Could not start miner");
             }
         }
 
@@ -262,23 +283,32 @@ fn main() {
     });
 }
 
-#[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+#[cfg(any(
+    feature = "miner-cpu",
+    feature = "miner-gpu",
+    feature = "miner-cpu-avx",
+    feature = "miner-test-mode"
+))]
 /// Returns our ip address
 fn fetch_ip(mut runtime: Runtime) -> (IpAddr, Runtime) {
     let fut = async {
         let resp = reqwest::get("https://api.ipify.org?format=json")
             .await
-            .expect("Could not retrieve external ip address! Please re-start the core to try again!");
-        
-            resp
-                .json::<HashMap<String, String>>()
-                .await
-                .expect("Could not parse external ip address! Please re-start the core to try again!")
+            .expect(
+                "Could not retrieve external ip address! Please re-start the core to try again!",
+            );
+
+        resp.json::<HashMap<String, String>>()
+            .await
+            .expect("Could not parse external ip address! Please re-start the core to try again!")
     };
 
     let resp: HashMap<String, String> = runtime.block_on(fut);
-    let ip_str = resp.get("ip").expect("Could not parse external ip address! Please re-start the core to try again!");
-    let ip = IpAddr::from_str(&ip_str).expect("Could not parse external ip address! Please re-start the core to try again!");
+    let ip_str = resp
+        .get("ip")
+        .expect("Could not parse external ip address! Please re-start the core to try again!");
+    let ip = IpAddr::from_str(&ip_str)
+        .expect("Could not parse external ip address! Please re-start the core to try again!");
 
     (ip, runtime)
 }
@@ -331,7 +361,12 @@ struct Argv {
     archival_mode: bool,
     wipe: bool,
 
-    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+    #[cfg(any(
+        feature = "miner-cpu",
+        feature = "miner-gpu",
+        feature = "miner-cpu-avx",
+        feature = "miner-test-mode"
+    ))]
     start_mining: bool,
 
     #[cfg(feature = "miner-test-mode")]
@@ -417,28 +452,31 @@ fn parse_cli_args() -> Argv {
                 .help("Whether to prune the ledger or to keep the entire transaction history. False by default"),
         );
 
-    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+    #[cfg(any(
+        feature = "miner-cpu",
+        feature = "miner-gpu",
+        feature = "miner-cpu-avx",
+        feature = "miner-test-mode"
+    ))]
     let argv = {
         // Miner only flags
-        argv
-            .arg(
-                Arg::with_name("start_mining")
-                    .long("start-mining")
-                    .help("Start the node as a miner node")
-            )
+        argv.arg(
+            Arg::with_name("start_mining")
+                .long("start-mining")
+                .help("Start the node as a miner node"),
+        )
     };
 
     #[cfg(feature = "miner-test-mode")]
     let argv = {
         // Miner test mode only flags
-        argv
-            .arg(
-                Arg::with_name("proof_delay")
-                    .long("proof-delay")
-                    .value_name("MILLISECONDS")
-                    .help("The time to wait before sending a valid proof. Only used in test mode!")
-                    .takes_value(true),
-            )
+        argv.arg(
+            Arg::with_name("proof_delay")
+                .long("proof-delay")
+                .value_name("MILLISECONDS")
+                .help("The time to wait before sending a valid proof. Only used in test mode!")
+                .takes_value(true),
+        )
     };
 
     let matches = argv.get_matches();
@@ -495,7 +533,12 @@ fn parse_cli_args() -> Argv {
     let no_bootnodes: bool = matches.is_present("no_bootnodes");
     let bootnodes = if no_bootnodes { Vec::new() } else { bootnodes };
 
-    #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+    #[cfg(any(
+        feature = "miner-cpu",
+        feature = "miner-gpu",
+        feature = "miner-cpu-avx",
+        feature = "miner-test-mode"
+    ))]
     let start_mining: bool = matches.is_present("start_mining");
 
     Argv {
@@ -510,11 +553,16 @@ fn parse_cli_args() -> Argv {
         wipe,
         port,
 
-        #[cfg(any(feature = "miner-cpu", feature = "miner-gpu", feature = "miner-cpu-avx", feature = "miner-test-mode"))]
+        #[cfg(any(
+            feature = "miner-cpu",
+            feature = "miner-gpu",
+            feature = "miner-cpu-avx",
+            feature = "miner-test-mode"
+        ))]
         start_mining,
 
         #[cfg(feature = "miner-test-mode")]
-        proof_delay
+        proof_delay,
     }
 }
 

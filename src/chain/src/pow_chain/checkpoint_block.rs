@@ -18,17 +18,17 @@
 
 use crate::block::Block;
 use crate::chain::*;
-use crate::pow_chain::PowChainState;
 use crate::pow_chain::chain_state::BlockType;
+use crate::pow_chain::PowChainState;
 use crate::types::*;
-use hashbrown::HashSet;
 use account::NormalAddress;
-use crypto::{NodeId, Signature, SecretKey as Sk};
 use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
 use crypto::Hash;
 use crypto::PublicKey;
+use crypto::{NodeId, SecretKey as Sk, Signature};
+use hashbrown::HashSet;
 use lazy_static::*;
 use miner::{Proof, PROOF_SIZE};
 use std::boxed::Box;
@@ -142,11 +142,13 @@ impl Block for CheckpointBlock {
         // Verify the signature of the miner over the block
         if !block.verify_miner_sig() {
             return Err(ChainErr::BadAppendCondition(AppendCondErr::BadMinerSig));
-        }  
+        }
 
         // Verify that we accept checkpoint blocks
         if !chain_state.accepts_checkpoint() {
-            return Err(ChainErr::BadAppendCondition(AppendCondErr::DoesntAcceptBlockType));
+            return Err(ChainErr::BadAppendCondition(
+                AppendCondErr::DoesntAcceptBlockType,
+            ));
         }
 
         if block.height() != chain_state.height + 1 {
@@ -350,7 +352,11 @@ impl CheckpointBlock {
 
     pub fn verify_miner_sig(&self) -> bool {
         let message = self.compute_message();
-        crypto::verify(&message, self.miner_signature.as_ref().unwrap(), &self.miner_id.0)
+        crypto::verify(
+            &message,
+            self.miner_signature.as_ref().unwrap(),
+            &self.miner_id.0,
+        )
     }
 
     pub fn compute_hash(&mut self) {
@@ -400,9 +406,13 @@ mod tests {
     use crate::test_helpers::*;
 
     macro_rules! is_enum_variant {
-        ($v:expr, $p:pat) => (
-            if let $p = $v { true } else { false }
-        );
+        ($v:expr, $p:pat) => {
+            if let $p = $v {
+                true
+            } else {
+                false
+            }
+        };
     }
 
     quickcheck! {

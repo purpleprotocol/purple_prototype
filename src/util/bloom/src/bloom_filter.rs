@@ -17,10 +17,10 @@
 */
 
 use crate::error::BloomErr;
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
 use bloomfilter::Bloom as BloomFilter;
-use std::io::Cursor;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::fmt;
+use std::io::Cursor;
 
 /// The size of an item in the bloom filter in bytes
 pub const ITEM_SIZE: usize = 8;
@@ -138,13 +138,15 @@ impl Bloom {
             return Err(BloomErr::ParseError);
         };
 
-        let sip_keys = [
-            (sip1, sip2),
-            (sip3, sip4),
-        ];
+        let sip_keys = [(sip1, sip2), (sip3, sip4)];
 
         Ok(Bloom {
-            inner: BloomFilter::from_existing(&bitmap, (bitmap_size as u64) * 8, hash_functions, sip_keys),
+            inner: BloomFilter::from_existing(
+                &bitmap,
+                (bitmap_size as u64) * 8,
+                hash_functions,
+                sip_keys,
+            ),
             bitmap_size,
             items_count,
         })
@@ -159,7 +161,12 @@ impl Clone for Bloom {
         let items_count = self.items_count;
 
         Bloom {
-            inner: BloomFilter::from_existing(&self.inner.bitmap(), (bitmap_size as u64) * 8, hash_functions, sip_keys),
+            inner: BloomFilter::from_existing(
+                &self.inner.bitmap(),
+                (bitmap_size as u64) * 8,
+                hash_functions,
+                sip_keys,
+            ),
             bitmap_size,
             items_count,
         }
@@ -177,15 +184,11 @@ impl PartialEq for Bloom {
         let other_bitmap_size = self.bitmap_size;
         let other_items_count = self.items_count;
 
-        sip_keys == other_sip_keys 
-        &&
-        hash_functions == other_hash_functions
-        &&
-        bitmap_size == other_bitmap_size
-        &&
-        items_count == other_items_count
-        &&
-        self.inner.bitmap() == other.inner.bitmap() 
+        sip_keys == other_sip_keys
+            && hash_functions == other_hash_functions
+            && bitmap_size == other_bitmap_size
+            && items_count == other_items_count
+            && self.inner.bitmap() == other.inner.bitmap()
     }
 }
 
@@ -209,14 +212,13 @@ impl Arbitrary for Bloom {
 
             let mut v = [0; ITEM_SIZE];
             v.copy_from_slice(&v_le);
-            
+
             bloom.set(&v);
         }
 
         bloom
     }
 }
-
 
 #[cfg(test)]
 mod tests {

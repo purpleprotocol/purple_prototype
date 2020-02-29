@@ -18,12 +18,12 @@
 
 use crate::block::Block;
 use crate::chain::*;
-use crate::types::*;
 use crate::pow_chain::checkpoint_block::CheckpointBlock;
 use crate::pow_chain::transaction_block::TransactionBlock;
 use crate::pow_chain::PowChainState;
-use crypto::Hash;
+use crate::types::*;
 use chrono::prelude::*;
+use crypto::Hash;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -73,17 +73,11 @@ impl Block for PowBlock {
 
     fn block_hash(&self) -> Option<Hash> {
         match *self {
-            PowBlock::Genesis => {
-                Some(crypto::hash_slice(GENESIS_HASH_KEY))
-            }
+            PowBlock::Genesis => Some(crypto::hash_slice(GENESIS_HASH_KEY)),
 
-            PowBlock::Checkpoint(ref block) => {
-                block.block_hash()
-            }
+            PowBlock::Checkpoint(ref block) => block.block_hash(),
 
-            PowBlock::Transaction(ref block) => {
-                block.block_hash()
-            }
+            PowBlock::Transaction(ref block) => block.block_hash(),
         }
     }
 
@@ -93,13 +87,9 @@ impl Block for PowBlock {
                 unimplemented!();
             }
 
-            PowBlock::Checkpoint(ref block) => {
-                block.parent_hash()
-            }
+            PowBlock::Checkpoint(ref block) => block.parent_hash(),
 
-            PowBlock::Transaction(ref block) => {
-                block.parent_hash()
-            }
+            PowBlock::Transaction(ref block) => block.parent_hash(),
         }
     }
 
@@ -109,47 +99,35 @@ impl Block for PowBlock {
                 unimplemented!();
             }
 
-            PowBlock::Checkpoint(ref block) => {
-                block.timestamp()
-            }
+            PowBlock::Checkpoint(ref block) => block.timestamp(),
 
-            PowBlock::Transaction(ref block) => {
-                block.timestamp()
-            }
+            PowBlock::Transaction(ref block) => block.timestamp(),
         }
     }
 
     fn height(&self) -> u64 {
         match *self {
-            PowBlock::Genesis => {
-                0
-            }
+            PowBlock::Genesis => 0,
 
-            PowBlock::Checkpoint(ref block) => {
-                block.height()
-            }
+            PowBlock::Checkpoint(ref block) => block.height(),
 
-            PowBlock::Transaction(ref block) => {
-                block.height()
-            }
+            PowBlock::Transaction(ref block) => block.height(),
         }
     }
 
     fn after_write() -> Option<Box<dyn FnMut(Arc<PowBlock>)>> {
-        let fun = |block: Arc<PowBlock>| {
-            match *block {
-                PowBlock::Genesis => { }
+        let fun = |block: Arc<PowBlock>| match *block {
+            PowBlock::Genesis => {}
 
-                PowBlock::Checkpoint(ref block) => {
-                    if let Some(mut closure) = CheckpointBlock::after_write() {
-                        closure(block.clone()) 
-                    }
+            PowBlock::Checkpoint(ref block) => {
+                if let Some(mut closure) = CheckpointBlock::after_write() {
+                    closure(block.clone())
                 }
+            }
 
-                PowBlock::Transaction(ref block) => {
-                    if let Some(mut closure) = TransactionBlock::after_write() {
-                        closure(block.clone()) 
-                    }
+            PowBlock::Transaction(ref block) => {
+                if let Some(mut closure) = TransactionBlock::after_write() {
+                    closure(block.clone())
                 }
             }
         };
@@ -157,9 +135,13 @@ impl Block for PowBlock {
         Some(Box::new(fun))
     }
 
-    fn append_condition(block: Arc<Self>, chain_state: Self::ChainState, branch_type: BranchType) -> Result<Self::ChainState, ChainErr> {
+    fn append_condition(
+        block: Arc<Self>,
+        chain_state: Self::ChainState,
+        branch_type: BranchType,
+    ) -> Result<Self::ChainState, ChainErr> {
         match *block {
-            PowBlock::Genesis => { 
+            PowBlock::Genesis => {
                 unimplemented!();
             }
 
@@ -175,17 +157,11 @@ impl Block for PowBlock {
 
     fn to_bytes(&self) -> Vec<u8> {
         match *self {
-            PowBlock::Genesis => {
-                Vec::new()
-            }
+            PowBlock::Genesis => Vec::new(),
 
-            PowBlock::Checkpoint(ref block) => {
-                block.to_bytes()
-            }
+            PowBlock::Checkpoint(ref block) => block.to_bytes(),
 
-            PowBlock::Transaction(ref block) => {
-                block.to_bytes()
-            }
+            PowBlock::Transaction(ref block) => block.to_bytes(),
         }
     }
 
@@ -205,9 +181,7 @@ impl Block for PowBlock {
                 Ok(Arc::new(PowBlock::Transaction(block))) // TODO: Make this less ugly
             }
 
-            _ => {
-                Err("Invalid block type!")
-            }
+            _ => Err("Invalid block type!"),
         }
     }
 }

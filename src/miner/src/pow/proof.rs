@@ -163,7 +163,9 @@ impl Proof {
         let mut cursor = Cursor::new(bytes);
         let mut nonces = Vec::with_capacity(PROOF_SIZE);
         let edge_bits = cursor.read_u8().map_err(|_| "Invalid Proof")?;
-        let nonce = cursor.read_u32::<BigEndian>().map_err(|_| "Invalid Proof")?;
+        let nonce = cursor
+            .read_u32::<BigEndian>()
+            .map_err(|_| "Invalid Proof")?;
 
         for _ in 0..PROOF_SIZE {
             if let Ok(result) = cursor.read_u64::<BigEndian>() {

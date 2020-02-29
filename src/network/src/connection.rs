@@ -22,24 +22,24 @@ use crate::network::Network;
 use crate::packet::Packet;
 use crate::packets::connect::Connect;
 use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
-use crate::validation::sender::Sender;
 use crate::priority::NetworkPriority;
-use persistence::PersistentDb;
+use crate::validation::sender::Sender;
+use bytes::{Bytes, BytesMut};
 use crypto::{Nonce, Signature};
+use persistence::PersistentDb;
+use rand::prelude::IteratorRandom;
 use std::iter;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
+use tokio::net::tcp::ReadHalf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
-use tokio_io_timeout::*;
-use tokio::time;
-use tokio::net::tcp::ReadHalf;
-use tokio::io::{self, BufWriter, BufReader, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc::error::TryRecvError;
-use rand::prelude::IteratorRandom;
-use bytes::{Bytes, BytesMut};
+use tokio::time;
+use tokio_io_timeout::*;
 
 /// Peer timeout interval
 pub(crate) const PEER_TIMEOUT: u64 = 15000;
@@ -60,14 +60,16 @@ pub fn start_listener(network: Network, accept_connections: Arc<AtomicBool>) {
     let fut = async move {
         // Bind the server's socket.
         let addr: SocketAddr = format!("0.0.0.0:{}", network.port()).parse().unwrap();
-        let mut listener: TcpListener = TcpListener::bind(&addr).await.expect("unable to bind TCP listener");
+        let mut listener: TcpListener = TcpListener::bind(&addr)
+            .await
+            .expect("unable to bind TCP listener");
         let accept_connections_clone = accept_connections.clone();
 
         let server = async move {
             loop {
                 if !accept_connections_clone.load(Ordering::Relaxed) {
                     continue;
-                } 
+                }
 
                 match listener.accept().await {
                     Ok((s, _addr)) => {
@@ -96,11 +98,7 @@ pub fn start_listener(network: Network, accept_connections: Arc<AtomicBool>) {
     tokio::spawn(fut);
 }
 
-pub fn connect_to_peer(
-    network: Network,
-    accept_connections: Arc<AtomicBool>,
-    addr: &SocketAddr,
-) {
+pub fn connect_to_peer(network: Network, accept_connections: Arc<AtomicBool>, addr: &SocketAddr) {
     let addr = addr.clone();
     let connect = async move {
         match TcpStream::connect(addr).await {
@@ -121,7 +119,7 @@ fn process_connection(
     let socket = async move {
         let refuse_connection = Arc::new(AtomicBool::new(false));
         let addr = sock.peer_addr().unwrap();
-        
+
         // Split up the reading and writing parts of the
         // socket.
         let (reader, writer) = sock.split();
@@ -139,18 +137,19 @@ fn process_connection(
 
         // Create outbound channels
         let (low_outbound_sender, mut low_outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
-        let (medium_outbound_sender, mut medium_outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
+        let (medium_outbound_sender, mut medium_outbound_receiver) =
+            mpsc::channel(OUTBOUND_BUF_SIZE);
         let (high_outbound_sender, mut high_outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
 
         // Create new peer and add it to the peer table
         let peer = Peer::new(
-            None, 
-            addr, 
-            client_or_server, 
-            Some(low_outbound_sender), 
+            None,
+            addr,
+            client_or_server,
+            Some(low_outbound_sender),
             Some(medium_outbound_sender),
             Some(high_outbound_sender),
-            network.bootstrap_cache.clone()
+            network.bootstrap_cache.clone(),
         );
 
         let (node_id, skey) = {
@@ -161,7 +160,7 @@ fn process_connection(
 
             (network.node_id.clone(), network.secret_key.clone())
         };
-    
+
         let network_clone = network.clone();
         let network_clone2 = network.clone();
         let network_clone3 = network.clone();
@@ -177,7 +176,7 @@ fn process_connection(
                 let mut writer = BufWriter::new(writer);
                 let connect = {
                     let mut peers = network.peers.read();
-        
+
                     if let Some(peer) = peers.get(&addr) {
                         // Write a connect packet if we are the client.
                         match client_or_server {
@@ -187,7 +186,7 @@ fn process_connection(
                                 connect.sign(&skey);
                                 Some(connect)
                             }
-        
+
                             _ => None
                         }
                     } else {
@@ -195,7 +194,7 @@ fn process_connection(
                         return;
                     }
                 };
-        
+
                 // Send connect packet if we are the client
                 if let Some(connect) = connect {
                     let packet = async {
@@ -204,15 +203,15 @@ fn process_connection(
                             crate::common::wrap_packet(&packet, network.network_name.as_str());
                         packet
                     }.await;
-                    
+
                     debug!("Sending connect packet to {}", addr);
-        
+
                     if let Err(err) = writer.write(&packet).await {
                         warn!("Write to {:?} failed: {:?}", addr, err);
                         return;
                     }
                 }
-        
+
                 // Poll outbound channels in the order of their priority
                 loop {
                     match high_outbound_receiver.try_recv() {
@@ -220,11 +219,11 @@ fn process_connection(
                             if let Err(err) = writer.write(&packet).await {
                                 warn!("Write to {:?} failed: {:?}", addr, err)
                             }
-                            
+
                             tokio::task::yield_now().await;
                             continue;
                         }
-        
+
                         Err(TryRecvError::Closed) => {
                             debug!("Write half of {} closed", addr);
                             break;
@@ -238,11 +237,11 @@ fn process_connection(
                             if let Err(err) = writer.write(&packet).await {
                                 warn!("Write to {:?} failed: {:?}", addr, err)
                             }
-                            
+
                             tokio::task::yield_now().await;
                             continue;
                         }
-        
+
                         Err(TryRecvError::Closed) => {
                             debug!("Write half of {} closed", addr);
                             break;
@@ -260,7 +259,7 @@ fn process_connection(
                             tokio::task::yield_now().await;
                             continue;
                         }
-        
+
                         Err(TryRecvError::Closed) => {
                             debug!("Write half of {} closed", addr);
                             break;
@@ -275,7 +274,7 @@ fn process_connection(
                 let network = network_clone3;
 
                 network.remove_peer_with_addr(&addr);
-        
+
                 // Re-enable connections
                 if network.peer_count() < network.max_peers {
                     accept_connections.store(true, Ordering::Relaxed);
@@ -283,22 +282,22 @@ fn process_connection(
 
                 debug!("Writer for {} closed", addr_clone1);
             }
-            
+
             // Reader future
             _ = async move {
                 let reader = BufReader::new(reader);
                 let network = network_clone2;
-        
+
                 if let Err(err) = socket_reader(network.clone(), addr.clone(), reader, refuse_connection).await {
                     warn!("Socket reader error for {:?}: {:?}", addr, err);
                 };
-        
+
                 info!("Connection to {} closed", addr);
             } => {
                 let network = network_clone4;
 
                 network.remove_peer_with_addr(&addr);
-        
+
                 // Re-enable connections
                 if network.peer_count() < network.max_peers {
                     accept_connections.store(true, Ordering::Relaxed);
@@ -321,7 +320,7 @@ pub fn start_peer_list_refresh_interval(
     db: PersistentDb,
     max_peers: usize,
     bootnodes: Vec<SocketAddr>,
-    port: u16
+    port: u16,
 ) {
     debug!("Starting peer list refresh interval...");
 
@@ -337,9 +336,12 @@ pub fn start_peer_list_refresh_interval(
             let peers = peers.read();
 
             if peers.len() < network.max_peers {
-                debug!("We are missing {} peers, requesting more peers...", network.max_peers - peers.len());
+                debug!(
+                    "We are missing {} peers, requesting more peers...",
+                    network.max_peers - peers.len()
+                );
 
-                // Choose a random node to request peers from. 
+                // Choose a random node to request peers from.
                 // TODO: Ask multiple peers
                 let peer = peers
                     .iter()
@@ -352,30 +354,43 @@ pub fn start_peer_list_refresh_interval(
                     let missing_peers = network.max_peers - peers.len();
                     let peer = peers.get(&peer_addr).unwrap();
                     let sender = peer.validator.request_peers.sender.clone();
-                    
+
                     let result = {
                         let mut sender = sender.lock();
 
-                        sender
-                            .send(missing_peers as u8)
-                            .map_err(|err| warn!("Could not send packet to {}, reason: {:?}", peer_addr, err))
+                        sender.send(missing_peers as u8).map_err(|err| {
+                            warn!("Could not send packet to {}, reason: {:?}", peer_addr, err)
+                        })
                     };
 
                     if let Ok(packet) = result {
                         network
                             .send_to_peer(&peer_addr, packet.to_bytes(), NetworkPriority::Medium)
-                            .map_err(|err| warn!("Could not send packet to {}, reason: {:?}", peer_addr, err))
+                            .map_err(|err| {
+                                warn!("Could not send packet to {}, reason: {:?}", peer_addr, err)
+                            })
                             .unwrap_or(());
                     }
                 } else {
-                    debug!("No connections available! Fallback to bootstrap script...");  
-                    crate::bootstrap::bootstrap(network.clone(), accept_connections.clone(), db.clone(), max_peers, bootnodes.clone(), port, false);
+                    debug!("No connections available! Fallback to bootstrap script...");
+                    crate::bootstrap::bootstrap(
+                        network.clone(),
+                        accept_connections.clone(),
+                        db.clone(),
+                        max_peers,
+                        bootnodes.clone(),
+                        port,
+                        false,
+                    );
                 }
             } else if peers.len() == network.max_peers {
                 debug!("We have enough peers. No need to refresh the peer list");
             } else {
-                debug!("More peers than needed found! Disconnecting from {} peers.", peers.len() - network.max_peers);
-                
+                debug!(
+                    "More peers than needed found! Disconnecting from {} peers.",
+                    peers.len() - network.max_peers
+                );
+
                 // TODO: Disconnect from the peers with the highest latency
                 let iter = peers
                     .iter()
@@ -385,7 +400,12 @@ pub fn start_peer_list_refresh_interval(
                 for id in iter {
                     network
                         .disconnect(id)
-                        .map_err(|err| warn!("Could not disconnect from peer with id {:?}! Reason: {:?}", id, err))
+                        .map_err(|err| {
+                            warn!(
+                                "Could not disconnect from peer with id {:?}! Reason: {:?}",
+                                id, err
+                            )
+                        })
                         .unwrap_or(());
                 }
             }
@@ -395,7 +415,12 @@ pub fn start_peer_list_refresh_interval(
     tokio::spawn(refresh_interval);
 }
 
-async fn socket_reader(mut network: Network, addr: SocketAddr, mut reader: BufReader<TimeoutReader<ReadHalf<'_>>>, refuse_connection: Arc<AtomicBool>) -> Result<(), io::Error> {
+async fn socket_reader(
+    mut network: Network,
+    addr: SocketAddr,
+    mut reader: BufReader<TimeoutReader<ReadHalf<'_>>>,
+    refuse_connection: Arc<AtomicBool>,
+) -> Result<(), io::Error> {
     let mut header_buf: [u8; crate::common::HEADER_SIZE] = [0; crate::common::HEADER_SIZE];
 
     loop {
@@ -409,7 +434,8 @@ async fn socket_reader(mut network: Network, addr: SocketAddr, mut reader: BufRe
 
         // Decode header
         let header = async {
-            let header = crate::common::decode_header(&header_buf).map_err(|err| { // TODO: Handle header read error
+            let header = crate::common::decode_header(&header_buf).map_err(|err| {
+                // TODO: Handle header read error
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("Header read error for {}: {:?}", addr, err),
@@ -418,7 +444,8 @@ async fn socket_reader(mut network: Network, addr: SocketAddr, mut reader: BufRe
 
             // Only accept our current network version
             if header.network_version != crate::common::NETWORK_VERSION {
-                return Err(io::Error::new( // TODO: Handle header read error
+                return Err(io::Error::new(
+                    // TODO: Handle header read error
                     io::ErrorKind::Other,
                     format!(
                         "Header read error for {}: {:?}",
@@ -429,14 +456,15 @@ async fn socket_reader(mut network: Network, addr: SocketAddr, mut reader: BufRe
             }
 
             Ok(header)
-        }.await?;
-        
+        }
+        .await?;
+
         // Read packet from socket
         let mut packet_buf = BytesMut::with_capacity(header.packet_len as usize);
         reader.read_exact(&mut packet_buf).await?;
-        
+
         let bytes_read = packet_buf.len();
-        let network_clone = network.clone();  
+        let network_clone = network.clone();
         let addr_clone = addr.clone();
 
         // Account bytes read
@@ -445,7 +473,7 @@ async fn socket_reader(mut network: Network, addr: SocketAddr, mut reader: BufRe
             let acc = {
                 let peers = network_clone.peers();
                 let peers = peers.read();
-                
+
                 if let Some(peer) = peers.get(&addr_clone) {
                     peer.bytes_read.clone()
                 } else {
@@ -453,22 +481,23 @@ async fn socket_reader(mut network: Network, addr: SocketAddr, mut reader: BufRe
                     return;
                 }
             };
-            
+
             debug!("Finished reading {} bytes from {}", bytes_read, addr_clone);
             acc.fetch_add(bytes_read as u64, Ordering::SeqCst);
         });
 
         // Verify packet CRC32
         async {
-            crate::common::verify_crc32(&header, &packet_buf, network.network_name.as_str()).map_err(
-                |err| {
-                    io::Error::new( // TODO: Handle header read error
+            crate::common::verify_crc32(&header, &packet_buf, network.network_name.as_str())
+                .map_err(|err| {
+                    io::Error::new(
+                        // TODO: Handle header read error
                         io::ErrorKind::Other,
                         format!("Header read error for {}: {:?}", addr, err),
                     )
-                },
-            )
-        }.await?;
+                })
+        }
+        .await?;
 
         // Decrypt packet
         let packet: Bytes = async {
@@ -491,26 +520,29 @@ async fn socket_reader(mut network: Network, addr: SocketAddr, mut reader: BufRe
                     let sig_buf = &packet_buf[12..76];
                     let sig = Signature::new(sig_buf);
 
-                    // Get a slice of the remaining length 
+                    // Get a slice of the remaining length
                     // which is the packet payload.
                     let packet_slice = &packet_buf[76..];
 
                     // Verify packet signature
                     if !crypto::verify(packet_slice, &sig, &peer.id.as_ref().unwrap().0) {
-                        return Err(io::Error::new( // TODO: Handle signature error
+                        return Err(io::Error::new(
+                            // TODO: Handle signature error
                             io::ErrorKind::Other,
                             format!("Packet signature error for {}", addr),
                         ));
                     }
 
                     // Decrypt payload
-                    let decrypted = crate::common::decrypt(packet_slice, &nonce, peer.tx.as_ref().unwrap())
-                        .map_err(|_| {
-                            io::Error::new( // TODO: Handle encryption error
-                                io::ErrorKind::Other,
-                                format!("Encryption error for {}", addr),
-                            )
-                        })?;
+                    let decrypted =
+                        crate::common::decrypt(packet_slice, &nonce, peer.tx.as_ref().unwrap())
+                            .map_err(|_| {
+                                io::Error::new(
+                                    // TODO: Handle encryption error
+                                    io::ErrorKind::Other,
+                                    format!("Encryption error for {}", addr),
+                                )
+                            })?;
 
                     buf.extend_from_slice(&decrypted);
                 } else {
@@ -526,7 +558,8 @@ async fn socket_reader(mut network: Network, addr: SocketAddr, mut reader: BufRe
                     format!("Lost connection to {}", addr),
                 ));
             }
-        }.await?;
+        }
+        .await?;
 
         // Process packet
         let result = async { network.process_packet(&addr, &packet) }.await;
@@ -554,7 +587,8 @@ async fn socket_reader(mut network: Network, addr: SocketAddr, mut reader: BufRe
                     warn!("Packet process error for {}: {:?}", addr.clone(), err);
                 }
             }
-        }.await;
+        }
+        .await;
     }
 
     Ok(())

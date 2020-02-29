@@ -18,10 +18,10 @@
 
 #![allow(unused)]
 
-use crate::network::Network;
 use crate::interface::NetworkInterface;
-use std::time::Duration;
+use crate::network::Network;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 /// Starts jobs that are executed once every ~1 second.
 pub async fn start_periodic_jobs(network: Network) {

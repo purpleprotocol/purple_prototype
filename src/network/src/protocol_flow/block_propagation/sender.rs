@@ -18,13 +18,13 @@
 
 use crate::error::NetworkErr;
 use crate::packets::*;
-use crate::protocol_flow::block_propagation::sender_state::BlockSenderState;
-use crate::protocol_flow::block_propagation::outbound::OutboundPacket;
 use crate::protocol_flow::block_propagation::inbound::InboundPacket;
+use crate::protocol_flow::block_propagation::outbound::OutboundPacket;
+use crate::protocol_flow::block_propagation::sender_state::BlockSenderState;
 use crate::validation::sender::Sender;
 use crypto::ShortHash;
-use transactions::Tx;
 use std::sync::Arc;
+use transactions::Tx;
 
 #[derive(Debug, Default)]
 pub struct BlockSender {

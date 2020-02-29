@@ -16,15 +16,15 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::network::Network;
 use crate::connection::*;
 use crate::interface::NetworkInterface;
+use crate::network::Network;
+use futures::future::FutureExt;
 use persistence::PersistentDb;
+use rand::prelude::IteratorRandom;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use futures::future::FutureExt;
-use rand::prelude::IteratorRandom;
 
 pub async fn bootstrap(
     network: Network,
@@ -42,7 +42,8 @@ pub async fn bootstrap(
         let fut = async move {
             let mut network = network.clone();
 
-            let peers_to_connect: Vec<SocketAddr> = network.bootstrap_cache
+            let peers_to_connect: Vec<SocketAddr> = network
+                .bootstrap_cache
                 .entries()
                 .map(|e| e.to_socket_addr(port))
                 .choose_multiple(&mut rand::thread_rng(), max_peers as usize);
@@ -81,7 +82,14 @@ pub async fn bootstrap(
             }
 
             if start_interval {
-                start_peer_list_refresh_interval(network_clone, accept_connections_clone, db.clone(), max_peers, bootnodes_clone, port);
+                start_peer_list_refresh_interval(
+                    network_clone,
+                    accept_connections_clone,
+                    db.clone(),
+                    max_peers,
+                    bootnodes_clone,
+                    port,
+                );
             }
         };
 
@@ -111,7 +119,14 @@ pub async fn bootstrap(
             futures::future::join_all(futures).await;
 
             if start_interval {
-                start_peer_list_refresh_interval(network_clone, accept_connections_clone, db.clone(), max_peers, bootnodes, port);
+                start_peer_list_refresh_interval(
+                    network_clone,
+                    accept_connections_clone,
+                    db.clone(),
+                    max_peers,
+                    bootnodes,
+                    port,
+                );
             }
         };
 

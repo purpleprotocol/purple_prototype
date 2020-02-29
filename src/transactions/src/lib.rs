@@ -53,10 +53,10 @@ pub use crate::mint::*;
 pub use crate::open_contract::*;
 pub use crate::send::*;
 
-use account::{Address, NormalAddress, Balance};
-use crypto::{ShortHash, Hash, SecretKey, PublicKey, FromBase58, Identity};
-use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{DbHasher, Codec};
+use account::{Address, Balance, NormalAddress};
+use crypto::{FromBase58, Hash, Identity, PublicKey, SecretKey, ShortHash};
+use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
+use persistence::{Codec, DbHasher};
 use quickcheck::Arbitrary;
 use rand::Rng;
 
@@ -122,18 +122,33 @@ impl Tx {
         }
 
         let tx_type = bytes[0];
-        
+
         match tx_type {
             Call::TX_TYPE => Ok(Tx::Call(Call::from_bytes(bytes)?, bytes.len() - 1)),
             Send::TX_TYPE => Ok(Tx::Send(Send::from_bytes(bytes)?, bytes.len() - 1)),
-            ChangeMinter::TX_TYPE => Ok(Tx::ChangeMinter(ChangeMinter::from_bytes(bytes)?, bytes.len() - 1)),
+            ChangeMinter::TX_TYPE => Ok(Tx::ChangeMinter(
+                ChangeMinter::from_bytes(bytes)?,
+                bytes.len() - 1,
+            )),
             Burn::TX_TYPE => Ok(Tx::Burn(Burn::from_bytes(bytes)?, bytes.len() - 1)),
-            CreateCurrency::TX_TYPE => Ok(Tx::CreateCurrency(CreateCurrency::from_bytes(bytes)?, bytes.len() - 1)),
-            CreateMintable::TX_TYPE => Ok(Tx::CreateMintable(CreateMintable::from_bytes(bytes)?, bytes.len() - 1)),
-            CreateUnique::TX_TYPE => Ok(Tx::CreateUnique(CreateUnique::from_bytes(bytes)?, bytes.len() - 1)),
+            CreateCurrency::TX_TYPE => Ok(Tx::CreateCurrency(
+                CreateCurrency::from_bytes(bytes)?,
+                bytes.len() - 1,
+            )),
+            CreateMintable::TX_TYPE => Ok(Tx::CreateMintable(
+                CreateMintable::from_bytes(bytes)?,
+                bytes.len() - 1,
+            )),
+            CreateUnique::TX_TYPE => Ok(Tx::CreateUnique(
+                CreateUnique::from_bytes(bytes)?,
+                bytes.len() - 1,
+            )),
             Mint::TX_TYPE => Ok(Tx::Mint(Mint::from_bytes(bytes)?, bytes.len() - 1)),
-            OpenContract::TX_TYPE => Ok(Tx::OpenContract(OpenContract::from_bytes(bytes)?, bytes.len() - 1)),
-            _ => Err("Invalid transaction type!")
+            OpenContract::TX_TYPE => Ok(Tx::OpenContract(
+                OpenContract::from_bytes(bytes)?,
+                bytes.len() - 1,
+            )),
+            _ => Err("Invalid transaction type!"),
         }
     }
 
@@ -275,47 +290,47 @@ impl Tx {
                 let tx: Call = Call::arbitrary_valid(trie, id.skey().clone());
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::Call(tx, byte_size)
-            },
+            }
             1 => {
                 let tx: OpenContract = OpenContract::arbitrary_valid(trie, id.skey().clone());
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::OpenContract(tx, byte_size)
-            },
+            }
             2 => {
                 let tx: Send = Send::arbitrary_valid(trie, id.skey().clone());
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::Send(tx, byte_size)
-            },
+            }
             3 => {
                 let tx: Burn = Burn::arbitrary_valid(trie, id.skey().clone());
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::Burn(tx, byte_size)
-            },
+            }
             4 => {
                 let tx: CreateCurrency = CreateCurrency::arbitrary_valid(trie, id.skey().clone());
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::CreateCurrency(tx, byte_size)
-            },
+            }
             5 => {
                 let tx: CreateMintable = CreateMintable::arbitrary_valid(trie, id.skey().clone());
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::CreateMintable(tx, byte_size)
-            },
+            }
             6 => {
                 let tx: Mint = Mint::arbitrary_valid(trie, id.skey().clone());
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::Mint(tx, byte_size)
-            },
+            }
             7 => {
                 let tx: CreateUnique = CreateUnique::arbitrary_valid(trie, id.skey().clone());
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::CreateUnique(tx, byte_size)
-            },
+            }
             8 => {
                 let tx: ChangeMinter = ChangeMinter::arbitrary_valid(trie, id.skey().clone());
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::ChangeMinter(tx, byte_size)
-            },
+            }
             _ => panic!(),
         }
     }
@@ -331,47 +346,47 @@ impl Arbitrary for Tx {
                 let tx: Call = Arbitrary::arbitrary(g);
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::Call(tx, byte_size)
-            },
+            }
             1 => {
                 let tx: OpenContract = Arbitrary::arbitrary(g);
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::OpenContract(tx, byte_size)
-            },
+            }
             2 => {
                 let tx: Send = Arbitrary::arbitrary(g);
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::Send(tx, byte_size)
-            },
+            }
             3 => {
                 let tx: Burn = Arbitrary::arbitrary(g);
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::Burn(tx, byte_size)
-            },
+            }
             4 => {
                 let tx: CreateCurrency = Arbitrary::arbitrary(g);
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::CreateCurrency(tx, byte_size)
-            },
+            }
             5 => {
                 let tx: CreateMintable = Arbitrary::arbitrary(g);
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::CreateMintable(tx, byte_size)
-            },
+            }
             6 => {
                 let tx: Mint = Arbitrary::arbitrary(g);
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::Mint(tx, byte_size)
-            },
+            }
             7 => {
                 let tx: CreateUnique = Arbitrary::arbitrary(g);
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::CreateUnique(tx, byte_size)
-            },
+            }
             8 => {
                 let tx: ChangeMinter = Arbitrary::arbitrary(g);
                 let byte_size = tx.to_bytes().unwrap().len() - 1;
                 Tx::ChangeMinter(tx, byte_size)
-            },
+            }
             _ => panic!(),
         }
     }
@@ -434,12 +449,18 @@ impl TestAccount {
 
 #[cfg(any(test, feature = "test"))]
 /// Helper to create test `Send` transactions between the
-/// genesis test accounts. 
-pub fn send_coins(sender: TestAccount, receiver: TestAccount, amount: u64, fee: u64, sender_nonce: u64) -> Tx {
+/// genesis test accounts.
+pub fn send_coins(
+    sender: TestAccount,
+    receiver: TestAccount,
+    amount: u64,
+    fee: u64,
+    sender_nonce: u64,
+) -> Tx {
     assert_ne!(sender, receiver);
 
     let sender_pkey = sender.to_pkey(sender_nonce);
-    
+
     let mut tx = Send {
         from: sender_pkey,
         next_address: sender.to_signing_addr(sender_nonce + 1),

@@ -33,15 +33,12 @@ pub struct RequestBlock {
     pub(crate) nonce: u64,
 
     /// Number of transactions in the receiver's mempool
-    pub(crate) tx_count: u32, 
+    pub(crate) tx_count: u32,
 }
 
 impl RequestBlock {
     pub fn new(nonce: u64, tx_count: u32) -> RequestBlock {
-        RequestBlock { 
-            nonce,
-            tx_count,
-        }
+        RequestBlock { nonce, tx_count }
     }
 }
 
@@ -90,10 +87,7 @@ impl Packet for RequestBlock {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = RequestBlock { 
-            nonce, 
-            tx_count,
-        };
+        let packet = RequestBlock { nonce, tx_count };
 
         Ok(Arc::new(packet))
     }

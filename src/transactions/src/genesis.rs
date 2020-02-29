@@ -17,9 +17,9 @@
 */
 
 use account::{Balance, NormalAddress};
-use crypto::{ShortHash, Hash};
-use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{DbHasher, Codec};
+use crypto::{Hash, ShortHash};
+use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
+use persistence::{Codec, DbHasher};
 use std::default::Default;
 
 #[cfg(any(test, feature = "test"))]
@@ -62,7 +62,7 @@ impl Genesis {
 
         #[cfg(any(test, feature = "test"))]
         let iterable_vec: Vec<(NormalAddress, u64)> = vec![
-            (TestAccount::A.to_perm_address(), 100000), 
+            (TestAccount::A.to_perm_address(), 100000),
             (TestAccount::B.to_perm_address(), 100000),
             (TestAccount::C.to_perm_address(), 100000),
         ];

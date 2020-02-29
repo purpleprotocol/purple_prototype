@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::address::Address;
 use crate::code::function::Function;
 use crate::error::VmError;
 use crate::frame::Frame;
@@ -26,11 +27,10 @@ use crate::primitives::control_flow::CfOperator;
 use crate::primitives::r#type::VmType;
 use crate::primitives::value::VmValue;
 use crate::stack::Stack;
-use crate::address::Address;
 use bitvec::Bits;
 use byteorder::{BigEndian, ReadBytesExt};
 use patricia_trie::TrieDBMut;
-use persistence::{DbHasher, Codec};
+use persistence::{Codec, DbHasher};
 use std::io::Cursor;
 
 const MAX_OP_ARITY: u8 = 8;
@@ -125,7 +125,7 @@ impl Vm {
                 if cfg!(test) {
                     println!("DEBUG IP: {}, FUN IDX: {}", ip.ip, ip.fun_idx);
                 }
-                
+
                 match Instruction::from_repr(op) {
                     Some(Instruction::Halt) => {
                         break;
@@ -628,99 +628,171 @@ impl Vm {
                         ip.increment();
                     }
                     Some(Instruction::f32TruncSignedi32) => {
-                        perform_data_conversion(Instruction::f32TruncSignedi32, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f32TruncSignedi32,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::f32TruncUnsignedi32) => {
-                        perform_data_conversion(Instruction::f32TruncUnsignedi32, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f32TruncUnsignedi32,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::f64TruncSignedi32) => {
-                        perform_data_conversion(Instruction::f64TruncSignedi32, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f64TruncSignedi32,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::f64TruncUnsignedi32) => {
-                        perform_data_conversion(Instruction::f64TruncUnsignedi32, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f64TruncUnsignedi32,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i32ExtendSignedi64) => {
-                        perform_data_conversion(Instruction::i32ExtendSignedi64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i32ExtendSignedi64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i32ExtendUnsignedi64) => {
-                        perform_data_conversion(Instruction::i32ExtendUnsignedi64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i32ExtendUnsignedi64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::f32TruncSignedi64) => {
-                        perform_data_conversion(Instruction::f32TruncSignedi64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f32TruncSignedi64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::f32TruncUnsignedi64) => {
-                        perform_data_conversion(Instruction::f32TruncUnsignedi64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f32TruncUnsignedi64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::f64TruncSignedi64) => {
-                        perform_data_conversion(Instruction::f64TruncSignedi64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f64TruncSignedi64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::f64TruncUnsignedi64) => {
-                        perform_data_conversion(Instruction::f64TruncUnsignedi64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f64TruncUnsignedi64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i32ConvertSignedf32) => {
-                        perform_data_conversion(Instruction::i32ConvertSignedf32, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i32ConvertSignedf32,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i32ConvertUnsignedf32) => {
-                        perform_data_conversion(Instruction::i32ConvertUnsignedf32, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i32ConvertUnsignedf32,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i64ConvertSignedf32) => {
-                        perform_data_conversion(Instruction::i64ConvertSignedf32, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i64ConvertSignedf32,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i64ConvertUnsignedf32) => {
-                        perform_data_conversion(Instruction::i64ConvertUnsignedf32, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i64ConvertUnsignedf32,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::f64Demotef32) => {
-                        perform_data_conversion(Instruction::f64Demotef32, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f64Demotef32,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i32ConvertSignedf64) => {
-                        perform_data_conversion(Instruction::i32ConvertSignedf64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i32ConvertSignedf64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i32ConvertUnsignedf64) => {
-                        perform_data_conversion(Instruction::i32ConvertUnsignedf64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i32ConvertUnsignedf64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i64ConvertSignedf64) => {
-                        perform_data_conversion(Instruction::i64ConvertSignedf64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i64ConvertSignedf64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i64ConvertUnsignedf64) => {
-                        perform_data_conversion(Instruction::i64ConvertUnsignedf64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i64ConvertUnsignedf64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::f32Promotef64) => {
-                        perform_data_conversion(Instruction::f32Promotef64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f32Promotef64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i32Reinterpretf32) => {
-                        perform_data_conversion(Instruction::i32Reinterpretf32, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i32Reinterpretf32,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i64Reinterpretf64) => {
-                        perform_data_conversion(Instruction::i64Reinterpretf64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::i64Reinterpretf64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::f32Reinterpreti32) => {
-                        perform_data_conversion(Instruction::f32Reinterpreti32, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f32Reinterpreti32,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::f64Reinterpreti64) => {
-                        perform_data_conversion(Instruction::f64Reinterpreti64, &mut self.operand_stack)?;
+                        perform_data_conversion(
+                            Instruction::f64Reinterpreti64,
+                            &mut self.operand_stack,
+                        )?;
                         ip.increment();
                     }
                     Some(Instruction::i32Store)
@@ -1807,7 +1879,7 @@ fn fetch_argv(
                     let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                     let mut cursor = Cursor::new(&bytes);
                     let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
-                    
+
                     argv.push(VmValue::F64(val));
                 }
             }
@@ -3429,11 +3501,14 @@ fn perform_max(op: Instruction, operand_stack: &mut Stack<VmValue>) {
     };
 }
 
-fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+fn perform_float_common(
+    op: Instruction,
+    operand_stack: &mut Stack<VmValue>,
+) -> Result<(), VmError> {
     let len = operand_stack.len();
 
     let mut buf: Vec<VmValue> = Vec::with_capacity(len);
-    match op{
+    match op {
         Instruction::Abs => {
             if len < 1 {
                 panic!("Cannot perform Abs on less than 1 operand")
@@ -3445,7 +3520,7 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
                 }
                 match value.abs() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3460,7 +3535,7 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
                 }
                 match -value {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3472,13 +3547,13 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
             let to_divide = operand_stack.pop();
             let mut result = operand_stack.pop();
 
-            if !is_type_float(to_divide) || !is_type_float(result){
-                return Err(VmError::InvalidOperator)
+            if !is_type_float(to_divide) || !is_type_float(result) {
+                return Err(VmError::InvalidOperator);
             }
 
             result = match result / to_divide {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
 
             operand_stack.push(result);
@@ -3496,7 +3571,7 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
                 }
                 match value.ceil() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3511,7 +3586,7 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
                 }
                 match value.floor() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3526,7 +3601,7 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
                 }
                 match value.trunc() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3541,13 +3616,16 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
                 }
                 match value.round() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
         Instruction::CopySign => {
             if len != 2 {
-                panic!(format!("Can perform CopySign only on 2 operands. Got {:?}", len))
+                panic!(format!(
+                    "Can perform CopySign only on 2 operands. Got {:?}",
+                    len
+                ))
             }
             let to_copy = operand_stack.pop();
             let mut result = operand_stack.pop();
@@ -3555,10 +3633,10 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
             if !is_type_float(to_copy) || !is_type_float(result) {
                 return Err(VmError::InvalidOperator);
             }
-            
+
             result = match result.copysign(&to_copy) {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
 
             operand_stack.push(result);
@@ -3576,15 +3654,18 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
                 }
                 match value.sqrt() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
-        _ => panic!(format!("Must receive a float only common operation. Got {:?}", op))
+        _ => panic!(format!(
+            "Must receive a float only common operation. Got {:?}",
+            op
+        )),
     }
 
     // Finally, push the results to operand stack
-    while let Some(v) = buf.pop(){
+    while let Some(v) = buf.pop() {
         operand_stack.push(v);
     }
 
@@ -3592,21 +3673,37 @@ fn perform_float_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> 
 }
 
 fn is_type_float(operand: VmValue) -> bool {
-    match operand{
-        VmValue::F32(_) | VmValue::F64(_) | 
-        VmValue::f32Array2(_) | VmValue::f32Array4(_) | VmValue::f32Array8(_) | VmValue::f32Array16(_) | 
-        VmValue::f32Array32(_) | VmValue::f32Array64(_) | VmValue::f32Array128(_) | VmValue::f32Array256(_) |
-        VmValue::f64Array2(_) | VmValue::f64Array4(_) | VmValue::f64Array8(_) | VmValue::f64Array16(_) |  
-        VmValue::f64Array32(_) | VmValue::f64Array64(_) | VmValue::f64Array128(_) | VmValue::f64Array256(_) => return true,
-        _ =>return false
+    match operand {
+        VmValue::F32(_)
+        | VmValue::F64(_)
+        | VmValue::f32Array2(_)
+        | VmValue::f32Array4(_)
+        | VmValue::f32Array8(_)
+        | VmValue::f32Array16(_)
+        | VmValue::f32Array32(_)
+        | VmValue::f32Array64(_)
+        | VmValue::f32Array128(_)
+        | VmValue::f32Array256(_)
+        | VmValue::f64Array2(_)
+        | VmValue::f64Array4(_)
+        | VmValue::f64Array8(_)
+        | VmValue::f64Array16(_)
+        | VmValue::f64Array32(_)
+        | VmValue::f64Array64(_)
+        | VmValue::f64Array128(_)
+        | VmValue::f64Array256(_) => return true,
+        _ => return false,
     }
 }
 
 fn is_type_integer(operand: VmValue) -> bool {
     !is_type_float(operand)
-}  
+}
 
-fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+fn perform_data_conversion(
+    op: Instruction,
+    operand_stack: &mut Stack<VmValue>,
+) -> Result<(), VmError> {
     let len = operand_stack.len();
     let mut buf: Vec<VmValue> = Vec::with_capacity(len);
 
@@ -3614,12 +3711,12 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
         panic!("Cannot perform cast on less than 1 operand");
     }
 
-    match op{
+    match op {
         Instruction::i64Wrapi32 => {
             for _ in 0..len {
                 match operand_stack.pop().i64_wrapi32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3627,7 +3724,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().f32trunc_i32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3640,7 +3737,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
 
                 match value.f32trunc_i32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3648,7 +3745,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().f64trunc_i32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3661,7 +3758,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
 
                 match value.f64trunc_i32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3669,7 +3766,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().i32extend_i64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3682,7 +3779,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
 
                 match value.i32extend_i64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3690,7 +3787,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().f32trunc_i64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3703,7 +3800,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
 
                 match value.f32trunc_i64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3711,7 +3808,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().f64trunc_i64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3724,7 +3821,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
 
                 match value.f64trunc_i64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3732,7 +3829,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().i32convert_f32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3745,7 +3842,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
 
                 match value.i32convert_f32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3753,7 +3850,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().i64convert_f32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3766,7 +3863,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
 
                 match value.i64convert_f32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3774,7 +3871,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().f64demote_f32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3782,7 +3879,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().i32convert_f64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3795,7 +3892,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
 
                 match value.i32convert_f64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3803,7 +3900,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().i64convert_f64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3816,7 +3913,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
 
                 match value.i64convert_f64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3824,7 +3921,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().f32promote_f64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3832,7 +3929,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().i32reinterpret_f32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3840,7 +3937,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().i64reinterpret_f64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3848,7 +3945,7 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().f32reinterpret_i32() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
@@ -3856,11 +3953,14 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
             for _ in 0..len {
                 match operand_stack.pop().f64reinterpret_i64() {
                     Ok(val) => buf.push(val),
-                    Err(err) => return Err(err)
+                    Err(err) => return Err(err),
                 }
             }
         }
-        _ => panic!(format!("No valid data conversion instruction was passed. Got {:?}", op))
+        _ => panic!(format!(
+            "No valid data conversion instruction was passed. Got {:?}",
+            op
+        )),
     }
 
     // Reverse the buffer and push back data to operand stack
@@ -3872,11 +3972,17 @@ fn perform_data_conversion(op: Instruction, operand_stack: &mut Stack<VmValue>) 
     Ok(())
 }
 
-fn perform_integer_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+fn perform_integer_common(
+    op: Instruction,
+    operand_stack: &mut Stack<VmValue>,
+) -> Result<(), VmError> {
     let len = operand_stack.len();
-    
+
     if len != 2 {
-        panic!(format!("Can perform {:?} only on 2 operands. Got {:?}", op, len))
+        panic!(format!(
+            "Can perform {:?} only on 2 operands. Got {:?}",
+            op, len
+        ))
     }
 
     let second = operand_stack.pop();
@@ -3887,60 +3993,63 @@ fn perform_integer_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -
         return Err(VmError::InvalidOperator);
     }
 
-    match op{
+    match op {
         Instruction::And => {
-            result = match first & second{
+            result = match first & second {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
         }
         Instruction::Or => {
-            result = match first | second{
+            result = match first | second {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
         }
         Instruction::Xor => {
-            result = match first ^ second{
+            result = match first ^ second {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
         }
         Instruction::Shl => {
-            result = match first << second{
+            result = match first << second {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
         }
         Instruction::ShrSigned => {
-            result = match first >> second{
+            result = match first >> second {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
         }
         Instruction::ShrUnsigned => {
-            if !first.is_positive() || !second.is_positive(){
+            if !first.is_positive() || !second.is_positive() {
                 return Err(VmError::UnsignedOperationSignedOperand);
             }
 
-            result = match first >> second{
+            result = match first >> second {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
         }
         Instruction::Rotl => {
-            result = match first.rotate_left(&second){
+            result = match first.rotate_left(&second) {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
         }
         Instruction::Rotr => {
-            result = match first.rotate_right(&second){
+            result = match first.rotate_right(&second) {
                 Ok(res) => res,
-                Err(err) => return Err(err)
+                Err(err) => return Err(err),
             };
         }
-        _ => panic!(format!("Must receive a integer only common operation. Got {:?}", op))
+        _ => panic!(format!(
+            "Must receive a integer only common operation. Got {:?}",
+            op
+        )),
     }
 
     operand_stack.push(result);
@@ -3951,7 +4060,7 @@ fn perform_integer_common(op: Instruction, operand_stack: &mut Stack<VmValue>) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crypto::{ShortHash, Hash};
+    use crypto::{Hash, ShortHash};
 
     #[test]
     #[rustfmt::skip]
@@ -10683,10 +10792,6 @@ mod tests {
 
         assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
     }
-
-
-
-
 
     #[test]
     #[rustfmt::skip]

@@ -18,9 +18,9 @@
 
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
-use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{DbHasher, Codec};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
+use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
+use persistence::{Codec, DbHasher};
 use rand::Rng;
 use std::io::Cursor;
 
@@ -35,9 +35,9 @@ pub struct CreateCurrency {
     pub(crate) fee_hash: ShortHash,
     pub(crate) fee: Balance,
     pub(crate) nonce: u64,
-    
+
     pub(crate) hash: Option<Hash>,
-    
+
     pub(crate) signature: Option<Signature>,
 }
 
@@ -81,7 +81,7 @@ impl CreateCurrency {
         // Calculate address mapping key
         //
         // An address mapping is a mapping between
-        // the account's signing address and an 
+        // the account's signing address and an
         // account's receiving address.
         //
         // They key of the address mapping has the following format:
@@ -95,9 +95,9 @@ impl CreateCurrency {
             Err(err) => panic!(err),
         };
 
-        // Do not allow address re-usage 
+        // Do not allow address re-usage
         if self.next_address == creator_perm_addr {
-            return false
+            return false;
         }
 
         // Calculate precision key
@@ -170,7 +170,7 @@ impl CreateCurrency {
         // Calculate address mapping key
         //
         // An address mapping is a mapping between
-        // the account's signing address and an 
+        // the account's signing address and an
         // account's receiving address.
         //
         // They key of the address mapping has the following format:
@@ -253,7 +253,8 @@ impl CreateCurrency {
             // Update trie
             trie.insert(&asset_hash_supply_key, &coin_supply_buf)
                 .unwrap();
-            trie.insert(&asset_hash_prec_key, &[self.precision]).unwrap();
+            trie.insert(&asset_hash_prec_key, &[self.precision])
+                .unwrap();
             trie.insert(&creator_cur_key, &creator_cur_balance.to_bytes())
                 .unwrap();
             trie.insert(&creator_fee_key, &creator_fee_balance.to_bytes())
@@ -262,7 +263,8 @@ impl CreateCurrency {
 
             // Update address mappings
             trie.remove(&creator_addr_mapping_key).unwrap();
-            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
+            trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes())
+                .unwrap();
         } else {
             // The receiver is another account
             match bin_receiver_nonce {
@@ -285,7 +287,8 @@ impl CreateCurrency {
                     // Update trie
                     trie.insert(&asset_hash_supply_key, &coin_supply_buf)
                         .unwrap();
-                    trie.insert(&asset_hash_prec_key, &[self.precision]).unwrap();
+                    trie.insert(&asset_hash_prec_key, &[self.precision])
+                        .unwrap();
                     trie.insert(&creator_fee_key, &creator_balance.to_bytes())
                         .unwrap();
                     trie.insert(&receiver_cur_key, &receiver_balance.to_bytes())
@@ -294,11 +297,13 @@ impl CreateCurrency {
 
                     // Update address mappings
                     trie.remove(&creator_addr_mapping_key).unwrap();
-                    trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
+                    trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes())
+                        .unwrap();
                 }
                 // The receiver account does not exist so we create it
                 Ok(None) => {
-                    let receiver_addr_mapping_key = [self.receiver.as_bytes(), &b".am"[..]].concat();
+                    let receiver_addr_mapping_key =
+                        [self.receiver.as_bytes(), &b".am"[..]].concat();
                     let mut creator_balance = unwrap!(
                         Balance::from_bytes(&unwrap!(
                             trie.get(&creator_fee_key).unwrap(),
@@ -316,7 +321,8 @@ impl CreateCurrency {
                     // Update trie
                     trie.insert(&asset_hash_supply_key, &coin_supply_buf)
                         .unwrap();
-                    trie.insert(&asset_hash_prec_key, &[self.precision]).unwrap();
+                    trie.insert(&asset_hash_prec_key, &[self.precision])
+                        .unwrap();
                     trie.insert(&creator_fee_key, &creator_balance.to_bytes())
                         .unwrap();
                     trie.insert(&receiver_cur_key, &receiver_balance.to_bytes())
@@ -326,9 +332,11 @@ impl CreateCurrency {
                         .unwrap();
 
                     // Update address mappings
-                    trie.insert(&receiver_addr_mapping_key, self.receiver.as_bytes()).unwrap();
+                    trie.insert(&receiver_addr_mapping_key, self.receiver.as_bytes())
+                        .unwrap();
                     trie.remove(&creator_addr_mapping_key).unwrap();
-                    trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes()).unwrap();
+                    trie.insert(&next_addr_mapping_key, creator_perm_addr.as_bytes())
+                        .unwrap();
                 }
                 Err(err) => panic!(err),
             }
@@ -374,7 +382,7 @@ impl CreateCurrency {
     /// 11) Next address        - 33byte binary
     /// 12) Signature           - 64byte binary
     /// 13) Fee                 - Binary of fee length
-     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
 
         let mut signature = if let Some(signature) = &self.signature {
@@ -391,11 +399,7 @@ impl CreateCurrency {
         let precision = &self.precision;
         let fee = &self.fee.to_bytes();
         let nonce = &self.nonce;
-        let currency_flag = if asset_hash == fee_hash {
-            1
-        } else {
-            0
-        };
+        let currency_flag = if asset_hash == fee_hash { 1 } else { 0 };
 
         let fee_len = fee.len();
 
@@ -468,7 +472,7 @@ impl CreateCurrency {
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {
-                result 
+                result
             } else {
                 return Err("Bad currency flag value");
             }
@@ -712,7 +716,6 @@ mod tests {
             // Manually initialize creator balance
             test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10000.0");
         }
-
 
         let amount = Balance::from_bytes(b"100.0").unwrap();
         let fee = Balance::from_bytes(b"10.0").unwrap();

@@ -102,7 +102,11 @@ impl Packet for ForwardBlock {
     ) -> Result<(), NetworkErr> {
         let block = &packet.block;
 
-        info!("Received POW block with hash {} and height {}", block.block_hash().unwrap(), block.height());
+        info!(
+            "Received POW block with hash {} and height {}",
+            block.block_hash().unwrap(),
+            block.height()
+        );
 
         let pow_chain = network.pow_chain_ref();
 

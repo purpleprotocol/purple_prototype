@@ -28,11 +28,8 @@ use std::cell::RefCell;
 
 #[cfg(not(feature = "test"))]
 lazy_static! {
-    static ref CHAIN_REF: Arc<RwLock<Option<PowChainRef>>> =
-        Arc::new(RwLock::new(None));
-    
-    static ref STATE_DB_REF: Arc<RwLock<Option<PersistentDb>>> = 
-        Arc::new(RwLock::new(None));
+    static ref CHAIN_REF: Arc<RwLock<Option<PowChainRef>>> = Arc::new(RwLock::new(None));
+    static ref STATE_DB_REF: Arc<RwLock<Option<PersistentDb>>> = Arc::new(RwLock::new(None));
 }
 
 #[cfg(feature = "test")]

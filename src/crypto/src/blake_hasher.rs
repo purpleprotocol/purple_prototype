@@ -20,8 +20,8 @@ use crate::hash::*;
 use merkle_light::hash::Algorithm;
 use std::default::Default;
 use std::hash::Hasher;
-use std::u64;
 use std::io::Write;
+use std::u64;
 
 pub struct BlakeHasher {
     hasher: blake3::Hasher,
@@ -29,7 +29,9 @@ pub struct BlakeHasher {
 
 impl BlakeHasher {
     pub fn new() -> BlakeHasher {
-        BlakeHasher { hasher: blake3::Hasher::new() }
+        BlakeHasher {
+            hasher: blake3::Hasher::new(),
+        }
     }
 }
 

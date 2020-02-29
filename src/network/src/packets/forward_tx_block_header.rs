@@ -23,11 +23,11 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
 use bloom::Bloom;
-use purple_iblt::PurpleIBLT;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, TransactionBlock};
 use crypto::NodeId;
 use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
+use purple_iblt::PurpleIBLT;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -44,7 +44,11 @@ pub struct ForwardTxBlockHeader {
 }
 
 impl ForwardTxBlockHeader {
-    pub fn new(block: Arc<TransactionBlock>, nonce: u64, mempool_size: u32) -> Result<ForwardTxBlockHeader, &'static str> {    
+    pub fn new(
+        block: Arc<TransactionBlock>,
+        nonce: u64,
+        mempool_size: u32,
+    ) -> Result<ForwardTxBlockHeader, &'static str> {
         if let Some(txs) = &block.transactions {
             let txs = txs.read();
 
@@ -52,7 +56,7 @@ impl ForwardTxBlockHeader {
                 let M: u32 = mempool_size;
                 let N: u32 = txs.len() as u32;
                 let A: u32 = ((N as f32) / (IBLT_C_CONST * IBLT_R_CONST)).trunc() as u32;
-                
+
                 // Calculate bloom filter table size based on the receiver's mempool size
                 let bloom_table_size = ((A as f32) / (M - N) as f32).trunc() as u32;
 
@@ -79,30 +83,23 @@ impl ForwardTxBlockHeader {
                 let iblt_size = if iblt_size == 0 {
                     txs.len() as u32
                 } else {
-                    iblt_size 
+                    iblt_size
                 };
 
-                // Dynamically find a suitable hash functions value 
+                // Dynamically find a suitable hash functions value
                 let hash_funcs = {
-                    let mut result: u8 = if iblt_size >= 4 {
-                        4
-                    } else {
-                        1
-                    };
+                    let mut result: u8 = if iblt_size >= 4 { 4 } else { 1 };
 
                     while iblt_size % (result as u32) != 0 {
                         result += 1;
-                    } 
+                    }
 
                     result
                 };
 
                 // Create IBLT
-                let mut iblt = PurpleIBLT::new(
-                    iblt_size as usize, 
-                    0, 
-                    hash_funcs,
-                ).map_err(|_| "Could not create IBLT")?;
+                let mut iblt = PurpleIBLT::new(iblt_size as usize, 0, hash_funcs)
+                    .map_err(|_| "Could not create IBLT")?;
 
                 // Insert transaction hashes in IBLT
                 for tx in txs.iter() {
@@ -111,14 +108,14 @@ impl ForwardTxBlockHeader {
                     iblt.insert(hash_le, &[]).unwrap();
                 }
 
-                Ok(ForwardTxBlockHeader { 
+                Ok(ForwardTxBlockHeader {
                     block: block.clone(),
                     bloom_filter: Some(bloom_filter),
                     iblt: Some(iblt),
                     nonce,
                 })
             } else {
-                Ok(ForwardTxBlockHeader { 
+                Ok(ForwardTxBlockHeader {
                     block: block.clone(),
                     bloom_filter: None,
                     iblt: None,
@@ -127,7 +124,7 @@ impl ForwardTxBlockHeader {
             }
         } else {
             Err("There are no attached transactions to the block header!")
-        }        
+        }
     }
 }
 
@@ -145,7 +142,7 @@ impl Packet for ForwardTxBlockHeader {
         // 2) Block length        - 16bits
         // 3) Bloom filter length - 16bits (Optional)
         // 4) IBLT length         - 16bits (Optional)
-        // 5) Nonce               - 64bits 
+        // 5) Nonce               - 64bits
         // 6) Bloom filter        - Binary of bloom filter length (Optional)
         // 7) IBLT                - Binary of IBLT length (Optional)
         // 8) Block               - Binary of block length
@@ -256,7 +253,6 @@ impl Packet for ForwardTxBlockHeader {
                 return Err(NetworkErr::BadFormat);
             };
 
-
             let block = if buf.len() == block_len as usize {
                 match TransactionBlock::from_bytes(&buf) {
                     Ok(result) => result,
@@ -266,7 +262,7 @@ impl Packet for ForwardTxBlockHeader {
                 return Err(NetworkErr::BadFormat);
             };
 
-            let packet = ForwardTxBlockHeader { 
+            let packet = ForwardTxBlockHeader {
                 block,
                 bloom_filter: Some(bloom_filter),
                 iblt: Some(iblt),
@@ -302,7 +298,7 @@ impl Packet for ForwardTxBlockHeader {
                 return Err(NetworkErr::BadFormat);
             };
 
-            let packet = ForwardTxBlockHeader { 
+            let packet = ForwardTxBlockHeader {
                 block,
                 bloom_filter: None,
                 iblt: None,

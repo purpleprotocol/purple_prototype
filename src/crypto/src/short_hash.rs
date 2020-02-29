@@ -19,9 +19,9 @@
 use crate::hash::Hash;
 use crc32fast::Hasher as CrcHasher;
 use crc64fast::Digest;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use quickcheck::Arbitrary;
 use rand::Rng;
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::default::Default;
 
 pub const SHORT_HASH_BYTES: usize = 8;
@@ -137,7 +137,9 @@ pub fn crc64_hash_slice(val: &[u8]) -> ShortHash {
 impl Arbitrary for ShortHash {
     fn arbitrary<G: quickcheck::Gen>(_g: &mut G) -> ShortHash {
         let mut rng = rand::thread_rng();
-        let bytes: Vec<u8> = (0..SHORT_HASH_BYTES).map(|_| rng.gen_range(1, 255)).collect();
+        let bytes: Vec<u8> = (0..SHORT_HASH_BYTES)
+            .map(|_| rng.gen_range(1, 255))
+            .collect();
 
         let mut result = [0; SHORT_HASH_BYTES];
         result.copy_from_slice(&bytes);

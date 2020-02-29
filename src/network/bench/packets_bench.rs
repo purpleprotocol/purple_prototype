@@ -3,12 +3,12 @@
 #[macro_use]
 extern crate criterion;
 
+use criterion::Criterion;
 use network::packets::*;
 use network::Packet;
-use quickcheck::{StdGen, Arbitrary};
-use criterion::Criterion;
-use transactions::Tx;
+use quickcheck::{Arbitrary, StdGen};
 use std::sync::Arc;
+use transactions::Tx;
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("deserialize SendMissingTxs packet 1000 txs", |b| {

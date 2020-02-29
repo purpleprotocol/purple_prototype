@@ -18,13 +18,13 @@
 
 use crate::error::NetworkErr;
 use crate::packets::*;
-use crate::protocol_flow::transaction_propagation::sender_state::TxSenderState;
-use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
 use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
+use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
+use crate::protocol_flow::transaction_propagation::sender_state::TxSenderState;
 use crate::validation::sender::Sender;
 use crypto::ShortHash;
-use transactions::Tx;
 use std::sync::Arc;
+use transactions::Tx;
 
 #[derive(Debug, Default)]
 pub struct TxSender {
@@ -57,7 +57,7 @@ impl Sender<OutboundPacket, InboundPacket, Option<Arc<Tx>>> for TxSender {
                 panic!("Invalid data given to sender!");
             }
 
-            _ => Err(NetworkErr::CouldNotSend)
+            _ => Err(NetworkErr::CouldNotSend),
         }
     }
 
@@ -81,7 +81,7 @@ impl Sender<OutboundPacket, InboundPacket, Option<Arc<Tx>>> for TxSender {
                 }
             }
 
-            _ => Err(NetworkErr::SenderStateErr)
+            _ => Err(NetworkErr::SenderStateErr),
         }
     }
 
@@ -89,7 +89,7 @@ impl Sender<OutboundPacket, InboundPacket, Option<Arc<Tx>>> for TxSender {
         match self.state {
             TxSenderState::Ready => true,
             TxSenderState::ReadyToSend(_, _) => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -115,7 +115,7 @@ mod tests {
 
         let tx = transactions::send_coins(TestAccount::A, TestAccount::B, 10, 10, 1);
         let tx = Arc::new(tx);
-        
+
         let packet = sender.send(Some(tx.clone())).unwrap();
         let packet = if let OutboundPacket::AnnounceTx(packet) = packet {
             packet
@@ -123,7 +123,10 @@ mod tests {
             panic!();
         };
         assert!(!sender.can_send());
-        assert_eq!(sender.state, TxSenderState::WaitingResponse(packet.nonce, tx.clone()));
+        assert_eq!(
+            sender.state,
+            TxSenderState::WaitingResponse(packet.nonce, tx.clone())
+        );
 
         let request = RequestTx::new(packet.nonce);
         let request = Arc::new(request);
@@ -147,15 +150,18 @@ mod tests {
 
         let tx = transactions::send_coins(TestAccount::A, TestAccount::B, 10, 10, 1);
         let tx = Arc::new(tx);
-        
+
         let packet = sender.send(Some(tx.clone())).unwrap();
         let packet = if let OutboundPacket::AnnounceTx(packet) = packet {
             packet
         } else {
             panic!();
         };
-        assert_eq!(sender.state, TxSenderState::WaitingResponse(packet.nonce, tx));
-    
+        assert_eq!(
+            sender.state,
+            TxSenderState::WaitingResponse(packet.nonce, tx)
+        );
+
         let reject = RejectTx::new(packet.nonce, TxRejectStatus::Witnessed);
         let reject = Arc::new(reject);
         let inbound = InboundPacket::RejectTx(reject);

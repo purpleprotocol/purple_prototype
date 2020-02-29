@@ -16,12 +16,12 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::error::NetworkErr;
-use crate::validation::validator::ProtocolValidator;
 use crate::bootstrap::cache::BootstrapCache;
+use crate::error::NetworkErr;
 use crate::priority::NetworkPriority;
-use crypto::{Hash, NodeId};
+use crate::validation::validator::ProtocolValidator;
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
+use crypto::{Hash, NodeId};
 use std::default::Default;
 use std::fmt;
 use std::hash::{Hash as HashTrait, Hasher};
@@ -178,16 +178,21 @@ impl Peer {
     }
 
     /// Attempts to place a packet in the outbound buffer of a `Peer`.
-    pub fn send_packet(&self, packet: Vec<u8>, priority: NetworkPriority) -> Result<(), NetworkErr> {
+    pub fn send_packet(
+        &self,
+        packet: Vec<u8>,
+        priority: NetworkPriority,
+    ) -> Result<(), NetworkErr> {
         let mut sender = match priority {
             NetworkPriority::Low => self.low_outbound_buffer.as_ref().unwrap().clone(),
             NetworkPriority::Medium => self.medium_outbound_buffer.as_ref().unwrap().clone(),
             NetworkPriority::High => self.high_outbound_buffer.as_ref().unwrap().clone(),
         };
 
-        sender
-            .try_send(packet)
-            .map_err(|err| { debug!("Packet sending error: {:?}", err); NetworkErr::CouldNotSend })
+        sender.try_send(packet).map_err(|err| {
+            debug!("Packet sending error: {:?}", err);
+            NetworkErr::CouldNotSend
+        })
     }
 }
 

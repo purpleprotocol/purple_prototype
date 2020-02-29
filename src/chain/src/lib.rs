@@ -26,19 +26,19 @@ extern crate bin_tools;
 
 mod block;
 mod chain;
-mod pow_chain;
 mod init;
+mod pow_chain;
 pub mod types;
 
 #[cfg(test)]
 mod test_helpers;
 
-pub use crate::chain::*;
 pub use crate::block::*;
-pub use crate::pow_chain::*;
+pub use crate::chain::*;
+pub use crate::init::*;
 pub use crate::pow_chain::block::*;
 pub use crate::pow_chain::chain::*;
-pub use crate::init::*;
+pub use crate::pow_chain::*;
 
 #[cfg(test)]
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};

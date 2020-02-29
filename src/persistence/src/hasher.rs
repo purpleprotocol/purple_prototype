@@ -16,8 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crypto::{BlakeHasher, ShortHash, SHORT_HASH_BYTES};
 use crc64fast::Digest;
+use crypto::{BlakeHasher, ShortHash, SHORT_HASH_BYTES};
 use hashdb::Hasher;
 
 pub struct DbHasher;

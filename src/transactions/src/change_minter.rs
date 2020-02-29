@@ -18,9 +18,9 @@
 
 use account::{Address, Balance, NormalAddress};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::{ShortHash, Hash, PublicKey as Pk, SecretKey as Sk, Signature};
-use patricia_trie::{TrieDBMut, TrieDB, TrieMut, Trie};
-use persistence::{DbHasher, Codec};
+use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
+use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
+use persistence::{Codec, DbHasher};
 use rand::Rng;
 use std::io::Cursor;
 
@@ -50,7 +50,7 @@ pub struct ChangeMinter {
 
     /// Transaction hash
     pub(crate) hash: Option<Hash>,
-    
+
     /// Transaction signature
     pub(crate) signature: Option<Signature>,
 }
@@ -78,7 +78,7 @@ impl ChangeMinter {
         // Calculate address mapping key
         //
         // An address mapping is a mapping between
-        // the account's signing address and an 
+        // the account's signing address and an
         // account's receiving address.
         //
         // They key of the address mapping has the following format:
@@ -92,9 +92,9 @@ impl ChangeMinter {
             Err(err) => panic!(err),
         };
 
-        // Do not allow address re-usage 
+        // Do not allow address re-usage
         if self.next_address == permanent_addr {
-            return false
+            return false;
         }
 
         // Check nonce
@@ -162,7 +162,7 @@ impl ChangeMinter {
         // Calculate address mapping key
         //
         // An address mapping is a mapping between
-        // the account's signing address and an 
+        // the account's signing address and an
         // account's receiving address.
         //
         // They key of the address mapping has the following format:
@@ -227,18 +227,21 @@ impl ChangeMinter {
                 minter_fee_balance -= self.fee.clone();
 
                 // Update trie
-                trie.insert(&asset_hash_minter_key, &bin_new_minter).unwrap();
+                trie.insert(&asset_hash_minter_key, &bin_new_minter)
+                    .unwrap();
                 trie.insert(&minter_nonce_key, &nonce_buf).unwrap();
                 trie.insert(&minter_fee_key, &minter_fee_balance.to_bytes())
                     .unwrap();
 
                 // Update address mappings
                 trie.remove(&minter_addr_mapping_key).unwrap();
-                trie.insert(&next_addr_mapping_key, minter_perm_addr.as_bytes()).unwrap();
+                trie.insert(&next_addr_mapping_key, minter_perm_addr.as_bytes())
+                    .unwrap();
             }
             // The new minter account doesn't exist, so we create it
             Ok(None) => {
-                let new_minter_addr_mapping_key = [self.new_minter.as_bytes(), &b".am"[..]].concat();
+                let new_minter_addr_mapping_key =
+                    [self.new_minter.as_bytes(), &b".am"[..]].concat();
                 let mut minter_fee_balance = unwrap!(
                     Balance::from_bytes(&unwrap!(
                         trie.get(&minter_fee_key).unwrap(),
@@ -254,14 +257,17 @@ impl ChangeMinter {
                 trie.insert(&minter_nonce_key, &nonce_buf).unwrap();
                 trie.insert(&new_minter_nonce_key, &[0, 0, 0, 0, 0, 0, 0, 0])
                     .unwrap();
-                trie.insert(&asset_hash_minter_key, &bin_new_minter).unwrap();
+                trie.insert(&asset_hash_minter_key, &bin_new_minter)
+                    .unwrap();
                 trie.insert(&minter_fee_key, &minter_fee_balance.to_bytes())
                     .unwrap();
 
                 // Update address mappings
-                trie.insert(&new_minter_addr_mapping_key, self.new_minter.as_bytes()).unwrap();
+                trie.insert(&new_minter_addr_mapping_key, self.new_minter.as_bytes())
+                    .unwrap();
                 trie.remove(&minter_addr_mapping_key).unwrap();
-                trie.insert(&next_addr_mapping_key, minter_perm_addr.as_bytes()).unwrap();
+                trie.insert(&next_addr_mapping_key, minter_perm_addr.as_bytes())
+                    .unwrap();
             }
             Err(err) => panic!(err),
         }
@@ -320,11 +326,7 @@ impl ChangeMinter {
         let fee = &self.fee.to_bytes();
         let fee_len = fee.len();
         let nonce = &self.nonce;
-        let currency_flag = if asset_hash == fee_hash {
-            1
-        } else {
-            0
-        };
+        let currency_flag = if asset_hash == fee_hash { 1 } else { 0 };
 
         // Write to buffer
         buf.write_u8(tx_type).unwrap();
@@ -378,7 +380,7 @@ impl ChangeMinter {
 
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {
-                result 
+                result
             } else {
                 return Err("Bad currency flag value");
             }
@@ -572,7 +574,7 @@ mod tests {
 
             // Manually initialize minter balance
             test_helpers::init_balance(&mut trie, minter_address.clone(), fee_hash, b"100.0");
-        
+
             // Create mintable token
             let mut create_mintable = CreateMintable {
                 creator: id.pkey().clone(),
@@ -637,7 +639,7 @@ mod tests {
 
             // Manually initialize minter balance
             test_helpers::init_balance(&mut trie, minter_address.clone(), fee_hash, b"100.0");
-        
+
             // Create mintable token
             let mut create_mintable = CreateMintable {
                 creator: id.pkey().clone(),
@@ -702,7 +704,7 @@ mod tests {
 
             // Manually initialize minter balance
             test_helpers::init_balance(&mut trie, minter_address.clone(), fee_hash, b"100.0");
-        
+
             // Create mintable token
             let mut create_mintable = CreateMintable {
                 creator: id.pkey().clone(),

@@ -31,20 +31,20 @@ extern crate bin_tools;
 pub mod mock;
 
 pub mod bootstrap;
-pub mod packets;
-pub mod jobs;
 mod common;
 mod connection;
 mod error;
 mod handlers;
 mod header;
 mod interface;
+pub mod jobs;
 mod network;
 mod packet;
+pub mod packets;
 mod peer;
+mod priority;
 mod protocol_flow;
 mod validation;
-mod priority;
 
 pub use crate::bootstrap::*;
 pub use crate::connection::*;
@@ -147,10 +147,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
                 let addresses = a_clone;
                 let temp_dir = TempDir::new("storage").unwrap();
 
-                let (db1, db2) = (
-                    test_helpers::init_tempdb(),
-                    test_helpers::init_tempdb(),
-                );
+                let (db1, db2) = (test_helpers::init_tempdb(), test_helpers::init_tempdb());
 
                 let pow_chain = chain::init(db1, db2, true);
 
@@ -170,10 +167,7 @@ pub fn init_test_networks(peers: usize) -> Vec<(Arc<Mutex<MockNetwork>>, SocketA
                 let network = Arc::new(Mutex::new(network));
                 s.send(network.clone()).unwrap();
 
-                MockNetwork::start_receive_loop(
-                    network,
-                    Arc::new(Mutex::new(tx1)),
-                )
+                MockNetwork::start_receive_loop(network, Arc::new(Mutex::new(tx1)))
             })
             .unwrap();
 
