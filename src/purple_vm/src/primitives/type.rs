@@ -165,7 +165,6 @@ impl VmType {
         }
     }
 
-    // TODO: Continue for arrays greather than 8
     /// Returns the byte size of the type.
     pub fn byte_size(&self) -> usize {
         match *self {
@@ -176,16 +175,35 @@ impl VmType {
             VmType::i32Array2 => 8,
             VmType::i32Array4 => 16,
             VmType::i32Array8 => 32,
+            VmType::i32Array16 => 64,
+            VmType::i32Array32 => 128,
+            VmType::i32Array64 => 256,
+            VmType::i32Array128 => 512,
+            VmType::i32Array256 => 1024,
             VmType::i64Array2 => 16,
             VmType::i64Array4 => 32,
             VmType::i64Array8 => 64,
+            VmType::i64Array16 => 128,
+            VmType::i64Array32 => 256,
+            VmType::i64Array64 => 512,
+            VmType::i64Array128 => 1024,
+            VmType::i64Array256 => 2048,
             VmType::f32Array2 => 8,
             VmType::f32Array4 => 16,
             VmType::f32Array8 => 32,
+            VmType::f32Array16 => 64,
+            VmType::f32Array32 => 128,
+            VmType::f32Array64 => 256,
+            VmType::f32Array128 => 512,
+            VmType::f32Array256 => 1024,
             VmType::f64Array2 => 16,
             VmType::f64Array4 => 32,
             VmType::f64Array8 => 64,
-            _ => panic!(),
+            VmType::f64Array16 => 128,
+            VmType::f64Array32 => 256,
+            VmType::f64Array64 => 512,
+            VmType::f64Array128 => 1024,
+            VmType::f64Array256 => 2048,
         }
     }
 
@@ -215,5 +233,65 @@ impl VmType {
 
     pub fn is_int(&self) -> bool {
         return !self.is_float();
+    }
+
+    pub fn is_i32(&self) -> bool {
+        match *self {
+            VmType::I32
+            | VmType::i32Array2
+            | VmType::i32Array4
+            | VmType::i32Array8
+            | VmType::i32Array16
+            | VmType::i32Array32
+            | VmType::i32Array64
+            | VmType::i32Array128
+            | VmType::i32Array256 => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_i64(&self) -> bool {
+        match *self {
+            VmType::I64
+            | VmType::i64Array2
+            | VmType::i64Array4
+            | VmType::i64Array8
+            | VmType::i64Array16
+            | VmType::i64Array32
+            | VmType::i64Array64
+            | VmType::i64Array128
+            | VmType::i64Array256 => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_f32(&self) -> bool {
+        match *self {
+            VmType::F32
+            | VmType::f32Array2
+            | VmType::f32Array4
+            | VmType::f32Array8
+            | VmType::f32Array16
+            | VmType::f32Array32
+            | VmType::f32Array64
+            | VmType::f32Array128
+            | VmType::f32Array256 => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_f64(&self) -> bool {
+        match *self {
+            VmType::F64
+            | VmType::f64Array2
+            | VmType::f64Array4
+            | VmType::f64Array8
+            | VmType::f64Array16
+            | VmType::f64Array32
+            | VmType::f64Array64
+            | VmType::f64Array128
+            | VmType::f64Array256 => true,
+            _ => false,
+        }
     }
 }

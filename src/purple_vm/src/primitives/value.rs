@@ -318,6 +318,174 @@ impl VmValue {
                     None => return Err(VmError::UnsafeCast) 
                 }
             }
+            VmValue::f32Array2(val) => {
+                let mut result: [i32; 2] = [0; 2];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [i32; 4] = [0; 4];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [i32; 8] = [0; 8];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array8(result))
+            }
+            VmValue::f32Array16(val) => {
+                let mut result: [i32; 16] = [0; 16];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array16(result))
+            }
+            VmValue::f32Array32(val) => {
+                let mut result: [i32; 32] = [0; 32];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array32(result))
+            }
+            VmValue::f32Array64(val) => {
+                let mut result: [i32; 64] = [0; 64];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array64(result))
+            }
+            VmValue::f32Array128(val) => {
+                let mut result: [i32; 128] = [0; 128];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array128(result))
+            }
+            VmValue::f32Array256(val) => {
+                let mut result: [i32; 256] = [0; 256];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array256(result))
+            }
             _ => return Err(VmError::InvalidOperand)
         }
     }
@@ -333,6 +501,174 @@ impl VmValue {
                     Some(res) => Ok(VmValue::I32(res)),
                     None => return Err(VmError::UnsafeCast) 
                 }
+            }
+            VmValue::f32Array2(val) => {
+                let mut result: [i32; 2] = [0; 2];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [i32; 4] = [0; 4];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [i32; 8] = [0; 8];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array8(result))
+            }
+            VmValue::f32Array16(val) => {
+                let mut result: [i32; 16] = [0; 16];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array16(result))
+            }
+            VmValue::f32Array32(val) => {
+                let mut result: [i32; 32] = [0; 32];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array32(result))
+            }
+            VmValue::f32Array64(val) => {
+                let mut result: [i32; 64] = [0; 64];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array64(result))
+            }
+            VmValue::f32Array128(val) => {
+                let mut result: [i32; 128] = [0; 128];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array128(result))
+            }
+            VmValue::f32Array256(val) => {
+                let mut result: [i32; 256] = [0; 256];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i32Array256(result))
             }
             _ => return Err(VmError::InvalidOperand)
         }
@@ -350,6 +686,174 @@ impl VmValue {
                     None => return Err(VmError::UnsafeCast) 
                 }
             }
+            VmValue::f32Array2(val) => {
+                let mut result: [i64; 2] = [0; 2];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [i64; 4] = [0; 4];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [i64; 8] = [0; 8];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array8(result))
+            }
+            VmValue::f32Array16(val) => {
+                let mut result: [i64; 16] = [0; 16];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array16(result))
+            }
+            VmValue::f32Array32(val) => {
+                let mut result: [i64; 32] = [0; 32];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array32(result))
+            }
+            VmValue::f32Array64(val) => {
+                let mut result: [i64; 64] = [0; 64];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array64(result))
+            }
+            VmValue::f32Array128(val) => {
+                let mut result: [i64; 128] = [0; 128];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array128(result))
+            }
+            VmValue::f32Array256(val) => {
+                let mut result: [i64; 256] = [0; 256];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array256(result))
+            }
             _ => return Err(VmError::InvalidOperand)
         }
     }
@@ -366,6 +870,174 @@ impl VmValue {
                     None => return Err(VmError::UnsafeCast) 
                 }
             }
+            VmValue::f64Array2(val) => {
+                let mut result: [i64; 2] = [0; 2];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array2(result))
+            }
+            VmValue::f64Array4(val) => {
+                let mut result: [i64; 4] = [0; 4];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array4(result))
+            }
+            VmValue::f64Array8(val) => {
+                let mut result: [i64; 8] = [0; 8];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array8(result))
+            }
+            VmValue::f64Array16(val) => {
+                let mut result: [i64; 16] = [0; 16];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array16(result))
+            }
+            VmValue::f64Array32(val) => {
+                let mut result: [i64; 32] = [0; 32];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array32(result))
+            }
+            VmValue::f64Array64(val) => {
+                let mut result: [i64; 64] = [0; 64];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array64(result))
+            }
+            VmValue::f64Array128(val) => {
+                let mut result: [i64; 128] = [0; 128];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array128(result))
+            }
+            VmValue::f64Array256(val) => {
+                let mut result: [i64; 256] = [0; 256];
+                let src = val.iter().map(|a| {
+                    if a.fract() != 0.0 {
+                        return Err(VmError::UnsafeCast);
+                    }
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast) 
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array256(result))
+            }
             _ => return Err(VmError::InvalidOperand)
         }
     }
@@ -377,6 +1049,150 @@ impl VmValue {
                     Some(res) => Ok(VmValue::F32(res)),
                     None => return Err(VmError::UnsafeCast)
                 }
+            }
+            VmValue::i32Array2(val) => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            VmValue::i32Array4(val) => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            VmValue::i32Array8(val) => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            VmValue::i32Array16(val) => {
+                let mut result: [f32; 16] = [0.0; 16];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array16(result))
+            }
+            VmValue::i32Array32(val) => {
+                let mut result: [f32; 32] = [0.0; 32];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array32(result))
+            }
+            VmValue::i32Array64(val) => {
+                let mut result: [f32; 64] = [0.0; 64];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array64(result))
+            }
+            VmValue::i32Array128(val) => {
+                let mut result: [f32; 128] = [0.0; 128];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array128(result))
+            }
+            VmValue::i32Array256(val) => {
+                let mut result: [f32; 256] = [0.0; 256];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array256(result))
             }
             _ => return Err(VmError::InvalidOperand)
         }
@@ -390,6 +1206,150 @@ impl VmValue {
                     None => return Err(VmError::UnsafeCast)
                 }
             }
+            VmValue::i64Array2(val) => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            VmValue::i64Array4(val) => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            VmValue::i64Array8(val) => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            VmValue::i64Array16(val) => {
+                let mut result: [f32; 16] = [0.0; 16];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array16(result))
+            }
+            VmValue::i64Array32(val) => {
+                let mut result: [f32; 32] = [0.0; 32];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array32(result))
+            }
+            VmValue::i64Array64(val) => {
+                let mut result: [f32; 64] = [0.0; 64];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array64(result))
+            }
+            VmValue::i64Array128(val) => {
+                let mut result: [f32; 128] = [0.0; 128];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array128(result))
+            }
+            VmValue::i64Array256(val) => {
+                let mut result: [f32; 256] = [0.0; 256];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array256(result))
+            }
             _ => return Err(VmError::InvalidOperand)
         }
     }
@@ -401,6 +1361,150 @@ impl VmValue {
                     Some(res) => Ok(VmValue::F32(res)),
                     None => return Err(VmError::UnsafeCast)
                 }
+            }
+            VmValue::f64Array2(val) => {
+                let mut result: [f32; 2] = [0.0; 2];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            VmValue::f64Array4(val) => {
+                let mut result: [f32; 4] = [0.0; 4];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            VmValue::f64Array8(val) => {
+                let mut result: [f32; 8] = [0.0; 8];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            VmValue::f64Array16(val) => {
+                let mut result: [f32; 16] = [0.0; 16];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array16(result))
+            }
+            VmValue::f64Array32(val) => {
+                let mut result: [f32; 32] = [0.0; 32];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array32(result))
+            }
+            VmValue::f64Array64(val) => {
+                let mut result: [f32; 64] = [0.0; 64];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array64(result))
+            }
+            VmValue::f64Array128(val) => {
+                let mut result: [f32; 128] = [0.0; 128];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array128(result))
+            }
+            VmValue::f64Array256(val) => {
+                let mut result: [f32; 256] = [0.0; 256];
+                let src = val.iter().map(|a| {
+                    match a.to_f32() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f32Array256(result))
             }
             _ => return Err(VmError::InvalidOperand)
         }
@@ -414,6 +1518,150 @@ impl VmValue {
                     None => return Err(VmError::UnsafeCast)
                 }
             }
+            VmValue::i32Array2(val) => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            VmValue::i32Array4(val) => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            VmValue::i32Array8(val) => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            VmValue::i32Array16(val) => {
+                let mut result: [f64; 16] = [0.0; 16];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array16(result))
+            }
+            VmValue::i32Array32(val) => {
+                let mut result: [f64; 32] = [0.0; 32];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array32(result))
+            }
+            VmValue::i32Array64(val) => {
+                let mut result: [f64; 64] = [0.0; 64];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array64(result))
+            }
+            VmValue::i32Array128(val) => {
+                let mut result: [f64; 128] = [0.0; 128];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array128(result))
+            }
+            VmValue::i32Array256(val) => {
+                let mut result: [f64; 256] = [0.0; 256];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array256(result))
+            }
             _ => return Err(VmError::InvalidOperand)
         }
     }
@@ -426,25 +1674,174 @@ impl VmValue {
                     None => return Err(VmError::UnsafeCast)
                 }
             }
+            VmValue::i64Array2(val) => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            VmValue::i64Array4(val) => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            VmValue::i64Array8(val) => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            VmValue::i64Array16(val) => {
+                let mut result: [f64; 16] = [0.0; 16];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array16(result))
+            }
+            VmValue::i64Array32(val) => {
+                let mut result: [f64; 32] = [0.0; 32];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array32(result))
+            }
+            VmValue::i64Array64(val) => {
+                let mut result: [f64; 64] = [0.0; 64];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array64(result))
+            }
+            VmValue::i64Array128(val) => {
+                let mut result: [f64; 128] = [0.0; 128];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array128(result))
+            }
+            VmValue::i64Array256(val) => {
+                let mut result: [f64; 256] = [0.0; 256];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array256(result))
+            }
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
-    // TODO: Extend for arrays
     pub fn i64_wrapi32 (&self) -> Result<VmValue, VmError> {
         VmValue::safe_i64_to_i32(*self)
     }
 
     pub fn f32trunc_i32(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::F32(_) => VmValue::safe_f32_to_i32(*self),
+            VmValue::F32(_) |
+            VmValue::f32Array2(_) | VmValue::f32Array4(_) | VmValue::f32Array8(_) |
+            VmValue::f32Array16(_) | VmValue::f32Array32(_) | VmValue::f32Array64(_) |
+            VmValue::f32Array128(_) | VmValue::f32Array256(_) => VmValue::safe_f32_to_i32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn f64trunc_i32(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::F64(_) => VmValue::safe_f64_to_i32(*self),
+            VmValue::F64(_) |
+            VmValue::f64Array2(_) | VmValue::f64Array4(_) | VmValue::f64Array8(_) |
+            VmValue::f64Array16(_) | VmValue::f64Array32(_) | VmValue::f64Array64(_) | 
+            VmValue::f64Array128(_) | VmValue::f64Array256(_) => VmValue::safe_f64_to_i32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
@@ -457,56 +1854,221 @@ impl VmValue {
                     Some(res) => Ok(VmValue::I64(res)),
                     None => return Err(VmError::UnsafeCast)
                 }
-            },
+            }
+            VmValue::i32Array2(val) => {
+                let mut result: [i64; 2] = [0; 2];
+                let src = val.iter().map(|a| {
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array2(result))
+            }
+            VmValue::i32Array4(val) => {
+                let mut result: [i64; 4] = [0; 4];
+                let src = val.iter().map(|a| {
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array4(result))
+            }
+            VmValue::i32Array8(val) => {
+                let mut result: [i64; 8] = [0; 8];
+                let src = val.iter().map(|a| {
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array8(result))
+            }
+            VmValue::i32Array16(val) => {
+                let mut result: [i64; 16] = [0; 16];
+                let src = val.iter().map(|a| {
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array16(result))
+            }
+            VmValue::i32Array32(val) => {
+                let mut result: [i64; 32] = [0; 32];
+                let src = val.iter().map(|a| {
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array32(result))
+            }
+            VmValue::i32Array64(val) => {
+                let mut result: [i64; 64] = [0; 64];
+                let src = val.iter().map(|a| {
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array64(result))
+            }
+            VmValue::i32Array128(val) => {
+                let mut result: [i64; 128] = [0; 128];
+                let src = val.iter().map(|a| {
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array128(result))
+            }
+            VmValue::i32Array256(val) => {
+                let mut result: [i64; 256] = [0; 256];
+                let src = val.iter().map(|a| {
+                    match a.to_i64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::i64Array256(result))
+            }
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn f32trunc_i64(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::F32(_) => VmValue::safe_f32_to_i64(*self),
+            VmValue::F32(_) |
+            VmValue::f32Array2(_) | VmValue::f32Array4(_) | VmValue::f32Array8(_) |
+            VmValue::f32Array16(_) | VmValue::f32Array32(_) | VmValue::f32Array64(_) |
+            VmValue::f32Array128(_) | VmValue::f32Array256(_) => VmValue::safe_f32_to_i64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn f64trunc_i64(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::F64(_) => VmValue::safe_f64_to_i64(*self),
+            VmValue::F64(_) |
+            VmValue::f64Array2(_) | VmValue::f64Array4(_) | VmValue::f64Array8(_) |
+            VmValue::f64Array16(_) | VmValue::f64Array32(_) | VmValue::f64Array64(_) | 
+            VmValue::f64Array128(_) | VmValue::f64Array256(_) => VmValue::safe_f64_to_i64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn i32convert_f32(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::I32(_) => VmValue::safe_i32_to_f32(*self),
+            VmValue::I32(_) |
+            VmValue::i32Array2(_) | VmValue::i32Array4(_) | VmValue::i32Array8(_) |
+            VmValue::i32Array16(_) | VmValue::i32Array32(_) | VmValue::i32Array64(_) | 
+            VmValue::i32Array128(_) | VmValue::i32Array256(_) => VmValue::safe_i32_to_f32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn i64convert_f32(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::I64(_) => VmValue::safe_i64_to_f32(*self),
+            VmValue::I64(_) |
+            VmValue::i64Array2(_) | VmValue::i64Array4(_) | VmValue::i64Array8(_) |
+            VmValue::i64Array16(_) | VmValue::i64Array32(_) | VmValue::i64Array64(_) | 
+            VmValue::i64Array128(_) | VmValue::i64Array256(_) => VmValue::safe_i64_to_f32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn f64demote_f32(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::F64(_) => VmValue::safe_f64_to_f32(*self),
+            VmValue::F64(_) |
+            VmValue::f64Array2(_) | VmValue::f64Array4(_) | VmValue::f64Array8(_) |
+            VmValue::f64Array16(_) | VmValue::f64Array32(_) | VmValue::f64Array64(_) | 
+            VmValue::f64Array128(_) | VmValue::f64Array256(_) => VmValue::safe_f64_to_f32(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn i32convert_f64(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::I32(_) => VmValue::safe_i32_to_f64(*self),
+            VmValue::I32(_) |
+            VmValue::i32Array2(_) | VmValue::i32Array4(_) | VmValue::i32Array8(_) |
+            VmValue::i32Array16(_) | VmValue::i32Array32(_) | VmValue::i32Array64(_) | 
+            VmValue::i32Array128(_) | VmValue::i32Array256(_) => VmValue::safe_i32_to_f64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
 
     pub fn i64convert_f64(&self) -> Result<VmValue, VmError> {
         match *self {
-            VmValue::I64(_) => VmValue::safe_i64_to_f64(*self),
+            VmValue::I64(_) |
+            VmValue::i64Array2(_) | VmValue::i64Array4(_) | VmValue::i64Array8(_) |
+            VmValue::i64Array16(_) | VmValue::i64Array32(_) | VmValue::i64Array64(_) | 
+            VmValue::i64Array128(_) | VmValue::i64Array256(_) => VmValue::safe_i64_to_f64(*self),
             _ => return Err(VmError::InvalidOperand)
         }
     }
@@ -520,6 +2082,150 @@ impl VmValue {
                     None => return Err(VmError::UnsafeCast)
                 }
             }
+            VmValue::f32Array2(val) => {
+                let mut result: [f64; 2] = [0.0; 2];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [f64; 4] = [0.0; 4];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [f64; 8] = [0.0; 8];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            VmValue::f32Array16(val) => {
+                let mut result: [f64; 16] = [0.0; 16];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array16(result))
+            }
+            VmValue::f32Array32(val) => {
+                let mut result: [f64; 32] = [0.0; 32];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array32(result))
+            }
+            VmValue::f32Array64(val) => {
+                let mut result: [f64; 64] = [0.0; 64];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array64(result))
+            }
+            VmValue::f32Array128(val) => {
+                let mut result: [f64; 128] = [0.0; 128];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array128(result))
+            }
+            VmValue::f32Array256(val) => {
+                let mut result: [f64; 256] = [0.0; 256];
+                let src = val.iter().map(|a| {
+                    match a.to_f64() {
+                        Some(res) => Ok(res),
+                        None => return Err(VmError::UnsafeCast)
+                    }
+                });
+
+                for (r, v) in result.iter_mut().zip(src) {
+                    match v {
+                        Ok(res) => *r = res,
+                        Err(err) => return Err(err),
+                    };
+                }
+
+                Ok(VmValue::f64Array256(result))
+            }
             _ => return Err(VmError::UnsafeCast)
         }
     }
@@ -529,6 +2235,89 @@ impl VmValue {
             VmValue::I32(val) => {
                 let bytes: [u8; 4] = val.to_be_bytes();
                 return Ok(VmValue::F32(f32::from_be_bytes(bytes)));
+            }
+            VmValue::i32Array2(val) => {
+                let mut result: [f32; 2] = [0.0; 2];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = f32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f32Array2(result))
+            }
+            VmValue::i32Array4(val) => {
+                let mut result: [f32; 4] = [0.0; 4];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = f32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f32Array4(result))
+            }
+            VmValue::i32Array8(val) => {
+                let mut result: [f32; 8] = [0.0; 8];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = f32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f32Array8(result))
+            }
+            VmValue::i32Array16(val) => {
+                let mut result: [f32; 16] = [0.0; 16];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = f32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f32Array16(result))
+            }
+            VmValue::i32Array32(val) => {
+                let mut result: [f32; 32] = [0.0; 32];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = f32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f32Array32(result))
+            }
+            VmValue::i32Array64(val) => {
+                let mut result: [f32; 64] = [0.0; 64];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = f32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f32Array64(result))
+            }
+            VmValue::i32Array128(val) => {
+                let mut result: [f32; 128] = [0.0; 128];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = f32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f32Array128(result))
+            }
+            VmValue::i32Array256(val) => {
+                let mut result: [f32; 256] = [0.0; 256];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = f32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f32Array256(result))
             }
             _ => return Err(VmError::InvalidOperand)
         }
@@ -540,6 +2329,89 @@ impl VmValue {
                 let bytes: [u8; 8] = val.to_be_bytes();
                 return Ok(VmValue::F64(f64::from_be_bytes(bytes)));
             }
+            VmValue::i64Array2(val) => {
+                let mut result: [f64; 2] = [0.0; 2];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = f64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f64Array2(result))
+            }
+            VmValue::i64Array4(val) => {
+                let mut result: [f64; 4] = [0.0; 4];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = f64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f64Array4(result))
+            }
+            VmValue::i64Array8(val) => {
+                let mut result: [f64; 8] = [0.0; 8];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = f64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f64Array8(result))
+            }
+            VmValue::i64Array16(val) => {
+                let mut result: [f64; 16] = [0.0; 16];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = f64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f64Array16(result))
+            }
+            VmValue::i64Array32(val) => {
+                let mut result: [f64; 32] = [0.0; 32];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = f64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f64Array32(result))
+            }
+            VmValue::i64Array64(val) => {
+                let mut result: [f64; 64] = [0.0; 64];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = f64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f64Array64(result))
+            }
+            VmValue::i64Array128(val) => {
+                let mut result: [f64; 128] = [0.0; 128];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = f64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f64Array128(result))
+            }
+            VmValue::i64Array256(val) => {
+                let mut result: [f64; 256] = [0.0; 256];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = f64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::f64Array256(result))
+            }
             _ => return Err(VmError::InvalidOperand)
         }
     }
@@ -550,6 +2422,89 @@ impl VmValue {
                 let bytes: [u8; 4] = val.to_be_bytes();
                 return Ok(VmValue::I32(i32::from_be_bytes(bytes)));
             }
+            VmValue::f32Array2(val) => {
+                let mut result: [i32; 2] = [0; 2];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = i32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i32Array2(result))
+            }
+            VmValue::f32Array4(val) => {
+                let mut result: [i32; 4] = [0; 4];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = i32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i32Array4(result))
+            }
+            VmValue::f32Array8(val) => {
+                let mut result: [i32; 8] = [0; 8];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = i32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i32Array8(result))
+            }
+            VmValue::f32Array16(val) => {
+                let mut result: [i32; 16] = [0; 16];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = i32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i32Array16(result))
+            }
+            VmValue::f32Array32(val) => {
+                let mut result: [i32; 32] = [0; 32];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = i32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i32Array32(result))
+            }
+            VmValue::f32Array64(val) => {
+                let mut result: [i32; 64] = [0; 64];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = i32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i32Array64(result))
+            }
+            VmValue::f32Array128(val) => {
+                let mut result: [i32; 128] = [0; 128];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = i32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i32Array128(result))
+            }
+            VmValue::f32Array256(val) => {
+                let mut result: [i32; 256] = [0; 256];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 4] = v.to_be_bytes();
+                    *r = i32::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i32Array256(result))
+            }
             _ => return Err(VmError::InvalidOperand)
         }
     }
@@ -559,6 +2514,89 @@ impl VmValue {
             VmValue::F64(val) => {
                 let bytes: [u8; 8] = val.to_be_bytes();
                 return Ok(VmValue::I64(i64::from_be_bytes(bytes)));
+            }
+            VmValue::f64Array2(val) => {
+                let mut result: [i64; 2] = [0; 2];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = i64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i64Array2(result))
+            }
+            VmValue::f64Array4(val) => {
+                let mut result: [i64; 4] = [0; 4];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = i64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i64Array4(result))
+            }
+            VmValue::f64Array8(val) => {
+                let mut result: [i64; 8] = [0; 8];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = i64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i64Array8(result))
+            }
+            VmValue::f64Array16(val) => {
+                let mut result: [i64; 16] = [0; 16];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = i64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i64Array16(result))
+            }
+            VmValue::f64Array32(val) => {
+                let mut result: [i64; 32] = [0; 32];
+
+                for (r, v) in result.iter_mut().zip(&val) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = i64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i64Array32(result))
+            }
+            VmValue::f64Array64(val) => {
+                let mut result: [i64; 64] = [0; 64];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = i64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i64Array64(result))
+            }
+            VmValue::f64Array128(val) => {
+                let mut result: [i64; 128] = [0; 128];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = i64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i64Array128(result))
+            }
+            VmValue::f64Array256(val) => {
+                let mut result: [i64; 256] = [0; 256];
+                let v1 = val.to_vec();
+
+                for (r, v) in result.iter_mut().zip(v1) {
+                    let bytes: [u8; 8] = v.to_be_bytes();
+                    *r = i64::from_be_bytes(bytes);
+                }
+
+                Ok(VmValue::i64Array256(result))
             }
             _ => return Err(VmError::InvalidOperand)
         }
