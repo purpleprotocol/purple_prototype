@@ -1822,24 +1822,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::I32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not i32! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::I32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not i32!");
-                                }
-                            },
                             Some(Instruction::i32Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -1851,7 +1833,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::I32(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -1871,7 +1853,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
                                 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -1891,7 +1873,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -1911,7 +1893,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -1931,7 +1913,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -1963,24 +1945,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::I32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not i32! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::I32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not i32!");
-                                }
-                            },
                             Some(Instruction::i32Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -1992,7 +1956,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::I32(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -2012,7 +1976,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
                                 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -2032,7 +1996,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -2052,7 +2016,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -2072,7 +2036,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -2104,24 +2068,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::I32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not i32! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::I32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not i32!");
-                                }
-                            },
                             Some(Instruction::i32Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -2133,7 +2079,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::I32(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -2153,7 +2099,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
                                 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -2173,7 +2119,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -2193,7 +2139,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -2213,7 +2159,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i32!");
                                 }
@@ -2245,24 +2191,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::I64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not i64! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::I64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not i64!");
-                                }
-                            },
                             Some(Instruction::i64Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -2274,7 +2202,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::I64(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2294,7 +2222,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
                                 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2314,7 +2242,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2334,7 +2262,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2354,7 +2282,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2374,7 +2302,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2394,7 +2322,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2426,24 +2354,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::I64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not i64! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::I64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not i64!");
-                                }
-                            },
                             Some(Instruction::i64Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -2455,7 +2365,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::I64(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2475,7 +2385,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
                                 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2495,7 +2405,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2515,7 +2425,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2535,7 +2445,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2555,7 +2465,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2575,7 +2485,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2607,24 +2517,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::I64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not i64! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::I64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not i64!");
-                                }
-                            },
                             Some(Instruction::i64Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -2636,7 +2528,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::I64(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2656,7 +2548,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
                                 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2676,7 +2568,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2696,7 +2588,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2716,7 +2608,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2736,7 +2628,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2756,7 +2648,7 @@ fn fetch_argv(
                                         return Err(VmError::Overflow);
                                     }
 
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not i64!");
                                 }
@@ -2788,24 +2680,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::F32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not f32! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::F32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not f32!");
-                                }
-                            },
                             Some(Instruction::f32Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -2817,7 +2691,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::F32(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not f32!");
                                 }
@@ -2849,24 +2723,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::F32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not f32! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::F32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not f32!");
-                                }
-                            },
                             Some(Instruction::f32Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -2878,7 +2734,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::F32(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not f32!");
                                 }
@@ -2910,24 +2766,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::F32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not f32! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::F32(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not f32!");
-                                }
-                            },
                             Some(Instruction::f32Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -2939,7 +2777,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::F32(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not f32!");
                                 }
@@ -2971,24 +2809,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::F64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not f64! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::F64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not f64!");
-                                }
-                            },
                             Some(Instruction::f64Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -3000,7 +2820,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::F64(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not f64!");
                                 }
@@ -3032,24 +2852,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::F64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not f64! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::F64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not f64!");
-                                }
-                            },
                             Some(Instruction::f64Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -3061,7 +2863,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::F64(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not f64!");
                                 }
@@ -3093,24 +2895,6 @@ fn fetch_argv(
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
                         match Instruction::from_repr(byte) {
-                            Some(Instruction::PopLocal) => {
-                                let value = frame.locals.pop();
-
-                                if let VmValue::F64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!(format!("Popped value that is not f64! Got: {:?}", value));
-                                }
-                            },
-                            Some(Instruction::PopOperand) => {
-                                let value = operand_stack.pop();
-
-                                if let VmValue::F64(_) = value {
-                                    argv.push(value);
-                                } else {
-                                    panic!("Popped value that is not f64!");
-                                }
-                            },
                             Some(Instruction::f64Load) => {
                                 // Fetch coordinates
                                 ip.increment();
@@ -3122,7 +2906,7 @@ fn fetch_argv(
                                 heap[x][y] = None;
 
                                 if let VmValue::F64(_) = value {
-                                    argv.push(value);
+                                    buffer.push(value.into());
                                 } else {
                                     panic!("Popped value that is not f64!");
                                 }

@@ -66,6 +66,47 @@ pub enum VmValue {
     f64Array256([f64; 256]),
 }
 
+impl From<VmValue> for i32 {
+    fn from(val: VmValue) -> Self {
+        if let VmValue::I32(num) = val {
+            num
+        } else {
+            panic!("Unsafe cast of value {:?} to i32", val)
+        }
+    }
+}
+
+impl From<VmValue> for i64 {
+    fn from(val: VmValue) -> Self {
+        if let VmValue::I64(num) = val {
+            num
+        } else {
+            panic!("Unsafe cast of value {:?} to i64", val)
+        }
+    }
+}
+
+
+impl From<VmValue> for f32 {
+    fn from(val: VmValue) -> Self {
+        if let VmValue::F32(num) = val {
+            num
+        } else {
+            panic!("Unsafe cast of value {:?} to f32", val)
+        }
+    }
+}
+
+impl From<VmValue> for f64 {
+    fn from(val: VmValue) -> Self {
+        if let VmValue::F64(num) = val {
+            num
+        } else {
+            panic!("Unsafe cast of value {:?} to f64", val)
+        }
+    }
+}
+
 impl VmValue {
     /// Returns the byte size of the inner value.
     pub fn byte_size(&self) -> usize {

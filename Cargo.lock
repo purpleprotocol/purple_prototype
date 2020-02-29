@@ -2048,6 +2048,7 @@ dependencies = [
  "enum-repr 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.7 (git+https://github.com/octavonce/hashbrown)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "persistence 0.1.0",
