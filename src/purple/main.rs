@@ -245,18 +245,6 @@ fn main() {
         // Start listening to connections
         start_listener(network.clone(), accept_connections.clone());
 
-        // Start bootstrap process
-        bootstrap(
-            network.clone(),
-            accept_connections,
-            node_storage.clone(),
-            argv.max_peers,
-            argv.bootnodes.clone(),
-            argv.port,
-            true,
-        )
-        .await;
-
         // Start miner related jobs
         #[cfg(any(
             feature = "miner-cpu",
@@ -278,8 +266,21 @@ fn main() {
             }
         }
 
-        // Start periodic jobs
-        network::jobs::start_periodic_jobs(network.clone()).await;
+        tokio::join!(
+            // Start bootstrap process
+            bootstrap(
+                network.clone(),
+                accept_connections,
+                node_storage.clone(),
+                argv.max_peers,
+                argv.bootnodes.clone(),
+                argv.port,
+                true,
+            ),
+
+            // Start periodic jobs
+            network::jobs::start_periodic_jobs(network.clone()),
+        );
     });
 }
 
