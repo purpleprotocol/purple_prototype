@@ -5,7 +5,7 @@ Welcome to the official Rust implementation of the Purple Protocol!
 
 ---
 
-Purple is a highly scalable, general-purpose decentralized ledger protocol. It's state of the art algorithms and architectural design potentially allow it to handle thousands of transactions per second which would allow the mainstream use of decentralized ledger technology.
+Purple is a highly scalable, general-purpose decentralized ledger protocol. Its state of the art algorithms and architectural design potentially allow it to handle thousands of transactions per second which would allow the mainstream use of decentralized ledger technology.
 
 ### General purpose
 The Purple Protocol is agnostic to the type of applications that can run on it which can be anything from a simple issued asset with no properties to full fledged decentralized insurance schemes and KYC. In fact, it is agnostic even to the programming language used to develop said applications.
