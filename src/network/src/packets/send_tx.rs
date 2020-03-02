@@ -67,7 +67,7 @@ impl Packet for SendTx {
     }
 
     fn from_bytes(bin: &[u8]) -> Result<Arc<SendTx>, NetworkErr> {
-        let mut rdr = Cursor::new(bin.to_vec());
+        let mut rdr = Cursor::new(bin);
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
         } else {
@@ -94,17 +94,12 @@ impl Packet for SendTx {
             return Err(NetworkErr::BadFormat);
         };
 
-        // Consume cursor
-        let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..11).collect();
-
-        let tx = if buf.len() == tx_len as usize {
-            let tx = Tx::from_bytes(&buf).map_err(|_| NetworkErr::BadFormat)?;
-            Arc::new(tx)
-        } else {
+        if bin.len() - 11 != tx_len as usize {
             return Err(NetworkErr::BadFormat);
-        };
+        }
 
+        let tx = Tx::from_bytes(&bin[11..]).map_err(|_| NetworkErr::BadFormat)?;
+        let tx = Arc::new(tx);
         let packet = SendTx { tx, nonce };
 
         Ok(Arc::new(packet))

@@ -24,50 +24,56 @@ use crate::peer::ConnectionType;
 use crate::priority::NetworkPriority;
 use crate::validation::receiver::Receiver;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use crypto::ShortHash;
 use rand::prelude::*;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct RequestPeers {
+pub struct RequestSubPiecesInfo {
     /// Randomly generated nonce
     pub(crate) nonce: u64,
 
-    /// The number of requested peers
-    pub(crate) requested_peers: u8,
+    /// The hash of the block
+    pub(crate) block_hash: ShortHash,
+
+    /// The hash of the piece we are requesting info for
+    pub(crate) piece_hash: ShortHash,
 }
 
-impl RequestPeers {
-    pub fn new(requested_peers: u8) -> RequestPeers {
+impl RequestSubPiecesInfo {
+    pub fn new(block_hash: ShortHash, piece_hash: ShortHash) -> RequestSubPiecesInfo {
         let mut rng = rand::thread_rng();
 
-        RequestPeers {
-            requested_peers,
+        RequestSubPiecesInfo {
+            block_hash,
+            piece_hash,
             nonce: rng.gen(),
         }
     }
 }
 
-impl Packet for RequestPeers {
-    const PACKET_TYPE: u8 = 4;
+impl Packet for RequestSubPiecesInfo {
+    const PACKET_TYPE: u8 = 17;
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = Vec::with_capacity(10);
+        let mut buffer: Vec<u8> = Vec::with_capacity(25);
         let packet_type: u8 = Self::PACKET_TYPE;
 
         // Packet structure:
-        // 1) Packet type(4)   - 8bits
-        // 2) Requested peers  - 8bits
-        // 3) Nonce            - 64bits
+        // 1) Packet type(17)  - 8bits
+        // 2) Nonce            - 64bits
+        // 3) Block hash       - 8bytes
+        // 4) Piece hash       - 8bytes
         buffer.write_u8(packet_type).unwrap();
-        buffer.write_u8(self.requested_peers).unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
-
+        buffer.extend_from_slice(&self.block_hash.0);
+        buffer.extend_from_slice(&self.piece_hash.0);
         buffer
     }
 
-    fn from_bytes(bytes: &[u8]) -> Result<Arc<RequestPeers>, NetworkErr> {
+    fn from_bytes(bytes: &[u8]) -> Result<Arc<RequestSubPiecesInfo>, NetworkErr> {
         let mut rdr = Cursor::new(bytes);
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
@@ -75,7 +81,7 @@ impl Packet for RequestPeers {
             return Err(NetworkErr::BadFormat);
         };
 
-        if bytes.len() != 10 {
+        if bytes.len() != 25 {
             return Err(NetworkErr::BadFormat);
         }
 
@@ -85,23 +91,25 @@ impl Packet for RequestPeers {
 
         rdr.set_position(1);
 
-        let requested_peers = if let Ok(result) = rdr.read_u8() {
-            result
-        } else {
-            return Err(NetworkErr::BadFormat);
-        };
-
-        rdr.set_position(2);
-
         let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
         } else {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = RequestPeers {
+        let mut block_hash_bytes = [0; 8];
+        let mut piece_hash_bytes = [0; 8];
+        
+        block_hash_bytes.copy_from_slice(&bytes[9..17]);
+        piece_hash_bytes.copy_from_slice(&bytes[17..]);
+
+        let block_hash = ShortHash(block_hash_bytes);
+        let piece_hash = ShortHash(piece_hash_bytes);
+
+        let packet = RequestSubPiecesInfo {
             nonce,
-            requested_peers,
+            block_hash,
+            piece_hash,
         };
 
         Ok(Arc::new(packet))
@@ -110,37 +118,10 @@ impl Packet for RequestPeers {
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &RequestPeers,
+        packet: &RequestSubPiecesInfo,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        debug!(
-            "Received RequestPeers packet from {} with nonce {}",
-            addr, packet.nonce
-        );
-
-        // Retrieve receiver mutex
-        let receiver = {
-            let peers = network.peers();
-            let peers = peers.read();
-            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
-
-            peer.validator.request_peers.receiver.clone()
-        };
-
-        // Attempt to receive packet
-        let packet = {
-            let mut receiver = receiver.lock();
-            receiver.receive(network as &N, addr, packet)?
-        };
-
-        debug!("Sending SendPeers packet to {}", addr);
-
-        // Send `SendPeers` packet back to peer
-        network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
-
-        debug!("SendPeers packet sent to {}", addr);
-
-        Ok(())
+        unimplemented!();
     }
 }
 
@@ -151,13 +132,14 @@ use quickcheck::Arbitrary;
 use crypto::Identity;
 
 #[cfg(test)]
-impl Arbitrary for RequestPeers {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> RequestPeers {
+impl Arbitrary for RequestSubPiecesInfo {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> RequestSubPiecesInfo {
         let id = Identity::new();
 
-        RequestPeers {
+        RequestSubPiecesInfo {
             nonce: Arbitrary::arbitrary(g),
-            requested_peers: Arbitrary::arbitrary(g),
+            block_hash: Arbitrary::arbitrary(g),
+            piece_hash: Arbitrary::arbitrary(g),
         }
     }
 }
@@ -167,8 +149,8 @@ mod tests {
     use super::*;
 
     quickcheck! {
-        fn serialize_deserialize(tx: Arc<RequestPeers>) -> bool {
-            tx == RequestPeers::from_bytes(&RequestPeers::to_bytes(&tx)).unwrap()
+        fn serialize_deserialize(tx: Arc<RequestSubPiecesInfo>) -> bool {
+            tx == RequestSubPiecesInfo::from_bytes(&RequestSubPiecesInfo::to_bytes(&tx)).unwrap()
         }
     }
 }
