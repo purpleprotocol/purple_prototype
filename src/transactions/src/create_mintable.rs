@@ -72,10 +72,8 @@ impl CreateMintable {
             return false;
         }
 
-        let bin_receiver = &self.receiver.to_bytes();
         let bin_asset_hash = &self.asset_hash.0;
         let bin_fee_hash = &self.fee_hash.0;
-        let coin_supply = &self.coin_supply;
         let creator_signing_addr = NormalAddress::from_pkey(&self.creator);
 
         // Do not allow address re-usage
@@ -410,12 +408,12 @@ impl CreateMintable {
     ///
     /// Fields:
     /// 1) Transaction type(5)  - 8bits
-    /// 2) Fee length           - 8bits
-    /// 3) Precision            - 8bits
-    /// 4) Coin supply          - 64bits
-    /// 5) Max supply           - 64bits
-    /// 6) Nonce                - 64bits
-    /// 7) Currency flag        - 1byte (Value is 1 if currency and fee hashes are identical. Otherwise is 0)
+    /// 2) Currency flag        - 1byte (Value is 1 if currency and fee hashes are identical. Otherwise is 0)
+    /// 3) Fee length           - 8bits
+    /// 4) Precision            - 8bits
+    /// 5) Coin supply          - 64bits
+    /// 6) Max supply           - 64bits
+    /// 7) Nonce                - 64bits
     /// 8) Asset hash           - 8byte binary
     /// 9) Fee hash             - 8byte binary (Non-existent if currency flag is true)
     /// 10) Creator             - 33byte binary
@@ -427,7 +425,7 @@ impl CreateMintable {
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let mut buffer: Vec<u8> = Vec::new();
 
-        let mut signature = if let Some(signature) = &self.signature {
+        let signature = if let Some(signature) = &self.signature {
             signature.to_bytes()
         } else {
             return Err("Signature field is missing");
@@ -448,12 +446,12 @@ impl CreateMintable {
         let fee_len = fee.len();
 
         buffer.write_u8(Self::TX_TYPE).unwrap();
+        buffer.write_u8(currency_flag).unwrap();
         buffer.write_u8(fee_len as u8).unwrap();
         buffer.write_u8(*precision).unwrap();
         buffer.write_u64::<BigEndian>(*coin_supply).unwrap();
         buffer.write_u64::<BigEndian>(*max_supply).unwrap();
         buffer.write_u64::<BigEndian>(*nonce).unwrap();
-        buffer.write_u8(currency_flag).unwrap();
         buffer.extend_from_slice(asset_hash);
 
         if currency_flag == 0 {
@@ -471,7 +469,11 @@ impl CreateMintable {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<CreateMintable, &'static str> {
-        let mut rdr = Cursor::new(bytes.to_vec());
+        if bytes.len() < 2 {
+            return Err("Invalid transaction length");
+        }
+        
+        let mut rdr = Cursor::new(bytes);
         let tx_type = if let Ok(result) = rdr.read_u8() {
             result
         } else {
@@ -484,46 +486,6 @@ impl CreateMintable {
 
         rdr.set_position(1);
 
-        let fee_len = if let Ok(result) = rdr.read_u8() {
-            result
-        } else {
-            return Err("Bad fee len");
-        };
-
-        rdr.set_position(2);
-
-        let precision = if let Ok(result) = rdr.read_u8() {
-            result
-        } else {
-            return Err("Bad precision");
-        };
-
-        rdr.set_position(3);
-
-        let coin_supply = if let Ok(result) = rdr.read_u64::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad coin supply");
-        };
-
-        rdr.set_position(11);
-
-        let max_supply = if let Ok(result) = rdr.read_u64::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad max supply");
-        };
-
-        rdr.set_position(19);
-
-        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
-            result
-        } else {
-            return Err("Bad nonce");
-        };
-
-        rdr.set_position(27);
-
         let currency_flag = if let Ok(result) = rdr.read_u8() {
             if result == 0 || result == 1 {
                 result
@@ -534,96 +496,118 @@ impl CreateMintable {
             return Err("Bad currency flag");
         };
 
-        // Consume cursor
-        let mut buf: Vec<u8> = rdr.into_inner();
-        let _: Vec<u8> = buf.drain(..28).collect();
+        rdr.set_position(2);
 
-        let asset_hash = if buf.len() > 8 as usize {
+        let fee_len = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad fee len");
+        };
+
+        let optional_bytes = if currency_flag == 0 {
+            8
+        } else {
+            0
+        };
+
+        if bytes.len() != 28 + 8 + optional_bytes + 32 + 33 * 3 + 64 + (fee_len as usize) {
+            return Err("Invalid transaction length");
+        }
+
+        rdr.set_position(3);
+
+        let precision = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err("Bad precision");
+        };
+
+        rdr.set_position(4);
+
+        let coin_supply = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad coin supply");
+        };
+
+        rdr.set_position(12);
+
+        let max_supply = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad max supply");
+        };
+
+        rdr.set_position(20);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err("Bad nonce");
+        };
+
+        let asset_hash = {
             let mut hash = [0; 8];
-            let hash_vec: Vec<u8> = buf.drain(..8).collect();
-
-            hash.copy_from_slice(&hash_vec);
+            hash.copy_from_slice(&bytes[28..36]);
 
             ShortHash(hash)
-        } else {
-            return Err("Incorrect packet structure");
         };
 
         let fee_hash = if currency_flag == 1 {
             asset_hash
         } else {
-            if buf.len() > 8 as usize {
-                let mut hash = [0; 8];
-                let hash_vec: Vec<u8> = buf.drain(..8).collect();
+            let mut hash = [0; 8];
+            hash.copy_from_slice(&bytes[36..44]);
 
-                hash.copy_from_slice(&hash_vec);
-
-                ShortHash(hash)
-            } else {
-                return Err("Incorrect packet structure");
-            }
+            ShortHash(hash)
         };
 
-        let creator = if buf.len() > 32 as usize {
-            let creator_vec: Vec<u8> = buf.drain(..32).collect();
+        let creator = {
             let mut creator_bytes = [0; 32];
+            let slice = if currency_flag == 1 {
+                &bytes[36..68]
+            } else {
+                &bytes[44..76]
+            };
 
-            creator_bytes.copy_from_slice(&creator_vec);
+            creator_bytes.copy_from_slice(slice);
             Pk(creator_bytes)
-        } else {
-            return Err("Incorrect packet structure");
         };
 
-        let receiver = if buf.len() > 33 as usize {
-            let receiver_vec: Vec<u8> = buf.drain(..33).collect();
-
-            match Address::from_bytes(&receiver_vec) {
-                Ok(addr) => addr,
-                Err(err) => return Err(err),
-            }
+        let slice = if currency_flag == 1 {
+            &bytes[68..101]
         } else {
-            return Err("Incorrect packet structure");
+            &bytes[76..109]
         };
+        let receiver = Address::from_bytes(slice)?;
 
-        let next_address = if buf.len() > 33 as usize {
-            let next_address_vec: Vec<u8> = buf.drain(..33).collect();
-            NormalAddress::from_bytes(&next_address_vec)?
+        let slice = if currency_flag == 1 {
+            &bytes[101..134]
         } else {
-            return Err("Incorrect packet structure");
+            &bytes[109..142]
         };
-
-        let minter_address = if buf.len() > 33 as usize {
-            let minter_address_vec: Vec<u8> = buf.drain(..33).collect();
-
-            match Address::from_bytes(&minter_address_vec) {
-                Ok(addr) => addr,
-                Err(err) => return Err(err),
-            }
+        let next_address = NormalAddress::from_bytes(slice)?;
+        
+        let slice = if currency_flag == 1 {
+            &bytes[134..167]
         } else {
-            return Err("Incorrect packet structure");
+            &bytes[142..175]
         };
-
-        let signature = if buf.len() > 64 as usize {
-            let sig_vec: Vec<u8> = buf.drain(..64).collect();
-
-            match Signature::from_bytes(&sig_vec) {
-                Ok(sig) => sig,
-                Err(_) => return Err("Bad signature"),
-            }
+        let minter_address = Address::from_bytes(slice)?;
+        
+        let slice = if currency_flag == 1 {
+            &bytes[167..231]
         } else {
-            return Err("Incorrect packet structure");
+            &bytes[175..239]
         };
-
-        let fee = if buf.len() == fee_len as usize {
-            let fee_vec: Vec<u8> = buf.drain(..fee_len as usize).collect();
-
-            match Balance::from_bytes(&fee_vec) {
-                Ok(result) => result,
-                Err(_) => return Err("Bad gas price"),
-            }
+        let signature = Signature::from_bytes(slice)?;
+        
+        let slice = if currency_flag == 1 {
+            &bytes[231..]
         } else {
-            return Err("Incorrect packet structure");
+            &bytes[239..]
         };
+        let fee = Balance::from_bytes(slice)?;
 
         let mut create_mintable = CreateMintable {
             creator,

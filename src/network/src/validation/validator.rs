@@ -17,7 +17,6 @@
 */
 
 use crate::bootstrap::cache::BootstrapCache;
-use crate::protocol_flow::block_propagation::BlockPropagation;
 use crate::protocol_flow::ping_pong::PingPong;
 use crate::protocol_flow::request_peers::RequestPeers;
 use crate::protocol_flow::transaction_propagation::TransactionPropagation;
@@ -35,9 +34,6 @@ pub struct ProtocolValidator {
 
     /// Transaction propagation protocol flow
     pub(crate) transaction_propagation: TransactionPropagation,
-
-    /// Block propagation protocol glow
-    pub(crate) block_propagation: BlockPropagation,
 }
 
 impl ProtocolValidator {
@@ -46,7 +42,6 @@ impl ProtocolValidator {
             ping_pong: Default::default(),
             request_peers: RequestPeers::new(bootstrap_cache),
             transaction_propagation: Default::default(),
-            block_propagation: Default::default(),
         }
     }
 }

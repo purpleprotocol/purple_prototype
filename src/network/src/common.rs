@@ -204,13 +204,8 @@ pub fn handle_packet<N: NetworkInterface>(
             _ => Err(NetworkErr::PacketParseErr),
         },
 
-        AnnounceCheckpoint::PACKET_TYPE => match AnnounceCheckpoint::from_bytes(packet) {
-            Ok(packet) => AnnounceCheckpoint::handle(network, peer_addr, &packet, conn_type),
-            _ => Err(NetworkErr::PacketParseErr),
-        },
-
-        AnnounceTxBlock::PACKET_TYPE => match AnnounceTxBlock::from_bytes(packet) {
-            Ok(packet) => AnnounceTxBlock::handle(network, peer_addr, &packet, conn_type),
+        AnnounceBlock::PACKET_TYPE => match AnnounceBlock::from_bytes(packet) {
+            Ok(packet) => AnnounceBlock::handle(network, peer_addr, &packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
@@ -221,26 +216,6 @@ pub fn handle_packet<N: NetworkInterface>(
 
         RequestBlock::PACKET_TYPE => match RequestBlock::from_bytes(packet) {
             Ok(packet) => RequestBlock::handle(network, peer_addr, &packet, conn_type),
-            _ => Err(NetworkErr::PacketParseErr),
-        },
-
-        ForwardCheckpointHeader::PACKET_TYPE => match ForwardCheckpointHeader::from_bytes(packet) {
-            Ok(packet) => ForwardCheckpointHeader::handle(network, peer_addr, &packet, conn_type),
-            _ => Err(NetworkErr::PacketParseErr),
-        },
-
-        ForwardTxBlockHeader::PACKET_TYPE => match ForwardTxBlockHeader::from_bytes(packet) {
-            Ok(packet) => ForwardTxBlockHeader::handle(network, peer_addr, &packet, conn_type),
-            _ => Err(NetworkErr::PacketParseErr),
-        },
-
-        RequestMissingTxs::PACKET_TYPE => match RequestMissingTxs::from_bytes(packet) {
-            Ok(packet) => RequestMissingTxs::handle(network, peer_addr, &packet, conn_type),
-            _ => Err(NetworkErr::PacketParseErr),
-        },
-
-        SendMissingTxs::PACKET_TYPE => match SendMissingTxs::from_bytes(packet) {
-            Ok(packet) => SendMissingTxs::handle(network, peer_addr, &packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
