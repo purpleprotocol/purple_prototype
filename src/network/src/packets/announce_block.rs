@@ -21,9 +21,9 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
 use crate::priority::NetworkPriority;
-use crate::protocol_flow::block_propagation::inbound::InboundPacket;
-use crate::protocol_flow::block_propagation::outbound::OutboundPacket;
-use crate::protocol_flow::block_propagation::Pair;
+// use crate::protocol_flow::block_propagation::inbound::InboundPacket;
+// use crate::protocol_flow::block_propagation::outbound::OutboundPacket;
+// use crate::protocol_flow::block_propagation::Pair;
 use crate::validation::receiver::Receiver;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
@@ -35,31 +35,31 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AnnounceTxBlock {
+pub struct AnnounceBlock {
     pub(crate) block_hash: ShortHash,
     pub(crate) nonce: u64,
 }
 
-impl AnnounceTxBlock {
-    pub fn new(block_hash: ShortHash) -> AnnounceTxBlock {
+impl AnnounceBlock {
+    pub fn new(block_hash: ShortHash) -> AnnounceBlock {
         let mut rng = rand::thread_rng();
 
-        AnnounceTxBlock {
+        AnnounceBlock {
             block_hash,
             nonce: rng.gen(),
         }
     }
 }
 
-impl Packet for AnnounceTxBlock {
-    const PACKET_TYPE: u8 = 12;
+impl Packet for AnnounceBlock {
+    const PACKET_TYPE: u8 = 11;
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::with_capacity(17);
         let packet_type: u8 = Self::PACKET_TYPE;
 
         // Packet structure:
-        // 1) Packet type(12)  - 8bits
+        // 1) Packet type(11)  - 8bits
         // 2) Nonce            - 64bits
         // 3) Block hash       - 8bytes
         buffer.write_u8(packet_type).unwrap();
@@ -68,7 +68,7 @@ impl Packet for AnnounceTxBlock {
         buffer
     }
 
-    fn from_bytes(bin: &[u8]) -> Result<Arc<AnnounceTxBlock>, NetworkErr> {
+    fn from_bytes(bin: &[u8]) -> Result<Arc<AnnounceBlock>, NetworkErr> {
         let mut rdr = Cursor::new(bin.to_vec());
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
@@ -101,7 +101,7 @@ impl Packet for AnnounceTxBlock {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = AnnounceTxBlock { block_hash, nonce };
+        let packet = AnnounceBlock { block_hash, nonce };
 
         Ok(Arc::new(packet))
     }
@@ -109,65 +109,67 @@ impl Packet for AnnounceTxBlock {
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &AnnounceTxBlock,
+        packet: &AnnounceBlock,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        debug!(
-            "Received AnnounceTxBlock packet from {} with nonce {}",
-            addr, packet.nonce
-        );
+        unimplemented!();
 
-        // Retrieve pairs map
-        let pairs = {
-            let peers = network.peers();
-            let peers = peers.read();
-            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
+        // debug!(
+        //     "Received AnnounceBlock packet from {} with nonce {}",
+        //     addr, packet.nonce
+        // );
 
-            peer.validator.block_propagation.pairs.clone()
-        };
+        // // Retrieve pairs map
+        // let pairs = {
+        //     let peers = network.peers();
+        //     let peers = peers.read();
+        //     let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
 
-        let receiver = {
-            if let Some(pair) = pairs.get(&packet.nonce) {
-                pair.receiver.clone()
-            } else {
-                let pair = Pair::default();
-                pairs.insert(packet.nonce, pair.clone());
-                pair.receiver.clone()
-            }
-        };
+        //     peer.validator.block_propagation.pairs.clone()
+        // };
 
-        // Attempt to receive packet
-        let packet = {
-            let mut receiver = receiver.lock();
-            let packet = OutboundPacket::AnnounceTxBlock(Arc::new(packet.clone()));
-            receiver.receive(network as &N, addr, &packet)?
-        };
+        // let receiver = {
+        //     if let Some(pair) = pairs.get(&packet.nonce) {
+        //         pair.receiver.clone()
+        //     } else {
+        //         let pair = Pair::default();
+        //         pairs.insert(packet.nonce, pair.clone());
+        //         pair.receiver.clone()
+        //     }
+        // };
 
-        match packet {
-            InboundPacket::RejectBlock(packet) => {
-                debug!("Sending RejectBlock packet to {}", addr);
+        // // Attempt to receive packet
+        // let packet = {
+        //     let mut receiver = receiver.lock();
+        //     let packet = OutboundPacket::AnnounceBlock(Arc::new(packet.clone()));
+        //     receiver.receive(network as &N, addr, &packet)?
+        // };
 
-                // Send `RejectBlock` packet back to peer
-                network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
+        // match packet {
+        //     InboundPacket::RejectBlock(packet) => {
+        //         debug!("Sending RejectBlock packet to {}", addr);
 
-                debug!("RejectBlock packet sent to {}", addr);
+        //         // Send `RejectBlock` packet back to peer
+        //         network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
 
-                Ok(())
-            }
+        //         debug!("RejectBlock packet sent to {}", addr);
 
-            InboundPacket::RequestBlock(packet) => {
-                debug!("Sending RequestBlock packet to {}", addr);
+        //         Ok(())
+        //     }
 
-                // Send `RequestBlock` packet back to peer
-                network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
+        //     InboundPacket::RequestBlock(packet) => {
+        //         debug!("Sending RequestBlock packet to {}", addr);
 
-                debug!("RequestBlock packet sent to {}", addr);
+        //         // Send `RequestBlock` packet back to peer
+        //         network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
 
-                Ok(())
-            }
+        //         debug!("RequestBlock packet sent to {}", addr);
 
-            _ => unreachable!(),
-        }
+        //         Ok(())
+        //     }
+
+        //     _ => unreachable!(),
+        // }
     }
 }
 
@@ -175,9 +177,9 @@ impl Packet for AnnounceTxBlock {
 use quickcheck::Arbitrary;
 
 #[cfg(test)]
-impl Arbitrary for AnnounceTxBlock {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> AnnounceTxBlock {
-        AnnounceTxBlock::new(Arbitrary::arbitrary(g))
+impl Arbitrary for AnnounceBlock {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> AnnounceBlock {
+        AnnounceBlock::new(Arbitrary::arbitrary(g))
     }
 }
 
@@ -187,8 +189,8 @@ mod tests {
     use chain::PowBlock;
 
     quickcheck! {
-        fn serialize_deserialize(packet: Arc<AnnounceTxBlock>) -> bool {
-            packet == AnnounceTxBlock::from_bytes(&AnnounceTxBlock::to_bytes(&packet)).unwrap()
+        fn serialize_deserialize(packet: Arc<AnnounceBlock>) -> bool {
+            packet == AnnounceBlock::from_bytes(&AnnounceBlock::to_bytes(&packet)).unwrap()
         }
     }
 }

@@ -23,7 +23,7 @@ use hashbrown::HashMap;
 use hashdb::Hasher as HasherTrait;
 use hashdb::{AsHashDB, HashDB};
 use rlp::NULL_RLP;
-use rocksdb::{ColumnFamily, DBCompactionStyle, Options, WriteBatch, DB};
+use rocksdb::{DBCompactionStyle, Options, WriteBatch, DB};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::path::Path;
@@ -353,10 +353,10 @@ impl HashDB<DbHasher, ElasticArray128<u8>> for PersistentDb {
 }
 
 impl AsHashDB<DbHasher, ElasticArray128<u8>> for PersistentDb {
-    fn as_hashdb(&self) -> &HashDB<DbHasher, ElasticArray128<u8>> {
+    fn as_hashdb(&self) -> & dyn HashDB<DbHasher, ElasticArray128<u8>> {
         self
     }
-    fn as_hashdb_mut(&mut self) -> &mut HashDB<DbHasher, ElasticArray128<u8>> {
+    fn as_hashdb_mut(&mut self) -> &mut dyn HashDB<DbHasher, ElasticArray128<u8>> {
         self
     }
 }

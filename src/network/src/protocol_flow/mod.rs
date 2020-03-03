@@ -16,7 +16,6 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod block_propagation;
 pub mod ping_pong;
 pub mod request_peers;
 pub mod transaction_propagation;
