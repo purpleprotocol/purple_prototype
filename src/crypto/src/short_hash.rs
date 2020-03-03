@@ -18,7 +18,6 @@
 
 use crate::hash::Hash;
 use crc32fast::Hasher as CrcHasher;
-use crc64fast::Digest;
 use quickcheck::Arbitrary;
 use rand::Rng;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -120,18 +119,6 @@ impl AsRef<[u8]> for ShortHash {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
-}
-
-#[inline]
-pub fn crc64_hash_slice(val: &[u8]) -> ShortHash {
-    let mut c = Digest::new();
-    c.write(val);
-    let checksum = c.sum64();
-    let checksum = encode_le_u64!(checksum);
-    let mut hash_bytes = [0; SHORT_HASH_BYTES];
-    hash_bytes.copy_from_slice(&checksum);
-
-    ShortHash(hash_bytes)
 }
 
 impl Arbitrary for ShortHash {
