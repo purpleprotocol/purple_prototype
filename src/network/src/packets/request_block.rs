@@ -43,14 +43,14 @@ impl RequestBlock {
 }
 
 impl Packet for RequestBlock {
-    const PACKET_TYPE: u8 = 14;
+    const PACKET_TYPE: u8 = 11;
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::with_capacity(11);
         let packet_type: u8 = Self::PACKET_TYPE;
 
         // Packet structure:
-        // 1) Packet type(14)   - 8bits
+        // 1) Packet type(11)   - 8bits
         // 2) Tx count          - 32bits
         // 2) Nonce             - 64bits
         buffer.write_u8(packet_type).unwrap();

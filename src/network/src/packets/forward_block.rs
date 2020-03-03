@@ -40,7 +40,7 @@ impl ForwardBlock {
 }
 
 impl Packet for ForwardBlock {
-    const PACKET_TYPE: u8 = 6;
+    const PACKET_TYPE: u8 = 12;
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
