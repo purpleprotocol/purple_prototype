@@ -52,14 +52,14 @@ impl AnnounceTx {
 }
 
 impl Packet for AnnounceTx {
-    const PACKET_TYPE: u8 = 7;
+    const PACKET_TYPE: u8 = 6;
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::with_capacity(17);
         let packet_type: u8 = Self::PACKET_TYPE;
 
         // Packet structure:
-        // 1) Packet type(7)   - 8bits
+        // 1) Packet type(6)   - 8bits
         // 2) Nonce            - 64bits
         // 3) Transaction hash - 8bytes
         buffer.write_u8(packet_type).unwrap();

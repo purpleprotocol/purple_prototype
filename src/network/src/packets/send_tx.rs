@@ -46,7 +46,7 @@ impl SendTx {
 }
 
 impl Packet for SendTx {
-    const PACKET_TYPE: u8 = 9;
+    const PACKET_TYPE: u8 = 8;
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
