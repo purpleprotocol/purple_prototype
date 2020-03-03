@@ -273,7 +273,7 @@ mod tests {
         chain_state.height = 10;
         chain_state.difficulty = 6;
         chain_state.edge_bits = 29;
-        chain_state.state_root = crypto::crc64_hash_slice(b"random_state_root");
+        chain_state.state_root = crypto::hash_slice(b"random_state_root").to_short();
         chain_state.last_checkpoint = crypto::hash_slice(b"random_checkpoint");
 
         // Flush values
@@ -295,7 +295,7 @@ mod tests {
         chain_state.height = 10;
         chain_state.difficulty = 6;
         chain_state.edge_bits = 29;
-        chain_state.state_root = crypto::crc64_hash_slice(b"random_state_root");
+        chain_state.state_root = crypto::hash_slice(b"random_state_root").to_short();
         chain_state.last_checkpoint = crypto::hash_slice(b"random_checkpoint");
         chain_state.current_validator = Some(node_id);
         chain_state.txs_blocks_left = Some(7);

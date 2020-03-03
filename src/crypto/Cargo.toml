@@ -10,7 +10,6 @@ blake3 = "0.1.0"
 hex = "0.3.2"
 byteorder = "1.2.7"
 crc32fast = { version = "1.2.0", features = ["nightly"] }
-crc64fast = "0.1.0"
 rlp = "0.3.0"
 merkle_light = "0.3.1"
 rust_sodium = { git = "https://github.com/octavonce/rust_sodium" }

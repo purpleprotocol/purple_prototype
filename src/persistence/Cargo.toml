@@ -16,7 +16,6 @@ num_cpus = "1.10.1"
 lazy_static = "1.4.0"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
 crypto = { path = "../crypto" }
-crc64fast = "0.1.0"
 log = "0.4.0"
 ansi_term = "0.9"
 byteorder = "1.2.7"
