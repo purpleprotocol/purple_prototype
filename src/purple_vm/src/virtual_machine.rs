@@ -3042,43 +3042,8 @@ fn perform_array_fetch(operand_stack: &mut Stack<VmValue>, idx: usize) -> Result
     }
 
     let arr: VmValue = operand_stack.pop();
-    let elem: VmValue;
-    match arr {
-        VmValue::I32(_) | VmValue::I64(_) | VmValue::F32(_) | VmValue::F64(_) => panic!(format!("Cannot fetch from this type of operand. Got {:?}", arr.get_type())),
-        VmValue::i32Array2(val) => elem = VmValue::I32(val[idx].clone()),
-        VmValue::i32Array4(val) => elem = VmValue::I32(val[idx].clone()),
-        VmValue::i32Array8(val) => elem = VmValue::I32(val[idx].clone()),
-        VmValue::i32Array16(val) => elem = VmValue::I32(val[idx].clone()),
-        VmValue::i32Array32(val) => elem = VmValue::I32(val[idx].clone()),
-        VmValue::i32Array64(val) => elem = VmValue::I32(val[idx].clone()),
-        VmValue::i32Array128(val) => elem = VmValue::I32(val[idx].clone()),
-        VmValue::i32Array256(val) => elem = VmValue::I32(val[idx].clone()),
-        VmValue::i64Array2(val) => elem = VmValue::I64(val[idx].clone()),
-        VmValue::i64Array4(val) => elem = VmValue::I64(val[idx].clone()),
-        VmValue::i64Array8(val) => elem = VmValue::I64(val[idx].clone()),
-        VmValue::i64Array16(val) => elem = VmValue::I64(val[idx].clone()),
-        VmValue::i64Array32(val) => elem = VmValue::I64(val[idx].clone()),
-        VmValue::i64Array64(val) => elem = VmValue::I64(val[idx].clone()),
-        VmValue::i64Array128(val) => elem = VmValue::I64(val[idx].clone()),
-        VmValue::i64Array256(val) => elem = VmValue::I64(val[idx].clone()),
-        VmValue::f32Array2(val) => elem = VmValue::F32(val[idx].clone()),
-        VmValue::f32Array4(val) => elem = VmValue::F32(val[idx].clone()),
-        VmValue::f32Array8(val) => elem = VmValue::F32(val[idx].clone()),
-        VmValue::f32Array16(val) => elem = VmValue::F32(val[idx].clone()),
-        VmValue::f32Array32(val) => elem = VmValue::F32(val[idx].clone()),
-        VmValue::f32Array64(val) => elem = VmValue::F32(val[idx].clone()),
-        VmValue::f32Array128(val) => elem = VmValue::F32(val[idx].clone()),
-        VmValue::f32Array256(val) => elem = VmValue::F32(val[idx].clone()),
-        VmValue::f64Array2(val) => elem = VmValue::F64(val[idx].clone()),
-        VmValue::f64Array4(val) => elem = VmValue::F64(val[idx].clone()),
-        VmValue::f64Array8(val) => elem = VmValue::F64(val[idx].clone()),
-        VmValue::f64Array16(val) => elem = VmValue::F64(val[idx].clone()),
-        VmValue::f64Array32(val) => elem = VmValue::F64(val[idx].clone()),
-        VmValue::f64Array64(val) => elem = VmValue::F64(val[idx].clone()),
-        VmValue::f64Array128(val) => elem = VmValue::F64(val[idx].clone()),
-        VmValue::f64Array256(val) => elem = VmValue::F64(val[idx].clone()),
-    }
-
+    let elem: VmValue = arr.element_at(idx)?;
+    
     operand_stack.push(arr);
     operand_stack.push(elem);
 
@@ -11894,4 +11859,37 @@ mod tests {
 
         assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
     }
+
+    // #[test]
+    // #[rustfmt::skip]
+    // fn it_performs_array_fetch_1() {
+    //     let mut bitmask: u8 = 0;
+        
+    //     bitmask.set(0, true);
+
+    //     let block: Vec<u8> = vec![
+    //         Instruction::Begin.repr(),
+    //         0x00,                             // 0 Arity
+    //         Instruction::Nop.repr(),
+    //         Instruction::PushOperand.repr(),
+    //         0x01,
+    //         0x00,
+    //         Instruction::i32Array2.repr(),
+    //         0x00,
+    //         0x00,
+    //         0x00,
+    //         0x01,
+    //         0x00,
+    //         0x00,
+    //         0x00,
+    //         0x02,
+    //         Instruction::Fetch.repr(),
+    //         bitmask,         // Assert that operands are equal
+    //         Instruction::Eq.repr(),
+    //         Instruction::Nop.repr(),
+    //         Instruction::End.repr()
+    //     ];
+
+    //     assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    // }
 }

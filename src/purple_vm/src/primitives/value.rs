@@ -4953,6 +4953,238 @@ impl VmValue {
 
         Ok(())
     }
+
+    pub fn element_at(&self, idx: usize) -> Result<VmValue, VmError> {
+        match *self {
+            VmValue::I32(_) | VmValue::I64(_) | VmValue::F32(_) | VmValue::F64(_) => {
+                return Err(VmError::InvalidOperand)
+            }
+            VmValue::i32Array2(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I32(val[idx].clone()))
+                }
+            }
+            VmValue::i32Array4(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I32(val[idx].clone()))
+                }
+            }
+            VmValue::i32Array8(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I32(val[idx].clone()))
+                }
+            }
+            VmValue::i32Array16(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I32(val[idx].clone()))
+                }
+            }
+            VmValue::i32Array32(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I32(val[idx].clone()))
+                }
+            }
+            VmValue::i32Array64(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I32(val[idx].clone()))
+                }
+            }
+            VmValue::i32Array128(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I32(val[idx].clone()))
+                }
+            }
+            VmValue::i32Array256(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I32(val[idx].clone()))
+                }
+            }
+            VmValue::i64Array2(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I64(val[idx].clone()))
+                }
+            }
+            VmValue::i64Array4(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I64(val[idx].clone()))
+                }
+            }
+            VmValue::i64Array8(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I64(val[idx].clone()))
+                }
+            }
+            VmValue::i64Array16(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I64(val[idx].clone()))
+                }
+            }
+            VmValue::i64Array32(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I64(val[idx].clone()))
+                }
+            }
+            VmValue::i64Array64(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I64(val[idx].clone()))
+                }
+            }
+            VmValue::i64Array128(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I64(val[idx].clone()))
+                }
+            }
+            VmValue::i64Array256(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::I64(val[idx].clone()))
+                }
+            }
+            VmValue::f32Array2(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F32(val[idx].clone()))
+                }
+            }
+            VmValue::f32Array4(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F32(val[idx].clone()))
+                }
+            }
+            VmValue::f32Array8(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F32(val[idx].clone()))
+                }
+            }
+            VmValue::f32Array16(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F32(val[idx].clone()))
+                }
+            }
+            VmValue::f32Array32(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F32(val[idx].clone()))
+                }
+            }
+            VmValue::f32Array64(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F32(val[idx].clone()))
+                }
+            }
+            VmValue::f32Array128(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F32(val[idx].clone()))
+                }
+            }
+            VmValue::f32Array256(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F32(val[idx].clone()))
+                }
+            }
+            VmValue::f64Array2(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F64(val[idx].clone()))
+                }
+            }
+            VmValue::f64Array4(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F64(val[idx].clone()))
+                }
+            }
+            VmValue::f64Array8(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F64(val[idx].clone()))
+                }
+            }
+            VmValue::f64Array16(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F64(val[idx].clone()))
+                }
+            }
+            VmValue::f64Array32(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F64(val[idx].clone()))
+                }
+            }
+            VmValue::f64Array64(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F64(val[idx].clone()))
+                }
+            }
+            VmValue::f64Array128(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F64(val[idx].clone()))
+                }
+            }
+            VmValue::f64Array256(val) => {
+                if idx >= val.len() {
+                    return Err(VmError::IndexOutOfBound);
+                } else {
+                    Ok(VmValue::F64(val[idx].clone()))
+                }
+            }
+        }
+    }
 }
 
 impl PartialEq for VmValue {
