@@ -795,6 +795,25 @@ impl Vm {
                         )?;
                         ip.increment();
                     }
+                    Some(Instruction::Fetch) => {
+                        ip.increment();
+
+                        // The next byte represents the index of the element to be fetched.
+                        let idx: usize = fun.fetch(ip.ip) as usize;
+                        perform_array_fetch(&mut self.operand_stack, idx)?;
+
+                        ip.increment();
+                    }
+                    Some(Instruction::Grow) => {
+                        perform_array_grow(&mut self.operand_stack)?;
+
+                        ip.increment();
+                    }
+                    Some(Instruction::ArrayPush) => {
+                        perform_array_push(&mut self.operand_stack)?;
+
+                        ip.increment();
+                    }
                     Some(Instruction::i32Store)
                     | Some(Instruction::i64Store)
                     | Some(Instruction::f32Store)
@@ -3013,6 +3032,83 @@ fn fetch_argv(
     Ok((argv_types, argv))
 }
 
+fn perform_array_fetch(operand_stack: &mut Stack<VmValue>, idx: usize) -> Result<(), VmError> {
+    if operand_stack.len() != 1 {
+        panic!(format!("Operand stack must have length 1. Got {:?}", operand_stack.len()));
+    }
+
+    let arr: VmValue = operand_stack.pop();
+    let elem: VmValue;
+    match arr {
+        VmValue::I32(_) | VmValue::I64(_) | VmValue::F32(_) | VmValue::F64(_) => panic!(format!("Cannot fetch from this type of operand. Got {:?}", arr.get_type())),
+        VmValue::i32Array2(val) => elem = VmValue::I32(val[idx].clone()),
+        VmValue::i32Array4(val) => elem = VmValue::I32(val[idx].clone()),
+        VmValue::i32Array8(val) => elem = VmValue::I32(val[idx].clone()),
+        VmValue::i32Array16(val) => elem = VmValue::I32(val[idx].clone()),
+        VmValue::i32Array32(val) => elem = VmValue::I32(val[idx].clone()),
+        VmValue::i32Array64(val) => elem = VmValue::I32(val[idx].clone()),
+        VmValue::i32Array128(val) => elem = VmValue::I32(val[idx].clone()),
+        VmValue::i32Array256(val) => elem = VmValue::I32(val[idx].clone()),
+        VmValue::i64Array2(val) => elem = VmValue::I64(val[idx].clone()),
+        VmValue::i64Array4(val) => elem = VmValue::I64(val[idx].clone()),
+        VmValue::i64Array8(val) => elem = VmValue::I64(val[idx].clone()),
+        VmValue::i64Array16(val) => elem = VmValue::I64(val[idx].clone()),
+        VmValue::i64Array32(val) => elem = VmValue::I64(val[idx].clone()),
+        VmValue::i64Array64(val) => elem = VmValue::I64(val[idx].clone()),
+        VmValue::i64Array128(val) => elem = VmValue::I64(val[idx].clone()),
+        VmValue::i64Array256(val) => elem = VmValue::I64(val[idx].clone()),
+        VmValue::f32Array2(val) => elem = VmValue::F32(val[idx].clone()),
+        VmValue::f32Array4(val) => elem = VmValue::F32(val[idx].clone()),
+        VmValue::f32Array8(val) => elem = VmValue::F32(val[idx].clone()),
+        VmValue::f32Array16(val) => elem = VmValue::F32(val[idx].clone()),
+        VmValue::f32Array32(val) => elem = VmValue::F32(val[idx].clone()),
+        VmValue::f32Array64(val) => elem = VmValue::F32(val[idx].clone()),
+        VmValue::f32Array128(val) => elem = VmValue::F32(val[idx].clone()),
+        VmValue::f32Array256(val) => elem = VmValue::F32(val[idx].clone()),
+        VmValue::f64Array2(val) => elem = VmValue::F64(val[idx].clone()),
+        VmValue::f64Array4(val) => elem = VmValue::F64(val[idx].clone()),
+        VmValue::f64Array8(val) => elem = VmValue::F64(val[idx].clone()),
+        VmValue::f64Array16(val) => elem = VmValue::F64(val[idx].clone()),
+        VmValue::f64Array32(val) => elem = VmValue::F64(val[idx].clone()),
+        VmValue::f64Array64(val) => elem = VmValue::F64(val[idx].clone()),
+        VmValue::f64Array128(val) => elem = VmValue::F64(val[idx].clone()),
+        VmValue::f64Array256(val) => elem = VmValue::F64(val[idx].clone()),
+    }
+
+    operand_stack.push(arr);
+    operand_stack.push(elem);
+
+    Ok(())
+}
+
+fn perform_array_grow(operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+    if operand_stack.len() != 1 {
+        panic!(format!("Operand stack must have length 1. Got {:?}", operand_stack.len()));
+    }
+
+    let arr: VmValue = operand_stack.pop();
+    let result: VmValue = match arr.grow_array() {
+        Ok(res) => res,
+        Err(err) => return Err(err)
+    };
+
+    operand_stack.push(result);
+
+    Ok(())
+}
+
+fn perform_array_push(operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+    if operand_stack.len() != 2 {
+        panic!(format!("Operand stack must have length 2. Got {:?}", operand_stack.len()));
+    }
+
+    // let arr: VmValue = operand_stack.pop();
+    
+
+
+    Ok(())
+}
+
 fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> Result<bool, VmError> {
     let op_len = operands.len();
     match op {
@@ -3158,7 +3254,6 @@ fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> Result<bool, V
     }
 }
 
-// TODO extend for up to 256 sized arrays
 fn compare_to_zero(operand: VmValue) -> bool {
     match operand {
         VmValue::I32(val) => val == 0,
@@ -3168,16 +3263,35 @@ fn compare_to_zero(operand: VmValue) -> bool {
         VmValue::i32Array2(val) => val.iter().all(|v| *v == 0),
         VmValue::i32Array4(val) => val.iter().all(|v| *v == 0),
         VmValue::i32Array8(val) => val.iter().all(|v| *v == 0),
+        VmValue::i32Array16(val) => val.iter().all(|v| *v == 0),
+        VmValue::i32Array32(val) => val.iter().all(|v| *v == 0),
+        VmValue::i32Array64(val) => val.iter().all(|v| *v == 0),
+        VmValue::i32Array128(val) => val.iter().all(|v| *v == 0),
+        VmValue::i32Array256(val) => val.iter().all(|v| *v == 0),
         VmValue::i64Array2(val) => val.iter().all(|v| *v == 0),
         VmValue::i64Array4(val) => val.iter().all(|v| *v == 0),
         VmValue::i64Array8(val) => val.iter().all(|v| *v == 0),
+        VmValue::i64Array16(val) => val.iter().all(|v| *v == 0),
+        VmValue::i64Array32(val) => val.iter().all(|v| *v == 0),
+        VmValue::i64Array64(val) => val.iter().all(|v| *v == 0),
+        VmValue::i64Array128(val) => val.iter().all(|v| *v == 0),
+        VmValue::i64Array256(val) => val.iter().all(|v| *v == 0),
         VmValue::f32Array2(val) => val.iter().all(|v| *v == 0.0),
         VmValue::f32Array4(val) => val.iter().all(|v| *v == 0.0),
         VmValue::f32Array8(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f32Array16(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f32Array32(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f32Array64(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f32Array128(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f32Array256(val) => val.iter().all(|v| *v == 0.0),
         VmValue::f64Array2(val) => val.iter().all(|v| *v == 0.0),
         VmValue::f64Array4(val) => val.iter().all(|v| *v == 0.0),
         VmValue::f64Array8(val) => val.iter().all(|v| *v == 0.0),
-        _ => panic!("Operand type not supported for comparison"),
+        VmValue::f64Array16(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f64Array32(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f64Array64(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f64Array128(val) => val.iter().all(|v| *v == 0.0),
+        VmValue::f64Array256(val) => val.iter().all(|v| *v == 0.0),
     }
 }
 
