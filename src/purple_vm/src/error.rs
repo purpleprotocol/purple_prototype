@@ -60,4 +60,7 @@ pub enum VmError {
 
     /// A cast which returns a different value than the original
     UnsafeCast,
+
+    /// Passed index exceeds array length
+    IndexOutOfBound
 }

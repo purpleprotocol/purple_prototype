@@ -809,8 +809,12 @@ impl Vm {
 
                         ip.increment();
                     }
-                    Some(Instruction::ArrayPush) => {
-                        perform_array_push(&mut self.operand_stack)?;
+                    Some(Instruction::ArrayStore) => {
+                        ip.increment();
+
+                        // The next byte represents the index(position) of the new element in the array.
+                        let idx: usize = fun.fetch(ip.ip) as usize;
+                        perform_array_store(&mut self.operand_stack, idx)?;
 
                         ip.increment();
                     }
@@ -3097,14 +3101,17 @@ fn perform_array_grow(operand_stack: &mut Stack<VmValue>) -> Result<(), VmError>
     Ok(())
 }
 
-fn perform_array_push(operand_stack: &mut Stack<VmValue>) -> Result<(), VmError> {
+fn perform_array_store(operand_stack: &mut Stack<VmValue>, idx: usize) -> Result<(), VmError> {
     if operand_stack.len() != 2 {
         panic!(format!("Operand stack must have length 2. Got {:?}", operand_stack.len()));
     }
 
-    // let arr: VmValue = operand_stack.pop();
+    let val: VmValue = operand_stack.pop();
+    let mut arr: VmValue = operand_stack.pop();
     
+    arr.store_array(&val, idx)?;
 
+    operand_stack.push(arr);
 
     Ok(())
 }
