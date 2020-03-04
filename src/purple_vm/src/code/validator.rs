@@ -1012,7 +1012,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    #[should_panic(expected("done state machine"))]
+    #[should_panic(expected = "state machine is DONE")]
     fn it_panics_on_pushing_ops_after_irrefutably_invalid() {
         let mut validator = Validator::new();
     
@@ -1022,7 +1022,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    #[should_panic(expected("done state machine"))]
+    #[should_panic(expected = "state machine is DONE")]
     fn it_fails_with_invalid_first_begin_arity() {
         let mut validator = Validator::new();
         let block: Vec<u8> = vec![
@@ -1039,7 +1039,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    #[should_panic(expected("done state machine"))]
+    #[should_panic(expected = "state machine is DONE")]
     fn it_fails_with_invalid_nested_begin_arity() {
         let mut validator = Validator::new();
         let block: Vec<u8> = vec![

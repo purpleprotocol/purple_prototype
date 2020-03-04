@@ -291,7 +291,7 @@ impl<B: Block> ChainRef<B> {
 
             let mut cache = self.block_cache.lock();
 
-            if cache.get(&hash).is_none() {
+            if cache.get(hash).is_none() {
                 // Cache result and then return it
                 cache.put(hash.clone(), result.clone());
             }

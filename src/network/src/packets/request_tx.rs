@@ -57,7 +57,7 @@ impl Packet for RequestTx {
     }
 
     fn from_bytes(bin: &[u8]) -> Result<Arc<RequestTx>, NetworkErr> {
-        let mut rdr = Cursor::new(bin.to_vec());
+        let mut rdr = Cursor::new(bin);
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
         } else {
