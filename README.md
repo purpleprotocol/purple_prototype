@@ -25,7 +25,7 @@ If you want a clear description of the progress so far you can look at the [mile
   
 
 ## Building
-Building the project requires cmake, clang/llvm and the CUDA toolkit. Note that building the core requires Rust `>= 1.39.0`. After all dependencies are installed, run:
+Building the project requires cmake, clang/llvm and the CUDA toolkit. Note that building the core requires Rust `>= 1.41.0`. After all dependencies are installed, run:
 
 ```
 cargo build
