@@ -144,12 +144,7 @@ impl<B: Block> ChainRef<B> {
         let cache_result = {
             let hash = hash.to_short();
             let mut cache = self.block_cache.lock();
-
-            if let Some(result) = cache.get(&hash) {
-                Some(result.clone())
-            } else {
-                None
-            }
+            cache.get(&hash).cloned()
         };
 
         if let Some(result) = cache_result {
@@ -180,12 +175,7 @@ impl<B: Block> ChainRef<B> {
     pub fn query_short_hash(&self, hash: &ShortHash) -> Option<Arc<B>> {
         let cache_result = {
             let mut cache = self.block_cache.lock();
-
-            if let Some(result) = cache.get(hash) {
-                Some(result.clone())
-            } else {
-                None
-            }
+            cache.get(hash).cloned()
         };
 
         if let Some(result) = cache_result {
