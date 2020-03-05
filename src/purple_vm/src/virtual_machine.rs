@@ -798,11 +798,14 @@ impl Vm {
                     Some(Instruction::Fetch) => {
                         ip.increment();
 
+                        debug!("Before Instruction::Fetch: operand_stack {:?}, len {:?}", self.operand_stack, self.operand_stack.len());
+
                         // The next byte represents the index of the element to be fetched.
                         let idx: usize = fun.fetch(ip.ip) as usize;
                         perform_array_fetch(&mut self.operand_stack, idx)?;
 
                         ip.increment();
+                        debug!("After Instruction::Fetch: operand_stack {:?}, len {:?}", self.operand_stack, self.operand_stack.len());
                     }
                     Some(Instruction::Grow) => {
                         perform_array_grow(&mut self.operand_stack)?;
@@ -812,11 +815,14 @@ impl Vm {
                     Some(Instruction::ArrayStore) => {
                         ip.increment();
 
+                        debug!("Before Instruction::ArrayStore: operand_stack {:?}, len {:?}", self.operand_stack, self.operand_stack.len());
+
                         // The next byte represents the index(position) of the new element in the array.
                         let idx: usize = fun.fetch(ip.ip) as usize;
                         perform_array_store(&mut self.operand_stack, idx)?;
 
                         ip.increment();
+                        debug!("After Instruction::ArrayStore: operand_stack {:?}, len {:?}", self.operand_stack, self.operand_stack.len());
                     }
                     Some(Instruction::i32Store)
                     | Some(Instruction::i64Store)
@@ -1907,11 +1913,12 @@ fn fetch_argv(
                 }
             }
             VmType::i32Array2 => {
+                let len = 2;
                 let mut result: [i32; 2] = [0; 2];
                 let mut buffer: Vec<i32> = Vec::with_capacity(2);
 
                 // Fetch array elems
-                for _ in 0..2 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -2017,11 +2024,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::I32(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -2030,11 +2043,12 @@ fn fetch_argv(
                 argv.push(VmValue::i32Array2(result));
             }
             VmType::i32Array4 => {
+                let len = 4;
                 let mut result: [i32; 4] = [0; 4];
                 let mut buffer: Vec<i32> = Vec::with_capacity(4);
 
                 // Fetch array elems
-                for _ in 0..4 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -2140,11 +2154,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+                        
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::I32(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -2153,11 +2173,12 @@ fn fetch_argv(
                 argv.push(VmValue::i32Array4(result));
             }
             VmType::i32Array8 => {
+                let len =  8;
                 let mut result: [i32; 8] = [0; 8];
                 let mut buffer: Vec<i32> = Vec::with_capacity(8);
 
                 // Fetch array elems
-                for _ in 0..8 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -2263,11 +2284,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::I32(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -2276,11 +2303,12 @@ fn fetch_argv(
                 argv.push(VmValue::i32Array8(result));
             }
             VmType::i64Array2 => {
+                let len = 2;
                 let mut result: [i64; 2] = [0; 2];
                 let mut buffer: Vec<i64> = Vec::with_capacity(2);
 
                 // Fetch array elems
-                for _ in 0..2 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -2426,11 +2454,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::I64(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -2439,11 +2473,12 @@ fn fetch_argv(
                 argv.push(VmValue::i64Array2(result));
             }
             VmType::i64Array4 => {
+                let len = 4;
                 let mut result: [i64; 4] = [0; 4];
                 let mut buffer: Vec<i64> = Vec::with_capacity(4);
 
                 // Fetch array elems
-                for _ in 0..4 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -2589,11 +2624,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::I64(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -2602,11 +2643,12 @@ fn fetch_argv(
                 argv.push(VmValue::i64Array4(result));
             }
             VmType::i64Array8 => {
+                let len = 8;
                 let mut result: [i64; 8] = [0; 8];
                 let mut buffer: Vec<i64> = Vec::with_capacity(8);
 
                 // Fetch array elems
-                for _ in 0..8 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -2752,11 +2794,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::I64(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -2765,11 +2813,12 @@ fn fetch_argv(
                 argv.push(VmValue::i64Array8(result));
             }
             VmType::f32Array2 => {
+                let len = 2;
                 let mut result: [f32; 2] = [0.0; 2];
                 let mut buffer: Vec<f32> = Vec::with_capacity(2);
 
                 // Fetch array elems
-                for _ in 0..2 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -2795,11 +2844,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::F32(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -2808,11 +2863,12 @@ fn fetch_argv(
                 argv.push(VmValue::f32Array2(result));
             }
             VmType::f32Array4 => {
+                let len = 4;
                 let mut result: [f32; 4] = [0.0; 4];
                 let mut buffer: Vec<f32> = Vec::with_capacity(4);
 
                 // Fetch array elems
-                for _ in 0..4 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -2838,11 +2894,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::F32(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -2851,11 +2913,12 @@ fn fetch_argv(
                 argv.push(VmValue::f32Array4(result));
             }
             VmType::f32Array8 => {
+                let len = 8;
                 let mut result: [f32; 8] = [0.0; 8];
                 let mut buffer: Vec<f32> = Vec::with_capacity(8);
 
                 // Fetch array elems
-                for _ in 0..8 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -2881,11 +2944,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::F32(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -2894,11 +2963,12 @@ fn fetch_argv(
                 argv.push(VmValue::f32Array8(result));
             }
             VmType::f64Array2 => {
+                let len = 2;
                 let mut result: [f64; 2] = [0.0; 2];
                 let mut buffer: Vec<f64> = Vec::with_capacity(2);
 
                 // Fetch array elems
-                for _ in 0..2 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -2924,11 +2994,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::F64(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -2937,11 +3013,12 @@ fn fetch_argv(
                 argv.push(VmValue::f64Array2(result));
             }
             VmType::f64Array4 => {
+                let len = 4;
                 let mut result: [f64; 4] = [0.0; 4];
                 let mut buffer: Vec<f64> = Vec::with_capacity(4);
 
                 // Fetch array elems
-                for _ in 0..4 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -2967,11 +3044,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::F64(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -2980,11 +3063,12 @@ fn fetch_argv(
                 argv.push(VmValue::f64Array4(result));
             }
             VmType::f64Array8 => {
+                let len = 8;
                 let mut result: [f64; 8] = [0.0; 8];
                 let mut buffer: Vec<f64> = Vec::with_capacity(8);
 
                 // Fetch array elems
-                for _ in 0..8 {
+                for i in 0..len {
                     let byte = fun.fetch(ip.ip);
 
                     // Fetch value from memory
@@ -3010,11 +3094,17 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
+                        ip.increment();
+
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
 
-                        argv.push(VmValue::F64(val));
+                        buffer.push(val);
+                    }
+
+                    if i != len - 1 {
+                        ip.increment();
                     }
                 }
 
@@ -4147,6 +4237,7 @@ fn perform_integer_common(
 mod tests {
     use super::*;
     use crypto::{Hash, ShortHash};
+    use rand::Rng;
 
     #[test]
     #[rustfmt::skip]
@@ -11860,36 +11951,355 @@ mod tests {
         assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
     }
 
-    // #[test]
-    // #[rustfmt::skip]
-    // fn it_performs_array_fetch_1() {
-    //     let mut bitmask: u8 = 0;
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_array_fetch_with_correct_index() {
+        let mut idx: u8 = 0; // idx = 0
         
-    //     bitmask.set(0, true);
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Array2.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,                              // debug: Before Instruction::Fetch: operand_stack Stack([[1, 2]]), len 1
+            Instruction::Fetch.repr(),
+            idx,                               // debug: After Instruction::Fetch: operand_stack Stack([[1, 2], 1]), len 2
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
 
-    //     let block: Vec<u8> = vec![
-    //         Instruction::Begin.repr(),
-    //         0x00,                             // 0 Arity
-    //         Instruction::Nop.repr(),
-    //         Instruction::PushOperand.repr(),
-    //         0x01,
-    //         0x00,
-    //         Instruction::i32Array2.repr(),
-    //         0x00,
-    //         0x00,
-    //         0x00,
-    //         0x01,
-    //         0x00,
-    //         0x00,
-    //         0x00,
-    //         0x02,
-    //         Instruction::Fetch.repr(),
-    //         bitmask,         // Assert that operands are equal
-    //         Instruction::Eq.repr(),
-    //         Instruction::Nop.repr(),
-    //         Instruction::End.repr()
-    //     ];
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
 
-    //     assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
-    // }
+        idx.set(0, true); // idx = 1
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Array2.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,                              // debug: Before Instruction::Fetch: operand_stack Stack([[1, 2]]), len 1
+            Instruction::Fetch.repr(),
+            idx,                               // debug: After Instruction::Fetch: operand_stack Stack([[1, 2], 2]), len 2
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_array_fetch_with_incorrect_index() {
+        let mut idx: u8 = 0;
+        
+        idx.set(1, true); // idx = 2
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Array2.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            Instruction::Fetch.repr(),
+            idx,
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_eq!(execute_vm_code_common(block), Err(VmError::IndexOutOfBound));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_array_grow() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Array2.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            Instruction::Grow.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Array4.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            Instruction::Eq.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_array_grow_all() {
+        let from: Vec<u8> = vec![Instruction::i32Array2.repr(), Instruction::i32Array4.repr(), /*Instruction::i32Array8.repr(), Instruction::i32Array16.repr(),
+                                 Instruction::i32Array32.repr(), Instruction::i32Array64.repr(), Instruction::i32Array128.repr(),*/
+                                 Instruction::i64Array2.repr(), Instruction::i64Array4.repr(), /*Instruction::i64Array8.repr(), Instruction::i64Array16.repr(),
+                                 Instruction::i64Array32.repr(), Instruction::i64Array64.repr(), Instruction::i64Array128.repr(),*/
+                                 Instruction::f32Array2.repr(), Instruction::f32Array4.repr(), /*Instruction::f32Array8.repr(), Instruction::f32Array16.repr(),
+                                 Instruction::f32Array32.repr(), Instruction::f32Array64.repr(), Instruction::f32Array128.repr(),*/
+                                 Instruction::f64Array2.repr(), Instruction::f64Array4.repr(), /*Instruction::f64Array8.repr(), Instruction::f64Array16.repr(),
+                                 Instruction::f64Array32.repr(), Instruction::f64Array64.repr(), Instruction::f64Array128.repr()*/];
+
+        let to: Vec<u8> = vec![Instruction::i32Array4.repr(), Instruction::i32Array8.repr(), /*Instruction::i32Array16.repr(), Instruction::i32Array32.repr(),
+                                 Instruction::i32Array64.repr(), Instruction::i32Array128.repr(), Instruction::i32Array256.repr(),*/
+                                 Instruction::i64Array4.repr(), Instruction::i64Array8.repr(), /*Instruction::i64Array16.repr(), Instruction::i64Array32.repr(),
+                                 Instruction::i64Array64.repr(), Instruction::i64Array128.repr(), Instruction::i64Array256.repr(),*/
+                                 Instruction::f32Array4.repr(), Instruction::f32Array8.repr(), /*Instruction::f32Array16.repr(), Instruction::f32Array32.repr(),
+                                 Instruction::f32Array64.repr(), Instruction::f32Array128.repr(), Instruction::f32Array256.repr(),*/
+                                 Instruction::f64Array4.repr(), Instruction::f64Array8.repr(), /*Instruction::f64Array16.repr(), Instruction::f64Array32.repr(),
+                                 Instruction::f64Array64.repr(), Instruction::f64Array128.repr(), Instruction::f64Array256.repr()*/];
+
+        let sizes: Vec<usize> = vec![2, 4, /*8, 16, 32, 64, 128,*/ 2, 4, /*8, 16, 32, 64, 128,*/ 2, 4, /*8, 16, 32, 64, 128,*/ 2, 4/*, 8, 16, 32, 64, 128*/];
+        let mut rnd = rand::thread_rng();
+
+        for i in 0..from.len() {
+            let f = from[i];
+            let t = to[i];
+            let s = sizes[i];
+
+            let mut block: Vec<u8> = vec![Instruction::Begin.repr(), 0x00, Instruction::Nop.repr(), Instruction::PushOperand.repr(), 0x01, 0x00, f];
+            let mut second: Vec<u8> = vec![];
+
+            for _ in 0..s {
+                let rn = rnd.gen::<u8>();
+                block.push(0x00);
+                block.push(0x00);
+                block.push(0x00);
+                block.push(0x00);
+                block.push(rn);
+                second.push(0x00);
+                second.push(0x00);
+                second.push(0x00);
+                second.push(0x00);
+                second.push(rn);
+            }
+            
+            block.push(Instruction::Grow.repr());
+            block.push(Instruction::PushOperand.repr());
+            block.push(0x01);
+            block.push(0x00);
+            block.push(t);
+            block.extend(second.iter());
+
+            for _ in 0..s * 5 {
+                block.push(0x00);
+            }
+            
+            block.push(Instruction::Eq.repr());
+            block.push(Instruction::Nop.repr());
+            block.push(Instruction::End.repr());
+
+            assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_performs_array_store_with_correct_index() {
+        let mut idx: u8 = 0; // idx = 0
+        
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Array2.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            0x12,
+            0x34,
+            0x56,
+            0x78,                              // debug: Before Instruction::ArrayStore: operand_stack Stack([[1, 2], 305419896]), len 2
+            Instruction::ArrayStore.repr(),
+            idx,
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Array2.repr(),
+            0x00,
+            0x12,
+            0x34,
+            0x56,
+            0x78,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,                              // debug: After Instruction::ArrayStore: operand_stack Stack([[305419896, 2]]), len 1
+            Instruction::Eq.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+
+        idx.set(0, true); // idx = 1
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Array2.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x12,
+            0x34,
+            0x56,
+            0x78,                              // debug: Before Instruction::ArrayStore: operand_stack Stack([[1, 1], 305419896]), len 2
+            Instruction::ArrayStore.repr(),
+            idx,
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Array2.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x12,
+            0x34,
+            0x56,
+            0x78,                              // debug: After Instruction::ArrayStore: operand_stack Stack([[1, 305419896]]), len 1
+            Instruction::Eq.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_ne!(execute_vm_code_common(block), Err(VmError::AssertionFailed));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_array_store_with_incorrect_index() {
+        let mut idx: u8 = 0;
+        
+        idx.set(1, true); // idx = 2
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            Instruction::i32Array2.repr(),
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x02,
+            0x12,
+            0x34,
+            0x56,
+            0x78,
+            Instruction::ArrayStore.repr(),
+            idx,
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert_eq!(execute_vm_code_common(block), Err(VmError::IndexOutOfBound));
+    }
 }

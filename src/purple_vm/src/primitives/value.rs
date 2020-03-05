@@ -4711,239 +4711,239 @@ impl VmValue {
     }
 
     pub fn store_array(&mut self, value: &VmValue, idx: usize) -> Result<(), VmError> {
-        match *value {
-            VmValue::I32(val) => match *self {
-                VmValue::i32Array2(mut arr) => {
+        match value {
+            VmValue::I32(val) => match self {
+                VmValue::i32Array2(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::i32Array4(mut arr) => {
+                VmValue::i32Array4(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::i32Array8(mut arr) => {
+                VmValue::i32Array8(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::i32Array16(mut arr) => {
+                VmValue::i32Array16(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::i32Array32(mut arr) => {
+                VmValue::i32Array32(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::i32Array64(mut arr) => {
+                VmValue::i32Array64(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::i32Array128(mut arr) => {
+                VmValue::i32Array128(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::i32Array256(mut arr) => {
+                VmValue::i32Array256(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
-                    }
-                }
-                _ => return Err(VmError::InvalidOperand),
-            },
-            VmValue::I64(val) => match *self {
-                VmValue::i64Array2(mut arr) => {
-                    if idx >= arr.len() {
-                        return Err(VmError::IndexOutOfBound);
-                    } else {
-                        arr[idx] = val;
-                    }
-                }
-                VmValue::i64Array4(mut arr) => {
-                    if idx >= arr.len() {
-                        return Err(VmError::IndexOutOfBound);
-                    } else {
-                        arr[idx] = val;
-                    }
-                }
-                VmValue::i64Array8(mut arr) => {
-                    if idx >= arr.len() {
-                        return Err(VmError::IndexOutOfBound);
-                    } else {
-                        arr[idx] = val;
-                    }
-                }
-                VmValue::i64Array16(mut arr) => {
-                    if idx >= arr.len() {
-                        return Err(VmError::IndexOutOfBound);
-                    } else {
-                        arr[idx] = val;
-                    }
-                }
-                VmValue::i64Array32(mut arr) => {
-                    if idx >= arr.len() {
-                        return Err(VmError::IndexOutOfBound);
-                    } else {
-                        arr[idx] = val;
-                    }
-                }
-                VmValue::i64Array64(mut arr) => {
-                    if idx >= arr.len() {
-                        return Err(VmError::IndexOutOfBound);
-                    } else {
-                        arr[idx] = val;
-                    }
-                }
-                VmValue::i64Array128(mut arr) => {
-                    if idx >= arr.len() {
-                        return Err(VmError::IndexOutOfBound);
-                    } else {
-                        arr[idx] = val;
-                    }
-                }
-                VmValue::i64Array256(mut arr) => {
-                    if idx >= arr.len() {
-                        return Err(VmError::IndexOutOfBound);
-                    } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
                 _ => return Err(VmError::InvalidOperand),
             },
-            VmValue::F32(val) => match *self {
-                VmValue::f32Array2(mut arr) => {
+            VmValue::I64(val) => match self {
+                VmValue::i64Array2(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f32Array4(mut arr) => {
+                VmValue::i64Array4(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f32Array8(mut arr) => {
+                VmValue::i64Array8(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f32Array16(mut arr) => {
+                VmValue::i64Array16(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f32Array32(mut arr) => {
+                VmValue::i64Array32(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f32Array64(mut arr) => {
+                VmValue::i64Array64(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f32Array128(mut arr) => {
+                VmValue::i64Array128(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f32Array256(mut arr) => {
+                VmValue::i64Array256(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
                 _ => return Err(VmError::InvalidOperand),
             },
-            VmValue::F64(val) => match *self {
-                VmValue::f64Array2(mut arr) => {
+            VmValue::F32(val) => match self {
+                VmValue::f32Array2(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f64Array4(mut arr) => {
+                VmValue::f32Array4(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f64Array8(mut arr) => {
+                VmValue::f32Array8(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f64Array16(mut arr) => {
+                VmValue::f32Array16(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f64Array32(mut arr) => {
+                VmValue::f32Array32(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f64Array64(mut arr) => {
+                VmValue::f32Array64(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f64Array128(mut arr) => {
+                VmValue::f32Array128(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
                     }
                 }
-                VmValue::f64Array256(mut arr) => {
+                VmValue::f32Array256(arr) => {
                     if idx >= arr.len() {
                         return Err(VmError::IndexOutOfBound);
                     } else {
-                        arr[idx] = val;
+                        arr[idx] = *val;
+                    }
+                }
+                _ => return Err(VmError::InvalidOperand),
+            },
+            VmValue::F64(val) => match self {
+                VmValue::f64Array2(arr) => {
+                    if idx >= arr.len() {
+                        return Err(VmError::IndexOutOfBound);
+                    } else {
+                        arr[idx] = *val;
+                    }
+                }
+                VmValue::f64Array4(arr) => {
+                    if idx >= arr.len() {
+                        return Err(VmError::IndexOutOfBound);
+                    } else {
+                        arr[idx] = *val;
+                    }
+                }
+                VmValue::f64Array8(arr) => {
+                    if idx >= arr.len() {
+                        return Err(VmError::IndexOutOfBound);
+                    } else {
+                        arr[idx] = *val;
+                    }
+                }
+                VmValue::f64Array16(arr) => {
+                    if idx >= arr.len() {
+                        return Err(VmError::IndexOutOfBound);
+                    } else {
+                        arr[idx] = *val;
+                    }
+                }
+                VmValue::f64Array32(arr) => {
+                    if idx >= arr.len() {
+                        return Err(VmError::IndexOutOfBound);
+                    } else {
+                        arr[idx] = *val;
+                    }
+                }
+                VmValue::f64Array64(arr) => {
+                    if idx >= arr.len() {
+                        return Err(VmError::IndexOutOfBound);
+                    } else {
+                        arr[idx] = *val;
+                    }
+                }
+                VmValue::f64Array128(arr) => {
+                    if idx >= arr.len() {
+                        return Err(VmError::IndexOutOfBound);
+                    } else {
+                        arr[idx] = *val;
+                    }
+                }
+                VmValue::f64Array256(arr) => {
+                    if idx >= arr.len() {
+                        return Err(VmError::IndexOutOfBound);
+                    } else {
+                        arr[idx] = *val;
                     }
                 }
                 _ => return Err(VmError::InvalidOperand),
