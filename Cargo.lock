@@ -1330,12 +1330,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itc"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02c47a96f68d68d75f2d7472b50b86a2df791a0d51d14e46756944ce6a4e0bcb"
-
-[[package]]
 name = "itertools"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2169,7 +2163,6 @@ dependencies = [
  "elastic-array",
  "hashdb",
  "hex 0.3.2",
- "itc",
  "jsonrpc-core",
  "jsonrpc-macros",
  "jump",

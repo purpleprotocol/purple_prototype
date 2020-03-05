@@ -23,7 +23,6 @@ members = [
 clap = "2.32.0"
 unwrap = "1.2.0"
 hex = "0.3.2"
-itc = "0.1.2"
 lazy_static = "1.4.0"
 log = "0.4.0"
 slog = "2.5.2"
@@ -51,7 +50,7 @@ chain = { path = "src/chain" }
 miner = { path = "src/miner" }
 mempool = { path = "src/mempool" }
 reqwest = { version = "0.10.1", features = ["cookies", "json"] }
-mimalloc = "0.1.17"
+mimalloc = { version = "0.1.17", default-features = false }
 
 ['cfg(test)'.chain]
 path = "src/chain"
@@ -68,6 +67,7 @@ name = "purple"
 [profile.release]
 lto = "thin"
 codegen-units=1
+panic = "abort"
 
 [features]
 default = ["mimalloc-allocator"]
