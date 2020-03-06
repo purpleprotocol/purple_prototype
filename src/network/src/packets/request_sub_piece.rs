@@ -122,13 +122,13 @@ impl Packet for RequestSubPiece {
             sub_piece_hash,
         };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &RequestSubPiece,
+        packet: Arc<RequestSubPiece>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         unimplemented!();

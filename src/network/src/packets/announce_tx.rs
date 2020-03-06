@@ -103,13 +103,13 @@ impl Packet for AnnounceTx {
 
         let packet = AnnounceTx { tx_hash, nonce };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &AnnounceTx,
+        packet: Arc<AnnounceTx>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
@@ -139,7 +139,7 @@ impl Packet for AnnounceTx {
         // Attempt to receive packet
         let packet = {
             let mut receiver = receiver.lock();
-            let packet = OutboundPacket::AnnounceTx(Arc::new(packet.clone()));
+            let packet = OutboundPacket::AnnounceTx(packet.clone());
             receiver.receive(network as &N, addr, &packet)?
         };
 

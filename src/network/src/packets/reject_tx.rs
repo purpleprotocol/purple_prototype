@@ -73,7 +73,7 @@ impl Packet for RejectTx {
     }
 
     fn from_bytes(bin: &[u8]) -> Result<Arc<RejectTx>, NetworkErr> {
-        let mut rdr = Cursor::new(bin.to_vec());
+        let mut rdr = Cursor::new(bin);
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
         } else {
@@ -107,13 +107,13 @@ impl Packet for RejectTx {
 
         let packet = RejectTx { nonce, status };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &RejectTx,
+        packet: Arc<RejectTx>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
@@ -142,7 +142,7 @@ impl Packet for RejectTx {
 
         // Ack packet
         {
-            let packet = InboundPacket::RejectTx(Arc::new(packet.clone()));
+            let packet = InboundPacket::RejectTx(packet.clone());
             let mut sender = sender.lock();
             sender.acknowledge(&packet)?;
         }

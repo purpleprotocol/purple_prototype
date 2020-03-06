@@ -327,7 +327,7 @@ impl NetworkInterface for Network {
                     );
 
                     // Handle connect packet
-                    Connect::handle(self, peer, &connect_packet, conn_type)?;
+                    Connect::handle(self, peer, connect_packet, conn_type)?;
 
                     Ok(())
                 }

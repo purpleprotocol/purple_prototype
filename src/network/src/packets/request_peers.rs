@@ -104,13 +104,13 @@ impl Packet for RequestPeers {
             requested_peers,
         };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &RequestPeers,
+        packet: Arc<RequestPeers>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
@@ -130,7 +130,7 @@ impl Packet for RequestPeers {
         // Attempt to receive packet
         let packet = {
             let mut receiver = receiver.lock();
-            receiver.receive(network as &N, addr, packet)?
+            receiver.receive(network as &N, addr, &packet)?
         };
 
         debug!("Sending SendPeers packet to {}", addr);

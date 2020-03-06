@@ -89,13 +89,13 @@ impl Packet for RequestBlock {
 
         let packet = RequestBlock { nonce, tx_count };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &RequestBlock,
+        packet: Arc<RequestBlock>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         unimplemented!();

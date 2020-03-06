@@ -103,13 +103,13 @@ impl Packet for AnnounceBlock {
 
         let packet = AnnounceBlock { block_hash, nonce };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &AnnounceBlock,
+        packet: Arc<AnnounceBlock>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         unimplemented!();
@@ -141,7 +141,7 @@ impl Packet for AnnounceBlock {
         // // Attempt to receive packet
         // let packet = {
         //     let mut receiver = receiver.lock();
-        //     let packet = OutboundPacket::AnnounceBlock(Arc::new(packet.clone()));
+        //     let packet = OutboundPacket::AnnounceBlock(packet.clone());
         //     receiver.receive(network as &N, addr, &packet)?
         // };
 

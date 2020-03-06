@@ -42,7 +42,7 @@ pub trait Packet {
     fn handle<N: NetworkInterface>(
         network: &mut N,
         peer: &SocketAddr,
-        packet: &Self,
+        packet: Arc<Self>,
         conn_type: ConnectionType,
     ) -> Result<(), NetworkErr>;
 }

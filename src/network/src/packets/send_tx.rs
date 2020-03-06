@@ -102,13 +102,13 @@ impl Packet for SendTx {
         let tx = Arc::new(tx);
         let packet = SendTx { tx, nonce };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &SendTx,
+        packet: Arc<SendTx>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
@@ -138,7 +138,7 @@ impl Packet for SendTx {
         // Attempt to receive packet
         let packet = {
             let mut receiver = receiver.lock();
-            let packet = OutboundPacket::SendTx(Arc::new(packet.clone()));
+            let packet = OutboundPacket::SendTx(packet);
             receiver.receive(network as &N, addr, &packet)?
         };
 

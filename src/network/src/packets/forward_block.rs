@@ -91,13 +91,13 @@ impl Packet for ForwardBlock {
         };
 
         let packet = ForwardBlock { block };
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &ForwardBlock,
+        packet: Arc<ForwardBlock>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         let block = &packet.block;

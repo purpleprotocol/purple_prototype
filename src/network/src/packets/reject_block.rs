@@ -102,13 +102,13 @@ impl Packet for RejectBlock {
 
         let packet = RejectBlock { nonce, status };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &RejectBlock,
+        packet: Arc<RejectBlock>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         unimplemented!();

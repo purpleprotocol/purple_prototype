@@ -20,44 +20,59 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
-use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
-use crate::protocol_flow::transaction_propagation::Pair;
 use crate::validation::sender::Sender;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use chain::{Block, PowBlock};
 use crypto::NodeId;
-use crypto::ShortHash;
+use crypto::{PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct RequestTx {
-    pub(crate) nonce: u64,
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum RejectSubPieceStatus {
+    /// The piece is yet unknown to the peer
+    Unknown,
+
+    /// We have been chocked by this peer
+    Chocked,
 }
 
-impl RequestTx {
-    pub fn new(nonce: u64) -> RequestTx {
-        RequestTx { nonce }
+#[derive(Debug, Clone, PartialEq)]
+pub struct RejectSubPiece {
+    pub(crate) nonce: u64,
+    pub(crate) status: RejectSubPieceStatus,
+}
+
+impl RejectSubPiece {
+    pub fn new(nonce: u64, status: RejectSubPieceStatus) -> RejectSubPiece {
+        RejectSubPiece { nonce, status }
     }
 }
 
-impl Packet for RequestTx {
-    const PACKET_TYPE: u8 = 7;
+impl Packet for RejectSubPiece {
+    const PACKET_TYPE: u8 = 19;
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut buffer: Vec<u8> = Vec::with_capacity(7);
+        let mut buffer: Vec<u8> = Vec::with_capacity(10);
         let packet_type: u8 = Self::PACKET_TYPE;
+        let status = match self.status {
+            RejectSubPieceStatus::Unknown => 0,
+            RejectSubPieceStatus::Chocked => 1,
+        };
 
         // Packet structure:
-        // 1) Packet type(8)   - 8bits
+        // 1) Packet type(19)  - 8bits
+        // 2) Reject status    - 8bits
         // 2) Nonce            - 64bits
         buffer.write_u8(packet_type).unwrap();
+        buffer.write_u8(status).unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
         buffer
     }
 
-    fn from_bytes(bin: &[u8]) -> Result<Arc<RequestTx>, NetworkErr> {
-        let mut rdr = Cursor::new(bin);
+    fn from_bytes(bin: &[u8]) -> Result<Arc<RejectSubPiece>, NetworkErr> {
+        let mut rdr = Cursor::new(bin.to_vec());
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
         } else {
@@ -70,13 +85,25 @@ impl Packet for RequestTx {
 
         rdr.set_position(1);
 
+        let status = if let Ok(result) = rdr.read_u8() {
+            match result {
+                0 => RejectSubPieceStatus::Unknown,
+                1 => RejectSubPieceStatus::Chocked,
+                _ => return Err(NetworkErr::BadFormat),
+            }
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        rdr.set_position(2);
+
         let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
             result
         } else {
             return Err(NetworkErr::BadFormat);
         };
 
-        let packet = RequestTx { nonce };
+        let packet = RejectSubPiece { nonce, status };
 
         Ok(Arc::new(packet.clone()))
     }
@@ -84,43 +111,10 @@ impl Packet for RequestTx {
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: Arc<RequestTx>,
+        packet: Arc<RejectSubPiece>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
-        debug!(
-            "Received RequestTx packet from {} with nonce {}",
-            addr, packet.nonce
-        );
-
-        // Retrieve pairs map
-        let pairs = {
-            let peers = network.peers();
-            let peers = peers.read();
-            let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
-
-            peer.validator.transaction_propagation.pairs.clone()
-        };
-
-        let sender = {
-            if let Some(pair) = pairs.get(&packet.nonce) {
-                pair.sender.clone()
-            } else {
-                return Err(NetworkErr::AckErr);
-            }
-        };
-
-        debug!("Acking RequestTx {}", packet.nonce);
-
-        // Ack packet
-        {
-            let packet = InboundPacket::RequestTx(packet.clone());
-            let mut sender = sender.lock();
-            sender.acknowledge(&packet)?;
-        }
-
-        debug!("RequestTx {} acked!", packet.nonce);
-
-        Ok(())
+        unimplemented!();
     }
 }
 
@@ -128,9 +122,26 @@ impl Packet for RequestTx {
 use quickcheck::Arbitrary;
 
 #[cfg(test)]
-impl Arbitrary for RequestTx {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> RequestTx {
-        RequestTx::new(Arbitrary::arbitrary(g))
+use rand::Rng;
+
+#[cfg(test)]
+impl Arbitrary for RejectSubPiece {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> RejectSubPiece {
+        RejectSubPiece::new(Arbitrary::arbitrary(g), Arbitrary::arbitrary(g))
+    }
+}
+
+#[cfg(test)]
+impl Arbitrary for RejectSubPieceStatus {
+    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> RejectSubPieceStatus {
+        let mut rng = rand::thread_rng();
+        let num = rng.gen_range(0, 2);
+
+        match num {
+            0 => RejectSubPieceStatus::Unknown,
+            1 => RejectSubPieceStatus::Chocked,
+            _ => panic!(),
+        }
     }
 }
 
@@ -140,8 +151,8 @@ mod tests {
     use chain::PowBlock;
 
     quickcheck! {
-        fn serialize_deserialize(packet: Arc<RequestTx>) -> bool {
-            packet == RequestTx::from_bytes(&RequestTx::to_bytes(&packet)).unwrap()
+        fn serialize_deserialize(packet: Arc<RejectSubPiece>) -> bool {
+            packet == RejectSubPiece::from_bytes(&RejectSubPiece::to_bytes(&packet)).unwrap()
         }
     }
 }
