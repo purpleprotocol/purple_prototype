@@ -137,13 +137,13 @@ impl Packet for SendPeers {
 
         let packet = SendPeers { nonce, peers };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &SendPeers,
+        packet: Arc<SendPeers>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
@@ -165,7 +165,7 @@ impl Packet for SendPeers {
         // Ack packet
         {
             let mut sender = sender.lock();
-            sender.acknowledge(packet)?;
+            sender.acknowledge(&packet)?;
         }
 
         debug!("SendPeers {} acked!", packet.nonce);

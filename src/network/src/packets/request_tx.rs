@@ -78,13 +78,13 @@ impl Packet for RequestTx {
 
         let packet = RequestTx { nonce };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &RequestTx,
+        packet: Arc<RequestTx>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
@@ -113,7 +113,7 @@ impl Packet for RequestTx {
 
         // Ack packet
         {
-            let packet = InboundPacket::RequestTx(Arc::new(packet.clone()));
+            let packet = InboundPacket::RequestTx(packet.clone());
             let mut sender = sender.lock();
             sender.acknowledge(&packet)?;
         }

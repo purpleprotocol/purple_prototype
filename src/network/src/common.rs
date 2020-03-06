@@ -27,6 +27,7 @@ use crypto::crc32fast::Hasher;
 use crypto::{Nonce, SecretKey as Sk, SessionKey, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 pub const NETWORK_VERSION: u8 = 0;
 pub const HEADER_SIZE: usize = 7; // Total of 7 bytes. 1 + 2 + 4;
@@ -160,82 +161,82 @@ pub fn handle_packet<N: NetworkInterface>(
 
     match packet_type {
         Ping::PACKET_TYPE => match Ping::from_bytes(packet) {
-            Ok(packet) => Ping::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => Ping::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         Pong::PACKET_TYPE => match Pong::from_bytes(packet) {
-            Ok(packet) => Pong::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => Pong::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         RequestPeers::PACKET_TYPE => match RequestPeers::from_bytes(packet) {
-            Ok(packet) => RequestPeers::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => RequestPeers::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         SendPeers::PACKET_TYPE => match SendPeers::from_bytes(packet) {
-            Ok(packet) => SendPeers::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => SendPeers::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         ForwardBlock::PACKET_TYPE => match ForwardBlock::from_bytes(packet) {
-            Ok(packet) => ForwardBlock::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => ForwardBlock::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         AnnounceTx::PACKET_TYPE => match AnnounceTx::from_bytes(packet) {
-            Ok(packet) => AnnounceTx::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => AnnounceTx::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         RequestTx::PACKET_TYPE => match RequestTx::from_bytes(packet) {
-            Ok(packet) => RequestTx::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => RequestTx::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         SendTx::PACKET_TYPE => match SendTx::from_bytes(packet) {
-            Ok(packet) => SendTx::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => SendTx::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         RejectTx::PACKET_TYPE => match RejectTx::from_bytes(packet) {
-            Ok(packet) => RejectTx::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => RejectTx::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         AnnounceBlock::PACKET_TYPE => match AnnounceBlock::from_bytes(packet) {
-            Ok(packet) => AnnounceBlock::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => AnnounceBlock::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         RejectBlock::PACKET_TYPE => match RejectBlock::from_bytes(packet) {
-            Ok(packet) => RejectBlock::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => RejectBlock::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         RequestBlock::PACKET_TYPE => match RequestBlock::from_bytes(packet) {
-            Ok(packet) => RequestBlock::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => RequestBlock::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
-        RequestSubPiecesInfo::PACKET_TYPE => match RequestSubPiecesInfo::from_bytes(packet) {
-            Ok(packet) => RequestSubPiecesInfo::handle(network, peer_addr, &packet, conn_type),
+        RequestPieceInfo::PACKET_TYPE => match RequestPieceInfo::from_bytes(packet) {
+            Ok(packet) => RequestPieceInfo::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
-        SendSubPiecesInfo::PACKET_TYPE => match SendSubPiecesInfo::from_bytes(packet) {
-            Ok(packet) => SendSubPiecesInfo::handle(network, peer_addr, &packet, conn_type),
+        SendPieceInfo::PACKET_TYPE => match SendPieceInfo::from_bytes(packet) {
+            Ok(packet) => SendPieceInfo::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         RequestSubPiece::PACKET_TYPE => match RequestSubPiece::from_bytes(packet) {
-            Ok(packet) => RequestSubPiece::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => RequestSubPiece::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 
         SendSubPiece::PACKET_TYPE => match SendSubPiece::from_bytes(packet) {
-            Ok(packet) => SendSubPiece::handle(network, peer_addr, &packet, conn_type),
+            Ok(packet) => SendSubPiece::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),
         },
 

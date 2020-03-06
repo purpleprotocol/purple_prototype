@@ -43,7 +43,7 @@ impl Packet for Pong {
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &Pong,
+        packet: Arc<Pong>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
@@ -64,7 +64,7 @@ impl Packet for Pong {
 
         // Ack packet
         let mut sender = sender.lock();
-        sender.acknowledge(packet)?;
+        sender.acknowledge(&packet)?;
 
         debug!("Pong {} acked!", packet.nonce);
 
@@ -108,7 +108,7 @@ impl Packet for Pong {
 
         let packet = Pong { nonce };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 }
 

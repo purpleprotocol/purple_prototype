@@ -47,7 +47,7 @@ impl Packet for Ping {
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &Ping,
+        packet: Arc<Ping>,
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
@@ -75,7 +75,7 @@ impl Packet for Ping {
         // Attempt to receive packet
         let pong = {
             let mut receiver = receiver.lock();
-            receiver.receive(network as &N, addr, packet)?
+            receiver.receive(network as &N, addr, &packet)?
         };
 
         debug!("Sending Pong packet to {}", addr);
@@ -125,7 +125,7 @@ impl Packet for Ping {
 
         let packet = Ping { nonce };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 }
 

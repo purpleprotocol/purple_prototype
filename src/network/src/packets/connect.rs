@@ -142,13 +142,13 @@ impl Packet for Connect {
             signature: Some(signature),
         };
 
-        Ok(Arc::new(packet))
+        Ok(Arc::new(packet.clone()))
     }
 
     fn handle<N: NetworkInterface>(
         network: &mut N,
         addr: &SocketAddr,
-        packet: &Connect,
+        packet: Arc<Connect>,
         conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         if !packet.verify_sig() {

@@ -288,7 +288,7 @@ impl NetworkInterface for MockNetwork {
                     );
 
                     // Handle connect packet
-                    Connect::handle(self, addr, &connect_packet, conn_type)?;
+                    Connect::handle(self, addr, connect_packet, conn_type)?;
 
                     // Schedule timeout task
                     {
