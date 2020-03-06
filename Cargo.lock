@@ -2195,6 +2195,7 @@ dependencies = [
  "bin-tools",
  "bitvec",
  "byteorder",
+ "criterion",
  "crypto",
  "enum-repr",
  "hashbrown 0.1.7",
