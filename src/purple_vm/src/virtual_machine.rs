@@ -151,15 +151,18 @@ impl Vm {
                         let fun = &module.functions[idx];
                         let mut argv: Vec<VmValue> = Vec::with_capacity(fun.arity as usize);
 
-                        // Fetch call args
-                        for _ in 0..fun.arity {
+                        {
                             let frame = self.call_stack.peek_mut();
-                            let val = frame.locals.pop();
 
-                            argv.push(val);
+                            // Fetch call args
+                            for _ in 0..fun.arity {
+                                let val = frame.locals.pop();
+
+                                argv.push(val);
+                            }
+
+                            argv.reverse();
                         }
-
-                        argv.reverse();
 
                         // Push new frame to call stack
                         self.call_stack
@@ -396,11 +399,8 @@ impl Vm {
                         self.operand_stack = Stack::new();
 
                         if let Some(return_address) = frame.return_address.clone() {
-                            let block_len = fun.fetch_block_len(return_address.ip);
-
                             // Set ip to the current frame's return address
                             *ip = return_address;
-
                             let current_ip = ip.ip;
 
                             match scope_type {
@@ -412,6 +412,8 @@ impl Vm {
                                     ip.set_ip(current_ip + 2);
                                 }
                                 _ => {
+                                    let block_len = fun.fetch_block_len(current_ip);
+
                                     // Set instruction pointer to the next
                                     // instruction after the block.
                                     ip.set_ip(current_ip + block_len);
@@ -459,16 +461,7 @@ impl Vm {
                             let is_comp_operator = COMP_OPS.iter().any(|o| *o == instruction);
 
                             if is_comp_operator {
-                                let mut operands: Vec<VmValue> =
-                                    Vec::with_capacity(self.operand_stack.len());
-                                let mut operand_stack = self.operand_stack.clone();
-
-                                for _ in 0..operand_stack.len() {
-                                    let value = operand_stack.pop();
-                                    operands.push(value);
-                                }
-
-                                let result = perform_comparison(instruction, operands)?;
+                                let result = perform_comparison(instruction, self.operand_stack.as_slice())?;
 
                                 // Return to stored caller address if comparison is successful
                                 if result {
@@ -510,10 +503,80 @@ impl Vm {
                         }
                     }
                     Some(Instruction::Eq) => {
-                        let os = self.operand_stack.to_vec();
-
                         // Perform assertion
-                        if perform_comparison(Instruction::Eq, os)? {
+                        if perform_comparison(Instruction::Eq, self.operand_stack.as_slice())? {
+                            ip.increment();
+                        } else {
+                            return Err(VmError::AssertionFailed);
+                        }
+                    }
+                    Some(Instruction::Eqz) => {
+                        // Perform assertion
+                        if perform_comparison(Instruction::Eqz, self.operand_stack.as_slice())? {
+                            ip.increment();
+                        } else {
+                            return Err(VmError::AssertionFailed);
+                        }
+                    }
+                    Some(Instruction::LtSigned) => {
+                        // Perform assertion
+                        if perform_comparison(Instruction::LtSigned, self.operand_stack.as_slice())? {
+                            ip.increment();
+                        } else {
+                            return Err(VmError::AssertionFailed);
+                        }
+                    }
+                    Some(Instruction::LtUnsigned) => {
+                        // Perform assertion
+                        if perform_comparison(Instruction::LtUnsigned, self.operand_stack.as_slice())? {
+                            ip.increment();
+                        } else {
+                            return Err(VmError::AssertionFailed);
+                        }
+                    }
+                    Some(Instruction::GtSigned) => {
+                        // Perform assertion
+                        if perform_comparison(Instruction::GtSigned, self.operand_stack.as_slice())? {
+                            ip.increment();
+                        } else {
+                            return Err(VmError::AssertionFailed);
+                        }
+                    }
+                    Some(Instruction::GtUnsigned) => {
+                        // Perform assertion
+                        if perform_comparison(Instruction::GtUnsigned, self.operand_stack.as_slice())? {
+                            ip.increment();
+                        } else {
+                            return Err(VmError::AssertionFailed);
+                        }
+                    }
+                    Some(Instruction::LeSigned) => {
+                        // Perform assertion
+                        if perform_comparison(Instruction::LeSigned, self.operand_stack.as_slice())? {
+                            ip.increment();
+                        } else {
+                            return Err(VmError::AssertionFailed);
+                        }
+                    }
+                    Some(Instruction::LeUnsigned) => {
+                        // Perform assertion
+                        if perform_comparison(Instruction::LeUnsigned, self.operand_stack.as_slice())? {
+                            ip.increment();
+                        } else {
+                            return Err(VmError::AssertionFailed);
+                        }
+                    }
+                    Some(Instruction::GeSigned) => {
+                        // Perform assertion
+                        if perform_comparison(Instruction::GeSigned, self.operand_stack.as_slice())? {
+                            ip.increment();
+                        } else {
+                            return Err(VmError::AssertionFailed);
+                        }
+                    }
+                    Some(Instruction::GeUnsigned) => {
+                        // Perform assertion
+                        if perform_comparison(Instruction::GeUnsigned, self.operand_stack.as_slice())? {
                             ip.increment();
                         } else {
                             return Err(VmError::AssertionFailed);
@@ -1296,14 +1359,7 @@ fn handle_begin_block(
                 let is_comp_operator = COMP_OPS.iter().any(|o| *o == instruction);
 
                 if is_comp_operator {
-                    let mut operands: Vec<VmValue> = Vec::with_capacity(operand_stack.len());
-                    let mut os = operand_stack.clone();
-
-                    for _ in 0..os.len() {
-                        let value = os.pop();
-                        operands.push(value);
-                    }
-                    if perform_comparison(instruction, operands)? {
+                    if perform_comparison(instruction, operand_stack.as_slice())? {
                         // Push frame
                         call_stack.push(Frame::new(Some(CfOperator::If), Some(initial_ip), None));
                     } else {
@@ -1345,14 +1401,7 @@ fn handle_begin_block(
                 let is_comp_operator = COMP_OPS.iter().any(|o| *o == instruction);
 
                 if is_comp_operator {
-                    let mut operands: Vec<VmValue> = Vec::with_capacity(operand_stack.len());
-                    let mut os = operand_stack.clone();
-
-                    for _ in 0..os.len() {
-                        let value = os.pop();
-                        operands.push(value);
-                    }
-                    if perform_comparison(instruction, operands)? {
+                    if perform_comparison(instruction, operand_stack.as_slice())? {
                         let mut buf: Vec<VmValue> = Vec::with_capacity(arity as usize);
 
                         {
@@ -3171,7 +3220,7 @@ fn perform_array_store(operand_stack: &mut Stack<VmValue>, idx: usize) -> Result
     Ok(())
 }
 
-fn perform_comparison(op: Instruction, operands: Vec<VmValue>) -> Result<bool, VmError> {
+fn perform_comparison(op: Instruction, operands: &[VmValue]) -> Result<bool, VmError> {
     let op_len = operands.len();
     match op {
         Instruction::Eqz => {
@@ -7839,16 +7888,7 @@ mod tests {
             Instruction::Eq.repr(),           // Assert 0 - pass test
             Instruction::End.repr(),
             Instruction::Else.repr(),
-            0x00,
-            Instruction::PushOperand.repr(),
-            0x01,
-            0x00,
-            Instruction::i32Const.repr(),
-            0x00,                             // 10
-            0x00,
-            0x00,
-            0x0a,
-            Instruction::Eq.repr(),           // Assert 10 - fail test
+            Instruction::Nop.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
@@ -7977,14 +8017,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0xff,                             // -10
-            0xff,
-            0xff,
-            0xf6,
             0xff,                             // -5
             0xff,
             0xff,
             0xfb,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
             Instruction::If.repr(),
             0x00,
             Instruction::LtSigned.repr(),
@@ -8031,14 +8071,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0xff,                             // -5
-            0xff,
-            0xff,
-            0xfb,
             0xff,                             // -10
             0xff,
             0xff,
             0xf6,
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
             Instruction::If.repr(),
             0x00,
             Instruction::LtSigned.repr(),
@@ -8085,14 +8125,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 5
-            0x00,
-            0x00,
-            0x05,
             0x00,                             // 10
             0x00,
             0x00,
             0x0a,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
             Instruction::If.repr(),
             0x00,
             Instruction::LtUnsigned.repr(),
@@ -8139,14 +8179,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 10
-            0x00,
-            0x00,
-            0x0a,
             0x00,                             // 5
             0x00,
             0x00,
             0x05,
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
             Instruction::If.repr(),
             0x00,
             Instruction::LtUnsigned.repr(),
@@ -8225,14 +8265,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0xff,                             // -5
-            0xff,
-            0xff,
-            0xfb,
             0xff,                             // -10
             0xff,
             0xff,
             0xf6,
+            0xff,                             // -5
+            0xff,
+            0xff,
+            0xfb,
             Instruction::If.repr(),
             0x00,
             Instruction::GtSigned.repr(),
@@ -8279,14 +8319,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0xff,                             // -10
-            0xff,
-            0xff,
-            0xf6,
             0xff,                             // -5
             0xff,
             0xff,
             0xfb,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
             Instruction::If.repr(),
             0x00,
             Instruction::GtSigned.repr(),
@@ -8333,14 +8373,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 10
-            0x00,
-            0x00,
-            0x0a,
             0x00,                             // 5
             0x00,
             0x00,
             0x05,
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
             Instruction::If.repr(),
             0x00,
             Instruction::GtUnsigned.repr(),
@@ -8387,14 +8427,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 5
-            0x00,
-            0x00,
-            0x05,
             0x00,                             // 10
             0x00,
             0x00,
             0x0a,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
             Instruction::If.repr(),
             0x00,
             Instruction::GtUnsigned.repr(),
@@ -8473,14 +8513,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0xff,                             // -10
-            0xff,
-            0xff,
-            0xf6,
             0x00,                             // 5
             0x00,
             0x00,
             0x05,
+            0xff,                             // -10
+            0xff,
+            0xff,
+            0xf6,
             Instruction::If.repr(),
             0x00,
             Instruction::LeSigned.repr(),
@@ -8581,14 +8621,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 5
-            0x00,
-            0x00,
-            0x05,
             0x00,                             // 10
             0x00,
             0x00,
             0x0a,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
             Instruction::If.repr(),
             0x00,
             Instruction::LeUnsigned.repr(),
@@ -8721,14 +8761,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 5
-            0x00,
-            0x00,
-            0x05,
             0xff,                             // -10
             0xff,
             0xff,
             0xf6,
+            0x00,                             // 5
+            0x00,
+            0x00,
+            0x05,
             Instruction::If.repr(),
             0x00,
             Instruction::GeSigned.repr(),
@@ -8745,16 +8785,7 @@ mod tests {
             Instruction::End.repr(),
             Instruction::Else.repr(),
             0x00,
-            Instruction::Mul.repr(),
-            Instruction::PushOperand.repr(),
-            0x01,
-            0x00,
-            Instruction::i32Const.repr(),
-            0xff,                             // -50
-            0xff,
-            0xff,
-            0xce,
-            Instruction::Eq.repr(),           // Assert -20 - pass test
+            Instruction::Nop.repr(),
             Instruction::End.repr(),
             Instruction::Nop.repr(),
             Instruction::End.repr()
@@ -8829,14 +8860,14 @@ mod tests {
             0x00,
             Instruction::i32Const.repr(),
             Instruction::i32Const.repr(),
-            0x00,                             // 10
-            0x00,
-            0x00,
-            0x0a,
             0x00,                             // 5
             0x00,
             0x00,
             0x05,
+            0x00,                             // 10
+            0x00,
+            0x00,
+            0x0a,
             Instruction::If.repr(),
             0x00,
             Instruction::GeUnsigned.repr(),

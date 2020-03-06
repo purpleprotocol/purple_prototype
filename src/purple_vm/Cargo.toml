@@ -26,3 +26,9 @@ log = "0.4.0"
 
 [dev-dependencies]
 test-helpers = { path = "../util/test-helpers" }
+criterion = "0.2.1"
+
+[[bench]]
+name = "vm_benchmark"
+path = "bench/vm_bench.rs"
+harness = false

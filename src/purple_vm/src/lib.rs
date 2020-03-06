@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(non_camel_case_types)]
+#![allow(non_camel_case_types, unused)]
 
 #[cfg(test)]
 extern crate test_helpers;
@@ -38,6 +38,9 @@ pub use crate::code::*;
 pub use crate::error::*;
 pub use crate::gas::*;
 pub use crate::virtual_machine::*;
+pub use crate::code::function::*;
+pub use crate::module::*;
+pub use crate::instruction_set::*;
 
 mod address;
 mod code;
