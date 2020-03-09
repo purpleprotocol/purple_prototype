@@ -164,7 +164,7 @@ impl Function {
                                                     result_len += 3;
                                                     acc += 3;
                                                 }
-                                                _ => panic!("Invalid instruction received: {:#?}", op)
+                                                _ => panic!("Invalid instruction received: {:?}", op)
                                             }   
                                         }
                                     },
@@ -706,6 +706,7 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn find_block_len_stores_and_loads() {
         let mut bitmask: u8 = 0;
         let mut bitmask2: u8 = 0;
