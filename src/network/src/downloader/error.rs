@@ -20,4 +20,13 @@
 pub enum DownloaderErr {
     /// The downloader buffer is full
     Full,
+
+    /// We already have info about the piece
+    AlreadyHaveInfo,
+
+    /// The provided info is invalid
+    InvalidInfo,
+
+    /// Checksum validation failed
+    InvalidChecksum,
 }

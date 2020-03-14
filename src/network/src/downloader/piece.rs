@@ -19,12 +19,14 @@
 use crate::downloader::error::DownloaderErr;
 use crate::downloader::sub_piece::SubPiece;
 use crate::downloader::piece_info::PieceInfo;
-use crypto::ShortHash;
+use crypto::{ShortHash, BlakeHasher};
+use chain::{MAX_TX_SET_SIZE, MAX_PIECE_SIZE};
+use std::hash::Hasher;
 
 #[derive(Debug)]
 pub struct Piece {
     /// The size of the piece in bytes
-    pub(crate) size: u64,
+    pub(crate) size: usize,
 
     /// Number of bytes downloaded
     pub(crate) downloaded: u64,
@@ -39,15 +41,128 @@ pub struct Piece {
 }
 
 impl Piece {
+    pub fn new(size: usize, checksum: ShortHash) -> Piece {
+        Piece {
+            size,
+            checksum,
+            downloaded: 0,
+            sub_pieces: None,
+        }
+    }
+
+    /// Validates provided data and if successful, returns a `Piece` with the data.
+    pub fn from_data(data: &[u8], checksum: ShortHash) -> Result<Piece, DownloaderErr> {
+        unimplemented!();
+    }
+
+    /// Returns a `Piece` with the provided data, performing no validation.
+    /// This function will panic if the size of the data is greater than allowed.
+    pub fn from_data_unchecked(data: &[u8]) -> Piece {
+        unimplemented!();
+    }
+
     /// Returns `true` if we have info about this piece's sub-pieces.
     pub fn has_info(&self) -> bool {
         self.sub_pieces.is_some()
     }
 
     /// Adds info to the piece, verifying the checksum of the 
-    /// given sub-pieces. Returns `Err(_)` if we already have info
-    /// or if the checksum validation failed.
+    /// given sub-pieces. Returns `Err(DownloaderErr::AlreadyHaveInfo)` 
+    /// if we already have info or if the checksum validation failed.
     pub fn add_info(&self, info: &PieceInfo) -> Result<(), DownloaderErr> {
+        if self.has_info() {
+            return Err(DownloaderErr::AlreadyHaveInfo);
+        }
+
+        if info.sub_pieces.len() == 0 || info.sub_pieces.len() > MAX_TX_SET_SIZE / MAX_PIECE_SIZE {
+            return Err(DownloaderErr::InvalidInfo);
+        }
+
+        if !self.validate_checksum(info) {
+            return Err(DownloaderErr::InvalidChecksum);
+        }
+
         unimplemented!();
+
+        Ok(())
+    }
+
+    /// Retrieves the `PieceInfo` of this `Piece`. Returns `None` if
+    /// this `Piece` does not have info.  
+    pub fn to_info(&self) -> Option<PieceInfo> {
+        if !self.has_info() {
+            return None;
+        }
+
+        unimplemented!();
+    }
+
+    fn validate_checksum(&self, info: &PieceInfo) -> bool {
+        let mut hasher = BlakeHasher::new();
+
+        for piece in info.sub_pieces.iter() {
+            hasher.write(&piece.checksum.0);
+        }
+
+        let hash = hasher.finish();
+        let hash = encode_le_u64!(hash);
+        let mut hash_bytes = [0; crypto::SHORT_HASH_BYTES];
+        hash_bytes.copy_from_slice(&hash);
+        let hash = ShortHash(hash_bytes);
+
+        hash == self.checksum
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::downloader::sub_piece_info::SubPieceInfo;
+    use rand::prelude::*;
+
+    #[test]
+    fn it_fails_adding_info_invalid_checksum() {
+        let piece = Piece::new(123, crypto::hash_slice(b"random_hash").to_short());
+        let info = PieceInfo { size: 123, sub_pieces: vec![SubPieceInfo::new(123, crypto::hash_slice(b"random_checksum").to_short())] };
+        assert_eq!(piece.add_info(&info), Err(DownloaderErr::InvalidChecksum));
+    }
+
+    #[test]
+    fn it_fails_adding_info_empty_info() {
+        let piece = Piece::new(123, crypto::hash_slice(b"random_hash").to_short());
+        let info = PieceInfo { size: 123, sub_pieces: vec![] };
+        assert_eq!(piece.add_info(&info), Err(DownloaderErr::InvalidInfo));
+    }
+
+    #[test]
+    fn it_fails_adding_info_already_set() {
+        assert!(false);
+    }
+
+    #[test]
+    fn to_info_it_fails_if_we_have_no_info() {
+        let piece = Piece::new(123, crypto::hash_slice(b"random_hash").to_short());
+        assert_eq!(piece.to_info(), None);
+    }
+
+    #[test]
+    fn it_doesnt_have_info() {
+        let piece = Piece::new(123, crypto::hash_slice(b"random_hash").to_short());
+        assert!(!piece.has_info());
+    }
+
+    quickcheck! {
+        fn it_adds_info_stress() -> bool {
+            false
+        }
+    }
+
+    fn gen_random_bytes(num: usize) -> Vec<u8> {
+        let mut rng = rand::thread_rng();
+        
+        (0..num)
+            .into_iter()
+            .map(|_| rng.gen())
+            .collect()
     }
 }

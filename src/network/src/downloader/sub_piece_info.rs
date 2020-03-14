@@ -18,11 +18,20 @@
 
 use crypto::ShortHash;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SubPieceInfo {
     /// The checksum of the sub-piece
     pub(crate) checksum: ShortHash,
 
     /// The size of the sub-piece in bytes
     pub(crate) size: usize,
+}
+
+impl SubPieceInfo {
+    pub fn new(size: usize, checksum: ShortHash) -> SubPieceInfo {
+        SubPieceInfo {
+            checksum,
+            size,
+        }
+    }
 }

@@ -17,14 +17,37 @@
 */
 
 use crate::downloader::sub_piece_info::SubPieceInfo;
+use chain::{MAX_TX_SET_SIZE, MAX_PIECE_SIZE, MAX_SUB_PIECE_SIZE};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PieceInfo {
-    sub_pieces: Vec<SubPieceInfo>,
+    /// The size of the piece
+    pub(crate) size: usize,
+
+    /// Sub-pieces info
+    pub(crate) sub_pieces: Vec<SubPieceInfo>,
 }
 
 impl PieceInfo {
     pub fn new(sub_pieces: Vec<SubPieceInfo>) -> Self {
-        PieceInfo { sub_pieces }
+        if sub_pieces.len() == 0 {
+            panic!("Cannot create PieceInfo from an empty vector!");
+        }
+
+        let mut size = 0;
+
+        for info in sub_pieces.iter() {
+            if info.size > MAX_SUB_PIECE_SIZE {
+                panic!("Cannot crate PieceInfo out of a SubPiece size greater than {}! Got: {}", MAX_SUB_PIECE_SIZE, info.size);
+            }
+
+            size += info.size;
+        }
+
+        if size > MAX_PIECE_SIZE {
+            panic!("Cannot crate PieceInfo with a sum of all SubPieces sizes greater than {}! Got: {}", MAX_PIECE_SIZE, size);
+        }
+        
+        PieceInfo { sub_pieces, size }
     }
 }

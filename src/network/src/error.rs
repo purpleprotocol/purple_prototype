@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::downloader::error::DownloaderErr as DownloadErr;
+use crate::downloader::error::DownloaderErr;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NetworkErr {
@@ -92,11 +92,11 @@ pub enum NetworkErr {
     NoPoolSession,
 
     /// An error inside the downloader
-    DownloaderErr(DownloadErr),
+    DownloadErr(DownloaderErr),
 }
 
-impl From<DownloadErr> for NetworkErr {
-    fn from(err: DownloadErr) -> Self {
-        NetworkErr::DownloaderErr(err)
+impl From<DownloaderErr> for NetworkErr {
+    fn from(err: DownloaderErr) -> Self {
+        NetworkErr::DownloadErr(err)
     }
 }
