@@ -18,6 +18,9 @@
 
 use crate::instruction_set::Instruction;
 
+use byteorder::{BigEndian, ReadBytesExt};
+use std::io::Cursor;
+
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum VmType {
     I32,
@@ -123,45 +126,428 @@ impl VmType {
                 Ok(_) => true,
                 _ => false,
             },
-
-            // TODO: Validate structure for arrays
             VmType::i32Array2 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..2 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
             VmType::i32Array4 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..4 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
             VmType::i32Array8 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..8 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::i32Array16 => {
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..16 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::i32Array32 => {
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..32 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::i32Array64 => {
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..64 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::i32Array128 => {
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..128 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::i32Array256 => {
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..256 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
             VmType::i64Array2 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..2 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
             VmType::i64Array4 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..4 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
             VmType::i64Array8 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..8 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::i64Array16 => {
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..16 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::i64Array32 => {
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..32 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::i64Array64 => {
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..64 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::i64Array128 => {
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..128 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::i64Array256 => {
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..256 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_i64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
             VmType::f32Array2 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..2 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
             VmType::f32Array4 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..4 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
             VmType::f32Array8 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..8 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::f32Array16 => {
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..16 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::f32Array32 => {
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..32 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::f32Array64 => {
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..64 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::f32Array128 => {
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..128 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::f32Array256 => {
+                let mut iterator = buf.chunks_exact(4);
+                for _ in 0..256 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f32::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
             VmType::f64Array2 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..2 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
             VmType::f64Array4 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..4 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
             VmType::f64Array8 => {
-                unimplemented!();
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..8 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
             }
-            _ => panic!(),
+            VmType::f64Array16 => {
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..16 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::f64Array32 => {
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..32 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::f64Array64 => {
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..64 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::f64Array128 => {
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..128 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+            VmType::f64Array256 => {
+                let mut iterator = buf.chunks_exact(8);
+                for _ in 0..256 {
+                    let mut cursor = Cursor::new(iterator.next().unwrap());
+                    match cursor.read_f64::<BigEndian>() {
+                        Ok(_) => (),
+                        Err(_) => return false,
+                    }
+                }
+
+                true
+            }
+        }
+    }
+
+    pub fn array_accepts(&self) -> Option<VmType> {
+        match *self {
+            VmType::i32Array2
+            | VmType::i32Array4
+            | VmType::i32Array8
+            | VmType::i32Array16
+            | VmType::i32Array32
+            | VmType::i32Array64
+            | VmType::i32Array128
+            | VmType::i32Array256 => Some(VmType::I32),
+            VmType::i64Array2
+            | VmType::i64Array4
+            | VmType::i64Array8
+            | VmType::i64Array16
+            | VmType::i64Array32
+            | VmType::i64Array64
+            | VmType::i64Array128
+            | VmType::i64Array256 => Some(VmType::I64),
+            VmType::f32Array2
+            | VmType::f32Array4
+            | VmType::f32Array8
+            | VmType::f32Array16
+            | VmType::f32Array32
+            | VmType::f32Array64
+            | VmType::f32Array128
+            | VmType::f32Array256 => Some(VmType::F32),
+            VmType::f64Array2
+            | VmType::f64Array4
+            | VmType::f64Array8
+            | VmType::f64Array16
+            | VmType::f64Array32
+            | VmType::f64Array64
+            | VmType::f64Array128
+            | VmType::f64Array256 => Some(VmType::F64),
+            _ => None,
         }
     }
 
@@ -292,6 +678,13 @@ impl VmType {
             | VmType::f64Array128
             | VmType::f64Array256 => true,
             _ => false,
+        }
+    }
+
+    pub fn is_array(&self) -> bool {
+        match *self {
+            VmType::I32 | VmType::I64 | VmType::F32 | VmType::F64 => false,
+            _ => true,
         }
     }
 }

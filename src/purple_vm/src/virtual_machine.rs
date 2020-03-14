@@ -1537,18 +1537,18 @@ fn fetch_argv(
         ip.increment();
 
         let op = fun.fetch(ip.ip);
-        let arg = match VmType::from_op(op) {
+        let arg_type = match VmType::from_op(op) {
             Some(result) => result,
             _ => panic!(format!("Invalid argument type! Received: {}", op)),
         };
 
-        let arg_type = if args_bitmask.get(i as u8) {
+        let arg_loc = if args_bitmask.get(i as u8) {
             ArgLocation::Memory
         } else {
             ArgLocation::Inline
         };
 
-        argv_types.push((arg, arg_type));
+        argv_types.push((arg_type, arg_loc));
     }
 
     // Fetch arguments. Only arrays up to
@@ -1558,10 +1558,10 @@ fn fetch_argv(
 
         match t {
             VmType::I32 => {
-                let byte = fun.fetch(ip.ip);
-
                 // Fetch value from memory
                 if let ArgLocation::Memory = al {
+                    let byte = fun.fetch(ip.ip);
+
                     match Instruction::from_repr(byte) {
                         Some(Instruction::PopLocal) => {
                             let value = frame.locals.pop();
@@ -1689,10 +1689,10 @@ fn fetch_argv(
                 }
             }
             VmType::I64 => {
-                let byte = fun.fetch(ip.ip);
-
                 // Fetch value from memory
                 if let ArgLocation::Memory = al {
+                    let byte = fun.fetch(ip.ip);
+
                     match Instruction::from_repr(byte) {
                         Some(Instruction::PopLocal) => {
                             let value = frame.locals.pop();
@@ -1860,10 +1860,10 @@ fn fetch_argv(
                 }
             }
             VmType::F32 => {
-                let byte = fun.fetch(ip.ip);
-
                 // Fetch value from memory
                 if let ArgLocation::Memory = al {
+                    let byte = fun.fetch(ip.ip);
+
                     match Instruction::from_repr(byte) {
                         Some(Instruction::PopLocal) => {
                             let value = frame.locals.pop();
@@ -1911,10 +1911,10 @@ fn fetch_argv(
                 }
             }
             VmType::F64 => {
-                let byte = fun.fetch(ip.ip);
-
                 // Fetch value from memory
                 if let ArgLocation::Memory = al {
+                    let byte = fun.fetch(ip.ip);
+
                     match Instruction::from_repr(byte) {
                         Some(Instruction::PopLocal) => {
                             let value = frame.locals.pop();
@@ -1968,10 +1968,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                        let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::i32Load) => {
                                 // Fetch coordinates
@@ -2073,8 +2073,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
@@ -2098,10 +2096,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                    let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::i32Load) => {
                                 // Fetch coordinates
@@ -2203,8 +2201,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-                        
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
@@ -2228,10 +2224,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                        let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::i32Load) => {
                                 // Fetch coordinates
@@ -2333,8 +2329,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i32 = cursor.read_i32::<BigEndian>().unwrap();
@@ -2358,10 +2352,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                        let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::i64Load) => {
                                 // Fetch coordinates
@@ -2503,8 +2497,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
@@ -2528,10 +2520,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                        let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::i64Load) => {
                                 // Fetch coordinates
@@ -2673,8 +2665,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
@@ -2698,10 +2688,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                        let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::i64Load) => {
                                 // Fetch coordinates
@@ -2843,8 +2833,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: i64 = cursor.read_i64::<BigEndian>().unwrap();
@@ -2868,10 +2856,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                        let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::f32Load) => {
                                 // Fetch coordinates
@@ -2893,8 +2881,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
@@ -2918,10 +2904,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                        let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::f32Load) => {
                                 // Fetch coordinates
@@ -2943,8 +2929,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
@@ -2968,10 +2952,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                        let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::f32Load) => {
                                 // Fetch coordinates
@@ -2993,8 +2977,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-
                         let bytes: Vec<u8> = fetch_bytes(4, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f32 = cursor.read_f32::<BigEndian>().unwrap();
@@ -3018,10 +3000,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                        let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::f64Load) => {
                                 // Fetch coordinates
@@ -3043,8 +3025,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
@@ -3068,10 +3048,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                        let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::f64Load) => {
                                 // Fetch coordinates
@@ -3093,8 +3073,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
@@ -3118,10 +3096,10 @@ fn fetch_argv(
 
                 // Fetch array elems
                 for i in 0..len {
-                    let byte = fun.fetch(ip.ip);
-
                     // Fetch value from memory
                     if let ArgLocation::Memory = al {
+                        let byte = fun.fetch(ip.ip);
+
                         match Instruction::from_repr(byte) {
                             Some(Instruction::f64Load) => {
                                 // Fetch coordinates
@@ -3143,8 +3121,6 @@ fn fetch_argv(
                             _        => panic!("Cannot fetch from memory! Invalid instruction!")
                         }
                     } else {
-                        ip.increment();
-
                         let bytes: Vec<u8> = fetch_bytes(8, ip, fun);
                         let mut cursor = Cursor::new(&bytes);
                         let val: f64 = cursor.read_f64::<BigEndian>().unwrap();
@@ -11998,9 +11974,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            0x00,
             0x01,
-            0x00,
             0x00,
             0x00,
             0x00,
@@ -12026,9 +12000,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            0x00,
             0x01,
-            0x00,
             0x00,
             0x00,
             0x00,
@@ -12060,9 +12032,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            0x00,
             0x01,
-            0x00,
             0x00,
             0x00,
             0x00,
@@ -12090,9 +12060,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            0x00,
             0x01,
-            0x00,
             0x00,
             0x00,
             0x00,
@@ -12105,15 +12073,11 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            0x00,
             0x01,
             0x00,
             0x00,
             0x00,
-            0x00,
             0x02,
-            0x00,
-            0x00,
             0x00,
             0x00,
             0x00,
@@ -12152,27 +12116,26 @@ mod tests {
                                  Instruction::f64Array64.repr(), Instruction::f64Array128.repr(), Instruction::f64Array256.repr()*/];
 
         let sizes: Vec<usize> = vec![2, 4, /*8, 16, 32, 64, 128,*/ 2, 4, /*8, 16, 32, 64, 128,*/ 2, 4, /*8, 16, 32, 64, 128,*/ 2, 4/*, 8, 16, 32, 64, 128*/];
+        let byte_sizes: Vec<usize> = vec![4, 4, /*4, 4, 4, 4, 4, */8, 8, /*8, 8, 8, 8, 8, */4, 4, /*4, 4, 4, 4, 4, */8, 8/*, 8, 8, 8, 8, 8*/];
+
         let mut rnd = rand::thread_rng();
 
         for i in 0..from.len() {
             let f = from[i];
             let t = to[i];
             let s = sizes[i];
+            let bs = byte_sizes[i];
 
             let mut block: Vec<u8> = vec![Instruction::Begin.repr(), 0x00, Instruction::Nop.repr(), Instruction::PushOperand.repr(), 0x01, 0x00, f];
             let mut second: Vec<u8> = vec![];
 
             for _ in 0..s {
                 let rn = rnd.gen::<u8>();
-                block.push(0x00);
-                block.push(0x00);
-                block.push(0x00);
-                block.push(0x00);
+                for _ in 0..bs {
+                    block.push(0x00);
+                    second.push(0x00);    
+                }
                 block.push(rn);
-                second.push(0x00);
-                second.push(0x00);
-                second.push(0x00);
-                second.push(0x00);
                 second.push(rn);
             }
             
@@ -12183,7 +12146,7 @@ mod tests {
             block.push(t);
             block.extend(second.iter());
 
-            for _ in 0..s * 5 {
+            for _ in 0..s * bs {
                 block.push(0x00);
             }
             
@@ -12212,9 +12175,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            0x00,
             0x01,
-            0x00,
             0x00,
             0x00,
             0x00,
@@ -12229,12 +12190,10 @@ mod tests {
             0x01,
             0x00,
             Instruction::i32Array2.repr(),
-            0x00,
             0x12,
             0x34,
             0x56,
             0x78,
-            0x00,
             0x00,
             0x00,
             0x00,
@@ -12260,9 +12219,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            0x00,
             0x01,
-            0x00,
             0x00,
             0x00,
             0x00,
@@ -12280,9 +12237,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            0x00,
             0x01,
-            0x00,
             0x12,
             0x34,
             0x56,
@@ -12314,9 +12269,7 @@ mod tests {
             0x00,
             0x00,
             0x00,
-            0x00,
             0x01,
-            0x00,
             0x00,
             0x00,
             0x00,
