@@ -19,6 +19,7 @@
 use crate::downloader::error::DownloaderErr;
 use crate::downloader::sub_piece::SubPiece;
 use crate::downloader::piece_info::PieceInfo;
+use crate::downloader::sub_piece_info::SubPieceInfo;
 use crypto::{ShortHash, BlakeHasher};
 use chain::{MAX_TX_SET_SIZE, MAX_PIECE_SIZE};
 use std::hash::Hasher;
@@ -69,7 +70,7 @@ impl Piece {
     /// Adds info to the piece, verifying the checksum of the 
     /// given sub-pieces. Returns `Err(DownloaderErr::AlreadyHaveInfo)` 
     /// if we already have info or if the checksum validation failed.
-    pub fn add_info(&self, info: &PieceInfo) -> Result<(), DownloaderErr> {
+    pub fn add_info(&mut self, info: &PieceInfo) -> Result<(), DownloaderErr> {
         if self.has_info() {
             return Err(DownloaderErr::AlreadyHaveInfo);
         }
@@ -82,8 +83,25 @@ impl Piece {
             return Err(DownloaderErr::InvalidChecksum);
         }
 
-        unimplemented!();
+        let mut size = 0;
 
+        // Validate size
+        for info in info.sub_pieces.iter() {
+            size += info.size;
+        }
+
+        if size != self.size {
+            return Err(DownloaderErr::InvalidSize);
+        }
+
+        let mut sub_pieces: Vec<SubPiece> = Vec::with_capacity(info.sub_pieces.len());
+
+        // Create sub-pieces
+        for info in info.sub_pieces.iter() {
+            sub_pieces.push(SubPiece::from(info));
+        }
+
+        self.sub_pieces = Some(sub_pieces);
         Ok(())
     }
 
@@ -122,21 +140,33 @@ mod tests {
 
     #[test]
     fn it_fails_adding_info_invalid_checksum() {
-        let piece = Piece::new(123, crypto::hash_slice(b"random_hash").to_short());
+        let mut piece = Piece::new(123, crypto::hash_slice(b"random_hash").to_short());
         let info = PieceInfo { size: 123, sub_pieces: vec![SubPieceInfo::new(123, crypto::hash_slice(b"random_checksum").to_short())] };
         assert_eq!(piece.add_info(&info), Err(DownloaderErr::InvalidChecksum));
     }
 
     #[test]
     fn it_fails_adding_info_empty_info() {
-        let piece = Piece::new(123, crypto::hash_slice(b"random_hash").to_short());
+        let mut piece = Piece::new(123, crypto::hash_slice(b"random_hash").to_short());
         let info = PieceInfo { size: 123, sub_pieces: vec![] };
         assert_eq!(piece.add_info(&info), Err(DownloaderErr::InvalidInfo));
     }
 
     #[test]
     fn it_fails_adding_info_already_set() {
-        assert!(false);
+        let hash = get_checksum(vec![b"data".to_vec()]);
+        let mut piece = Piece::new(4, hash);
+        let info = PieceInfo { size: 4, sub_pieces: vec![SubPieceInfo::new(4, crypto::hash_slice(b"data").to_short())] };
+        assert_eq!(piece.add_info(&info), Ok(()));
+        assert_eq!(piece.add_info(&info), Err(DownloaderErr::AlreadyHaveInfo));
+    }
+
+    #[test]
+    fn it_fails_invalid_sub_piece_size() {
+        let hash = get_checksum(vec![b"data".to_vec()]);
+        let mut piece = Piece::new(4, hash);
+        let info = PieceInfo { size: 4, sub_pieces: vec![SubPieceInfo::new(6, crypto::hash_slice(b"data").to_short())] };
+        assert_eq!(piece.add_info(&info), Err(DownloaderErr::InvalidSize));
     }
 
     #[test]
@@ -151,10 +181,31 @@ mod tests {
         assert!(!piece.has_info());
     }
 
+    #[test]
+    fn it_adds_info() {
+        let hash = get_checksum(vec![b"data".to_vec()]);
+        let mut piece = Piece::new(4, hash);
+        let info = PieceInfo { size: 4, sub_pieces: vec![SubPieceInfo::new(4, crypto::hash_slice(b"data").to_short())] };
+        assert_eq!(piece.add_info(&info), Ok(()));
+    }
+
     quickcheck! {
         fn it_adds_info_stress() -> bool {
             false
         }
+    }
+
+    fn get_checksum(data: Vec<Vec<u8>>) -> ShortHash {
+        let mut hasher = BlakeHasher::new();
+        for data in data.iter() {
+            let hash = crypto::hash_slice(&data).to_short();
+            hasher.write(&hash.0);
+        }
+        let hash = hasher.finish();
+        let hash = encode_le_u64!(hash);
+        let mut hash_bytes = [0; crypto::SHORT_HASH_BYTES];
+        hash_bytes.copy_from_slice(&hash);
+        ShortHash(hash_bytes)
     }
 
     fn gen_random_bytes(num: usize) -> Vec<u8> {

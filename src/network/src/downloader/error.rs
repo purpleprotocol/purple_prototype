@@ -29,4 +29,7 @@ pub enum DownloaderErr {
 
     /// Checksum validation failed
     InvalidChecksum,
+
+    /// The provided size is invalid
+    InvalidSize,
 }
