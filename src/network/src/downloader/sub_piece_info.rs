@@ -16,35 +16,13 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(unused, unused_attributes)]
+use crypto::ShortHash;
 
-#[macro_use]
-extern crate bin_tools;
-#[macro_use]
-extern crate cfg_if;
+#[derive(Clone, Debug)]
+pub struct SubPieceInfo {
+    /// The checksum of the sub-piece
+    pub(crate) checksum: ShortHash,
 
-use ansi_term::Colour::Green;
-use rocksdb::DB;
-use std::path::{Path, PathBuf};
-
-pub fn open_database(path: &PathBuf, wal_path: &Path) -> DB {
-    DB::open(&crate::db_options(wal_path), path.to_str().unwrap()).unwrap()
+    /// The size of the sub-piece in bytes
+    pub(crate) size: usize,
 }
-
-#[cfg(test)]
-extern crate hex;
-#[cfg(test)]
-extern crate tempdir;
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate lazy_static;
-
-pub use hasher::*;
-pub use node_codec::*;
-pub use persistent_db::*;
-
-mod hasher;
-mod node_codec;
-mod persistent_db;

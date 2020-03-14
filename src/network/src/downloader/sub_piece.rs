@@ -16,35 +16,23 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(unused, unused_attributes)]
+use crypto::ShortHash;
 
-#[macro_use]
-extern crate bin_tools;
-#[macro_use]
-extern crate cfg_if;
+#[derive(Debug)]
+pub struct SubPiece {
+    /// The checksum of the sub-piece
+    pub(crate) checksum: ShortHash,
 
-use ansi_term::Colour::Green;
-use rocksdb::DB;
-use std::path::{Path, PathBuf};
+    /// The size of the sub-piece in bytes
+    pub(crate) size: usize,
 
-pub fn open_database(path: &PathBuf, wal_path: &Path) -> DB {
-    DB::open(&crate::db_options(wal_path), path.to_str().unwrap()).unwrap()
+    /// Sub-piece data. This is `None` if we haven't downloaded the sub-piece.
+    pub(crate) data: Option<Vec<u8>>,
 }
 
-#[cfg(test)]
-extern crate hex;
-#[cfg(test)]
-extern crate tempdir;
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate lazy_static;
-
-pub use hasher::*;
-pub use node_codec::*;
-pub use persistent_db::*;
-
-mod hasher;
-mod node_codec;
-mod persistent_db;
+impl SubPiece {
+    /// Returns `true` if the sub-piece has been downloaded
+    pub fn is_done(&self) -> bool {
+        self.data.is_some()
+    }
+}

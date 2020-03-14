@@ -16,7 +16,9 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+use crate::downloader::error::DownloaderErr as DownloadErr;
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum NetworkErr {
     /// The format of the packet is invalid
     BadFormat,
@@ -88,4 +90,13 @@ pub enum NetworkErr {
 
     /// There is no active validator pool session on our node.
     NoPoolSession,
+
+    /// An error inside the downloader
+    DownloaderErr(DownloadErr),
+}
+
+impl From<DownloadErr> for NetworkErr {
+    fn from(err: DownloadErr) -> Self {
+        NetworkErr::DownloaderErr(err)
+    }
 }

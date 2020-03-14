@@ -16,35 +16,17 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(unused, unused_attributes)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DownloadState {
+    /// We haven't downloaded anything
+    NotStarted,
 
-#[macro_use]
-extern crate bin_tools;
-#[macro_use]
-extern crate cfg_if;
+    /// The download is paused
+    Paused,
 
-use ansi_term::Colour::Green;
-use rocksdb::DB;
-use std::path::{Path, PathBuf};
+    /// We have a partial download
+    Partial,
 
-pub fn open_database(path: &PathBuf, wal_path: &Path) -> DB {
-    DB::open(&crate::db_options(wal_path), path.to_str().unwrap()).unwrap()
+    /// The download has been completed
+    Completed,
 }
-
-#[cfg(test)]
-extern crate hex;
-#[cfg(test)]
-extern crate tempdir;
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate lazy_static;
-
-pub use hasher::*;
-pub use node_codec::*;
-pub use persistent_db::*;
-
-mod hasher;
-mod node_codec;
-mod persistent_db;

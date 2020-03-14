@@ -16,35 +16,15 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(unused, unused_attributes)]
+use crate::downloader::sub_piece_info::SubPieceInfo;
 
-#[macro_use]
-extern crate bin_tools;
-#[macro_use]
-extern crate cfg_if;
-
-use ansi_term::Colour::Green;
-use rocksdb::DB;
-use std::path::{Path, PathBuf};
-
-pub fn open_database(path: &PathBuf, wal_path: &Path) -> DB {
-    DB::open(&crate::db_options(wal_path), path.to_str().unwrap()).unwrap()
+#[derive(Debug, Clone)]
+pub struct PieceInfo {
+    sub_pieces: Vec<SubPieceInfo>,
 }
 
-#[cfg(test)]
-extern crate hex;
-#[cfg(test)]
-extern crate tempdir;
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate lazy_static;
-
-pub use hasher::*;
-pub use node_codec::*;
-pub use persistent_db::*;
-
-mod hasher;
-mod node_codec;
-mod persistent_db;
+impl PieceInfo {
+    pub fn new(sub_pieces: Vec<SubPieceInfo>) -> Self {
+        PieceInfo { sub_pieces }
+    }
+}

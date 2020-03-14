@@ -16,35 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(unused, unused_attributes)]
-
-#[macro_use]
-extern crate bin_tools;
-#[macro_use]
-extern crate cfg_if;
-
-use ansi_term::Colour::Green;
-use rocksdb::DB;
-use std::path::{Path, PathBuf};
-
-pub fn open_database(path: &PathBuf, wal_path: &Path) -> DB {
-    DB::open(&crate::db_options(wal_path), path.to_str().unwrap()).unwrap()
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DownloaderErr {
+    /// The downloader buffer is full
+    Full,
 }
-
-#[cfg(test)]
-extern crate hex;
-#[cfg(test)]
-extern crate tempdir;
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate lazy_static;
-
-pub use hasher::*;
-pub use node_codec::*;
-pub use persistent_db::*;
-
-mod hasher;
-mod node_codec;
-mod persistent_db;

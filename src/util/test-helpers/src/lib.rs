@@ -16,6 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#![allow(unused, unused_attributes)]
+
 extern crate account;
 extern crate crypto;
 extern crate hex;
