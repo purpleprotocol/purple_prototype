@@ -61,6 +61,10 @@ impl SubPiece {
         self.data = Some(data.clone());
         Ok(())
     }
+
+    pub fn to_info(&self) -> SubPieceInfo {
+        SubPieceInfo::new(self.size, self.checksum)
+    }
 }
 
 impl From<&SubPieceInfo> for SubPiece {
