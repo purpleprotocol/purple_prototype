@@ -20,6 +20,7 @@ use crate::downloader::error::DownloaderErr;
 use crate::downloader::sub_piece::SubPiece;
 use crate::downloader::piece_info::PieceInfo;
 use crate::downloader::sub_piece_info::SubPieceInfo;
+use crate::downloader::sub_pieces::SubPieces;
 use crypto::{ShortHash, BlakeHasher};
 use chain::{MAX_TX_SET_SIZE, MAX_PIECE_SIZE, MAX_SUB_PIECE_SIZE};
 use std::hash::Hasher;
@@ -37,7 +38,7 @@ pub struct Piece {
 
     /// Sub-pieces of the piece. This is `None` if we don't have info
     /// about the piece.
-    pub(crate) sub_pieces: Option<Vec<SubPiece>>
+    pub(crate) sub_pieces: Option<SubPieces>
 
 }
 
@@ -107,7 +108,7 @@ impl Piece {
             sub_pieces.push(SubPiece::from(info));
         }
 
-        self.sub_pieces = Some(sub_pieces);
+        self.sub_pieces = Some(SubPieces::new(sub_pieces));
         Ok(())
     }
 
@@ -121,6 +122,7 @@ impl Piece {
         let infos = self.sub_pieces
             .as_ref()
             .unwrap()
+            .sub_pieces
             .iter()
             .map(|s| s.to_info())
             .collect();
@@ -260,7 +262,7 @@ mod tests {
                 .collect();
             let checksum = get_checksum(raw_sub_pieces);
             let mut piece = Piece::new(raw_piece.len(), checksum);
-            piece.sub_pieces = Some(sub_pieces);
+            piece.sub_pieces = Some(SubPieces::new(sub_pieces));
             buf.push(piece);
         }
 

@@ -72,3 +72,36 @@ impl From<&SubPieceInfo> for SubPiece {
         SubPiece::new(info.size, info.checksum)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_adds_data() {
+        let data = b"data".to_vec();
+        let checksum = crypto::hash_slice(&data).to_short();
+        let mut sub_piece = SubPiece::new(data.len(), checksum);
+        sub_piece.add_data(Arc::new(data.clone())).unwrap();
+        assert_eq!(sub_piece.data, Some(Arc::new(data.clone())));
+        assert!(sub_piece.is_done());
+    }
+
+    #[test]
+    fn it_fails_adding_data_bad_checksum() {
+        let data = b"data".to_vec();
+        let checksum = crypto::hash_slice(b"other_data").to_short();
+        let mut sub_piece = SubPiece::new(data.len(), checksum);
+        assert_eq!(sub_piece.add_data(Arc::new(data.clone())), Err(DownloaderErr::InvalidChecksum));
+    }
+
+    #[test]
+    fn to_info() {
+        let data = b"data".to_vec();
+        let checksum = crypto::hash_slice(&data).to_short();
+        let oracle_info = SubPieceInfo::new(data.len(), checksum);
+        let mut sub_piece = SubPiece::new(data.len(), checksum);
+        sub_piece.add_data(Arc::new(data.clone())).unwrap();
+        assert_eq!(sub_piece.to_info(), oracle_info);
+    }
+}

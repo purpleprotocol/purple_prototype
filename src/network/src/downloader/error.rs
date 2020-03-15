@@ -32,4 +32,7 @@ pub enum DownloaderErr {
 
     /// The provided size is invalid
     InvalidSize,
+
+    /// Could not find object with the given query
+    NotFound,
 }

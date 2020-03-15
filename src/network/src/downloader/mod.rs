@@ -29,6 +29,7 @@ mod download;
 mod piece;
 mod sub_piece;
 mod sub_piece_info;
+mod sub_pieces;
 pub mod piece_info;
 pub mod error;
 
