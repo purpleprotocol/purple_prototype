@@ -465,6 +465,8 @@ pub const OPS_LIST: &'static [Instruction] = &[
 
     // Array operations
     Instruction::Fetch                 ,
+    Instruction::Grow                  ,
+    Instruction::ArrayStore            ,
 
     // Common operations
     Instruction::Add                   ,

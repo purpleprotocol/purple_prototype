@@ -305,6 +305,55 @@ impl Validator {
 
                                 DEFAULT_TRANSITIONS.to_vec()
                             }
+                            Instruction::Fetch => {
+                                if self.operand_stack.len() != 1 {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
+
+                                self.validation_stack
+                                    .push((Instruction::Fetch.repr(), true));
+
+                                INDEX_TRANSITIONS.to_vec()
+                            }
+                            Instruction::Grow => {
+                                if self.operand_stack.len() != 1 {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                } else {
+                                    let operand = self.operand_stack.peek();
+                                    let valid = match operand {
+                                        VmType::I32
+                                        | VmType::I64
+                                        | VmType::F32
+                                        | VmType::F64
+                                        | VmType::i32Array256
+                                        | VmType::i64Array256
+                                        | VmType::f32Array256
+                                        | VmType::f64Array256 => false,
+                                        _ => true,
+                                    };
+
+                                    if valid == true {
+                                        self.state = Validity::Invalid;
+                                        DEFAULT_TRANSITIONS.to_vec()
+                                    } else {
+                                        self.state = Validity::IrrefutablyInvalid;
+                                        return;
+                                    }
+                                }
+                            }
+                            Instruction::ArrayStore => {
+                                if self.operand_stack.len() != 2 {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                    return;
+                                }
+
+                                self.validation_stack
+                                    .push((Instruction::ArrayStore.repr(), true));
+
+                                INDEX_TRANSITIONS.to_vec()
+                            }
                             _ => op.transitions(),
                         };
 
@@ -605,7 +654,94 @@ impl Validator {
                                 }
                             }
                         }
-                        _ => unimplemented!(),
+                        Some(Instruction::Fetch) => {
+                            if self.validation_stack.len() != 1 {
+                                panic!(format!("The validation stack can only have 1 element at this point! Got: {}", self.validation_stack.len()));
+                            }
+
+                            if self.operand_stack.len() != 1 {
+                                // Operand stack must have only one element at this point
+                                self.state = Validity::IrrefutablyInvalid;
+                                return;
+                            }
+
+                            // Remove current op
+                            self.validation_stack.pop();
+
+                            let valid = INDEX_TRANSITIONS.iter().find(|t| t.accepts_byte(op));
+                            match valid {
+                                Some(Transition::Byte(idx)) => {
+                                    let arr = *self.operand_stack.peek();
+
+                                    if !arr.is_array() {
+                                        self.state = Validity::IrrefutablyInvalid;
+                                        return;
+                                    }
+
+                                    if self.is_idx_valid(*idx as usize) {
+                                        // Add to the operand stack the type of the fetched element
+                                        let fetched_type = arr.array_accepts();
+                                        self.operand_stack.push(fetched_type.unwrap());
+
+                                        // Continue validation
+                                        self.state = Validity::Invalid;
+                                        next_transitions = Some(DEFAULT_TRANSITIONS.to_vec());
+                                    } else {
+                                        self.state = Validity::IrrefutablyInvalid;
+                                    }
+                                }
+                                _ => {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                }
+                            }
+                        }
+                        Some(Instruction::ArrayStore) => {
+                            if self.validation_stack.len() != 1 {
+                                panic!(format!("The validation stack can only have 1 element at this point! Got: {}", self.validation_stack.len()));
+                            }
+
+                            if self.operand_stack.len() != 2 {
+                                // Operand stack must have 2 elements at this point. First, an array, second, a constant
+                                self.state = Validity::IrrefutablyInvalid;
+                                return;
+                            }
+
+                            // Remove current op
+                            self.validation_stack.pop();
+
+                            let valid = INDEX_TRANSITIONS.iter().find(|t| t.accepts_byte(op));
+
+                            match valid {
+                                Some(Transition::Byte(idx)) => {
+                                    // Remove operand to store from operand stack
+                                    let to_store = self.operand_stack.pop();
+
+                                    // Operand stack len = 1, validate idx
+                                    if self.is_idx_valid(*idx as usize) {
+                                        let is_ok;
+                                        let arr = self.operand_stack.peek();
+                                        match arr.array_accepts() {
+                                            Some(tp) => is_ok = tp == to_store,
+                                            None => is_ok = false,
+                                        }
+
+                                        if is_ok {
+                                            // Continue validation
+                                            self.state = Validity::Invalid;
+                                            next_transitions = Some(DEFAULT_TRANSITIONS.to_vec());
+                                        } else {
+                                            self.state = Validity::IrrefutablyInvalid;
+                                        }
+                                    } else {
+                                        self.state = Validity::IrrefutablyInvalid;
+                                    }
+                                }
+                                _ => {
+                                    self.state = Validity::IrrefutablyInvalid;
+                                }
+                            }
+                        }
+                        _ => unimplemented!()
                     }
                 }
                 None => {
@@ -907,6 +1043,41 @@ impl Validator {
             }
         }
     }
+
+    fn is_idx_valid(&mut self, idx: usize) -> bool {
+        let operand = self.operand_stack.peek();
+        match operand {
+            VmType::I32 | VmType::I64 | VmType::F32 | VmType::F64 => {
+                panic!("Type of operand is not array")
+            }
+            VmType::i32Array2 | VmType::i64Array2 | VmType::f32Array2 | VmType::f64Array2 => {
+                idx < 2
+            }
+            VmType::i32Array4 | VmType::i64Array4 | VmType::f32Array4 | VmType::f64Array4 => {
+                idx < 4
+            }
+            VmType::i32Array8 | VmType::i64Array8 | VmType::f32Array8 | VmType::f64Array8 => {
+                idx < 8
+            }
+            VmType::i32Array16 | VmType::i64Array16 | VmType::f32Array16 | VmType::f64Array16 => {
+                idx < 16
+            }
+            VmType::i32Array32 | VmType::i64Array32 | VmType::f32Array32 | VmType::f64Array32 => {
+                idx < 32
+            }
+            VmType::i32Array64 | VmType::i64Array64 | VmType::f32Array64 | VmType::f64Array64 => {
+                idx < 64
+            }
+            VmType::i32Array128
+            | VmType::i64Array128
+            | VmType::f32Array128
+            | VmType::f64Array128 => idx < 128,
+            VmType::i32Array256
+            | VmType::i64Array256
+            | VmType::f32Array256
+            | VmType::f64Array256 => idx < 256,
+        }
+    }
 }
 
 fn valid_operand_type(operand_stack: &Stack<VmType>, op: Instruction) -> bool {
@@ -980,7 +1151,39 @@ lazy_static! {
         Transition::Byte(Instruction::i32Const.repr()),
         Transition::Byte(Instruction::i64Const.repr()),
         Transition::Byte(Instruction::f32Const.repr()),
-        Transition::Byte(Instruction::f64Const.repr())
+        Transition::Byte(Instruction::f64Const.repr()),
+        Transition::Byte(Instruction::i32Array2.repr()),
+        Transition::Byte(Instruction::i32Array4.repr()),
+        Transition::Byte(Instruction::i32Array8.repr()),
+        Transition::Byte(Instruction::i32Array16.repr()),
+        Transition::Byte(Instruction::i32Array32.repr()),
+        Transition::Byte(Instruction::i32Array64.repr()),
+        Transition::Byte(Instruction::i32Array128.repr()),
+        Transition::Byte(Instruction::i32Array256.repr()),
+        Transition::Byte(Instruction::i64Array2.repr()),
+        Transition::Byte(Instruction::i64Array4.repr()),
+        Transition::Byte(Instruction::i64Array8.repr()),
+        Transition::Byte(Instruction::i64Array16.repr()),
+        Transition::Byte(Instruction::i64Array32.repr()),
+        Transition::Byte(Instruction::i64Array64.repr()),
+        Transition::Byte(Instruction::i64Array128.repr()),
+        Transition::Byte(Instruction::i64Array256.repr()),
+        Transition::Byte(Instruction::f32Array2.repr()),
+        Transition::Byte(Instruction::f32Array4.repr()),
+        Transition::Byte(Instruction::f32Array8.repr()),
+        Transition::Byte(Instruction::f32Array16.repr()),
+        Transition::Byte(Instruction::f32Array32.repr()),
+        Transition::Byte(Instruction::f32Array64.repr()),
+        Transition::Byte(Instruction::f32Array128.repr()),
+        Transition::Byte(Instruction::f32Array256.repr()),
+        Transition::Byte(Instruction::f64Array2.repr()),
+        Transition::Byte(Instruction::f64Array4.repr()),
+        Transition::Byte(Instruction::f64Array8.repr()),
+        Transition::Byte(Instruction::f64Array16.repr()),
+        Transition::Byte(Instruction::f64Array32.repr()),
+        Transition::Byte(Instruction::f64Array64.repr()),
+        Transition::Byte(Instruction::f64Array128.repr()),
+        Transition::Byte(Instruction::f64Array256.repr())
     ];
     static ref OPERATIONS: Vec<Transition> = vec![
         Transition::Byte(Instruction::Add.repr()),
@@ -995,6 +1198,8 @@ lazy_static! {
     ];
     static ref DEFAULT_TRANSITIONS: Vec<Transition> =
         OPS_LIST.iter().map(|op| Transition::Op(*op)).collect();
+    static ref INDEX_TRANSITIONS: Vec<Transition> =
+        (0..=255).into_iter().map(|x| Transition::Byte(x)).collect();
 }
 
 #[cfg(test)]
@@ -2990,6 +3195,379 @@ mod tests {
             assert!(!is_valid(block));
 
             let block: Vec<u8> = get_common_block_f32_operand(i);
+            assert!(!is_valid(block));
+        }
+    }
+
+    fn get_common_array_fetch_with_size_and_idx(
+        array_type: Instruction,
+        size: usize,
+        byte_size: usize,
+        idx: u8,
+    ) -> Vec<u8> {
+        let mut block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            array_type.repr(),
+        ];
+
+        for _ in 0..size {
+            for _ in 0..byte_size {
+                block.push(0x12);
+            }
+        }
+
+        block.push(Instruction::Fetch.repr());
+        block.push(idx);
+        block.push(Instruction::Nop.repr());
+        block.push(Instruction::End.repr());
+        block
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_fetch_with_wrong_index() {
+        let i32arr: Vec<Instruction> = vec![Instruction::i32Array2, Instruction::i32Array4, Instruction::i32Array8, Instruction::i32Array16,
+        Instruction::i32Array32, Instruction::i32Array64, Instruction::i32Array128];
+        let i64arr: Vec<Instruction> = vec![Instruction::i64Array2, Instruction::i64Array4, Instruction::i64Array8, Instruction::i64Array16,
+        Instruction::i64Array32, Instruction::i64Array64, Instruction::i64Array128];
+        let f32arr: Vec<Instruction> = vec![Instruction::f32Array2, Instruction::f32Array4, Instruction::f32Array8, Instruction::f32Array16,
+        Instruction::f32Array32, Instruction::f32Array64, Instruction::f32Array128];
+        let f64arr: Vec<Instruction> = vec![Instruction::f64Array2, Instruction::f64Array4, Instruction::f64Array8, Instruction::f64Array16,
+        Instruction::f64Array32, Instruction::f64Array64, Instruction::f64Array128];
+
+        let size: Vec<usize> = vec![2, 4, 8, 16, 32, 64, 128];
+        let out_of_bound: Vec<u8> = vec![2, 4, 8, 16, 32, 64, 128];
+
+        for i in 0..size.len() {
+            let s: usize = size[i];
+            let idx: u8 = out_of_bound[i];
+
+            let block: Vec<u8> = get_common_array_fetch_with_size_and_idx(i32arr[i], s, 4, idx);
+            assert!(!is_valid(block));
+            
+            let block: Vec<u8> = get_common_array_fetch_with_size_and_idx(i64arr[i], s, 8, idx);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_array_fetch_with_size_and_idx(f32arr[i], s, 4, idx);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_array_fetch_with_size_and_idx(f64arr[i], s, 8, idx);
+            assert!(!is_valid(block));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_validates_fetch_with_correct_index() {
+        let i32arr: Vec<Instruction> = vec![Instruction::i32Array2, Instruction::i32Array4, Instruction::i32Array8, Instruction::i32Array16,
+        Instruction::i32Array32, Instruction::i32Array64, Instruction::i32Array128, Instruction::i32Array256];
+        let i64arr: Vec<Instruction> = vec![Instruction::i64Array2, Instruction::i64Array4, Instruction::i64Array8, Instruction::i64Array16,
+        Instruction::i64Array32, Instruction::i64Array64, Instruction::i64Array128, Instruction::i64Array256];
+        let f32arr: Vec<Instruction> = vec![Instruction::f32Array2, Instruction::f32Array4, Instruction::f32Array8, Instruction::f32Array16,
+        Instruction::f32Array32, Instruction::f32Array64, Instruction::f32Array128, Instruction::f32Array256];
+        let f64arr: Vec<Instruction> = vec![Instruction::f64Array2, Instruction::f64Array4, Instruction::f64Array8, Instruction::f64Array16,
+        Instruction::f64Array32, Instruction::f64Array64, Instruction::f64Array128, Instruction::f64Array256];
+
+        let size: Vec<usize> = vec![2, 4, 8, 16, 32, 64, 128, 256];
+        let idxs: Vec<u8> = vec![1, 3, 7, 15, 31, 63, 127, 255];
+
+        for i in 0..size.len() {
+            let s: usize = size[i];
+            let idx: u8 = idxs[i];
+
+            let block: Vec<u8> = get_common_array_fetch_with_size_and_idx(i32arr[i], s, 4, idx);
+            assert!(is_valid(block));
+            
+            let block: Vec<u8> = get_common_array_fetch_with_size_and_idx(i64arr[i], s, 8, idx);
+            assert!(is_valid(block));
+
+            let block: Vec<u8> = get_common_array_fetch_with_size_and_idx(f32arr[i], s, 4, idx);
+            assert!(is_valid(block));
+
+            let block: Vec<u8> = get_common_array_fetch_with_size_and_idx(f64arr[i], s, 8, idx);
+            assert!(is_valid(block));
+        }
+    }
+
+    fn get_common_array_grow_with_size(
+        array_type: Instruction,
+        size: usize,
+        byte_size: usize,
+    ) -> Vec<u8> {
+        let mut block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            array_type.repr(),
+        ];
+
+        for _ in 0..size {
+            for _ in 0..byte_size {
+                block.push(0x01);
+            }
+        }
+
+        block.push(Instruction::Grow.repr());
+        block.push(Instruction::Nop.repr());
+        block.push(Instruction::End.repr());
+        block
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_validates_grow_with_correct_array_type() {
+        let i32arr: Vec<Instruction> = vec![Instruction::i32Array2, Instruction::i32Array4, Instruction::i32Array8, Instruction::i32Array16,
+        Instruction::i32Array32, Instruction::i32Array64, Instruction::i32Array128];
+        let i64arr: Vec<Instruction> = vec![Instruction::i64Array2, Instruction::i64Array4, Instruction::i64Array8, Instruction::i64Array16,
+        Instruction::i64Array32, Instruction::i64Array64, Instruction::i64Array128];
+        let f32arr: Vec<Instruction> = vec![Instruction::f32Array2, Instruction::f32Array4, Instruction::f32Array8, Instruction::f32Array16,
+        Instruction::f32Array32, Instruction::f32Array64, Instruction::f32Array128];
+        let f64arr: Vec<Instruction> = vec![Instruction::f64Array2, Instruction::f64Array4, Instruction::f64Array8, Instruction::f64Array16,
+        Instruction::f64Array32, Instruction::f64Array64, Instruction::f64Array128];
+
+        let size: Vec<usize> = vec![2, 4, 8, 16, 32, 64, 128];
+
+        for i in 0..size.len() {
+            let s: usize = size[i];
+            
+            let block: Vec<u8> = get_common_array_grow_with_size(i32arr[i], s, 4);
+            assert!(is_valid(block));
+            
+            let block: Vec<u8> = get_common_array_grow_with_size(i64arr[i], s, 8);
+            assert!(is_valid(block));
+
+            let block: Vec<u8> = get_common_array_grow_with_size(f32arr[i], s, 4);
+            assert!(is_valid(block));
+
+            let block: Vec<u8> = get_common_array_grow_with_size(f64arr[i], s, 8);
+            assert!(is_valid(block));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_grow_with_wrong_data_type() {
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Grow.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert!(!is_valid(block));
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::i64Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Grow.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert!(!is_valid(block));
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f32Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Grow.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert!(!is_valid(block));
+
+        let block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,                             // 0 Arity
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x01,
+            0x00,
+            Instruction::f64Const.repr(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            Instruction::Grow.repr(),
+            Instruction::Nop.repr(),
+            Instruction::End.repr()
+        ];
+
+        assert!(!is_valid(block));
+
+        let block: Vec<u8> = get_common_array_grow_with_size(Instruction::i32Array256, 256, 4);
+        assert!(!is_valid(block));
+
+        let block: Vec<u8> = get_common_array_grow_with_size(Instruction::i64Array256, 256, 8);
+        assert!(!is_valid(block));
+
+        let block: Vec<u8> = get_common_array_grow_with_size(Instruction::f32Array256, 256, 4);
+        assert!(!is_valid(block));
+
+        let block: Vec<u8> = get_common_array_grow_with_size(Instruction::f64Array256, 256, 8);
+        assert!(!is_valid(block));
+    }
+
+    fn get_common_array_store_with_size(
+        array_type: Instruction,
+        array_size: usize,
+        array_elem_size: usize,
+        operand_type: Instruction,
+        operand_size: usize,
+        idx: u8,
+    ) -> Vec<u8> {
+        let mut block: Vec<u8> = vec![
+            Instruction::Begin.repr(),
+            0x00,
+            Instruction::Nop.repr(),
+            Instruction::PushOperand.repr(),
+            0x02,
+            0x00,
+            array_type.repr(),
+            operand_type.repr(),
+        ];
+
+        // Array data
+        for _ in 0..array_size {
+            for _ in 0..array_elem_size {
+                block.push(0x01);
+            }
+        }
+
+        // Operand data
+        for _ in 0..operand_size {
+            block.push(0x02);
+        }
+
+        block.push(Instruction::ArrayStore.repr());
+        block.push(idx);
+        block.push(Instruction::Nop.repr());
+        block.push(Instruction::End.repr());
+        block
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_array_store_with_wrong_index() {
+        let i32arr: Vec<Instruction> = vec![Instruction::i32Array2, Instruction::i32Array4, Instruction::i32Array8, Instruction::i32Array16,
+        Instruction::i32Array32, Instruction::i32Array64, Instruction::i32Array128];
+        let i64arr: Vec<Instruction> = vec![Instruction::i64Array2, Instruction::i64Array4, Instruction::i64Array8, Instruction::i64Array16,
+        Instruction::i64Array32, Instruction::i64Array64, Instruction::i64Array128];
+        let f32arr: Vec<Instruction> = vec![Instruction::f32Array2, Instruction::f32Array4, Instruction::f32Array8, Instruction::f32Array16,
+        Instruction::f32Array32, Instruction::f32Array64, Instruction::f32Array128];
+        let f64arr: Vec<Instruction> = vec![Instruction::f64Array2, Instruction::f64Array4, Instruction::f64Array8, Instruction::f64Array16,
+        Instruction::f64Array32, Instruction::f64Array64, Instruction::f64Array128];
+
+        let size: Vec<usize> = vec![2, 4, 8, 16, 32, 64, 128];
+        let wrong_idx: Vec<u8> = vec![2, 4, 8, 16, 32, 64, 128];
+
+        for i in 0..size.len() {
+            let s: usize = size[i];
+            let idx: u8 = wrong_idx[i];
+            
+            let block: Vec<u8> = get_common_array_store_with_size(i32arr[i], s, 4, Instruction::i32Const, 4, idx);
+            assert!(!is_valid(block));
+            
+            let block: Vec<u8> = get_common_array_store_with_size(i64arr[i], s, 8, Instruction::i64Const, 8, idx);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_array_store_with_size(f32arr[i], s, 4, Instruction::f32Const, 4, idx);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_array_store_with_size(f64arr[i], s, 8, Instruction::f64Const, 8, idx);
+            assert!(!is_valid(block));
+        }
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn it_fails_array_store_with_wrong_data_type_to_store() {
+        let i32arr: Vec<Instruction> = vec![Instruction::i32Array2, Instruction::i32Array4, Instruction::i32Array8, Instruction::i32Array16,
+        Instruction::i32Array32, Instruction::i32Array64, Instruction::i32Array128, Instruction::i32Array256];
+        let i64arr: Vec<Instruction> = vec![Instruction::i64Array2, Instruction::i64Array4, Instruction::i64Array8, Instruction::i64Array16,
+        Instruction::i64Array32, Instruction::i64Array64, Instruction::i64Array128, Instruction::i64Array256];
+        let f32arr: Vec<Instruction> = vec![Instruction::f32Array2, Instruction::f32Array4, Instruction::f32Array8, Instruction::f32Array16,
+        Instruction::f32Array32, Instruction::f32Array64, Instruction::f32Array128, Instruction::f32Array256];
+        let f64arr: Vec<Instruction> = vec![Instruction::f64Array2, Instruction::f64Array4, Instruction::f64Array8, Instruction::f64Array16,
+        Instruction::f64Array32, Instruction::f64Array64, Instruction::f64Array128, Instruction::f64Array256];
+
+        let size: Vec<usize> = vec![2, 4, 8, 16, 32, 64, 128, 256];
+        let wrong_idx: Vec<u8> = vec![1, 3, 7, 15, 31, 63, 127, 255];
+
+        for i in 0..size.len() {
+            let s: usize = size[i];
+            let idx: u8 = wrong_idx[i];
+            
+            let block: Vec<u8> = get_common_array_store_with_size(i32arr[i], s, 4, Instruction::i64Const, 8, idx);
+            assert!(!is_valid(block));
+            let block: Vec<u8> = get_common_array_store_with_size(i32arr[i], s, 4, Instruction::f32Const, 4, idx);
+            assert!(!is_valid(block));
+            let block: Vec<u8> = get_common_array_store_with_size(i32arr[i], s, 4, Instruction::f64Const, 8, idx);
+            assert!(!is_valid(block));
+            
+            let block: Vec<u8> = get_common_array_store_with_size(i64arr[i], s, 8, Instruction::i32Const, 4, idx);
+            assert!(!is_valid(block));
+            let block: Vec<u8> = get_common_array_store_with_size(i64arr[i], s, 8, Instruction::f32Const, 4, idx);
+            assert!(!is_valid(block));
+            let block: Vec<u8> = get_common_array_store_with_size(i64arr[i], s, 8, Instruction::f64Const, 8, idx);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_array_store_with_size(f32arr[i], s, 4, Instruction::i32Const, 4, idx);
+            assert!(!is_valid(block));
+            let block: Vec<u8> = get_common_array_store_with_size(f32arr[i], s, 4, Instruction::i64Const, 8, idx);
+            assert!(!is_valid(block));
+            let block: Vec<u8> = get_common_array_store_with_size(f32arr[i], s, 4, Instruction::f64Const, 8, idx);
+            assert!(!is_valid(block));
+
+            let block: Vec<u8> = get_common_array_store_with_size(f64arr[i], s, 8, Instruction::i32Const, 4, idx);
+            assert!(!is_valid(block));
+            let block: Vec<u8> = get_common_array_store_with_size(f64arr[i], s, 8, Instruction::i64Const, 8, idx);
+            assert!(!is_valid(block));
+            let block: Vec<u8> = get_common_array_store_with_size(f64arr[i], s, 8, Instruction::f32Const, 4, idx);
             assert!(!is_valid(block));
         }
     }
