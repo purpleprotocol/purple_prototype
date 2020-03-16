@@ -18,7 +18,6 @@
 
 use crate::blake_hasher::BlakeHasher;
 use crate::short_hash::ShortHash;
-use crc32fast::Hasher as CrcHasher;
 use hashdb::Hasher;
 use quickcheck::Arbitrary;
 use rand::Rng;
@@ -40,9 +39,8 @@ impl Hash {
 
     /// Converts the `Hash` to an unique integer representation.
     pub fn to_u64(&self) -> u64 {
-        let mut hasher = CrcHasher::new();
-        hasher.update(&self.0);
-        hasher.finalize() as u64
+        let short = self.to_short();
+        decode_le_u64!(&short.0).unwrap()
     }
 
     pub fn to_vec(&self) -> Vec<u8> {
@@ -60,6 +58,7 @@ impl Hash {
         Hash(random_bytes)
     }
 
+    #[inline]
     /// Converts a 32 byte `Hash` to a 8 bytes `ShortHash`
     pub fn to_short(&self) -> ShortHash {
         ShortHash::from_hash(&self)
@@ -100,6 +99,7 @@ impl Encodable for Hash {
 }
 
 impl Decodable for Hash {
+    #[inline]
     fn decode(bytes: &Rlp) -> Result<Hash, DecoderError> {
         match bytes.data() {
             Ok(data) => {

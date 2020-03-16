@@ -35,4 +35,7 @@ pub enum DownloaderErr {
 
     /// Could not find object with the given query
     NotFound,
+
+    /// We already have the sub-piece data
+    AlreadyHaveData,
 }

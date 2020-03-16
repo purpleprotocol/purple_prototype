@@ -21,7 +21,7 @@ use crate::downloader::sub_piece_info::SubPieceInfo;
 use crypto::ShortHash;
 use std::sync::Arc;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SubPiece {
     /// The checksum of the sub-piece
     pub(crate) checksum: ShortHash,
@@ -50,6 +50,10 @@ impl SubPiece {
     pub fn add_data(&mut self, data: Arc<Vec<u8>>) -> Result<(), DownloaderErr> {
         if data.len() != self.size {
             return Err(DownloaderErr::InvalidSize);
+        }
+
+        if self.data.is_some() {
+            return Err(DownloaderErr::AlreadyHaveData);
         }
 
         let checksum = crypto::hash_slice(&data).to_short();
