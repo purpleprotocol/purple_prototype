@@ -741,7 +741,7 @@ impl Validator {
                                 }
                             }
                         }
-                        _ => unimplemented!()
+                        _ => unimplemented!(),
                     }
                 }
                 None => {
@@ -768,6 +768,32 @@ impl Validator {
             Validity::Valid => true,
             _ => false,
         }
+    }
+
+    pub fn validate_block(&mut self, block: &[u8]) -> bool {
+        // First reset the validator
+        self.reset();
+
+        // Validate each byte in the block
+        for byte in block {
+            self.push_op(*byte);
+
+            if self.done() {
+                break;
+            }
+        }
+
+        self.valid()
+    }
+
+    fn reset(&mut self) {
+        self.state = Validity::Invalid;
+        self.transitions = Vec::new();
+        self.validation_stack = Stack::new();
+        self.validation_buffer = Vec::new();
+        self.call_stack = Stack::new();
+        self.operand_stack = Stack::new();
+        self.last_arity = None;
     }
 
     fn validate_push(

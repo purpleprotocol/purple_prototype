@@ -21,6 +21,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
 use persistence::{Codec, DbHasher};
+use purple_vm::Validator;
 use rand::Rng;
 use std::io::Cursor;
 use std::str;
@@ -50,7 +51,131 @@ impl OpenContract {
 
     /// Validates the transaction against the provided state.
     pub fn validate(&self, trie: &TrieDB<DbHasher, Codec>) -> bool {
-        unimplemented!();
+        let zero = Balance::zero();
+
+        // Invalidate if 0 coins are set as amount
+        if self.amount == zero {
+            return false;
+        }
+
+        // Invalidate if creator address doesn't exist
+        let _ = match &self.address {
+            Some(address) => address,
+            None => return false,
+        };
+
+        // Invalidate if signature is not valid
+        if !self.verify_sig() {
+            return false;
+        }
+
+        // Validate contract code
+        let mut validator = Validator::new();
+        if !validator.validate_block(self.code.as_slice()) {
+            return false;
+        }
+
+        let bin_asset_hash = &self.asset_hash.0;
+        let bin_fee_hash = &self.fee_hash.0;
+
+        let creator_signing_addr = NormalAddress::from_pkey(&self.creator);
+
+        // Calculate address mapping key
+        //
+        // An address mapping is a mapping between
+        // the account's signing address and an
+        // account's receiving address.
+        //
+        // They key of the address mapping has the following format:
+        // `<signing-address>.am`
+        let addr_mapping_key = [creator_signing_addr.as_bytes(), &b".am"[..]].concat();
+
+        // Retrieve creator account permanent address
+        let creator_perm_addr = match trie.get(&addr_mapping_key) {
+            Ok(Some(perm_addr)) => NormalAddress::from_bytes(&perm_addr).unwrap(),
+            Ok(None) => return false,
+            Err(err) => panic!(err),
+        };
+
+        // Do not allow address re-usage
+        if self.next_address == creator_signing_addr {
+            return false;
+        }
+
+        // Calculate nonce key
+        //
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let creator_nonce_key = [creator_perm_addr.as_bytes(), &b".n"[..]].concat();
+
+        // Calculate currency keys
+        //
+        // The key of a currency entry has the following format:
+        // `<permanent-addr>.<currency-hash>`
+        let cur_key = [creator_perm_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
+        let fee_key = [creator_perm_addr.as_bytes(), &b"."[..], &bin_fee_hash[..]].concat();
+
+        // Retrieve serialized nonce
+        let bin_creator_nonce = match trie.get(&creator_nonce_key) {
+            Ok(Some(nonce)) => nonce,
+            Ok(None) => return false,
+            Err(err) => panic!(err),
+        };
+
+        // Read the nonce of the creator
+        let nonce = decode_be_u64!(bin_creator_nonce).unwrap();
+        if nonce + 1 != self.nonce {
+            return false;
+        }
+
+        if bin_fee_hash == bin_asset_hash {
+            // The transaction's fee is paid in the same currency
+            // that is being sent, so we only retrieve one balance.
+            let mut balance = match trie.get(&cur_key) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err) => panic!(err),
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err),
+            };
+
+            // Subtract fee from balance
+            balance -= self.fee.clone();
+
+            // Subtract amount transferred from balance
+            balance -= self.amount.clone();
+
+            balance >= zero
+        } else {
+            // The transaction's fee is paid in a different currency
+            // than the one being transferred so we retrieve both balances.
+            let mut cur_balance = match trie.get(&cur_key) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err) => panic!(err),
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err),
+            };
+
+            let mut fee_balance = match trie.get(&fee_key) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err) => panic!(err),
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err),
+            };
+
+            // Subtract fee from sender
+            fee_balance -= self.fee.clone();
+
+            // Subtract amount transferred from sender
+            cur_balance -= self.amount.clone();
+
+            cur_balance >= zero && fee_balance >= zero
+        }
     }
 
     /// Applies the open contract transaction to the provided database.
