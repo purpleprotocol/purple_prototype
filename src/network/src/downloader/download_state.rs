@@ -24,8 +24,11 @@ pub enum DownloadState {
     /// The download is paused
     Paused,
 
-    /// We have a partial download
-    Partial,
+    /// The download is queued
+    Queued,
+
+    /// We have are currently downloading this object
+    Downloading,
 
     /// The download has been completed
     Completed,

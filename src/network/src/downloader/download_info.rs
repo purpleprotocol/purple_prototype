@@ -16,29 +16,23 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#[derive(Clone, Debug)]
+pub struct DownloadInfo {
+    /// Size of the download, in bytes
+    pub(crate) size: u64,
+
+    /// Completed bytes
+    pub(crate) completed: u64,
+
+    /// The priority of the download
+    pub(crate) priority: u64,
+
+    /// The type of the download
+    pub(crate) download_type: DownloadType,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum DownloaderErr {
-    /// The downloader buffer is full
-    Full,
-
-    /// We already have info about the piece
-    AlreadyHaveInfo,
-
-    /// The provided info is invalid
-    InvalidInfo,
-
-    /// Checksum validation failed
-    InvalidChecksum,
-
-    /// The provided size is invalid
-    InvalidSize,
-
-    /// Could not find object with the given query
-    NotFound,
-
-    /// We already have the sub-piece data
-    AlreadyHaveData,
-
-    /// The download for the given object is already scheduled
-    AlreadyHaveDownload,
+pub enum DownloadType {
+    /// A block download
+    Block,
 }

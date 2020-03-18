@@ -16,8 +16,10 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::downloader::download_info::DownloadInfo;
 use crate::downloader::download_state::DownloadState;
 use crate::downloader::piece::Piece;
+use crypto::ShortHash;
 
 #[derive(Debug)]
 pub struct Download {
@@ -27,6 +29,9 @@ pub struct Download {
     /// Completed bytes
     pub(crate) completed: u64,
 
+    /// The priority of the download
+    pub(crate) priority: u64,
+
     /// The state of the download
     pub(crate) state: DownloadState,
 
@@ -35,12 +40,24 @@ pub struct Download {
 }
 
 impl Download {
+    pub fn from_pieces(size: u64, pieces: Vec<Piece>, priority: u64) -> Self {
+        unimplemented!();
+    }
+
+    pub fn from_checksums_and_sizes(checksums: &[(ShortHash, u64)], priority: u64) -> Self {
+        unimplemented!();
+    }
+
+    pub fn to_info(&self) -> DownloadInfo {
+        unimplemented!();
+    }
+
     pub fn is_not_started(&self) -> bool {
         self.state == DownloadState::NotStarted
     }
 
     pub fn is_pending(&self) -> bool {
-        self.state == DownloadState::NotStarted || self.state == DownloadState::Partial
+        self.state == DownloadState::NotStarted || self.state == DownloadState::Downloading
     }
 
     pub fn is_complete(&self) -> bool {
@@ -49,6 +66,10 @@ impl Download {
 
     pub fn is_paused(&self) -> bool {
         self.state == DownloadState::Paused
+    }
+
+    pub fn is_queued(&self) -> bool {
+        self.state == DownloadState::Queued
     }
 
     pub fn state(&self) -> DownloadState {
