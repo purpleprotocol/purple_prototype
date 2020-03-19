@@ -16,6 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use chrono::*;
+
 #[derive(Clone, Debug)]
 pub struct DownloadInfo {
     /// Size of the download, in bytes
@@ -26,6 +28,9 @@ pub struct DownloadInfo {
 
     /// The priority of the download
     pub(crate) priority: u64,
+
+    /// When the download was created
+    pub(crate) created_at: DateTime<Utc>,
 
     /// The type of the download
     pub(crate) download_type: DownloadType,

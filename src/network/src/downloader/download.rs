@@ -19,6 +19,7 @@
 use crate::downloader::download_info::DownloadInfo;
 use crate::downloader::download_state::DownloadState;
 use crate::downloader::piece::Piece;
+use chrono::*;
 use crypto::ShortHash;
 
 #[derive(Debug)]
@@ -31,6 +32,9 @@ pub struct Download {
 
     /// The priority of the download
     pub(crate) priority: u64,
+
+    /// When the download was created
+    pub(crate) created_at: DateTime<Utc>,
 
     /// The state of the download
     pub(crate) state: DownloadState,

@@ -16,7 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(non_snake_case, unused)]
+#![allow(non_snake_case, unused, deprecated)]
 
 #[macro_use]
 extern crate log;

@@ -71,8 +71,14 @@ pub struct TransactionBlock {
     /// The hash of the block.
     pub hash: Option<Hash>,
 
-    /// Merkle root hashes of all the block's pieces 
-    pub tx_roots: Option<Vec<ShortHash>>,
+    /// Checksums of all the block's pieces 
+    pub tx_checksums: Option<Vec<ShortHash>>,
+
+    /// Sizes of all the pieces
+    pub pieces_sizes: Option<Vec<usize>>,
+
+    /// Root hash of all transactions in the block
+    pub tx_root: Option<ShortHash>,
 
     /// Merkle root hash of the state trie
     pub state_root: Option<ShortHash>,
@@ -229,20 +235,23 @@ impl Block for TransactionBlock {
         let ts = self.timestamp.to_rfc3339();
         let timestamp = ts.as_bytes();
         let timestamp_len = timestamp.len() as u8;
-        let tx_roots = self.tx_roots.as_ref().unwrap();
+        let tx_checksums = self.tx_checksums.as_ref().unwrap();
+        let pieces_sizes = self.pieces_sizes.as_ref().unwrap();
 
         buf.write_u8(Self::BLOCK_TYPE).unwrap();
         buf.write_u8(timestamp_len).unwrap();
-        buf.write_u8(tx_roots.len() as u8).unwrap();
+        buf.write_u8(tx_checksums.len() as u8).unwrap();
         buf.write_u64::<BigEndian>(self.height).unwrap();
         buf.extend_from_slice(&self.parent_hash.0);
         buf.extend_from_slice(&self.state_root.unwrap().0);
+        buf.extend_from_slice(&self.tx_root.unwrap().0);
         buf.extend_from_slice(&(&self.miner_id.0).0);
         buf.extend_from_slice(&self.miner_signature.as_ref().unwrap().to_bytes());
         buf.extend_from_slice(&timestamp);
 
-        for tx_root in tx_roots.iter() {
-            buf.extend_from_slice(&tx_root.0);
+        for (i, checksum) in tx_checksums.iter().enumerate() {
+            buf.write_u32::<BigEndian>(pieces_sizes[i] as u32).unwrap();
+            buf.extend_from_slice(&checksum.0);
         }
 
         buf
@@ -290,7 +299,7 @@ impl Block for TransactionBlock {
             return Err("Bad height");
         };
 
-        if bytes.len() != 11 + timestamp_len as usize + 32 * 2 + crypto::SHORT_HASH_BYTES + 64 + pieces_count as usize * 8 {
+        if bytes.len() != 11 + timestamp_len as usize + 32 * 2 + crypto::SHORT_HASH_BYTES * 2 + 64 + pieces_count as usize * 12 {
             return Err("Invalid packet length")
         }
 
@@ -308,30 +317,51 @@ impl Block for TransactionBlock {
             ShortHash(hash)
         };
 
-        let miner_id = NodeId::from_bytes(&bytes[51..83]).map_err(|_| "Incorrect miner id field")?;
-        let miner_signature = Signature::from_bytes(&bytes[83..147]).map_err(|_| "Incorrect signature field")?;
-        let utf8 = std::str::from_utf8(&bytes[147..(147+timestamp_len as usize)]).map_err(|_| "Invalid block timestamp")?;
+        let tx_root = {
+            let mut hash = [0; crypto::SHORT_HASH_BYTES];
+            hash.copy_from_slice(&bytes[51..59]);
+
+            ShortHash(hash)
+        };
+
+        let miner_id = NodeId::from_bytes(&bytes[59..91]).map_err(|_| "Incorrect miner id field")?;
+        let miner_signature = Signature::from_bytes(&bytes[91..155]).map_err(|_| "Incorrect signature field")?;
+        let utf8 = std::str::from_utf8(&bytes[155..(155+timestamp_len as usize)]).map_err(|_| "Invalid block timestamp")?;
         let timestamp = DateTime::<Utc>::from_str(utf8).map_err(|_| "Invalid block timestamp")?;
 
-        let mut tx_roots = Vec::with_capacity(pieces_count as usize);
+        let mut tx_checksums = Vec::with_capacity(pieces_count as usize);
+        let mut pieces_sizes = Vec::with_capacity(pieces_count as usize);
 
         for i in 0..pieces_count as usize {
             let mut hash_bytes = [0; 8];
-            let start_i = 147 + timestamp_len as usize;
-            let end_i = 155 + timestamp_len as usize;
-            let i = i * 8;
+            let start_i = 155 + timestamp_len as usize;
+            let end_i = 167 + timestamp_len as usize;
+            let i = i * 12;
             let start_i = i + start_i;
             let end_i = i + end_i;
+            let mut reader = Cursor::new(&bytes[start_i..(start_i+4)]);
 
-            hash_bytes.copy_from_slice(&bytes[start_i..end_i]);
-            tx_roots.push(ShortHash(hash_bytes));
+            let piece_size = reader
+                .read_u32::<BigEndian>()
+                .map_err(|_| "Invalid piece size")?;
+            let piece_size = piece_size as usize;
+
+            if piece_size > MAX_PIECE_SIZE || piece_size == 0 {
+                return Err("Invalid piece size!");
+            }
+            
+            hash_bytes.copy_from_slice(&bytes[(start_i+4)..end_i]);
+            tx_checksums.push(ShortHash(hash_bytes));
+            pieces_sizes.push(piece_size);
         }
 
         let mut block = TransactionBlock {
             timestamp,
             miner_id,
             state_root: Some(state_root),
-            tx_roots: Some(tx_roots),
+            tx_root: Some(tx_root),
+            tx_checksums: Some(tx_checksums),
+            pieces_sizes: Some(pieces_sizes),
             hash: None,
             parent_hash: parent_hash,
             miner_signature: Some(miner_signature),
@@ -358,8 +388,10 @@ impl TransactionBlock {
             parent_hash,
             miner_id,
             height,
-            tx_roots: None,
+            tx_checksums: None,
+            pieces_sizes: None,
             state_root: None,
+            tx_root: None,
             hash: None,
             miner_signature: None,
             transactions: None,
@@ -400,17 +432,20 @@ impl TransactionBlock {
         let mut buf: Vec<u8> = Vec::new();
         let ts = self.timestamp.to_rfc3339();
         let timestamp = ts.as_bytes();
-        let tx_roots = self.tx_roots.as_ref().unwrap();
+        let tx_checksums = self.tx_checksums.as_ref().unwrap();
+        let sizes = self.pieces_sizes.as_ref().unwrap();
 
         buf.write_u64::<BigEndian>(self.height).unwrap();
         buf.extend_from_slice(&self.parent_hash.0);
         buf.extend_from_slice(&self.state_root.unwrap().0);
+        buf.extend_from_slice(&self.tx_root.unwrap().0);
         buf.extend_from_slice(&(&self.miner_id.0).0);
         buf.extend_from_slice(&self.miner_signature.as_ref().unwrap().to_bytes());
         buf.extend_from_slice(&timestamp);
 
-        for tx_root in tx_roots.iter() {
-            buf.extend_from_slice(&tx_root.0);
+        for (i, checksum) in tx_checksums.iter().enumerate() {
+            buf.write_u32::<BigEndian>(sizes[i] as u32).unwrap();
+            buf.extend_from_slice(&checksum.0);
         }
 
         buf
@@ -426,10 +461,12 @@ impl Arbitrary for TransactionBlock {
         let num = rng.gen_range(0, 9);
 
         let mut block = TransactionBlock {
-            tx_roots: Some((0..num).into_iter().map(|_| Arbitrary::arbitrary(g)).collect()),
+            tx_checksums: Some((0..num).into_iter().map(|_| Arbitrary::arbitrary(g)).collect()),
+            pieces_sizes: Some((0..num).into_iter().map(|_| rng.gen_range(1, MAX_PIECE_SIZE)).collect()),
             height: Arbitrary::arbitrary(g),
             parent_hash: Arbitrary::arbitrary(g),
             state_root: Some(Arbitrary::arbitrary(g)),
+            tx_root: Some(Arbitrary::arbitrary(g)),
             hash: None,
             miner_id: Arbitrary::arbitrary(g),
             miner_signature: Some(Arbitrary::arbitrary(g)),
@@ -447,22 +484,60 @@ mod tests {
     use super::*;
 
     quickcheck! {
-        fn serialize_deserialize(block: TransactionBlock) -> bool {
-            TransactionBlock::from_bytes(&TransactionBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap();
-
-            true
+        fn serialize_deserialize(block: Arc<TransactionBlock>) -> bool {
+            block == TransactionBlock::from_bytes(&TransactionBlock::from_bytes(&block.to_bytes()).unwrap().to_bytes()).unwrap()
         }
 
         fn fails_deserialize_if_pieces_count_is_larger_than_allowed(block: TransactionBlock) -> bool {
+            let mut rng = rand::thread_rng();
             let mut block = block.clone();
-            let mut tx_roots = block.tx_roots.as_mut().unwrap();
+            let mut tx_checksums = block.tx_checksums.as_mut().unwrap();
+            let mut pieces_sizes = block.pieces_sizes.as_mut().unwrap();
             let max_pieces = MAX_TX_SET_SIZE / MAX_PIECE_SIZE;
 
             for i in 0..(max_pieces + 10) { 
-                tx_roots.push(crypto::hash_slice(format!("random_hash-{}", i).as_bytes()).to_short());
+                tx_checksums.push(crypto::hash_slice(format!("random_hash-{}", i).as_bytes()).to_short());
+                pieces_sizes.push(rng.gen_range(1, MAX_PIECE_SIZE));
             }
 
-            TransactionBlock::from_bytes(&block.to_bytes()).is_err()
+            block.compute_hash();
+            assert_eq!(TransactionBlock::from_bytes(&block.to_bytes()), Err("Pieces count is too large!"));
+            true
+        }
+
+        fn fails_deserialize_if_piece_size_is_bigger_than_allowed(block: TransactionBlock) -> bool {
+            let mut rng = rand::thread_rng();
+            let mut block = block.clone();
+            let mut pieces_sizes = block.pieces_sizes.as_mut().unwrap();
+
+            if pieces_sizes.len() == 0 {
+                return true;
+            }
+
+            let random = rng.gen_range(MAX_PIECE_SIZE + 1, MAX_PIECE_SIZE + 100);
+            
+            pieces_sizes.pop();
+            pieces_sizes.push(random);
+            block.compute_hash();
+
+            assert_eq!(TransactionBlock::from_bytes(&block.to_bytes()), Err("Invalid piece size!"));
+            true
+        }
+
+        fn fails_deserialize_with_0_piece_size(block: TransactionBlock) -> bool {
+            let mut block = block.clone();
+            let mut pieces_sizes = block.pieces_sizes.as_mut().unwrap();
+
+            if pieces_sizes.len() == 0 {
+                return true;
+            }
+
+            pieces_sizes.pop();
+            pieces_sizes.push(0);
+            block.compute_hash();
+
+            assert_eq!(TransactionBlock::from_bytes(&block.to_bytes()), Err("Invalid piece size!"));
+            true
         }
     }
 }

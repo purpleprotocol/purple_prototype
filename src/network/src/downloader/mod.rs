@@ -42,10 +42,13 @@ pub use self::error::*;
 /// Maximum allowed concurrent downloads
 pub const MAX_CONCURRENT_DOWNLOADS: usize = 50;
 
+/// Maximum amount of active downloads
+pub const MAX_ACTIVE_DOWNLOAD: usize = 5;
+
 #[derive(Clone, Debug)]
 pub struct Downloader {
     /// Downloader info
-    info: Arc<Mutex<DownloaderInfo>>,
+    info: DownloaderInfo,
 
     /// HashMap with all current block downloads
     block_downloads: Arc<DashMap<ShortHash, Arc<Mutex<Download>>>>, 
@@ -54,52 +57,66 @@ pub struct Downloader {
 impl Downloader {
     pub fn new() -> Self {
         Downloader { 
-            info: Arc::new(Mutex::new(DownloaderInfo::new())),
+            info: DownloaderInfo::new(),
             block_downloads: Arc::new(DashMap::with_capacity(MAX_CONCURRENT_DOWNLOADS))
         }
     }
 
     /// Schedules a new block download. Returns `Err(_)` if the download cannot
     /// be scheduled.
-    pub async fn from_block(&self, block: Arc<TransactionBlock>) -> Result<(), DownloaderErr> {        
+    pub async fn from_block(&self, block: Arc<TransactionBlock>, priority: u64) -> Result<(), DownloaderErr> {        
+        debug!("Scheduling block download for hash: {}, height: {}", block.block_hash().unwrap(), block.height());
+        
         if self.block_downloads.len() >= MAX_CONCURRENT_DOWNLOADS {
-            return Err(DownloaderErr::Full);
+            let err = DownloaderErr::Full;
+            debug!("Scheduling failed for hash: {}, height: {}, reason: {:?}", block.block_hash().unwrap(), block.height(), err);
+            return Err(err);
         }
 
         // First try to schedule the block download
-        let info = self.try_schedule_block_download(block.clone()).await?;
+        let info = self.try_schedule_block_download(block.clone(), priority).await?;
         
         // If scheduling succeeds, write info entry
-        self.write_download_info(info).await;
+        self.write_download_info(block.clone(), info).await;
+
+        debug!("Scheduling succeeded for hash: {}, height: {}", block.block_hash().unwrap(), block.height());
 
         Ok(())
     }
 
-    async fn try_schedule_block_download(&self, block: Arc<TransactionBlock>) -> Result<DownloadInfo, DownloaderErr> {
+    /// Returns the current downloader info
+    pub fn get_info(&self) -> DownloaderInfo {
+        self.info.clone()
+    }
+
+    async fn try_schedule_block_download(&self, block: Arc<TransactionBlock>, priority: u64) -> Result<DownloadInfo, DownloaderErr> {
         let block_hash = block.block_hash().unwrap().to_short();
         let has_block = self.block_downloads.get(&block_hash).is_some();
 
         if has_block {
-            return Err(DownloaderErr::AlreadyHaveDownload);
+            let err = DownloaderErr::AlreadyHaveDownload;
+            debug!("Scheduling failed for hash: {}, height: {}, reason: {:?}", block.block_hash().unwrap(), block.height(), err);
+            return Err(err);
         }
         
         unimplemented!();
     } 
 
-    async fn write_download_info(&self, info: DownloadInfo) {
-        unimplemented!();
+    async fn write_download_info(&self, block: Arc<TransactionBlock>, info: DownloadInfo) {
+        let block_hash = block.block_hash().unwrap().to_short();
+        self.info.block_infos.insert(block_hash, info);
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct DownloaderInfo {
-    block_infos: Vec<DownloadInfo>,
+    pub(crate) block_infos: Arc<DashMap<ShortHash, DownloadInfo>>,
 }
 
 impl DownloaderInfo {
     pub fn new() -> Self {
         DownloaderInfo {
-            block_infos: Vec::with_capacity(MAX_CONCURRENT_DOWNLOADS),
+            block_infos: Arc::new(DashMap::with_capacity(MAX_CONCURRENT_DOWNLOADS)),
         }
     }
 }
