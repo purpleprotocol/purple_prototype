@@ -25,10 +25,10 @@ use crypto::{ShortHash, BlakeHasher};
 use chain::{MAX_TX_SET_SIZE, MAX_PIECE_SIZE, MAX_SUB_PIECE_SIZE};
 use std::hash::Hasher;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Piece {
     /// The size of the piece in bytes
-    pub(crate) size: usize,
+    pub(crate) size: u64,
 
     /// Number of bytes downloaded
     pub(crate) downloaded: u64,
@@ -43,7 +43,7 @@ pub struct Piece {
 }
 
 impl Piece {
-    pub fn new(size: usize, checksum: ShortHash) -> Piece {
+    pub fn new(size: u64, checksum: ShortHash) -> Piece {
         Piece {
             size,
             checksum,
@@ -261,7 +261,7 @@ mod tests {
                 .map(|s| s.data.as_ref().unwrap().as_ref().clone())
                 .collect();
             let checksum = get_checksum(raw_sub_pieces);
-            let mut piece = Piece::new(raw_piece.len(), checksum);
+            let mut piece = Piece::new(raw_piece.len() as u64, checksum);
             piece.sub_pieces = Some(SubPieces::new(sub_pieces));
             buf.push(piece);
         }
@@ -295,7 +295,7 @@ mod tests {
             assert!(raw_sub_piece.len() > 0);
             assert!(raw_sub_piece.len() <= MAX_SUB_PIECE_SIZE);
             let checksum = crypto::hash_slice(raw_sub_piece).to_short();
-            let mut sub_piece = SubPiece::new(raw_sub_piece.len(), checksum);
+            let mut sub_piece = SubPiece::new(raw_sub_piece.len() as u64, checksum);
             sub_piece.add_data(Arc::new(raw_sub_piece.to_vec())).unwrap();
             buf.push(sub_piece);
         }

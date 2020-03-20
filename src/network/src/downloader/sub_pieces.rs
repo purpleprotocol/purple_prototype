@@ -24,7 +24,7 @@ use hashbrown::HashMap;
 use std::sync::Arc;
 
 /// A set of sub-pieces
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct SubPieces {
     /// Sub-pieces list 
     pub(crate) sub_pieces: Vec<SubPiece>,
@@ -88,7 +88,7 @@ mod tests {
         for i in 0..10 {
             let data = format!("data-{}", i).as_bytes().to_vec();
             let checksum = crypto::hash_slice(&data).to_short();
-            let mut sub_piece = SubPiece::new(data.len(), checksum);
+            let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
             let data = Arc::new(data);
             sub_pieces.push((sub_piece, data));
         }
@@ -112,7 +112,7 @@ mod tests {
         for i in 0..10 {
             let data = format!("data-{}", i).as_bytes().to_vec();
             let checksum = crypto::hash_slice(&data).to_short();
-            let mut sub_piece = SubPiece::new(data.len(), checksum);
+            let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
             let data = Arc::new(data);
             sub_pieces.push((sub_piece, data));
         }
@@ -136,7 +136,7 @@ mod tests {
         for i in 0..10 {
             let data = format!("data-{}", i).as_bytes().to_vec();
             let checksum = crypto::hash_slice(&data).to_short();
-            let mut sub_piece = SubPiece::new(data.len(), checksum);
+            let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
             let data = Arc::new(data);
             sub_pieces.push((sub_piece, data));
         }
@@ -160,7 +160,7 @@ mod tests {
         for i in 0..10 {
             let data = format!("data-{}", i).as_bytes().to_vec();
             let checksum = crypto::hash_slice(&data).to_short();
-            let mut sub_piece = SubPiece::new(data.len(), checksum);
+            let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
             let data = Arc::new(data);
             sub_pieces.push((sub_piece, data));
         }
@@ -184,8 +184,8 @@ mod tests {
         for i in 0..10 {
             let data = format!("data-{}", i).as_bytes().to_vec();
             let checksum = crypto::hash_slice(&data).to_short();
-            let info = SubPieceInfo::new(data.len(), checksum);
-            let mut sub_piece = SubPiece::new(data.len(), checksum);
+            let info = SubPieceInfo::new(data.len() as u64, checksum);
+            let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
             let data = Arc::new(data);
             sub_pieces.push((sub_piece, data, info));
         }
@@ -209,7 +209,7 @@ mod tests {
         for i in 0..10 {
             let data = format!("data-{}", i).as_bytes().to_vec();
             let checksum = crypto::hash_slice(&data).to_short();
-            let mut sub_piece = SubPiece::new(data.len(), checksum);
+            let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
             let data = Arc::new(data);
             sub_pieces.push((sub_piece, data));
         }
@@ -231,7 +231,7 @@ mod tests {
         for i in 0..10 {
             let data = format!("data-{}", i).as_bytes().to_vec();
             let checksum = crypto::hash_slice(&data).to_short();
-            let mut sub_piece = SubPiece::new(data.len(), checksum);
+            let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
             let data = Arc::new(data);
             sub_pieces.push((sub_piece, data));
         }
@@ -255,7 +255,7 @@ mod tests {
         for i in 0..10 {
             let data = format!("data-{}", i).as_bytes().to_vec();
             let checksum = crypto::hash_slice(&data).to_short();
-            let mut sub_piece = SubPiece::new(data.len(), checksum);
+            let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
             let data = Arc::new(data);
             sub_pieces.push((sub_piece, data));
         }
@@ -277,8 +277,8 @@ mod tests {
         for i in 0..10 {
             let data = format!("data-{}", i).as_bytes().to_vec();
             let checksum = crypto::hash_slice(&data).to_short();
-            let info = SubPieceInfo::new(data.len(), checksum);
-            let mut sub_piece = SubPiece::new(data.len(), checksum);
+            let info = SubPieceInfo::new(data.len() as u64, checksum);
+            let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
             let data = Arc::new(data);
             sub_pieces.push((sub_piece, data, info));
         }

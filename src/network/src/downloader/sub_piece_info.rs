@@ -24,11 +24,11 @@ pub struct SubPieceInfo {
     pub(crate) checksum: ShortHash,
 
     /// The size of the sub-piece in bytes
-    pub(crate) size: usize,
+    pub(crate) size: u64,
 }
 
 impl SubPieceInfo {
-    pub fn new(size: usize, checksum: ShortHash) -> SubPieceInfo {
+    pub fn new(size: u64, checksum: ShortHash) -> SubPieceInfo {
         SubPieceInfo {
             checksum,
             size,

@@ -21,20 +21,20 @@ use crate::downloader::sub_piece_info::SubPieceInfo;
 use crypto::ShortHash;
 use std::sync::Arc;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SubPiece {
     /// The checksum of the sub-piece
     pub(crate) checksum: ShortHash,
 
     /// The size of the sub-piece in bytes
-    pub(crate) size: usize,
+    pub(crate) size: u64,
 
     /// Sub-piece data. This is `None` if we haven't downloaded the sub-piece.
     pub(crate) data: Option<Arc<Vec<u8>>>,
 }
 
 impl SubPiece {
-    pub fn new(size: usize, checksum: ShortHash) -> Self {
+    pub fn new(size: u64, checksum: ShortHash) -> Self {
         SubPiece {
             size,
             checksum,
@@ -48,7 +48,7 @@ impl SubPiece {
     }
 
     pub fn add_data(&mut self, data: Arc<Vec<u8>>) -> Result<(), DownloaderErr> {
-        if data.len() != self.size {
+        if data.len() as u64 != self.size {
             return Err(DownloaderErr::InvalidSize);
         }
 
@@ -85,7 +85,7 @@ mod tests {
     fn it_adds_data() {
         let data = b"data".to_vec();
         let checksum = crypto::hash_slice(&data).to_short();
-        let mut sub_piece = SubPiece::new(data.len(), checksum);
+        let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
         sub_piece.add_data(Arc::new(data.clone())).unwrap();
         assert_eq!(sub_piece.data, Some(Arc::new(data.clone())));
         assert!(sub_piece.is_done());
@@ -95,7 +95,7 @@ mod tests {
     fn it_fails_adding_data_bad_checksum() {
         let data = b"data".to_vec();
         let checksum = crypto::hash_slice(b"other_data").to_short();
-        let mut sub_piece = SubPiece::new(data.len(), checksum);
+        let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
         assert_eq!(sub_piece.add_data(Arc::new(data.clone())), Err(DownloaderErr::InvalidChecksum));
     }
 
@@ -103,8 +103,8 @@ mod tests {
     fn to_info() {
         let data = b"data".to_vec();
         let checksum = crypto::hash_slice(&data).to_short();
-        let oracle_info = SubPieceInfo::new(data.len(), checksum);
-        let mut sub_piece = SubPiece::new(data.len(), checksum);
+        let oracle_info = SubPieceInfo::new(data.len() as u64, checksum);
+        let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
         sub_piece.add_data(Arc::new(data.clone())).unwrap();
         assert_eq!(sub_piece.to_info(), oracle_info);
     }
