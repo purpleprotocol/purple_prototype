@@ -19,8 +19,10 @@
 use crate::downloader::error::DownloaderErr;
 use crate::downloader::download_info::{DownloadInfo, DownloadType};
 use crate::downloader::download_state::DownloadState;
+use crate::downloader::piece_info::PieceInfo;
+use crate::downloader::sub_piece_info::SubPieceInfo;
 use crate::downloader::piece::Piece;
-use chain::{MAX_PIECE_SIZE, MAX_TX_SET_SIZE};
+use chain::{MAX_PIECE_SIZE, MAX_SUB_PIECE_SIZE, MAX_TX_SET_SIZE};
 use hashbrown::HashMap;
 use chrono::*;
 use crypto::ShortHash;
@@ -62,6 +64,7 @@ impl Download {
         for (i, piece) in pieces.iter().enumerate() {
             let piece_size = &piece.size;
             let checksum = &piece.checksum;
+
             if *piece_size > MAX_PIECE_SIZE as u64 || *piece_size == 0 {
                 return Err(DownloaderErr::InvalidSize);
             }
@@ -150,8 +153,36 @@ impl Download {
         }
     }
 
+    pub fn add_info(&mut self, piece: &ShortHash, info: &PieceInfo) -> Result<(), DownloaderErr> {
+        let piece_i = self.checksum_mappings.get(piece).ok_or(DownloaderErr::NotFound)?;
+        let mut piece = &mut self.pieces[*piece_i];
+        piece.add_info(info)
+    }
+
+    /// This panics if we don't have info about a `Piece`
     pub fn append_raw_sub_piece(&mut self, piece: &ShortHash, sub_piece: &ShortHash, raw: Arc<Vec<u8>>) -> Result<(), DownloaderErr> {
-        unimplemented!();
+        let piece_i = self.checksum_mappings.get(piece).ok_or(DownloaderErr::NotFound)?;
+        let mut piece = &mut self.pieces[*piece_i];
+        
+        piece
+            .sub_pieces
+            .as_mut()
+            .unwrap()
+            .add_data(sub_piece, raw.clone())?;
+
+        // Mark as started if this is the first appended piece
+        if let DownloadState::NotStarted = self.state {
+            self.state = DownloadState::Downloading;
+        }
+
+        self.completed += raw.len() as u64;
+
+        // Mark as complete if this is the last sub-piece
+        if self.completed == self.size {
+            self.state = DownloadState::Completed;
+        }
+        
+        Ok(())
     }
 
     pub fn is_not_started(&self) -> bool {
@@ -182,6 +213,7 @@ impl Download {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::prelude::*;
     use crate::downloader::piece_info::PieceInfo;
     use crate::downloader::download_info::DownloadType;
     use crate::downloader::sub_piece_info::SubPieceState;
@@ -443,21 +475,234 @@ mod tests {
 
     #[test]
     fn append_raw_sub_piece() {
-        assert!(false);
+        let data = vec![
+            b"data1".to_vec(),
+            b"data2".to_vec(),
+            b"data3".to_vec(),
+            b"data4".to_vec(),
+            b"data5".to_vec(),
+        ];
+
+        let checksums: Vec<_> = data
+            .iter()
+            .map(|d| (crypto::hash_slice(&d).to_short(), d.len() as u64, d.clone()))
+            .collect();
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size, data)| (data, Piece::new(*size, crypto::hash_slice(&checksum.0).to_short())))
+            .map(|(data, mut piece)| {
+                let checksum = crypto::hash_slice(&data).to_short();
+                let infos = vec![SubPieceInfo::new(data.len() as u64, checksum, SubPieceState::Pending)];
+                let info = PieceInfo::new(data.len() as u64, crypto::hash_slice(&checksum.0).to_short(), Some(infos));
+                piece.add_info(&info).unwrap();
+                piece
+            })
+            .collect();
+
+        let mut download = Download::from_pieces(pieces, 0).unwrap();
+        assert!(download.is_not_started());
+
+        for (checksum, _, data) in checksums.iter() {
+            let piece_checksum = crypto::hash_slice(&checksum.0).to_short();
+            download.append_raw_sub_piece(&piece_checksum, checksum, Arc::new(data.clone())).unwrap();
+            assert!(download.is_pending() || download.is_complete());
+        }
+
+        assert!(download.is_complete());
     }
 
     #[test]
     fn append_raw_sub_piece_fails_invalid_piece() {
-        assert!(false);
+        let data = vec![
+            b"data1".to_vec(),
+            b"data2".to_vec(),
+            b"data3".to_vec(),
+            b"data4".to_vec(),
+            b"data5".to_vec(),
+        ];
+
+        let checksums: Vec<_> = data
+            .iter()
+            .map(|d| (crypto::hash_slice(&d).to_short(), d.len() as u64, d.clone()))
+            .collect();
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size, data)| (data, Piece::new(*size, crypto::hash_slice(&checksum.0).to_short())))
+            .map(|(data, mut piece)| {
+                let checksum = crypto::hash_slice(&data).to_short();
+                let infos = vec![SubPieceInfo::new(data.len() as u64, checksum, SubPieceState::Pending)];
+                let info = PieceInfo::new(data.len() as u64, crypto::hash_slice(&checksum.0).to_short(), Some(infos));
+                piece.add_info(&info).unwrap();
+                piece
+            })
+            .collect();
+
+        let mut download = Download::from_pieces(pieces, 0).unwrap();
+        assert!(download.is_not_started());
+
+        for (checksum, _, data) in checksums.iter() {
+            let piece_checksum = crypto::hash_slice(b"random").to_short();
+            assert_eq!(download.append_raw_sub_piece(&piece_checksum, checksum, Arc::new(data.clone())), Err(DownloaderErr::NotFound));
+        }
     }
 
     #[test]
     fn append_raw_sub_piece_fails_invalid_sub_piece() {
-        assert!(false);
+        let data = vec![
+            b"data1".to_vec(),
+            b"data2".to_vec(),
+            b"data3".to_vec(),
+            b"data4".to_vec(),
+            b"data5".to_vec(),
+        ];
+
+        let checksums: Vec<_> = data
+            .iter()
+            .map(|d| (crypto::hash_slice(&d).to_short(), d.len() as u64, d.clone()))
+            .collect();
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size, data)| (data, Piece::new(*size, crypto::hash_slice(&checksum.0).to_short())))
+            .map(|(data, mut piece)| {
+                let checksum = crypto::hash_slice(&data).to_short();
+                let infos = vec![SubPieceInfo::new(data.len() as u64, checksum, SubPieceState::Pending)];
+                let info = PieceInfo::new(data.len() as u64, crypto::hash_slice(&checksum.0).to_short(), Some(infos));
+                piece.add_info(&info).unwrap();
+                piece
+            })
+            .collect();
+
+        let mut download = Download::from_pieces(pieces, 0).unwrap();
+        assert!(download.is_not_started());
+
+        for (checksum, _, data) in checksums.iter() {
+            let piece_checksum = crypto::hash_slice(&checksum.0).to_short();
+            let checksum = crypto::hash_slice(b"random").to_short();
+            assert_eq!(download.append_raw_sub_piece(&piece_checksum, &checksum, Arc::new(data.clone())), Err(DownloaderErr::NotFound));
+        }
     }
 
     #[test]
     fn append_raw_sub_piece_fails_invalid_checksum() {
-        assert!(false);
+        let data = vec![
+            b"data1".to_vec(),
+            b"data2".to_vec(),
+            b"data3".to_vec(),
+            b"data4".to_vec(),
+            b"data5".to_vec(),
+        ];
+
+        let checksums: Vec<_> = data
+            .iter()
+            .map(|d| (crypto::hash_slice(&d).to_short(), d.len() as u64, d.clone()))
+            .collect();
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size, data)| (data, Piece::new(*size, crypto::hash_slice(&checksum.0).to_short())))
+            .map(|(data, mut piece)| {
+                let checksum = crypto::hash_slice(&data).to_short();
+                let infos = vec![SubPieceInfo::new(data.len() as u64, checksum, SubPieceState::Pending)];
+                let info = PieceInfo::new(data.len() as u64, crypto::hash_slice(&checksum.0).to_short(), Some(infos));
+                piece.add_info(&info).unwrap();
+                piece
+            })
+            .collect();
+
+        let mut download = Download::from_pieces(pieces, 0).unwrap();
+        assert!(download.is_not_started());
+
+        for (checksum, _, _) in checksums.iter() {
+            let data = b"random".to_vec();
+            let piece_checksum = crypto::hash_slice(&checksum.0).to_short();
+            assert!(download.append_raw_sub_piece(&piece_checksum, checksum, Arc::new(data.clone())).is_err());
+        }
+    }
+
+    #[test]
+    fn append_raw_sub_piece_fails_invalid_sub_piece_size() {
+        let data = vec![
+            b"data1".to_vec(),
+            b"data2".to_vec(),
+            b"data3".to_vec(),
+            b"data4".to_vec(),
+            b"data5".to_vec(),
+        ];
+
+        let checksums: Vec<_> = data
+            .iter()
+            .map(|d| (crypto::hash_slice(&d).to_short(), d.len() as u64, d.clone()))
+            .collect();
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size, data)| (data, Piece::new(*size, crypto::hash_slice(&checksum.0).to_short())))
+            .map(|(data, mut piece)| {
+                let checksum = crypto::hash_slice(&data).to_short();
+                let infos = vec![SubPieceInfo::new(data.len() as u64, checksum, SubPieceState::Pending)];
+                let info = PieceInfo::new(data.len() as u64, crypto::hash_slice(&checksum.0).to_short(), Some(infos));
+                piece.add_info(&info).unwrap();
+                piece
+            })
+            .collect();
+
+        let mut download = Download::from_pieces(pieces, 0).unwrap();
+        assert!(download.is_not_started());
+
+        for (checksum, _, _) in checksums.iter() {
+            let data = gen_random_bytes(MAX_SUB_PIECE_SIZE + 1);
+            let piece_checksum = crypto::hash_slice(&checksum.0).to_short();
+            assert_eq!(download.append_raw_sub_piece(&piece_checksum, checksum, Arc::new(data.clone())), Err(DownloaderErr::InvalidSize));
+    
+        }
+    }
+
+    #[test]
+    fn append_raw_sub_piece_fails_0_sub_piece_size() {
+        let data = vec![
+            b"data1".to_vec(),
+            b"data2".to_vec(),
+            b"data3".to_vec(),
+            b"data4".to_vec(),
+            b"data5".to_vec(),
+        ];
+
+        let checksums: Vec<_> = data
+            .iter()
+            .map(|d| (crypto::hash_slice(&d).to_short(), d.len() as u64, d.clone()))
+            .collect();
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size, data)| (data, Piece::new(*size, crypto::hash_slice(&checksum.0).to_short())))
+            .map(|(data, mut piece)| {
+                let checksum = crypto::hash_slice(&data).to_short();
+                let infos = vec![SubPieceInfo::new(data.len() as u64, checksum, SubPieceState::Pending)];
+                let info = PieceInfo::new(data.len() as u64, crypto::hash_slice(&checksum.0).to_short(), Some(infos));
+                piece.add_info(&info).unwrap();
+                piece
+            })
+            .collect();
+
+        let mut download = Download::from_pieces(pieces, 0).unwrap();
+        assert!(download.is_not_started());
+
+        for (checksum, _, data) in checksums.iter() {
+            let data = vec![];
+            let piece_checksum = crypto::hash_slice(&checksum.0).to_short();
+            assert_eq!(download.append_raw_sub_piece(&piece_checksum, checksum, Arc::new(data.clone())), Err(DownloaderErr::InvalidSize));
+        }
+    }
+
+    fn gen_random_bytes(num: usize) -> Vec<u8> {
+        let mut rng = rand::thread_rng();
+        
+        (0..num)
+            .into_iter()
+            .map(|_| rng.gen())
+            .collect()
     }
 }

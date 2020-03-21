@@ -219,8 +219,8 @@ mod tests {
 
     #[test]
     fn it_adds_info_stress() {
-        // Run 10 times
-        for _ in (0..10) {
+        // Run 5 times
+        for _ in (0..5) {
             let mut rng = rand::thread_rng();
             let num = rng.gen_range(1, MAX_TX_SET_SIZE);
             let bytes = gen_random_bytes(num);
