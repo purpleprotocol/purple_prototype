@@ -18,7 +18,7 @@
 
 use chrono::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DownloadInfo {
     /// Size of the download, in bytes
     pub(crate) size: u64,

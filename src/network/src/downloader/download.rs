@@ -51,8 +51,44 @@ pub struct Download {
 }
 
 impl Download {
-    pub fn from_pieces(size: u64, pieces: Vec<Piece>, priority: u64) -> Result<Self, DownloaderErr> {
-        unimplemented!();
+    pub fn from_pieces(pieces: Vec<Piece>, priority: u64) -> Result<Self, DownloaderErr> {
+        if pieces.len() == 0 || pieces.len() > MAX_TX_SET_SIZE / MAX_PIECE_SIZE {
+            return Err(DownloaderErr::InvalidSize);
+        }
+        
+        let mut size = 0;
+        let mut checksum_mappings = HashMap::with_capacity(pieces.len());
+
+        for (i, piece) in pieces.iter().enumerate() {
+            let piece_size = &piece.size;
+            let checksum = &piece.checksum;
+            if *piece_size > MAX_PIECE_SIZE as u64 || *piece_size == 0 {
+                return Err(DownloaderErr::InvalidSize);
+            }
+
+            if checksum_mappings.get(checksum).is_some() {
+                return Err(DownloaderErr::DuplicateChecksum);
+            }
+
+            checksum_mappings.insert(*checksum, i);
+            size += *piece_size
+        }
+
+        if size > MAX_TX_SET_SIZE as u64 {
+            return Err(DownloaderErr::InvalidSize);
+        }
+
+        let download = Download {
+            size,
+            pieces,
+            checksum_mappings,
+            priority,
+            state: DownloadState::NotStarted,
+            completed: 0,
+            created_at: Utc::now(),
+        };
+
+        Ok(download)
     }
 
     pub fn from_checksums_and_sizes(checksums: &[(ShortHash, u64)], priority: u64) -> Result<Self, DownloaderErr> {
@@ -228,7 +264,119 @@ mod tests {
 
     #[test]
     fn from_pieces() {
-        assert!(false);
+        let checksums = vec![
+            (crypto::hash_slice(b"checksum_1").to_short(), 200345),
+            (crypto::hash_slice(b"checksum_2").to_short(), 220345),
+            (crypto::hash_slice(b"checksum_3").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_4").to_short(), 345),
+        ];
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size)| Piece::new(*size, *checksum))
+            .collect();
+
+        let download = Download::from_pieces(pieces, 0).unwrap();
+
+        assert_eq!(download.pieces.len(), checksums.len());
+        assert_eq!(download.checksum_mappings.len(), checksums.len());
+        assert!(download.is_not_started());
+
+        for (i, (checksum, size)) in checksums.iter().enumerate() {
+            let piece = &download.pieces[i];
+            assert_eq!(&piece.checksum, checksum);
+            assert_eq!(piece.size, *size);
+            assert_eq!(piece.downloaded, 0);
+            assert_eq!(download.checksum_mappings.get(checksum), Some(&i));
+            assert!(piece.sub_pieces.is_none());
+        }
+    }
+
+    #[test]
+    fn from_pieces_fails_on_invalid_size() {
+        let checksums = vec![
+            (crypto::hash_slice(b"checksum_1").to_short(), 200345),
+            (crypto::hash_slice(b"checksum_2").to_short(), 220345),
+            (crypto::hash_slice(b"checksum_3").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_4").to_short(), (MAX_PIECE_SIZE as u64) + 1),
+        ];
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size)| Piece::new(*size, *checksum))
+            .collect();
+
+        let download = Download::from_pieces(pieces, 0);
+        assert_eq!(download, Err(DownloaderErr::InvalidSize));
+    }
+
+    #[test]
+    fn from_pieces_and_sizes_fails_on_0_pieces() {
+        let pieces = vec![];
+        let download = Download::from_pieces(pieces, 0);
+        assert_eq!(download, Err(DownloaderErr::InvalidSize));
+    }
+
+    #[test]
+    fn from_pieces_fails_on_greater_piece_count() {
+        let checksums = vec![
+            (crypto::hash_slice(b"checksum_1").to_short(), 200345),
+            (crypto::hash_slice(b"checksum_2").to_short(), 220345),
+            (crypto::hash_slice(b"checksum_3").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_4").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_5").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_6").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_7").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_8").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_9").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_10").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_11").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_12").to_short(), 100345),
+        ];
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size)| Piece::new(*size, *checksum))
+            .collect();
+
+        let download = Download::from_pieces(pieces, 0);
+        assert_eq!(download, Err(DownloaderErr::InvalidSize));
+    }
+
+    #[test]
+    fn from_pieces_fails_on_duplicate_checksum() {
+        let checksums = vec![
+            (crypto::hash_slice(b"checksum_1").to_short(), 200345),
+            (crypto::hash_slice(b"checksum_2").to_short(), 220345),
+            (crypto::hash_slice(b"checksum_3").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_3").to_short(), 345),
+        ];
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size)| Piece::new(*size, *checksum))
+            .collect();
+
+        let download = Download::from_pieces(pieces, 0);
+        assert_eq!(download, Err(DownloaderErr::DuplicateChecksum));
+    }
+
+    #[test]
+    fn from_pieces_fails_on_0_piece_size() {
+        let checksums = vec![
+            (crypto::hash_slice(b"checksum_1").to_short(), 200345),
+            (crypto::hash_slice(b"checksum_2").to_short(), 220345),
+            (crypto::hash_slice(b"checksum_3").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_4").to_short(), 0),
+        ];
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size)| Piece::new(*size, *checksum))
+            .collect();
+
+        let download = Download::from_pieces(pieces, 0);
+        assert_eq!(download, Err(DownloaderErr::InvalidSize));
     }
 
     #[test]
