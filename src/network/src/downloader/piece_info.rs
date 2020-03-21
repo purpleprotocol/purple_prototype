@@ -17,6 +17,7 @@
 */
 
 use crate::downloader::sub_piece_info::SubPieceInfo;
+use crypto::ShortHash;
 use chain::{MAX_TX_SET_SIZE, MAX_PIECE_SIZE, MAX_SUB_PIECE_SIZE};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -24,30 +25,40 @@ pub struct PieceInfo {
     /// The size of the piece
     pub(crate) size: u64,
 
+    /// Amount of bytes already downloaded
+    pub(crate) completed: u64,
+
+    /// Checksum of the piece
+    pub(crate) checksum: ShortHash,
+
     /// Sub-pieces info
-    pub(crate) sub_pieces: Vec<SubPieceInfo>,
+    pub(crate) sub_pieces: Option<Vec<SubPieceInfo>>,
 }
 
 impl PieceInfo {
-    pub fn new(sub_pieces: Vec<SubPieceInfo>) -> Self {
-        if sub_pieces.len() == 0 {
-            panic!("Cannot create PieceInfo from an empty vector!");
-        }
-
-        let mut size = 0;
-
-        for info in sub_pieces.iter() {
-            if info.size > MAX_SUB_PIECE_SIZE as u64 {
-                panic!("Cannot crate PieceInfo out of a SubPiece size greater than {}! Got: {}", MAX_SUB_PIECE_SIZE, info.size);
+    pub fn new(size: u64, checksum: ShortHash, sub_pieces: Option<Vec<SubPieceInfo>>) -> Self {
+        let completed = if let Some(sub_pieces) = sub_pieces.as_ref() {
+            if sub_pieces.len() == 0 {
+                panic!("Cannot create PieceInfo from an empty vector!");
             }
 
-            size += info.size;
-        }
+            let mut completed = 0;
+
+            for sub_piece in sub_pieces.iter() {
+                if sub_piece.is_complete() {
+                    completed += sub_piece.size;
+                }
+            }
+
+            completed
+        } else {
+            0
+        };
 
         if size > MAX_PIECE_SIZE as u64 {
             panic!("Cannot crate PieceInfo with a sum of all SubPieces sizes greater than {}! Got: {}", MAX_PIECE_SIZE, size);
         }
         
-        PieceInfo { sub_pieces, size }
+        PieceInfo { checksum, sub_pieces, size, completed }
     }
 }

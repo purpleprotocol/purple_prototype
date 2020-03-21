@@ -25,13 +25,30 @@ pub struct SubPieceInfo {
 
     /// The size of the sub-piece in bytes
     pub(crate) size: u64,
+
+    /// The download state of the `SubPiece`
+    pub(crate) state: SubPieceState,
 }
 
 impl SubPieceInfo {
-    pub fn new(size: u64, checksum: ShortHash) -> SubPieceInfo {
+    pub fn new(size: u64, checksum: ShortHash, state: SubPieceState) -> SubPieceInfo {
         SubPieceInfo {
             checksum,
             size,
+            state,
         }
     }
+
+    pub fn is_complete(&self) -> bool {
+        self.state == SubPieceState::Downloaded
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SubPieceState {
+    /// We have downloaded the `SubPiece`
+    Downloaded,
+
+    /// We have not downloaded the `SubPiece`
+    Pending,
 }

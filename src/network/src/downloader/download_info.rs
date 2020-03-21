@@ -16,6 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::downloader::piece_info::PieceInfo;
+use crate::downloader::download_state::DownloadState;
 use chrono::*;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -34,10 +36,19 @@ pub struct DownloadInfo {
 
     /// The type of the download
     pub(crate) download_type: DownloadType,
+
+    /// The state of the download
+    pub(crate) state: DownloadState,
+
+    /// Info of all the pieces
+    pub(crate) pieces: Vec<PieceInfo>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DownloadType {
     /// A block download
     Block,
+
+    /// State download
+    State,
 }

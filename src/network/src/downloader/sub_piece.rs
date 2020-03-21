@@ -17,7 +17,7 @@
 */
 
 use crate::downloader::error::DownloaderErr;
-use crate::downloader::sub_piece_info::SubPieceInfo;
+use crate::downloader::sub_piece_info::{SubPieceInfo, SubPieceState};
 use crypto::ShortHash;
 use std::sync::Arc;
 
@@ -67,7 +67,13 @@ impl SubPiece {
     }
 
     pub fn to_info(&self) -> SubPieceInfo {
-        SubPieceInfo::new(self.size, self.checksum)
+        let state = if self.data.is_some() {
+            SubPieceState::Downloaded
+        } else {
+            SubPieceState::Pending
+        };
+
+        SubPieceInfo::new(self.size, self.checksum, state)
     }
 }
 
@@ -103,7 +109,7 @@ mod tests {
     fn to_info() {
         let data = b"data".to_vec();
         let checksum = crypto::hash_slice(&data).to_short();
-        let oracle_info = SubPieceInfo::new(data.len() as u64, checksum);
+        let oracle_info = SubPieceInfo::new(data.len() as u64, checksum, SubPieceState::Downloaded);
         let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
         sub_piece.add_data(Arc::new(data.clone())).unwrap();
         assert_eq!(sub_piece.to_info(), oracle_info);

@@ -30,6 +30,6 @@ pub enum DownloadState {
     /// We have are currently downloading this object
     Downloading,
 
-    /// The download has been completed
+    /// The download has been downloaded
     Completed,
 }

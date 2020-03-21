@@ -17,7 +17,7 @@
 */
 
 use crate::downloader::error::DownloaderErr;
-use crate::downloader::download_info::DownloadInfo;
+use crate::downloader::download_info::{DownloadInfo, DownloadType};
 use crate::downloader::download_state::DownloadState;
 use crate::downloader::piece::Piece;
 use chain::{MAX_PIECE_SIZE, MAX_TX_SET_SIZE};
@@ -133,7 +133,21 @@ impl Download {
     }
 
     pub fn to_info(&self) -> DownloadInfo {
-        unimplemented!();
+        let pieces = self
+            .pieces
+            .iter()
+            .map(|p| p.to_info())
+            .collect();
+
+        DownloadInfo {
+            size: self.size,
+            completed: self.completed,
+            created_at: self.created_at,
+            priority: self.priority,
+            state: self.state,
+            download_type: DownloadType::Block,
+            pieces,
+        }
     }
 
     pub fn append_raw_sub_piece(&mut self, piece: &ShortHash, sub_piece: &ShortHash, raw: Arc<Vec<u8>>) -> Result<(), DownloaderErr> {
@@ -168,6 +182,9 @@ impl Download {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::downloader::piece_info::PieceInfo;
+    use crate::downloader::download_info::DownloadType;
+    use crate::downloader::sub_piece_info::SubPieceState;
 
     #[test]
     fn from_checksums_and_sizes() {
@@ -188,7 +205,7 @@ mod tests {
             let piece = &download.pieces[i];
             assert_eq!(&piece.checksum, checksum);
             assert_eq!(piece.size, *size);
-            assert_eq!(piece.downloaded, 0);
+            assert_eq!(piece.completed, 0);
             assert_eq!(download.checksum_mappings.get(checksum), Some(&i));
             assert!(piece.sub_pieces.is_none());
         }
@@ -286,7 +303,7 @@ mod tests {
             let piece = &download.pieces[i];
             assert_eq!(&piece.checksum, checksum);
             assert_eq!(piece.size, *size);
-            assert_eq!(piece.downloaded, 0);
+            assert_eq!(piece.completed, 0);
             assert_eq!(download.checksum_mappings.get(checksum), Some(&i));
             assert!(piece.sub_pieces.is_none());
         }
@@ -381,7 +398,47 @@ mod tests {
 
     #[test]
     fn to_info() {
-        assert!(false);
+        let checksums = vec![
+            (crypto::hash_slice(b"checksum_1").to_short(), 200345),
+            (crypto::hash_slice(b"checksum_2").to_short(), 220345),
+            (crypto::hash_slice(b"checksum_3").to_short(), 100345),
+            (crypto::hash_slice(b"checksum_4").to_short(), 345),
+        ];
+
+        let pieces: Vec<Piece> = checksums
+            .iter()
+            .map(|(checksum, size)| Piece::new(*size, *checksum))
+            .collect();
+
+        let infos: Vec<PieceInfo> = pieces
+            .iter()
+            .map(|p| p.to_info())
+            .collect();
+
+        let download = Download::from_pieces(pieces, 0).unwrap();
+        let info = download.to_info();
+
+        assert_eq!(info.size, download.size);
+        assert_eq!(info.completed, download.completed);
+        assert_eq!(info.priority, download.priority);
+        assert_eq!(info.created_at, download.created_at);
+        assert_eq!(info.state, download.state);
+        assert_eq!(info.download_type, DownloadType::Block);
+        assert_eq!(info.pieces.len(), infos.len());
+
+        for (i, piece) in download.pieces.iter().enumerate() {
+            let info = &infos[i];
+            assert_eq!(info.size, piece.size);
+            assert_eq!(info.checksum, piece.checksum);
+            // let sub_pieces = info.sub_pieces.as_ref().unwrap();
+
+            // for (i, sub_piece) in sub_pieces.iter().enumerate() {
+            //     let info = &sub_pieces[i];
+            //     assert_eq!(info.size, sub_piece.size);
+            //     assert_eq!(info.checksum, sub_piece.checksum);
+            //     assert_eq!(info.state, SubPieceState::Pending);
+            // } 
+        }
     }
 
     #[test]

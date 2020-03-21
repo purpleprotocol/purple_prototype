@@ -19,7 +19,7 @@
 use crate::downloader::error::DownloaderErr;
 use crate::downloader::sub_piece::SubPiece;
 use crate::downloader::piece_info::PieceInfo;
-use crate::downloader::sub_piece_info::SubPieceInfo;
+use crate::downloader::sub_piece_info::{SubPieceInfo, SubPieceState};
 use crate::downloader::sub_pieces::SubPieces;
 use crypto::{ShortHash, BlakeHasher};
 use chain::{MAX_TX_SET_SIZE, MAX_PIECE_SIZE, MAX_SUB_PIECE_SIZE};
@@ -31,7 +31,7 @@ pub struct Piece {
     pub(crate) size: u64,
 
     /// Number of bytes downloaded
-    pub(crate) downloaded: u64,
+    pub(crate) completed: u64,
 
     /// The blake3 checksum of the piece
     pub(crate) checksum: ShortHash,
@@ -47,7 +47,7 @@ impl Piece {
         Piece {
             size,
             checksum,
-            downloaded: 0,
+            completed: 0,
             sub_pieces: None,
         }
     }
@@ -82,7 +82,11 @@ impl Piece {
             return Err(DownloaderErr::AlreadyHaveInfo);
         }
 
-        if info.sub_pieces.len() == 0 || info.sub_pieces.len() > MAX_PIECE_SIZE / MAX_SUB_PIECE_SIZE {
+        if let Some(sub_pieces) = &info.sub_pieces {
+            if sub_pieces.len() == 0 || sub_pieces.len() > MAX_PIECE_SIZE / MAX_SUB_PIECE_SIZE {
+                return Err(DownloaderErr::InvalidInfo);
+            }
+        } else {
             return Err(DownloaderErr::InvalidInfo);
         }
 
@@ -90,60 +94,64 @@ impl Piece {
             return Err(DownloaderErr::InvalidChecksum);
         }
 
-        let mut size = 0;
-
         // Validate size
-        for info in info.sub_pieces.iter() {
-            size += info.size;
+        if let Some(infos) = &info.sub_pieces {
+            let mut size = 0;
+            let mut sub_pieces: Vec<SubPiece> = Vec::with_capacity(info.sub_pieces.as_ref().unwrap().len());
+
+            // Create sub-pieces
+            for info in infos.iter() {
+                size += info.size;
+                sub_pieces.push(SubPiece::from(info));
+            }
+
+            if size != self.size {
+                return Err(DownloaderErr::InvalidSize);
+            }
+
+            self.sub_pieces = Some(SubPieces::new(sub_pieces));
         }
-
-        if size != self.size {
-            return Err(DownloaderErr::InvalidSize);
-        }
-
-        let mut sub_pieces: Vec<SubPiece> = Vec::with_capacity(info.sub_pieces.len());
-
-        // Create sub-pieces
-        for info in info.sub_pieces.iter() {
-            sub_pieces.push(SubPiece::from(info));
-        }
-
-        self.sub_pieces = Some(SubPieces::new(sub_pieces));
+        
         Ok(())
     }
 
-    /// Retrieves the `PieceInfo` of this `Piece`. Returns `None` if
-    /// this `Piece` does not have info.  
-    pub fn to_info(&self) -> Option<PieceInfo> {
-        if !self.has_info() || self.sub_pieces.is_none() {
-            return None;
-        }
+    /// Retrieves the `PieceInfo` of this `Piece`.
+    pub fn to_info(&self) -> PieceInfo {
+        let infos = if self.sub_pieces.is_none() {
+            None
+        } else {
+            let infos = self.sub_pieces
+                .as_ref()
+                .unwrap()
+                .sub_pieces
+                .iter()
+                .map(|s| s.to_info())
+                .collect();
 
-        let infos = self.sub_pieces
-            .as_ref()
-            .unwrap()
-            .sub_pieces
-            .iter()
-            .map(|s| s.to_info())
-            .collect();
+            Some(infos)
+        };
 
-        Some(PieceInfo::new(infos))
+        PieceInfo::new(self.size, self.checksum, infos)
     }
 
     fn validate_checksum(&self, info: &PieceInfo) -> bool {
-        let mut hasher = BlakeHasher::new();
+        if let Some(sub_pieces) = &info.sub_pieces {
+            let mut hasher = BlakeHasher::new();
 
-        for piece in info.sub_pieces.iter() {
-            hasher.write(&piece.checksum.0);
+            for piece in sub_pieces.iter() {
+                hasher.write(&piece.checksum.0);
+            }
+
+            let hash = hasher.finish();
+            let hash = encode_le_u64!(hash);
+            let mut hash_bytes = [0; crypto::SHORT_HASH_BYTES];
+            hash_bytes.copy_from_slice(&hash);
+            let hash = ShortHash(hash_bytes);
+
+            hash == self.checksum
+        } else {
+            false
         }
-
-        let hash = hasher.finish();
-        let hash = encode_le_u64!(hash);
-        let mut hash_bytes = [0; crypto::SHORT_HASH_BYTES];
-        hash_bytes.copy_from_slice(&hash);
-        let hash = ShortHash(hash_bytes);
-
-        hash == self.checksum
     }
 }
 
@@ -157,14 +165,24 @@ mod tests {
     #[test]
     fn it_fails_adding_info_invalid_checksum() {
         let mut piece = Piece::new(123, crypto::hash_slice(b"random_hash").to_short());
-        let info = PieceInfo { size: 123, sub_pieces: vec![SubPieceInfo::new(123, crypto::hash_slice(b"random_checksum").to_short())] };
+        let info = PieceInfo { 
+            checksum: crypto::hash_slice(b"random_hash").to_short(), 
+            size: 123, 
+            completed: 0,
+            sub_pieces: Some(vec![SubPieceInfo::new(123, crypto::hash_slice(b"random_checksum").to_short(), SubPieceState::Pending)]),
+        };
         assert_eq!(piece.add_info(&info), Err(DownloaderErr::InvalidChecksum));
     }
 
     #[test]
     fn it_fails_adding_info_empty_info() {
         let mut piece = Piece::new(123, crypto::hash_slice(b"random_hash").to_short());
-        let info = PieceInfo { size: 123, sub_pieces: vec![] };
+        let info = PieceInfo { 
+            checksum: crypto::hash_slice(b"random_hash").to_short(),
+            completed: 0,  
+            size: 123, 
+            sub_pieces: Some(vec![]),
+        };
         assert_eq!(piece.add_info(&info), Err(DownloaderErr::InvalidInfo));
     }
 
@@ -172,7 +190,7 @@ mod tests {
     fn it_fails_adding_info_already_set() {
         let hash = get_checksum(vec![b"data".to_vec()]);
         let mut piece = Piece::new(4, hash);
-        let info = PieceInfo { size: 4, sub_pieces: vec![SubPieceInfo::new(4, crypto::hash_slice(b"data").to_short())] };
+        let info = PieceInfo { checksum: hash, size: 4, completed: 0, sub_pieces: Some(vec![SubPieceInfo::new(4, crypto::hash_slice(b"data").to_short(), SubPieceState::Pending)]) };
         assert_eq!(piece.add_info(&info), Ok(()));
         assert_eq!(piece.add_info(&info), Err(DownloaderErr::AlreadyHaveInfo));
     }
@@ -181,14 +199,8 @@ mod tests {
     fn it_fails_invalid_sub_piece_size() {
         let hash = get_checksum(vec![b"data".to_vec()]);
         let mut piece = Piece::new(4, hash);
-        let info = PieceInfo { size: 4, sub_pieces: vec![SubPieceInfo::new(6, crypto::hash_slice(b"data").to_short())] };
+        let info = PieceInfo { checksum: hash, size: 4, completed: 0, sub_pieces: Some(vec![SubPieceInfo::new(6, crypto::hash_slice(b"data").to_short(), SubPieceState::Pending)]) };
         assert_eq!(piece.add_info(&info), Err(DownloaderErr::InvalidSize));
-    }
-
-    #[test]
-    fn to_info_it_fails_if_we_have_no_info() {
-        let piece = Piece::new(123, crypto::hash_slice(b"random_hash").to_short());
-        assert_eq!(piece.to_info(), None);
     }
 
     #[test]
@@ -201,7 +213,7 @@ mod tests {
     fn it_adds_info() {
         let hash = get_checksum(vec![b"data".to_vec()]);
         let mut piece = Piece::new(4, hash);
-        let info = PieceInfo { size: 4, sub_pieces: vec![SubPieceInfo::new(4, crypto::hash_slice(b"data").to_short())] };
+        let info = PieceInfo { checksum: hash, size: 4, completed: 0, sub_pieces: Some(vec![SubPieceInfo::new(4, crypto::hash_slice(b"data").to_short(), SubPieceState::Pending)]) };
         assert_eq!(piece.add_info(&info), Ok(()));
     }
 
@@ -215,7 +227,7 @@ mod tests {
             let pieces = chunk(bytes);
             let infos: Vec<(PieceInfo, ShortHash)> = pieces
                 .iter()
-                .map(|s| (s.to_info().unwrap(), s.checksum))
+                .map(|s| (s.to_info(), s.checksum))
                 .collect();
 
             for (info, checksum) in infos.iter() {
@@ -235,24 +247,11 @@ mod tests {
             panic!("Cannot chunk more bytes than the MAX_TX_SET_SIZE constant");
         }
 
-        let pieces_count = if bytes.len() / MAX_PIECE_SIZE == 0 {
-            1
-        } else {
-            bytes.len() / MAX_PIECE_SIZE
-        };
-        assert_ne!(pieces_count, 0);
-        let mut buf = Vec::with_capacity(pieces_count);
+        let mut buf = Vec::new();
+        let mut size = 0;
 
-        for i in 0..pieces_count {
-            let i = i * MAX_PIECE_SIZE;
-            let start_i = i;
-            let end_i = if i == pieces_count - 1 {
-                i + (bytes.len() % MAX_PIECE_SIZE)
-            } else {
-                i + MAX_PIECE_SIZE
-            };
-
-            let raw_piece = &bytes[start_i..end_i].to_vec();
+        for raw_piece in bytes.chunks(MAX_PIECE_SIZE) {
+            let raw_piece = raw_piece.to_vec();
             assert!(raw_piece.len() > 0);
             assert!(raw_piece.len() <= MAX_PIECE_SIZE);
             let sub_pieces = chunk_piece(&raw_piece);
@@ -262,10 +261,12 @@ mod tests {
                 .collect();
             let checksum = get_checksum(raw_sub_pieces);
             let mut piece = Piece::new(raw_piece.len() as u64, checksum);
+            size += raw_piece.len();
             piece.sub_pieces = Some(SubPieces::new(sub_pieces));
             buf.push(piece);
         }
 
+        assert_eq!(size, bytes.len());
         buf
     }
 
@@ -274,32 +275,21 @@ mod tests {
             panic!("Cannot chunk 0 bytes");
         }
 
-        let sub_pieces_count = if bytes.len() / MAX_SUB_PIECE_SIZE == 0 {
-            1
-        } else {
-            bytes.len() / MAX_SUB_PIECE_SIZE
-        };
-        assert_ne!(sub_pieces_count, 0);
-        let mut buf = Vec::with_capacity(sub_pieces_count);
+        let mut buf = Vec::new();
+        let mut size = 0;
 
-        for i in 0..sub_pieces_count {
-            let i = i * MAX_SUB_PIECE_SIZE;
-            let start_i = i;
-            let end_i = if i == sub_pieces_count - 1 {
-                i + (bytes.len() % MAX_SUB_PIECE_SIZE)
-            } else {
-                i + MAX_SUB_PIECE_SIZE
-            };
-
-            let raw_sub_piece = &bytes[start_i..end_i].to_vec();
+        for raw_sub_piece in bytes.chunks(MAX_SUB_PIECE_SIZE) {
+            let raw_sub_piece = raw_sub_piece.to_vec();
             assert!(raw_sub_piece.len() > 0);
             assert!(raw_sub_piece.len() <= MAX_SUB_PIECE_SIZE);
-            let checksum = crypto::hash_slice(raw_sub_piece).to_short();
+            let checksum = crypto::hash_slice(&raw_sub_piece).to_short();
             let mut sub_piece = SubPiece::new(raw_sub_piece.len() as u64, checksum);
-            sub_piece.add_data(Arc::new(raw_sub_piece.to_vec())).unwrap();
+            size += raw_sub_piece.len();
+            sub_piece.add_data(Arc::new(raw_sub_piece)).unwrap();
             buf.push(sub_piece);
         }
 
+        assert_eq!(size, bytes.len());
         buf
     }
 
