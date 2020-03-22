@@ -20,6 +20,7 @@ use crate::bootstrap::cache::BootstrapCache;
 use crate::error::NetworkErr;
 use crate::peer::Peer;
 use crate::priority::NetworkPriority;
+use crate::downloader::Downloader;
 use chain::*;
 use crypto::{NodeId, SecretKey as Sk};
 use hashbrown::HashMap;
@@ -107,6 +108,9 @@ pub trait NetworkInterface: Clone + Send {
 
     /// Returns a reference to the `PowChain`.
     fn pow_chain_ref(&self) -> PowChainRef;
+
+    /// Returns a reference to the `Downloader`
+    fn downloader(&self) -> Downloader;
 
     /// Returns a reference to a `PowChain` mpsc sender.
     /// Use this to buffer blocks that are to be appended

@@ -67,7 +67,7 @@ impl Arbitrary for NodeId {
         NodeId(PublicKey(result))
     }
 
-    fn shrink(&self) -> Box<Iterator<Item = Self>> {
+    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
         Box::new((&(&self.0).0).to_vec().shrink().map(|p| {
             let mut result = [0; 32];
             result.copy_from_slice(&p);

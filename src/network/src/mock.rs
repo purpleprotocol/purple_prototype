@@ -24,6 +24,7 @@ use crate::packets::*;
 use crate::peer::{ConnectionType, Peer};
 use crate::priority::NetworkPriority;
 use crate::validation::sender::Sender as SenderTrait;
+use crate::downloader::Downloader;
 use chain::*;
 use chrono::Duration;
 use crossbeam_channel::{Receiver, Sender};
@@ -58,6 +59,9 @@ pub struct MockNetwork {
 
     /// Sender to `PowChain` block buffer
     pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
+
+    /// Reference to the `Downloader`
+    downloader: Downloader,
 
     /// Mapping between ips and node ids.
     pub(crate) address_mappings: HashMap<SocketAddr, NodeId>,
@@ -362,6 +366,10 @@ impl NetworkInterface for MockNetwork {
         &self.secret_key
     }
 
+    fn downloader(&self) -> Downloader {
+        self.downloader.clone()
+    }
+
     fn bootstrap_cache(&self) -> BootstrapCache {
         self.bootstrap_cache.clone()
     }
@@ -392,6 +400,7 @@ impl MockNetwork {
             address_mappings,
             pow_chain_sender,
             pow_chain_ref,
+            downloader: Downloader::new(),
             peers: Arc::new(RwLock::new(HashMap::new())),
             bootstrap_cache: BootstrapCache::new(PersistentDb::new_in_memory(), 100000),
             node_id,

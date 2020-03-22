@@ -16,12 +16,35 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(unused, unused_attributes, deprecated)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DownloaderErr {
+    /// The downloader buffer is full
+    Full,
 
-#[macro_use]
-extern crate log;
+    /// We already have info about the piece
+    AlreadyHaveInfo,
 
-mod error;
-mod mempool;
-pub use crate::mempool::*;
-pub use error::*;
+    /// The provided info is invalid
+    InvalidInfo,
+
+    /// Checksum validation failed
+    InvalidChecksum,
+
+    /// Received a duplicate checksum
+    DuplicateChecksum,
+
+    /// The provided size is invalid
+    InvalidSize,
+
+    /// Could not schedule block download as the header is invalid
+    InvalidBlockHeader,
+
+    /// Could not find object with the given query
+    NotFound,
+
+    /// We already have the sub-piece data
+    AlreadyHaveData,
+
+    /// The download for the given object is already scheduled
+    AlreadyHaveDownload,
+}

@@ -50,9 +50,11 @@ impl Hasher for BlakeHasher {
     #[inline]
     fn finish(&self) -> u64 {
         let result = self.hasher.finalize();
-        let hex_encoded = result.to_hex();
+        let mut hash: [u8; 32] = [0; 32];
+        hash.copy_from_slice(result.as_bytes());
+        let hash = Hash(hash).to_short();
 
-        u64::from_str_radix(&hex_encoded, 16).unwrap()
+        decode_le_u64!(&hash.0).unwrap()
     }
 }
 

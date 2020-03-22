@@ -16,12 +16,20 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![allow(unused, unused_attributes, deprecated)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DownloadState {
+    /// We haven't downloaded anything
+    NotStarted,
 
-#[macro_use]
-extern crate log;
+    /// The download is paused
+    Paused,
 
-mod error;
-mod mempool;
-pub use crate::mempool::*;
-pub use error::*;
+    /// The download is queued
+    Queued,
+
+    /// We have are currently downloading this object
+    Downloading,
+
+    /// The download has been downloaded
+    Completed,
+}

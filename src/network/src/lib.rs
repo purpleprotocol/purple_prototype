@@ -45,6 +45,7 @@ mod peer;
 mod priority;
 mod protocol_flow;
 mod validation;
+pub mod downloader;
 
 pub use crate::bootstrap::*;
 pub use crate::connection::*;

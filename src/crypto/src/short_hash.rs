@@ -33,6 +33,7 @@ impl ShortHash {
     pub const NULL: ShortHash = ShortHash([0; SHORT_HASH_BYTES]);
     pub const NULL_RLP: ShortHash = ShortHash([27, 48, 224, 179, 230, 246, 193, 214]);
 
+    #[inline]
     pub fn from_hash(hash: &Hash) -> ShortHash {
         let mut short_hash = [0; SHORT_HASH_BYTES];
         let short_bytes = &hash.0[..SHORT_HASH_BYTES];
@@ -96,6 +97,7 @@ impl Encodable for ShortHash {
 }
 
 impl Decodable for ShortHash {
+    #[inline]
     fn decode(bytes: &Rlp) -> Result<ShortHash, DecoderError> {
         match bytes.data() {
             Ok(data) => {
