@@ -36,6 +36,9 @@ pub enum DownloaderErr {
     /// The provided size is invalid
     InvalidSize,
 
+    /// Could not schedule block download as the header is invalid
+    InvalidBlockHeader,
+
     /// Could not find object with the given query
     NotFound,
 

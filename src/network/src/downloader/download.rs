@@ -74,7 +74,7 @@ impl Download {
             }
 
             checksum_mappings.insert(*checksum, i);
-            size += *piece_size
+            size += *piece_size;
         }
 
         if size > MAX_TX_SET_SIZE as u64 {
@@ -115,7 +115,7 @@ impl Download {
             let piece = Piece::new(*piece_size, *checksum);
             pieces.push(piece);
             checksum_mappings.insert(*checksum, i);
-            size += *piece_size
+            size += *piece_size;
         }
 
         if size > MAX_TX_SET_SIZE as u64 {
@@ -656,7 +656,6 @@ mod tests {
             let data = gen_random_bytes(MAX_SUB_PIECE_SIZE + 1);
             let piece_checksum = crypto::hash_slice(&checksum.0).to_short();
             assert_eq!(download.append_raw_sub_piece(&piece_checksum, checksum, Arc::new(data.clone())), Err(DownloaderErr::InvalidSize));
-    
         }
     }
 

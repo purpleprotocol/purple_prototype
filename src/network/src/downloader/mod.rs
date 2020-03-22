@@ -19,7 +19,7 @@
 use crate::downloader::download::Download;
 use crate::downloader::error::DownloaderErr;
 use crate::downloader::download_info::DownloadInfo;
-use chain::Block;
+use chain::{Block, MAX_PIECE_SIZE, MAX_TX_SET_SIZE};
 use crypto::ShortHash;
 use chain::TransactionBlock;
 use dashmap::DashMap;
@@ -89,6 +89,14 @@ impl Downloader {
         self.info.clone()
     }
 
+    pub fn query_block(&self, hash: &ShortHash) -> Option<Arc<Mutex<Download>>> {
+        self.block_downloads.get(hash).map(|r| r.clone())
+    }
+
+    pub fn remove_block(&self, hash: &ShortHash) -> Option<Arc<Mutex<Download>>> {
+        self.block_downloads.remove(hash).map(|(_, r)| r)
+    }
+
     async fn try_schedule_block_download(&self, block: Arc<TransactionBlock>, priority: u64) -> Result<DownloadInfo, DownloaderErr> {
         let block_hash = block.block_hash().unwrap().to_short();
         let has_block = self.block_downloads.get(&block_hash).is_some();
@@ -98,8 +106,31 @@ impl Downloader {
             debug!("Scheduling failed for hash: {}, height: {}, reason: {:?}", block.block_hash().unwrap(), block.height(), err);
             return Err(err);
         }
-        
-        unimplemented!();
+
+        let tx_checksums = block.tx_checksums.as_ref().unwrap();
+        let pieces_sizes = block.pieces_sizes.as_ref().unwrap();
+
+        if tx_checksums.len() == 0 || tx_checksums.len() != pieces_sizes.len() || tx_checksums.len() > MAX_TX_SET_SIZE / MAX_PIECE_SIZE {
+            return Err(DownloaderErr::InvalidBlockHeader);
+        }
+
+        let checksums: Vec<(ShortHash, u64)> = tx_checksums
+            .iter()
+            .enumerate()
+            .map(|(i, checksum)| {
+                let size = pieces_sizes[i];
+                (checksum.clone(), size as u64)
+            })
+            .collect();
+
+        // Schedule block download
+        let download = Download::from_checksums_and_sizes(&checksums, 0)?;
+        let info = download.to_info();
+        let download = Arc::new(Mutex::new(download));
+        let block_hash = block.block_hash().unwrap();
+        self.block_downloads.insert(block_hash.to_short(), download);
+
+        Ok(info)
     } 
 
     async fn write_download_info(&self, block: Arc<TransactionBlock>, info: DownloadInfo) {

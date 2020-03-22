@@ -25,6 +25,7 @@ use crate::packets::connect::Connect;
 use crate::peer::ConnectionType;
 use crate::priority::NetworkPriority;
 use crate::validation::sender::Sender as SenderTrait;
+use crate::downloader::Downloader;
 use crate::Peer;
 use chain::*;
 use crypto::NodeId;
@@ -61,6 +62,9 @@ pub struct Network {
 
     /// Sender to `PowChain` block buffer
     pow_chain_sender: Sender<(SocketAddr, Arc<PowBlock>)>,
+
+    /// Reference to the `Downloader`
+    downloader: Downloader,
 
     /// The port we are accepting external TCP connections on.
     port: u16,
@@ -111,6 +115,7 @@ impl Network {
             bootstrap_cache,
             mempool_ref,
             accept_connections,
+            downloader: Downloader::new(),
 
             #[cfg(feature = "miner")]
             our_ip: our_ip.unwrap(),
@@ -306,6 +311,10 @@ impl NetworkInterface for Network {
 
     fn pow_chain_sender(&self) -> &Sender<(SocketAddr, Arc<PowBlock>)> {
         &self.pow_chain_sender
+    }
+
+    fn downloader(&self) -> Downloader {
+        self.downloader.clone()
     }
 
     fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
