@@ -19,7 +19,7 @@
 pub mod function;
 pub mod import;
 pub mod transition;
-mod validator;
+pub mod validator;
 
 use self::validator::Validator;
 use crate::function::Function;

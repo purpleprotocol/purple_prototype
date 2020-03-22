@@ -21,6 +21,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::{Hash, PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
 use persistence::{Codec, DbHasher};
+use purple_vm::Validator;
 use rand::Rng;
 use std::io::Cursor;
 use std::str;
@@ -50,7 +51,140 @@ impl OpenContract {
 
     /// Validates the transaction against the provided state.
     pub fn validate(&self, trie: &TrieDB<DbHasher, Codec>) -> bool {
-        unimplemented!();
+        let zero = Balance::zero();
+
+        // Invalidate if 0 coins are set as amount
+        if self.amount == zero {
+            return false;
+        }
+
+        // Invalidate if address was not computed
+        if let None = self.address {
+            return false;
+        }
+
+        // Validate contract code
+        let mut validator = Validator::new();
+        if !validator.validate_block(self.code.as_slice()) {
+            return false;
+        }
+
+        // Invalidate if signature is not valid
+        if !self.verify_sig() {
+            return false;
+        }
+
+        // Check contract address
+        let address = &self.address.unwrap();
+        let bin_address = address.as_bytes();
+        let address_nonce_key = [bin_address, &b".n"[..]].concat();
+
+        // Invalidate if address already exists
+        if let Ok(Some(_)) = trie.get(&address_nonce_key) {
+            return false;
+        }
+
+        let bin_asset_hash = &self.asset_hash.0;
+        let bin_fee_hash = &self.fee_hash.0;
+
+        let creator_signing_addr = NormalAddress::from_pkey(&self.creator);
+
+        // Calculate address mapping key
+        //
+        // An address mapping is a mapping between
+        // the account's signing address and an
+        // account's receiving address.
+        //
+        // They key of the address mapping has the following format:
+        // `<signing-address>.am`
+        let addr_mapping_key = [creator_signing_addr.as_bytes(), &b".am"[..]].concat();
+
+        // Retrieve creator account permanent address
+        let creator_perm_addr = match trie.get(&addr_mapping_key) {
+            Ok(Some(perm_addr)) => NormalAddress::from_bytes(&perm_addr).unwrap(),
+            Ok(None) => return false,
+            Err(err) => panic!(err),
+        };
+
+        // Do not allow address re-usage
+        if self.next_address == creator_signing_addr {
+            return false;
+        }
+
+        // Calculate nonce key
+        //
+        // The key of a nonce has the following format:
+        // `<account-address>.n`
+        let creator_nonce_key = [creator_perm_addr.as_bytes(), &b".n"[..]].concat();
+
+        // Calculate currency keys
+        //
+        // The key of a currency entry has the following format:
+        // `<permanent-addr>.<currency-hash>`
+        let cur_key = [creator_perm_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
+        let fee_key = [creator_perm_addr.as_bytes(), &b"."[..], &bin_fee_hash[..]].concat();
+
+        // Retrieve serialized nonce
+        let bin_creator_nonce = match trie.get(&creator_nonce_key) {
+            Ok(Some(nonce)) => nonce,
+            Ok(None) => return false,
+            Err(err) => panic!(err),
+        };
+
+        // Read the nonce of the creator
+        let nonce = decode_be_u64!(bin_creator_nonce).unwrap();
+        if nonce + 1 != self.nonce {
+            return false;
+        }
+
+        if bin_fee_hash == bin_asset_hash {
+            // The transaction's fee is paid in the same currency
+            // that is being sent, so we only retrieve one balance.
+            let mut balance = match trie.get(&cur_key) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err) => panic!(err),
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err),
+            };
+
+            // Subtract fee from balance
+            balance -= self.fee.clone();
+
+            // Subtract amount transferred from balance
+            balance -= self.amount.clone();
+
+            balance >= zero
+        } else {
+            // The transaction's fee is paid in a different currency
+            // than the one being transferred so we retrieve both balances.
+            let mut cur_balance = match trie.get(&cur_key) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err) => panic!(err),
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err),
+            };
+
+            let mut fee_balance = match trie.get(&fee_key) {
+                Ok(Some(balance)) => match Balance::from_bytes(&balance) {
+                    Ok(balance) => balance,
+                    Err(err) => panic!(err),
+                },
+                Ok(None) => return false,
+                Err(err) => panic!(err),
+            };
+
+            // Subtract fee from sender
+            fee_balance -= self.fee.clone();
+
+            // Subtract amount transferred from sender
+            cur_balance -= self.amount.clone();
+
+            cur_balance >= zero && fee_balance >= zero
+        }
     }
 
     /// Applies the open contract transaction to the provided database.
@@ -709,6 +843,380 @@ mod tests {
         assert_eq!(written_code, code);
         assert_eq!(written_state, default_state);
         assert_eq!(written_self_payable, vec![1]);
+    }
+
+    #[test]
+    fn it_validates_same_currencies() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = ShortHash::NULL_RLP;
+        {
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
+
+            // Manually initialize creator balance
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), asset_hash, b"100.0");
+        }
+
+        let amount = Balance::from_bytes(b"30.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+        let code: Vec<u8> = vec![0x02, 0x00, 0x01, 0x06];
+        let default_state: Vec<u8> = vec![0x1a, 0xff, 0x22, 0x2a];
+
+        let mut tx = OpenContract {
+            creator: id.pkey().clone(),
+            next_address,
+            fee: fee.clone(),
+            code: code.clone(),
+            default_state: default_state.clone(),
+            fee_hash: asset_hash,
+            amount: amount.clone(),
+            asset_hash: asset_hash,
+            self_payable: true,
+            nonce: 1,
+            address: None,
+            signature: None,
+            hash: None,
+        };
+
+        tx.compute_address();
+        tx.sign(id.skey().clone());
+        tx.compute_hash();
+
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
+        assert!(tx.validate(&trie));
+    }
+
+    #[test]
+    fn it_validates_different_currencies() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = ShortHash::NULL_RLP;
+        {
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
+
+            // Manually initialize creator balance
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), asset_hash, b"100.0");
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"200.0");
+        }
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+        let code: Vec<u8> = vec![0x02, 0x00, 0x01, 0x06];
+        let default_state: Vec<u8> = vec![0x1a, 0xff, 0x22, 0x2a];
+
+        let mut tx = OpenContract {
+            creator: id.pkey().clone(),
+            next_address,
+            fee: fee.clone(),
+            code: code.clone(),
+            default_state: default_state.clone(),
+            fee_hash: fee_hash,
+            amount: amount.clone(),
+            asset_hash: asset_hash,
+            self_payable: true,
+            nonce: 1,
+            address: None,
+            signature: None,
+            hash: None,
+        };
+
+        tx.compute_address();
+        tx.sign(id.skey().clone());
+        tx.compute_hash();
+
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
+        assert!(tx.validate(&trie));
+    }
+
+    #[test]
+    fn it_invalidates_no_funds_same_currencies() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = ShortHash::NULL_RLP;
+        {
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
+
+            // Manually initialize creator balance
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), asset_hash, b"10.0");
+        }
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+        let code: Vec<u8> = vec![0x02, 0x00, 0x01, 0x06];
+        let default_state: Vec<u8> = vec![0x1a, 0xff, 0x22, 0x2a];
+
+        let mut tx = OpenContract {
+            creator: id.pkey().clone(),
+            next_address,
+            fee: fee.clone(),
+            code: code.clone(),
+            default_state: default_state.clone(),
+            fee_hash: asset_hash,
+            amount: amount.clone(),
+            asset_hash: asset_hash,
+            self_payable: true,
+            nonce: 1,
+            address: None,
+            signature: None,
+            hash: None,
+        };
+
+        tx.compute_address();
+        tx.sign(id.skey().clone());
+        tx.compute_hash();
+
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn it_invalidates_no_amount_funds_different_currencies() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = ShortHash::NULL_RLP;
+        {
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
+
+            // Manually initialize creator balance
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), asset_hash, b"10.0");
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10.0");
+        }
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+        let code: Vec<u8> = vec![0x02, 0x00, 0x01, 0x06];
+        let default_state: Vec<u8> = vec![0x1a, 0xff, 0x22, 0x2a];
+
+        let mut tx = OpenContract {
+            creator: id.pkey().clone(),
+            next_address,
+            fee: fee.clone(),
+            code: code.clone(),
+            default_state: default_state.clone(),
+            fee_hash: fee_hash,
+            amount: amount.clone(),
+            asset_hash: asset_hash,
+            self_payable: true,
+            nonce: 1,
+            address: None,
+            signature: None,
+            hash: None,
+        };
+
+        tx.compute_address();
+        tx.sign(id.skey().clone());
+        tx.compute_hash();
+
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn it_invalidates_no_fee_funds_different_currencies() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
+        let fee_hash = crypto::hash_slice(b"Test currency 2").to_short();
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = ShortHash::NULL_RLP;
+        {
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
+
+            // Manually initialize creator balance
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), asset_hash, b"10000.0");
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), fee_hash, b"10.0");
+        }
+
+        let amount = Balance::from_bytes(b"100.0").unwrap();
+        let fee = Balance::from_bytes(b"20.0").unwrap();
+        let code: Vec<u8> = vec![0x02, 0x00, 0x01, 0x06];
+        let default_state: Vec<u8> = vec![0x1a, 0xff, 0x22, 0x2a];
+
+        let mut tx = OpenContract {
+            creator: id.pkey().clone(),
+            next_address,
+            fee: fee.clone(),
+            code: code.clone(),
+            default_state: default_state.clone(),
+            fee_hash: fee_hash,
+            amount: amount.clone(),
+            asset_hash: asset_hash,
+            self_payable: true,
+            nonce: 1,
+            address: None,
+            signature: None,
+            hash: None,
+        };
+
+        tx.compute_address();
+        tx.sign(id.skey().clone());
+        tx.compute_hash();
+
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn it_invalides_bad_code() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = ShortHash::NULL_RLP;
+        {
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
+
+            // Manually initialize creator balance
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), asset_hash, b"100.0");
+        }
+
+        let amount = Balance::from_bytes(b"30.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+        let code: Vec<u8> = vec![0x02, 0x12, 0x03, 0x04];
+        let default_state: Vec<u8> = vec![0x1a, 0xff, 0x22, 0x2a];
+
+        let mut tx = OpenContract {
+            creator: id.pkey().clone(),
+            next_address,
+            fee: fee.clone(),
+            code: code.clone(),
+            default_state: default_state.clone(),
+            fee_hash: asset_hash,
+            amount: amount.clone(),
+            asset_hash: asset_hash,
+            self_payable: true,
+            nonce: 1,
+            address: None,
+            signature: None,
+            hash: None,
+        };
+
+        tx.compute_address();
+        tx.sign(id.skey().clone());
+        tx.compute_hash();
+
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn it_invalidates_zero_amount() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = ShortHash::NULL_RLP;
+        {
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
+
+            // Manually initialize creator balance
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), asset_hash, b"1000.0");
+        }
+
+        let amount = Balance::zero();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+        let code: Vec<u8> = vec![0x02, 0x00, 0x01, 0x06];
+        let default_state: Vec<u8> = vec![0x1a, 0xff, 0x22, 0x2a];
+
+        let mut tx = OpenContract {
+            creator: id.pkey().clone(),
+            next_address,
+            fee: fee.clone(),
+            code: code.clone(),
+            default_state: default_state.clone(),
+            fee_hash: asset_hash,
+            amount: amount.clone(),
+            asset_hash: asset_hash,
+            self_payable: true,
+            nonce: 1,
+            address: None,
+            signature: None,
+            hash: None,
+        };
+
+        tx.compute_address();
+        tx.sign(id.skey().clone());
+        tx.compute_hash();
+
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
+        assert!(!tx.validate(&trie));
+    }
+
+    #[test]
+    fn it_invalidates_bad_nonce() {
+        let id = Identity::new();
+        let id2 = Identity::new();
+        let creator_addr = NormalAddress::from_pkey(id.pkey());
+        let next_address = NormalAddress::from_pkey(id2.pkey());
+        let asset_hash = crypto::hash_slice(b"Test currency").to_short();
+
+        let mut db = test_helpers::init_tempdb();
+        let mut root = ShortHash::NULL_RLP;
+        {
+            let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
+
+            // Manually initialize creator balance
+            test_helpers::init_balance(&mut trie, creator_addr.clone(), asset_hash, b"1000.0");
+        }
+
+        let amount = Balance::from_bytes(b"10.0").unwrap();
+        let fee = Balance::from_bytes(b"10.0").unwrap();
+        let code: Vec<u8> = vec![0x02, 0x00, 0x01, 0x06];
+        let default_state: Vec<u8> = vec![0x1a, 0xff, 0x22, 0x2a];
+
+        let mut tx = OpenContract {
+            creator: id.pkey().clone(),
+            next_address,
+            fee: fee.clone(),
+            code: code.clone(),
+            default_state: default_state.clone(),
+            fee_hash: asset_hash,
+            amount: amount.clone(),
+            asset_hash: asset_hash,
+            self_payable: true,
+            nonce: 123456,
+            address: None,
+            signature: None,
+            hash: None,
+        };
+
+        tx.compute_address();
+        tx.sign(id.skey().clone());
+        tx.compute_hash();
+
+        let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
+        assert!(!tx.validate(&trie));
     }
 
     quickcheck! {

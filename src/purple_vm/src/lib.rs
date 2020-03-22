@@ -39,6 +39,7 @@ pub use crate::error::*;
 pub use crate::gas::*;
 pub use crate::virtual_machine::*;
 pub use crate::code::function::*;
+pub use crate::code::validator::*;
 pub use crate::module::*;
 pub use crate::instruction_set::*;
 
