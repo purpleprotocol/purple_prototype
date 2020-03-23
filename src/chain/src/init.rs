@@ -21,7 +21,7 @@ use crate::pow_chain::PowChainState;
 use lazy_static::*;
 use parking_lot::RwLock;
 use persistence::PersistentDb;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[cfg(feature = "test")]
 use std::cell::RefCell;

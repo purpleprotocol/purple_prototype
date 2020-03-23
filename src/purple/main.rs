@@ -56,7 +56,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use triomphe::Arc;
 use std::thread;
 use tokio::runtime::{Builder, Runtime};
 

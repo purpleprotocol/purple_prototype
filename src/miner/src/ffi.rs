@@ -22,7 +22,7 @@
 use crate::error::CuckooMinerError;
 use crate::plugin::*;
 use parking_lot::Mutex;
-use std::sync::Arc;
+use triomphe::Arc;
 
 use libloading;
 

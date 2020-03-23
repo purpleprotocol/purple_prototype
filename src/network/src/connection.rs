@@ -31,7 +31,7 @@ use rand::prelude::IteratorRandom;
 use std::iter;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use triomphe::Arc;
 use std::time::{Duration, Instant};
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::tcp::ReadHalf;

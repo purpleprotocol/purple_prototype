@@ -27,7 +27,7 @@ use crypto::crc32fast::Hasher;
 use crypto::{Nonce, SecretKey as Sk, SessionKey, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 pub const NETWORK_VERSION: u8 = 0;
 pub const HEADER_SIZE: usize = 7; // Total of 7 bytes. 1 + 2 + 4;

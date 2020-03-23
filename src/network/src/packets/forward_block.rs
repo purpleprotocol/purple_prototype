@@ -26,7 +26,7 @@ use crypto::NodeId;
 use crypto::{PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ForwardBlock {

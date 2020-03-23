@@ -27,7 +27,7 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 use std::str;
 use std::str::FromStr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendPeers {

@@ -27,7 +27,7 @@ use hashbrown::HashMap;
 use mempool::Mempool;
 use parking_lot::RwLock;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[cfg(not(test))]
 use tokio::sync::mpsc::Sender;

@@ -26,7 +26,7 @@ use chrono::prelude::*;
 use crypto::Hash;
 use std::hash::Hash as HashTrait;
 use std::hash::Hasher;
-use std::sync::Arc;
+use triomphe::Arc;
 
 pub const GENESIS_HASH_KEY: &[u8] = b"GENESIS";
 

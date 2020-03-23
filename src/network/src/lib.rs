@@ -85,7 +85,7 @@ pub fn random_socket_addr() -> SocketAddr {
 }
 
 #[cfg(test)]
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[cfg(test)]
 use crossbeam_channel::*;

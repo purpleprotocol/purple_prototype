@@ -29,7 +29,7 @@ use hashbrown::{HashMap, HashSet};
 use miner::Proof;
 use parking_lot::RwLock;
 use rand::prelude::*;
-use std::sync::Arc;
+use triomphe::Arc;
 
 pub fn init_test_chains() -> PowChainRef {
     let pow_db = test_helpers::init_tempdb();

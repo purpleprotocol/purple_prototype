@@ -26,13 +26,14 @@ extern crate persistence;
 extern crate quicksort;
 extern crate rlp;
 extern crate tempdir;
+extern crate triomphe;
 
 use account::{Balance, NormalAddress};
 use crypto::ShortHash;
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{Codec, DbHasher, PersistentDb};
 use quicksort::*;
-use std::sync::Arc;
+use triomphe::Arc;
 use tempdir::TempDir;
 
 pub use quicksort::*;

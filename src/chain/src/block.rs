@@ -24,7 +24,7 @@ use std::boxed::Box;
 use std::fmt::Debug;
 use std::hash::Hash as HashTrait;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 /// Generic block interface
 pub trait Block: Debug + PartialEq + Eq + HashTrait + Sized {

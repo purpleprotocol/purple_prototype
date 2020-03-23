@@ -18,7 +18,7 @@
 
 use crate::protocol_flow::ping_pong::*;
 use parking_lot::Mutex;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Clone, Debug, Default)]
 pub struct PingPong {

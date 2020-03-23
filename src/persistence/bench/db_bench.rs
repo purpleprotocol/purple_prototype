@@ -13,7 +13,7 @@ use mimalloc::MiMalloc;
 use persistence::PersistentDb;
 use rand::Rng;
 use rocksdb::{Options, DB};
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

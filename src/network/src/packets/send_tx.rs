@@ -30,7 +30,7 @@ use crypto::NodeId;
 use crypto::{PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 use transactions::Tx;
 
 #[derive(Debug, Clone, PartialEq)]

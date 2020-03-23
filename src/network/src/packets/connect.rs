@@ -26,7 +26,7 @@ use crypto::NodeId;
 use crypto::{KxPublicKey as KxPk, PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Connect {
@@ -266,7 +266,7 @@ mod tests {
     use crypto::NodeId;
     use hashbrown::HashMap;
     use parking_lot::Mutex;
-    use std::sync::Arc;
+    use triomphe::Arc;
     use std::thread;
     use std::time::Duration;
 

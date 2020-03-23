@@ -9,6 +9,7 @@ chrono = "0.4.6"
 elastic-array = "0.10.0"
 byteorder = "1.2.7"
 lazy_static = "1.0.0"
+triomphe = { git = "https://github.com/octavonce/triomphe" }
 lru = "0.1.13"
 rlp = "0.3.0"
 parking_lot = "0.7.1"

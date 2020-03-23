@@ -41,7 +41,7 @@ use std::io::Cursor;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str;
 use std::str::FromStr;
-use std::sync::Arc;
+use triomphe::Arc;
 use transactions::Tx;
 
 /// The maximum size, in bytes, of a transaction set in a transaction block.

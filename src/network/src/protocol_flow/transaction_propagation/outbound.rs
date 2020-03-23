@@ -17,7 +17,7 @@
 */
 
 use crate::packets::*;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Clone, Debug, PartialEq)]
 /// Wrapper over an outbound packet in this state-machine.

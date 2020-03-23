@@ -19,7 +19,7 @@
 use crate::bootstrap::cache::BootstrapCache;
 use crate::protocol_flow::request_peers::*;
 use parking_lot::Mutex;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Clone, Debug)]
 pub struct RequestPeers {

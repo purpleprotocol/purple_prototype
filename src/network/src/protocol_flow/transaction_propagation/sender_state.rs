@@ -17,7 +17,7 @@
 */
 
 use std::default::Default;
-use std::sync::Arc;
+use triomphe::Arc;
 use transactions::Tx;
 
 #[derive(Debug, Clone, PartialEq)]

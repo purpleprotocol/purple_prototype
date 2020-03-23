@@ -22,7 +22,7 @@ use crate::peer::ConnectionType;
 use chrono::prelude::*;
 use crypto::{SecretKey as Sk, Signature};
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 /// The type id of a packet.
 pub type PacketType = u8;

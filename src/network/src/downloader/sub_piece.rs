@@ -19,7 +19,7 @@
 use crate::downloader::error::DownloaderErr;
 use crate::downloader::sub_piece_info::{SubPieceInfo, SubPieceState};
 use crypto::ShortHash;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubPiece {

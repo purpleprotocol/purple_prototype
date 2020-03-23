@@ -26,7 +26,7 @@ use chain::{MAX_PIECE_SIZE, MAX_SUB_PIECE_SIZE, MAX_TX_SET_SIZE};
 use hashbrown::HashMap;
 use chrono::*;
 use crypto::ShortHash;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Debug, PartialEq)]
 pub struct Download {
