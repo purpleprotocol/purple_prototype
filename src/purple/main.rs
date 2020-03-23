@@ -38,6 +38,8 @@ extern crate slog;
 ))]
 extern crate reqwest;
 
+use account::addresses::normal::NormalAddress;
+use cfg_if::*;
 use clap::{App, Arg};
 use crypto::{Identity, NodeId, SecretKey as Sk};
 use elastic_array::ElasticArray128;
@@ -254,14 +256,18 @@ fn main() {
         ))]
         {
             if argv.start_mining {
-                #[cfg(feature = "miner-test-mode")]
-                let proof_delay = Some(argv.proof_delay);
+                cfg_if! {
+                    if #[cfg(feature = "miner-test-mode")] {
+                        let proof_delay = Some(argv.proof_delay);
+                    } else {
+                        let proof_delay = None;
+                    }
+                }
 
-                #[cfg(not(feature = "miner-test-mode"))]
-                let proof_delay = None;
+                let collector_address = argv.collector_address;
 
                 // Start mining
-                crate::jobs::start_miner(pow_chain, network.clone(), our_ip, proof_delay)
+                crate::jobs::start_miner(pow_chain, network.clone(), our_ip, proof_delay, collector_address)
                     .expect("Could not start miner");
             }
         }
@@ -370,6 +376,14 @@ struct Argv {
     ))]
     start_mining: bool,
 
+    #[cfg(any(
+        feature = "miner-cpu",
+        feature = "miner-gpu",
+        feature = "miner-cpu-avx",
+        feature = "miner-test-mode"
+    ))]
+    collector_address: NormalAddress,
+
     #[cfg(feature = "miner-test-mode")]
     proof_delay: u32,
 }
@@ -466,6 +480,13 @@ fn parse_cli_args() -> Argv {
                 .long("start-mining")
                 .help("Start the node as a miner node"),
         )
+        .arg(
+            Arg::with_name("collector_address")
+                .long("collector-address")
+                .value_name("COLLECTOR_ADDRESS")
+                .takes_value(true)
+                .help("The collector address on which the miner gets the rewards"),
+        )
     };
 
     #[cfg(feature = "miner-test-mode")]
@@ -534,13 +555,21 @@ fn parse_cli_args() -> Argv {
     let no_bootnodes: bool = matches.is_present("no_bootnodes");
     let bootnodes = if no_bootnodes { Vec::new() } else { bootnodes };
 
-    #[cfg(any(
-        feature = "miner-cpu",
-        feature = "miner-gpu",
-        feature = "miner-cpu-avx",
-        feature = "miner-test-mode"
-    ))]
-    let start_mining: bool = matches.is_present("start_mining");
+    cfg_if! {
+        if #[cfg(any(
+            feature = "miner-cpu",
+            feature = "miner-gpu",
+            feature = "miner-cpu-avx",
+            feature = "miner-test-mode"
+        ))] {
+            let start_mining: bool = matches.is_present("start_mining");
+            let collector_address: NormalAddress = if let Some(arg) = matches.value_of("collector_address") {
+                unwrap!(NormalAddress::from_base58(arg), "Bad value for <COLLECTOR_ADDRESS>")
+            } else {
+                panic!("No value specified for <COLLECTOR_ADDRESS>")
+            };
+        }
+    }
 
     Argv {
         bootnodes,
@@ -561,6 +590,14 @@ fn parse_cli_args() -> Argv {
             feature = "miner-test-mode"
         ))]
         start_mining,
+
+        #[cfg(any(
+            feature = "miner-cpu",
+            feature = "miner-gpu",
+            feature = "miner-cpu-avx",
+            feature = "miner-test-mode"
+        ))]
+        collector_address,
 
         #[cfg(feature = "miner-test-mode")]
         proof_delay,

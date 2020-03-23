@@ -85,6 +85,7 @@ pub fn start_miner(
     network: Network,
     ip: SocketAddr,
     proof_delay: Option<u32>,
+    collector_address: NormalAddress
 ) -> Result<(), &'static str> {
     if MINER_IS_STARTED.load(Ordering::Relaxed) {
         return Err("The miner is already started!");
@@ -143,8 +144,6 @@ pub fn start_miner(
                             let sol_u64s = solution.to_u64s();
                             let proof = Proof::new(sol_u64s, nonce, solutions.edge_bits as u8);
 
-                            // TODO: Set and retrieve the node's collector address #157
-                            let collector_address = NormalAddress::random();
                             let node_id = network.our_node_id().clone();
 
                             // Create block
