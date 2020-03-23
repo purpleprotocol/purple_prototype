@@ -24,7 +24,7 @@ use persistence::PersistentDb;
 use rand::prelude::IteratorRandom;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use triomphe::Arc;
 
 pub async fn bootstrap(
     network: Network,

@@ -27,7 +27,7 @@ use std::fmt;
 use std::hash::{Hash as HashTrait, Hasher};
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
+use triomphe::Arc;
 use tokio::sync::mpsc::Sender;
 
 #[cfg(test)]

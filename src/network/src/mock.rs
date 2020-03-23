@@ -37,7 +37,7 @@ use persistence::PersistentDb;
 use rayon::prelude::*;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use triomphe::Arc;
 
 /// Peer timeout in milliseconds
 const PEER_TIMEOUT: u64 = 1000;

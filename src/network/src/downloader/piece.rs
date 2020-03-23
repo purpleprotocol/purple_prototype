@@ -160,7 +160,7 @@ mod tests {
     use super::*;
     use crate::downloader::sub_piece_info::SubPieceInfo;
     use rand::prelude::*;
-    use std::sync::Arc;
+    use triomphe::Arc;
 
     #[test]
     fn it_fails_adding_info_invalid_checksum() {

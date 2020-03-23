@@ -27,7 +27,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::ShortHash;
 use std::io::Cursor;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendPieceInfo {

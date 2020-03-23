@@ -20,7 +20,7 @@ use crate::protocol_flow::transaction_propagation::*;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use std::default::Default;
-use std::sync::Arc;
+use triomphe::Arc;
 
 /// The pairs buffer size. This number represents
 /// the maximum amount of transactions that can be

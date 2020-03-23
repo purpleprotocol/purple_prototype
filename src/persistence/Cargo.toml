@@ -9,6 +9,7 @@ publish = false
 hashdb = "0.3.0"
 patricia-trie = "0.3.0"
 elastic-array = "0.10.0"
+triomphe = { git = "https://github.com/octavonce/triomphe" }
 rlp = "0.3.0"
 parking_lot = "0.7.1"
 rocksdb = "0.13.0"

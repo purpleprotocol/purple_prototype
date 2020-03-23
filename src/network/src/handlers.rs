@@ -22,7 +22,7 @@ use crate::priority::NetworkPriority;
 use crate::{Network, NetworkInterface};
 use chain::*;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Receiver;
 use tokio::time::Interval;

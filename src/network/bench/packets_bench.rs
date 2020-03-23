@@ -7,7 +7,7 @@ use criterion::Criterion;
 use network::packets::*;
 use network::Packet;
 use quickcheck::{Arbitrary, StdGen};
-use std::sync::Arc;
+use triomphe::Arc;
 use transactions::Tx;
 
 fn criterion_benchmark(c: &mut Criterion) {

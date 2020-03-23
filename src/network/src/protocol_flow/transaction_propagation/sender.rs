@@ -23,7 +23,7 @@ use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
 use crate::protocol_flow::transaction_propagation::sender_state::TxSenderState;
 use crate::validation::sender::Sender;
 use crypto::ShortHash;
-use std::sync::Arc;
+use triomphe::Arc;
 use transactions::Tx;
 
 #[derive(Debug, Default)]

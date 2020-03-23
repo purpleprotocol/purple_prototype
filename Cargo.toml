@@ -37,6 +37,7 @@ dirs = "1.0.4"
 elastic-array = "0.10.0"
 jsonrpc-core = "9.0.0"
 jsonrpc-macros = "9.0.0"
+triomphe = { git = "https://github.com/octavonce/triomphe" }
 hashdb = "0.3.0"
 rocksdb = "0.13.0"
 account = { path = "src/account" }

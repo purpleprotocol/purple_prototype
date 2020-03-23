@@ -24,7 +24,7 @@ use crypto::ShortHash;
 use chain::TransactionBlock;
 use dashmap::DashMap;
 use parking_lot::Mutex;
-use std::sync::Arc;
+use triomphe::Arc;
 
 mod download_state;
 mod download;

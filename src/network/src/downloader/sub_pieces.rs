@@ -21,7 +21,7 @@ use crate::downloader::sub_piece::SubPiece;
 use crate::downloader::sub_piece_info::{SubPieceInfo, SubPieceState};
 use crypto::ShortHash;
 use hashbrown::HashMap;
-use std::sync::Arc;
+use triomphe::Arc;
 
 /// A set of sub-pieces
 #[derive(Debug, PartialEq)]

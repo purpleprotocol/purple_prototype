@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 parking_lot = "0.7.1"
 chrono = "0.4.6"
+triomphe = { git = "https://github.com/octavonce/triomphe" }
 log = "0.4.0"
 rand = "0.6.0"
 graphlib = "0.6.0"

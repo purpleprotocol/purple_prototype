@@ -29,7 +29,7 @@ use std::cell::RefCell;
 use std::net::SocketAddr;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use triomphe::Arc;
 use std::thread;
 
 #[cfg(any(

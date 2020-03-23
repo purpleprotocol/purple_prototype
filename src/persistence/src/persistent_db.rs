@@ -27,7 +27,7 @@ use rocksdb::{DBCompactionStyle, Options, WriteBatch, DB};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::path::Path;
-use std::sync::Arc;
+use triomphe::Arc;
 
 pub fn cf_options() -> Options {
     let mut opts = Options::default();

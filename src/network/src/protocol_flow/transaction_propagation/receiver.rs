@@ -24,7 +24,7 @@ use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
 use crate::protocol_flow::transaction_propagation::receiver_state::TxReceiverState;
 use crate::validation::receiver::Receiver;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Debug, Default)]
 pub struct TxReceiver {

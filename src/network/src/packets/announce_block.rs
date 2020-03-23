@@ -32,7 +32,7 @@ use crypto::{PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use rand::Rng;
 use std::io::Cursor;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnounceBlock {

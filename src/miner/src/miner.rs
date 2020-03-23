@@ -36,7 +36,7 @@ use parking_lot::RwLock;
 use rand::Rng;
 use std::path::PathBuf;
 use std::ptr::NonNull;
-use std::sync::Arc;
+use triomphe::Arc;
 use std::thread;
 use std::time;
 

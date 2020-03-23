@@ -29,7 +29,7 @@ use patricia_trie::{Trie, TrieDB};
 use persistence::{Codec, DbHasher};
 use rand::Rng;
 use std::collections::{BTreeMap, VecDeque};
-use std::sync::Arc;
+use triomphe::Arc;
 use transactions::Tx;
 
 /// How far into the future a transaction can be

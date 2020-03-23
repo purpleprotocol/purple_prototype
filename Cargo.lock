@@ -359,6 +359,7 @@ dependencies = [
  "rlp",
  "test-helpers",
  "transactions",
+ "triomphe",
 ]
 
 [[package]]
@@ -1553,6 +1554,7 @@ dependencies = [
  "rand 0.6.5",
  "test-helpers",
  "transactions",
+ "triomphe",
 ]
 
 [[package]]
@@ -1758,6 +1760,7 @@ dependencies = [
  "tokio",
  "tokio-io-timeout",
  "transactions",
+ "triomphe",
 ]
 
 [[package]]
@@ -2060,6 +2063,7 @@ dependencies = [
  "rlp",
  "rocksdb",
  "tempdir",
+ "triomphe",
 ]
 
 [[package]]
@@ -2185,6 +2189,7 @@ dependencies = [
  "slog-term",
  "tokio",
  "transactions",
+ "triomphe",
  "unwrap",
 ]
 
@@ -3046,6 +3051,7 @@ dependencies = [
  "quicksort",
  "rlp",
  "tempdir",
+ "triomphe",
 ]
 
 [[package]]
@@ -3206,6 +3212,17 @@ dependencies = [
  "tempfile",
  "test-helpers",
  "unwrap",
+]
+
+[[package]]
+name = "triomphe"
+version = "0.1.1"
+source = "git+https://github.com/octavonce/triomphe#0d373a87f230ceb402a48c3c7f27b3dafe8727f7"
+dependencies = [
+ "memoffset",
+ "quickcheck",
+ "serde",
+ "stable_deref_trait",
 ]
 
 [[package]]

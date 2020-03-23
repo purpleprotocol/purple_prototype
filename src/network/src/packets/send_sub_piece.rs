@@ -27,7 +27,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::ShortHash;
 use std::io::Cursor;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 /// Maximum size of a sub-piece. 16kb
 pub const SUB_PIECE_MAX_SIZE: usize = 16_384;

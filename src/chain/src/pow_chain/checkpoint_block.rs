@@ -38,7 +38,7 @@ use std::io::Cursor;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str;
 use std::str::FromStr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[cfg(not(test))]
 /// How many transaction blocks the validator is allowed to create

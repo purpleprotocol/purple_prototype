@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 hex = "0.3.2"
 rlp = "0.3.0"
+triomphe = { git = "https://github.com/octavonce/triomphe" }
 tempdir = "0.3.7"
 patricia-trie = "0.3.0"
 account = { path = "../../account" }

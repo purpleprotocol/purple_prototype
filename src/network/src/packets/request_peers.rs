@@ -27,7 +27,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use rand::prelude::*;
 use std::io::Cursor;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use triomphe::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestPeers {

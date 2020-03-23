@@ -30,7 +30,7 @@ use parking_lot::{Mutex, RwLock};
 use persistence::PersistentDb;
 use std::collections::VecDeque;
 use std::hash::Hash as HashTrait;
-use std::sync::Arc;
+use triomphe::Arc;
 use transactions::Tx;
 
 #[derive(Clone, Debug, PartialEq)]

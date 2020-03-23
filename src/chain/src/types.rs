@@ -20,7 +20,7 @@ use crate::chain::ChainErr;
 use account::Address;
 use crypto::ShortHash;
 use std::fmt::Debug;
-use std::sync::Arc;
+use triomphe::Arc;
 use transactions::Tx;
 
 #[derive(Clone, Debug, PartialEq, Copy)]
