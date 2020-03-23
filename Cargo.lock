@@ -1613,6 +1613,7 @@ dependencies = [
  "quickcheck",
  "rand 0.6.5",
  "serde",
+ "triomphe",
 ]
 
 [[package]]

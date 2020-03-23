@@ -21,6 +21,7 @@ failure = "0.1.5"
 lazy_static = "1.4.0"
 serde = "1.0.104"
 num = "0.2"
+triomphe = { git = "https://github.com/octavonce/triomphe" }
 bin-tools = { path = "../util/bin-tools" }
 crypto = { path = "../crypto" }
 

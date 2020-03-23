@@ -19,7 +19,7 @@
   https://github.com/mimblewimble/grin-miner/blob/master/cuckoo-miner/src/build.rs
 */
 
-#![allow(unused, unused_attributes)]
+#![allow(unused, unused_attributes, deprecated)]
 
 #[macro_use]
 extern crate log;
