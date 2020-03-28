@@ -17,6 +17,10 @@ members = [
     "src/purple_vm",
     "src/transactions",
     "src/mempool",
+    "src/util/bin-tools",
+    "src/util/quicksort",
+    "src/util/recursive",
+    "src/util/yamux_purple",
 ]
 
 [dependencies]
@@ -42,6 +46,7 @@ triomphe = { git = "https://github.com/octavonce/triomphe" }
 hashdb = "0.3.0"
 rocksdb = "0.13.0"
 cfg-if = "0.1.10"
+static_assertions = "1"
 account = { path = "src/account" }
 purple_vm = { path = "src/purple_vm" }
 crypto = { path = "src/crypto" } 

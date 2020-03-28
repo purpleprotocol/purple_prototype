@@ -605,3 +605,13 @@ fn parse_cli_args() -> Argv {
 }
 
 mod jobs;
+
+// Check that we can safely cast a `usize` to a `u64`.
+static_assertions::const_assert! {
+    std::mem::size_of::<usize>() <= std::mem::size_of::<u64>()
+}
+
+// Check that we can safely cast a `u32` to a `usize`.
+static_assertions::const_assert! {
+    std::mem::size_of::<u32>() <= std::mem::size_of::<usize>()
+}

@@ -82,18 +82,6 @@ pub struct Peer {
     /// Whether the peer has sent a `Connect` packet or not.
     pub sent_connect: bool,
 
-    /// Buffer storing packets that are to be
-    /// sent to the peer with low priority.
-    pub low_outbound_buffer: Option<Sender<Vec<u8>>>,
-
-    /// Buffer storing packets that are to be
-    /// sent to the peer with medium priority.
-    pub medium_outbound_buffer: Option<Sender<Vec<u8>>>,
-
-    /// Buffer storing packets that are to be
-    /// sent to the peer with high priority.
-    pub high_outbound_buffer: Option<Sender<Vec<u8>>>,
-
     /// Session generated public key
     pub pk: Pk,
 
@@ -130,9 +118,6 @@ impl Peer {
         id: Option<NodeId>,
         ip: SocketAddr,
         connection_type: ConnectionType,
-        low_outbound_buffer: Option<Sender<Vec<u8>>>,
-        medium_outbound_buffer: Option<Sender<Vec<u8>>>,
-        high_outbound_buffer: Option<Sender<Vec<u8>>>,
         bootstrap_cache: BootstrapCache,
     ) -> Peer {
         let (pk, sk) = gen_kx_keypair();
@@ -181,14 +166,7 @@ impl Peer {
     pub fn send_packet(
         &self,
         packet: Vec<u8>,
-        priority: NetworkPriority,
     ) -> Result<(), NetworkErr> {
-        let mut sender = match priority {
-            NetworkPriority::Low => self.low_outbound_buffer.as_ref().unwrap().clone(),
-            NetworkPriority::Medium => self.medium_outbound_buffer.as_ref().unwrap().clone(),
-            NetworkPriority::High => self.high_outbound_buffer.as_ref().unwrap().clone(),
-        };
-
         sender.try_send(packet).map_err(|err| {
             debug!("Packet sending error: {:?}", err);
             NetworkErr::CouldNotSend

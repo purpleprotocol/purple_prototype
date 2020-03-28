@@ -357,6 +357,7 @@ dependencies = [
  "rand 0.6.5",
  "rayon",
  "rlp",
+ "static_assertions",
  "test-helpers",
  "transactions",
  "triomphe",
@@ -2201,6 +2202,7 @@ dependencies = [
  "slog-scope",
  "slog-stdlog",
  "slog-term",
+ "static_assertions",
  "tokio",
  "transactions",
  "triomphe",
@@ -2496,6 +2498,10 @@ checksum = "678054eb77286b51581ba43620cc911abf02758c91f93f479767aed0f90458b2"
 dependencies = [
  "rand_core 0.3.1",
 ]
+
+[[package]]
+name = "recursive"
+version = "0.1.0"
 
 [[package]]
 name = "redox_syscall"
@@ -2962,6 +2968,12 @@ name = "stable_deref_trait"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "strsim"
@@ -3543,6 +3555,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "244c3741f4240ef46274860397c7c74e50eb23624996930e484c16679633a54c"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "yamux_purple"
+version = "0.1.0"
+dependencies = [
+ "tokio",
 ]
 
 [[package]]

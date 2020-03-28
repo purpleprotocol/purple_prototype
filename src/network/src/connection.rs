@@ -119,36 +119,18 @@ fn process_connection(
     let socket = async move {
         let refuse_connection = Arc::new(AtomicBool::new(false));
         let addr = sock.peer_addr().unwrap();
-
-        // Split up the reading and writing parts of the
-        // socket.
-        let (reader, writer) = sock.split();
-        let mut reader = TimeoutReader::new(reader);
-        let mut writer = TimeoutWriter::new(writer);
-
-        // Set timeout
-        reader.set_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
-        writer.set_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
+        let sock = TimeoutStream::new(sock);
 
         match client_or_server {
             ConnectionType::Client => info!("Connecting to {}", addr),
             ConnectionType::Server => info!("Received connection request from {}", addr),
         };
 
-        // Create outbound channels
-        let (low_outbound_sender, mut low_outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
-        let (medium_outbound_sender, mut medium_outbound_receiver) =
-            mpsc::channel(OUTBOUND_BUF_SIZE);
-        let (high_outbound_sender, mut high_outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
-
         // Create new peer and add it to the peer table
         let peer = Peer::new(
             None,
             addr,
             client_or_server,
-            Some(low_outbound_sender),
-            Some(medium_outbound_sender),
-            Some(high_outbound_sender),
             network.bootstrap_cache.clone(),
         );
 
@@ -160,6 +142,44 @@ fn process_connection(
 
             (network.node_id.clone(), network.secret_key.clone())
         };
+
+        let connect = {
+            let mut peers = network.peers.read();
+
+            if let Some(peer) = peers.get(&addr) {
+                // Write a connect packet if we are the client.
+                match client_or_server {
+                    ConnectionType::Client => {
+                        // Send `Connect` packet.
+                        let mut connect = Connect::new(node_id.clone(), peer.pk);
+                        connect.sign(&skey);
+                        Some(connect)
+                    }
+
+                    _ => None
+                }
+            } else {
+                warn!("Could not find peer {:?}", addr);
+                return;
+            }
+        };
+
+        // Send connect packet if we are the client
+        if let Some(connect) = connect {
+            let packet = async {
+                let packet = connect.to_bytes();
+                let packet =
+                    crate::common::wrap_packet(&packet, network.network_name.as_str());
+                packet
+            }.await;
+
+            debug!("Sending connect packet to {}", addr);
+
+            if let Err(err) = sock.write(&packet).await {
+                warn!("Write to {:?} failed: {:?}", addr, err);
+                return;
+            }
+        }
 
         let network_clone = network.clone();
         let network_clone2 = network.clone();
@@ -175,42 +195,12 @@ fn process_connection(
             _ = async move {
                 let mut writer = BufWriter::new(writer);
                 let connect = {
-                    let mut peers = network.peers.read();
+                    
 
-                    if let Some(peer) = peers.get(&addr) {
-                        // Write a connect packet if we are the client.
-                        match client_or_server {
-                            ConnectionType::Client => {
-                                // Send `Connect` packet.
-                                let mut connect = Connect::new(node_id.clone(), peer.pk);
-                                connect.sign(&skey);
-                                Some(connect)
-                            }
-
-                            _ => None
-                        }
-                    } else {
-                        warn!("Could not find peer {:?}", addr);
-                        return;
-                    }
+                    
                 };
 
-                // Send connect packet if we are the client
-                if let Some(connect) = connect {
-                    let packet = async {
-                        let packet = connect.to_bytes();
-                        let packet =
-                            crate::common::wrap_packet(&packet, network.network_name.as_str());
-                        packet
-                    }.await;
-
-                    debug!("Sending connect packet to {}", addr);
-
-                    if let Err(err) = writer.write(&packet).await {
-                        warn!("Write to {:?} failed: {:?}", addr, err);
-                        return;
-                    }
-                }
+                
 
                 // Poll outbound channels in the order of their priority
                 loop {
