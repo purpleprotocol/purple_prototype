@@ -27,7 +27,6 @@ use crate::validation::sender::Sender as SenderTrait;
 use crate::downloader::Downloader;
 use chain::*;
 use chrono::Duration;
-use crossbeam_channel::{Receiver, Sender};
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
 use hashbrown::HashMap;
@@ -38,6 +37,7 @@ use rayon::prelude::*;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use triomphe::Arc;
+use crossbeam_channel::{Receiver, Sender};
 
 /// Peer timeout in milliseconds
 const PEER_TIMEOUT: u64 = 1000;

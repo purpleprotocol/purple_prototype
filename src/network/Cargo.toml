@@ -18,7 +18,7 @@ tokio-io-timeout = "0.4.0"
 dashmap = "3.2.1"
 rlp = "0.3.0"
 log = "0.4.0"
-crossbeam-channel = "0.4.0"
+flume = "0.7.1"
 parking_lot = "0.7.1"
 triomphe = { git = "https://github.com/octavonce/triomphe" }
 hex = "0.3.2"
@@ -45,6 +45,7 @@ tempdir = "0.3.7"
 rayon = "1.2.0"
 timer = "0.2.0"
 criterion = "0.2.1"
+crossbeam-channel = "0.4.0"
 test-helpers = { path = "../util/test-helpers" }
 
 [[bench]]

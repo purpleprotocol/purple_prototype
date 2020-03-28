@@ -30,7 +30,7 @@ use std::net::SocketAddr;
 use triomphe::Arc;
 
 #[cfg(not(test))]
-use tokio::sync::mpsc::Sender;
+use flume::Sender;
 
 #[cfg(test)]
 use crossbeam_channel::Sender;

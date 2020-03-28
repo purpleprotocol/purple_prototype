@@ -158,7 +158,7 @@ fn main() {
         Some(mempool)
     };
 
-    let (pow_tx, pow_rx) = tokio::sync::mpsc::channel(10000);
+    let (pow_tx, pow_rx) = flume::unbounded();
 
     info!("Setting up the network...");
 
