@@ -44,7 +44,7 @@ use tokio::time;
 use crossbeam_channel::Sender;
 
 #[cfg(not(test))]
-use tokio::sync::mpsc::Sender;
+use flume::Sender;
 
 #[derive(Clone)]
 pub struct Network {

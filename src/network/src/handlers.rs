@@ -24,7 +24,7 @@ use chain::*;
 use std::net::SocketAddr;
 use triomphe::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::Receiver;
+use flume::Receiver;
 use tokio::time::Interval;
 
 /// Listens for blocks on chain receivers and
@@ -36,7 +36,7 @@ pub fn start_block_listeners(
 ) {
     let loop_fut_pow = async move {
         loop {
-            if let Some((addr, block)) = pow_receiver.recv().await {
+            if let Ok((addr, block)) = pow_receiver.recv_async().await {
                 debug!("Received PowBlock {:?}", block.block_hash().unwrap());
                 let chain_result = {
                     let mut chain = pow_chain.chain.write();
