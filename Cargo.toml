@@ -20,7 +20,7 @@ members = [
     "src/util/bin-tools",
     "src/util/quicksort",
     "src/util/recursive",
-    "src/util/yamux_purple",
+    "src/yamux",
 ]
 
 [dependencies]

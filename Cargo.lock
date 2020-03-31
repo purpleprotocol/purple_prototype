@@ -1774,6 +1774,7 @@ dependencies = [
  "tokio-io-timeout",
  "transactions",
  "triomphe",
+ "yamux_purple",
 ]
 
 [[package]]
