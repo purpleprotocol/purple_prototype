@@ -1754,6 +1754,7 @@ dependencies = [
  "dashmap",
  "flume",
  "futures 0.3.4",
+ "futures-io",
  "hashbrown 0.1.7",
  "hashdb",
  "hex 0.3.2",
@@ -1774,7 +1775,6 @@ dependencies = [
  "tokio-io-timeout",
  "transactions",
  "triomphe",
- "yamux_purple",
 ]
 
 [[package]]
@@ -3556,13 +3556,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "244c3741f4240ef46274860397c7c74e50eb23624996930e484c16679633a54c"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "yamux_purple"
-version = "0.1.0"
-dependencies = [
- "tokio",
 ]
 
 [[package]]

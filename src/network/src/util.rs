@@ -16,62 +16,54 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use tokio::io::{AsyncRead, AsyncWrite, Result as TokioResult, Error};
+use tokio::io::{AsyncRead as TokioAsyncRead, AsyncWrite as TokioAsyncWrite}; //, Result as TokioResult, Error};
+use futures_io::{AsyncRead, AsyncWrite, Result as TokioResult, Error};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ConnectionType {
-    /// A `Client` connection type
-    Client,
+/// `futures-io` based socket wrapper over tokio 2.0 socket.
+pub struct FuturesIoSock<'a, S: TokioAsyncRead + TokioAsyncWrite + Unpin> {
+    /// Owned socket
+    sock: S,
     
-    /// A `Server` connection type
-    Server,
+    /// Inner socket ref
+    inner_ref: Pin<&'a mut S>,
 }
 
-/// Multiplexed socket wrapper over an ordered, reliable  
-/// protocol such as TCP. For usage with tokio.
-pub struct YamuxSock<S: AsyncRead + AsyncWrite> {
-    /// Inner socket
-    inner: S,
-
-    /// The type of the connection
-    mode: ConnectionType,
-}
-
-impl<S: AsyncRead + AsyncWrite> YamuxSock<S> {
-    pub fn new(sock: S, mode: ConnectionType) -> Self {
-        YamuxSock { inner: sock, mode }
+impl<'a, S: TokioAsyncRead + TokioAsyncWrite + Unpin> FuturesIoSock<'a, S> {
+    pub fn new(sock: S) -> Self {
+        let inner_ref = Pin::new(&mut sock);
+        FuturesIoSock { sock, inner_ref }
     }
 }
 
-impl<S: AsyncRead + AsyncWrite> AsyncRead for YamuxSock<S> {
+impl<'a, S: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncRead for FuturesIoSock<'a, S> {
     fn poll_read(
         self: Pin<&mut Self>, 
-        cx: &mut Context, 
+        ctx: &mut Context, 
         buf: &mut [u8]
     ) -> Poll<TokioResult<usize>> {
-        unimplemented!();
+        self.inner_ref.poll_read(ctx, buf)
     }
 }
 
-impl<S: AsyncRead + AsyncWrite> AsyncWrite for YamuxSock<S> {
+impl<'a, S: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncWrite for FuturesIoSock<'a, S> {
     fn poll_write(
         self: Pin<&mut Self>, 
-        cx: &mut Context, 
+        ctx: &mut Context, 
         buf: &[u8]
     ) -> Poll<Result<usize, Error>> {
-        unimplemented!();
+        self.inner_ref.poll_write(ctx, buf)
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Error>> {
-        unimplemented!();
+    fn poll_flush(self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Result<(), Error>> {
+        self.inner_ref.poll_flush(ctx)
     }
 
-    fn poll_shutdown(
+    fn poll_close(
         self: Pin<&mut Self>, 
-        cx: &mut Context
+        ctx: &mut Context
     ) -> Poll<Result<(), Error>> {
-        unimplemented!();
+        self.inner_ref.poll_shutdown(ctx)
     }
-}
+} 

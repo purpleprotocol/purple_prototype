@@ -15,6 +15,7 @@ futures = "0.3.4"
 chrono = "0.4.6"
 tokio = { version = "0.2.13", features = ["full"] } 
 tokio-io-timeout = "0.4.0"
+futures-io = "0.3.4"
 dashmap = "3.2.1"
 rlp = "0.3.0"
 log = "0.4.0"
@@ -31,7 +32,6 @@ persistence = { path = "../persistence" }
 quickcheck = "0.7.2"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["rayon", "serde"] }
 bin-tools = { path = "../util/bin-tools/" }
-yamux_purple = { path = "../yamux" }
 
 [dev-dependencies.chain]
 path = "../chain"

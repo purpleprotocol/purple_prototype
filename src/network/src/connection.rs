@@ -24,6 +24,7 @@ use crate::packets::connect::Connect;
 use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
 use crate::priority::NetworkPriority;
 use crate::validation::sender::Sender;
+use crate::util::FuturesIoSock;
 use bytes::{Bytes, BytesMut};
 use crypto::{Nonce, Signature};
 use persistence::PersistentDb;
@@ -120,6 +121,7 @@ fn process_connection(
         let refuse_connection = Arc::new(AtomicBool::new(false));
         let addr = sock.peer_addr().unwrap();
         let sock = TimeoutStream::new(sock);
+        let sock = FuturesIoSock::new(sock);
 
         match client_or_server {
             ConnectionType::Client => info!("Connecting to {}", addr),
