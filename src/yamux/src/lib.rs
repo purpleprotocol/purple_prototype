@@ -19,3 +19,6 @@
 mod header;
 mod message_type;
 mod frame;
+mod socket;
+
+pub use crate::socket::*;
