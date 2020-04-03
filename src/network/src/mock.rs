@@ -354,6 +354,10 @@ impl NetworkInterface for MockNetwork {
         unimplemented!();
     }
 
+    fn network_name(&self) -> &str {
+        self.network_name.as_str()
+    }
+
     fn our_node_id(&self) -> &NodeId {
         &self.node_id
     }

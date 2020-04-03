@@ -305,6 +305,10 @@ impl NetworkInterface for Network {
         }
     }
 
+    fn network_name(&self) -> &str {
+        self.network_name.as_str()
+    }
+
     fn pow_chain_ref(&self) -> PowChainRef {
         self.pow_chain_ref.clone()
     }

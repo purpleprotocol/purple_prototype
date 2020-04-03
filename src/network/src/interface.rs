@@ -36,7 +36,7 @@ use flume::Sender;
 use crossbeam_channel::Sender;
 
 /// Generic network layer interface.
-pub trait NetworkInterface: Clone + Send {
+pub trait NetworkInterface: Clone + Send + Sync {
     /// Attempts to connect to the peer with the given ip.
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr>;
 
@@ -105,6 +105,9 @@ pub trait NetworkInterface: Clone + Send {
 
     /// Returns a reference to the peer table `RwLock`.
     fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>>;
+
+    /// Returns a reference to the current network name
+    fn network_name(&self) -> &str;
 
     /// Returns a reference to the `PowChain`.
     fn pow_chain_ref(&self) -> PowChainRef;

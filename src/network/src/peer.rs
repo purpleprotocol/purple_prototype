@@ -131,9 +131,6 @@ impl Peer {
             tx: None,
             sent_connect: false,
             connection_type,
-            low_outbound_buffer,
-            medium_outbound_buffer,
-            high_outbound_buffer,
             last_seen: Arc::new(AtomicU64::new(0)),
             last_ping: Arc::new(AtomicU64::new(0)),
             bytes_read: Arc::new(AtomicU64::new(0)),
@@ -162,16 +159,16 @@ impl Peer {
         self.tx = Some(tx);
     }
 
-    /// Attempts to place a packet in the outbound buffer of a `Peer`.
-    pub fn send_packet(
-        &self,
-        packet: Vec<u8>,
-    ) -> Result<(), NetworkErr> {
-        sender.try_send(packet).map_err(|err| {
-            debug!("Packet sending error: {:?}", err);
-            NetworkErr::CouldNotSend
-        })
-    }
+    // /// Attempts to place a packet in the outbound buffer of a `Peer`.
+    // pub fn send_packet(
+    //     &self,
+    //     packet: Vec<u8>,
+    // ) -> Result<(), NetworkErr> {
+    //     sender.try_send(packet).map_err(|err| {
+    //         debug!("Packet sending error: {:?}", err);
+    //         NetworkErr::CouldNotSend
+    //     })
+    // }
 }
 
 impl PartialEq for Peer {
