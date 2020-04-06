@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -29,6 +30,7 @@ use rand::prelude::*;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestPieceInfo {
@@ -54,6 +56,7 @@ impl RequestPieceInfo {
     }
 }
 
+#[async_trait]
 impl Packet for RequestPieceInfo {
     const PACKET_TYPE: u8 = 14;
 
@@ -122,6 +125,10 @@ impl Packet for RequestPieceInfo {
         _conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         unimplemented!();
+    }
+
+    fn to_client_request(&self) -> Option<ClientRequest> {
+        Some(ClientRequest::RequestPieceInfo)
     }
 }
 

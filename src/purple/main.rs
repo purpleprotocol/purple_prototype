@@ -241,9 +241,6 @@ fn main() {
 
     // Start the tokio runtime
     runtime.block_on(async move {
-        // Start listening for blocks
-        start_block_listeners(network.clone(), pow_chain.clone(), pow_rx);
-
         // Start listening to connections
         start_listener(network.clone(), accept_connections.clone());
 

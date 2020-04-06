@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -25,6 +26,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pong {
@@ -37,6 +39,7 @@ impl Pong {
     }
 }
 
+#[async_trait]
 impl Packet for Pong {
     const PACKET_TYPE: u8 = 3;
 
@@ -109,6 +112,10 @@ impl Packet for Pong {
         let packet = Pong { nonce };
 
         Ok(Arc::new(packet.clone()))
+    }
+
+    fn to_client_request(&self) -> Option<ClientRequest> {
+        None
     }
 }
 

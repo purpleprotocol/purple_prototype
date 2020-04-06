@@ -93,6 +93,12 @@ pub enum NetworkErr {
 
     /// An error inside the downloader
     DownloadErr(DownloaderErr),
+
+    /// The packet cannot start a protocol flow
+    CannotStartProtocolFlow,
+
+    /// Encryption keys were not found for the peer i.e. we are still connecting
+    NoKeys,
 }
 
 impl From<DownloaderErr> for NetworkErr {

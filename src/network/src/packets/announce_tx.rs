@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -33,6 +34,7 @@ use rand::Rng;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnounceTx {
@@ -51,6 +53,7 @@ impl AnnounceTx {
     }
 }
 
+#[async_trait]
 impl Packet for AnnounceTx {
     const PACKET_TYPE: u8 = 6;
 
@@ -148,7 +151,7 @@ impl Packet for AnnounceTx {
                 debug!("Sending RejectTx packet to {}", addr);
 
                 // Send `RejectTx` packet back to peer
-                network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
+                network.send_to_peer(addr, &packet, NetworkPriority::Medium)?;
 
                 debug!("RejectTx packet sent to {}", addr);
 
@@ -159,7 +162,7 @@ impl Packet for AnnounceTx {
                 debug!("Sending RequestTx packet to {}", addr);
 
                 // Send `RequestTx` packet back to peer
-                network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
+                network.send_to_peer(addr, &packet, NetworkPriority::Medium)?;
 
                 debug!("RequestTx packet sent to {}", addr);
 
@@ -168,6 +171,10 @@ impl Packet for AnnounceTx {
 
             InboundPacket::None => unreachable!(),
         }
+    }
+
+    fn to_client_request(&self) -> Option<ClientRequest> {
+        Some(ClientRequest::AnnounceTx)
     }
 }
 

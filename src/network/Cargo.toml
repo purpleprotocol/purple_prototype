@@ -25,6 +25,7 @@ flume = "0.7.1"
 parking_lot = "0.7.1"
 triomphe = { git = "https://github.com/octavonce/triomphe" }
 hex = "0.3.2"
+async-trait = "0.1.29"
 hashdb = "0.3.0"
 chain = { path = "../chain" }
 crypto = { path = "../crypto" }

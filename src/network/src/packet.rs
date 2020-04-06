@@ -19,14 +19,19 @@
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::peer::ConnectionType;
+use crate::client_request::ClientRequest;
 use chrono::prelude::*;
 use crypto::{SecretKey as Sk, Signature};
-use std::net::SocketAddr;
 use triomphe::Arc;
+use async_trait::async_trait;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
+use std::net::SocketAddr;
 
 /// The type id of a packet.
 pub type PacketType = u8;
 
+#[async_trait]
 /// Generic packet interface
 pub trait Packet {
     /// The type of the packet.
@@ -45,4 +50,32 @@ pub trait Packet {
         packet: Arc<Self>,
         conn_type: ConnectionType,
     ) -> Result<(), NetworkErr>;
+
+    /// Returns `Some(_)` if the packet is an initial packet
+    /// in a client request. Returns `None` otherwise.
+    fn to_client_request(&self) -> Option<ClientRequest>;
+
+    /// Attempts to start a client protocol flow using the packet.
+    /// 
+    /// This should return an `Err(_)` if the packet cannot start 
+    /// a client protocol flow. 
+    async fn start_client_protocol_flow<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
+      &self, 
+      network: &N, 
+      sock: &S
+    ) -> Result<(), NetworkErr> {
+        Err(NetworkErr::CannotStartProtocolFlow)
+    }
+
+    /// Attempts to start a server protocol flow using the packet.
+    /// 
+    /// This should return an `Err(_)` if the packet cannot start 
+    /// a server protocol flow. 
+    async fn start_server_protocol_flow<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
+      &self, 
+      network: &N, 
+      sock: &S
+    ) -> Result<(), NetworkErr> {
+        Err(NetworkErr::CannotStartProtocolFlow)
+    }
 }

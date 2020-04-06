@@ -17,6 +17,7 @@
 */
 
 use crate::bootstrap::cache::BootstrapCache;
+use crate::packet::Packet;
 use crate::error::NetworkErr;
 use crate::peer::Peer;
 use crate::priority::NetworkPriority;
@@ -53,30 +54,21 @@ pub trait NetworkInterface: Clone + Send + Sync {
     fn disconnect_from_ip(&mut self, ip: &SocketAddr) -> Result<(), NetworkErr>;
 
     /// Sends a packet to a specific peer.
-    fn send_to_peer(
+    fn send_to_peer<P: Packet>(
         &self,
         peer: &SocketAddr,
-        packet: Vec<u8>,
+        packet: &P,
         priority: NetworkPriority,
     ) -> Result<(), NetworkErr>;
 
     /// Sends a packet to all peers.
-    fn send_to_all(&self, packet: &[u8], priority: NetworkPriority) -> Result<(), NetworkErr>;
+    fn send_to_all<P: Packet>(&self, packet: &[u8], priority: NetworkPriority) -> Result<(), NetworkErr>;
 
     /// Sends a packet to all peers except the given address.
-    fn send_to_all_except(
+    fn send_to_all_except<P: Packet>(
         &self,
         exception: &SocketAddr,
-        packet: &[u8],
-        priority: NetworkPriority,
-    ) -> Result<(), NetworkErr>;
-
-    /// Sends a raw packet to a specific peer. This
-    /// means that the packet will be un-encrypted.
-    fn send_raw(
-        &self,
-        peer: &SocketAddr,
-        packet: &[u8],
+        packet: &P,
         priority: NetworkPriority,
     ) -> Result<(), NetworkErr>;
 

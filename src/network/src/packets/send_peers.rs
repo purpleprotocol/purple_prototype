@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -28,6 +29,7 @@ use std::net::SocketAddr;
 use std::str;
 use std::str::FromStr;
 use triomphe::Arc;
+use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendPeers {
@@ -56,6 +58,7 @@ impl SendPeers {
     }
 }
 
+#[async_trait]
 impl Packet for SendPeers {
     const PACKET_TYPE: u8 = 5;
 
@@ -184,6 +187,10 @@ impl Packet for SendPeers {
 
         Ok(())
     }
+
+    fn to_client_request(&self) -> Option<ClientRequest> {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -271,7 +278,7 @@ mod tests {
             let mut sender = sender.lock();
             let packet = sender.send(3).unwrap();
             network
-                .send_to_peer(&addr1, packet.to_bytes(), NetworkPriority::Medium)
+                .send_to_peer(&addr1, &packet, NetworkPriority::Medium)
                 .unwrap();
         }
 

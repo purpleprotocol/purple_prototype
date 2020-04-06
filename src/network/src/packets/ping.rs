@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -27,6 +28,7 @@ use rand::prelude::*;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ping {
@@ -41,6 +43,7 @@ impl Ping {
     }
 }
 
+#[async_trait]
 impl Packet for Ping {
     const PACKET_TYPE: u8 = 2;
 
@@ -81,7 +84,7 @@ impl Packet for Ping {
         debug!("Sending Pong packet to {}", addr);
 
         // Send `Pong` packet back to peer
-        network.send_to_peer(addr, pong.to_bytes(), NetworkPriority::Low)?;
+        network.send_to_peer(addr, &pong, NetworkPriority::Low)?;
 
         debug!("Pong packet sent to {}", addr);
 
@@ -127,7 +130,11 @@ impl Packet for Ping {
 
         Ok(Arc::new(packet.clone()))
     }
-}
+
+    fn to_client_request(&self) -> Option<ClientRequest> {
+        Some(ClientRequest::Ping)
+    }
+} 
 
 #[cfg(test)]
 use quickcheck::Arbitrary;

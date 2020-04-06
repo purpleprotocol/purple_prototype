@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -27,6 +28,7 @@ use crypto::{KxPublicKey as KxPk, PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Connect {
@@ -65,6 +67,7 @@ impl Connect {
     }
 }
 
+#[async_trait]
 impl Packet for Connect {
     const PACKET_TYPE: u8 = 1;
 
@@ -222,6 +225,10 @@ impl Packet for Connect {
         } else {
             Err(NetworkErr::SelfConnect)
         }
+    }
+
+    fn to_client_request(&self) -> Option<ClientRequest> {
+        None
     }
 }
 

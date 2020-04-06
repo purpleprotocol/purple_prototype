@@ -180,11 +180,6 @@ pub fn handle_packet<N: NetworkInterface>(
             _ => Err(NetworkErr::PacketParseErr),
         },
 
-        ForwardBlock::PACKET_TYPE => match ForwardBlock::from_bytes(packet) {
-            Ok(packet) => ForwardBlock::handle(network, peer_addr, packet, conn_type),
-            _ => Err(NetworkErr::PacketParseErr),
-        },
-
         AnnounceTx::PACKET_TYPE => match AnnounceTx::from_bytes(packet) {
             Ok(packet) => AnnounceTx::handle(network, peer_addr, packet, conn_type),
             _ => Err(NetworkErr::PacketParseErr),

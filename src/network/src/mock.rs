@@ -171,26 +171,6 @@ impl NetworkInterface for MockNetwork {
         }
     }
 
-    fn send_raw(
-        &self,
-        peer: &SocketAddr,
-        packet: &[u8],
-        _priority: NetworkPriority,
-    ) -> Result<(), NetworkErr> {
-        let id = if let Some(id) = self.address_mappings.get(peer) {
-            id
-        } else {
-            return Err(NetworkErr::PeerNotFound);
-        };
-
-        if let Some(mailbox) = self.mailboxes.get(&id) {
-            mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
-            Ok(())
-        } else {
-            Err(NetworkErr::PeerNotFound)
-        }
-    }
-
     fn send_to_all(&self, packet: &[u8], _priority: NetworkPriority) -> Result<(), NetworkErr> {
         if self.mailboxes.is_empty() {
             return Err(NetworkErr::NoPeers);
@@ -469,29 +449,6 @@ impl MockNetwork {
                                 network.ban_ip(&addr).unwrap();
                             }
                         }
-                    }
-                }
-
-                let pow_receiver = pow_block_receiver.lock();
-                let mut iter = pow_receiver.try_iter();
-
-                while let Some((addr, block)) = iter.next() {
-                    let pow_chain = network.pow_chain_ref().chain;
-                    let mut chain = pow_chain.write();
-
-                    match chain.append_block(block.clone()) {
-                        Ok(()) => {
-                            // Forward block
-                            let mut packet = ForwardBlock::new(block);
-                            network
-                                .send_to_all_except(&addr, &packet.to_bytes(), NetworkPriority::Low)
-                                .unwrap();
-                        }
-                        Err(err) => info!(
-                            "Chain Error for block {:?}: {:?}",
-                            block.block_hash().unwrap(),
-                            err
-                        ),
                     }
                 }
 

@@ -19,7 +19,6 @@
 pub mod announce_block;
 pub mod announce_tx;
 pub mod connect;
-pub mod forward_block;
 pub mod ping;
 pub mod pong;
 pub mod reject_tx;
@@ -38,7 +37,6 @@ pub mod reject_sub_piece;
 pub use self::announce_block::*;
 pub use self::announce_tx::*;
 pub use self::connect::*;
-pub use self::forward_block::*;
 pub use self::ping::*;
 pub use self::pong::*;
 pub use self::reject_tx::*;

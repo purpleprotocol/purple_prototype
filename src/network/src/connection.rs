@@ -26,6 +26,7 @@ use crate::priority::NetworkPriority;
 use crate::validation::sender::Sender;
 use crate::util::FuturesIoSock;
 use crate::header::PacketHeader as Header;
+use crate::client_request::ClientRequest;
 use yamux::{Connection, Mode, Config};
 use bytes::{Bytes, BytesMut};
 use crypto::{Nonce, Signature};
@@ -37,11 +38,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use triomphe::Arc;
 use std::time::{Duration, Instant};
 use std::marker::Unpin;
-use tokio::io::{self, BufReader, BufWriter};
+use tokio::io;
 use tokio::net::tcp::ReadHalf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TryRecvError;
+use flume::RecvError;
 use tokio::time;
 use tokio_io_timeout::*;
 use futures_io::{AsyncRead, AsyncWrite};
@@ -131,6 +132,11 @@ fn process_connection(
         sock.set_read_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
         sock.set_write_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
 
+        // Create outbound channels
+        let (low_outbound_sender, mut low_outbound_receiver) = flume::bounded(OUTBOUND_BUF_SIZE);
+        let (medium_outbound_sender, mut medium_outbound_receiver) = flume::bounded(OUTBOUND_BUF_SIZE);
+        let (high_outbound_sender, mut high_outbound_receiver) = flume::bounded(OUTBOUND_BUF_SIZE);
+
         // Wrap `TimeoutStream` with futures_io traits wrapper
         let sock = FuturesIoSock::new(sock);
 
@@ -144,11 +150,14 @@ fn process_connection(
             None,
             addr,
             client_or_server,
+            Some(low_outbound_sender),
+            Some(medium_outbound_sender),
+            Some(high_outbound_sender),
             network.bootstrap_cache.clone(),
         );
 
         let (node_id, skey) = {
-            if let Err(NetworkErr::MaximumPeersReached) = network.add_peer(addr, peer.clone()) {
+            if let Err(NetworkErr::MaximumPeersReached) = network.add_peer(addr, peer) {
                 // Stop accepting peers
                 accept_connections.store(false, Ordering::Relaxed);
             }
@@ -156,25 +165,23 @@ fn process_connection(
             (network.node_id.clone(), network.secret_key.clone())
         };
 
-        let connect = {
-            let mut peers = network.peers.read();
+        // Write a connect packet if we are the client.
+        let connect = match client_or_server {
+            ConnectionType::Client => {
+                let mut peers = network.peers.read();
 
-            if let Some(peer) = peers.get(&addr) {
-                // Write a connect packet if we are the client.
-                match client_or_server {
-                    ConnectionType::Client => {
-                        // Send `Connect` packet.
-                        let mut connect = Connect::new(node_id.clone(), peer.pk);
-                        connect.sign(&skey);
-                        Some(connect)
-                    }
-
-                    _ => None
+                if let Some(peer) = peers.get(&addr) {
+                    // Send `Connect` packet.
+                    let mut connect = Connect::new(node_id.clone(), peer.pk);
+                    connect.sign(&skey);
+                    Some(connect)
+                } else {
+                    warn!("Could not find peer {:?}", addr);
+                    return;
                 }
-            } else {
-                warn!("Could not find peer {:?}", addr);
-                return;
             }
+
+            _ => None
         };
 
         // Send connect packet if we are the client
@@ -206,7 +213,7 @@ fn process_connection(
 
         // Parse `Connect` packet
         let connect = match Connect::from_bytes(&packet) {
-            Ok(packet) => Arc::new(packet),
+            Ok(packet) => packet,
             Err(err) => {
                 warn!("Connect error for {:?}: {:?}", addr, err);
                 ban_peer(&network, &addr);
@@ -231,6 +238,7 @@ fn process_connection(
 
         // Wrap socket with multiplexer
         let sock = Connection::new(sock, Config::default(), mode);
+        let control = sock.control();
 
         let network_clone = network.clone();
         let network_clone2 = network.clone();
@@ -244,72 +252,71 @@ fn process_connection(
         tokio::select! {
             // Writer future
             _ = async move {
-                let mut writer = BufWriter::new(writer);
-                let connect = {
-                    
-
-                    
-                };
-
-                
 
                 // Poll outbound channels in the order of their priority
                 loop {
-                    match high_outbound_receiver.try_recv() {
-                        Ok(packet) => {
-                            if let Err(err) = writer.write(&packet).await {
-                                warn!("Write to {:?} failed: {:?}", addr, err)
-                            }
+                    match high_outbound_receiver.recv_async().await {
+                        Ok((packet, req)) => {
+                            match control.open_stream().await {
+                                Ok(stream) => {
+                                    tokio::spawn(handle_client_stream(&network, stream, packet, req));
+                                }
 
-                            tokio::task::yield_now().await;
+                                Err(err) => {
+                                    warn!("Opening stream to {:?} failed: {:?}", addr, err);
+                                }
+                            };
+
                             continue;
                         }
 
-                        Err(TryRecvError::Closed) => {
+                        Err(RecvError::Disconnected) => {
                             debug!("Write half of {} closed", addr);
                             break;
                         }
-
-                        Err(TryRecvError::Empty) => { } // Do nothing
                     }
 
-                    match medium_outbound_receiver.try_recv() {
-                        Ok(packet) => {
-                            if let Err(err) = writer.write(&packet).await {
-                                warn!("Write to {:?} failed: {:?}", addr, err)
-                            }
+                    match medium_outbound_receiver.recv_async().await {
+                        Ok((packet, req)) => {
+                            match control.open_stream().await {
+                                Ok(stream) => {
+                                    tokio::spawn(handle_client_stream(&network, stream, packet, req));
+                                }
 
-                            tokio::task::yield_now().await;
+                                Err(err) => {
+                                    warn!("Opening stream to {:?} failed: {:?}", addr, err);
+                                }
+                            };
+
                             continue;
                         }
 
-                        Err(TryRecvError::Closed) => {
+                        Err(RecvError::Disconnected) => {
                             debug!("Write half of {} closed", addr);
                             break;
                         }
-
-                        Err(TryRecvError::Empty) => { } // Do nothing
                     }
 
-                    match low_outbound_receiver.try_recv() {
-                        Ok(packet) => {
-                            if let Err(err) = writer.write(&packet).await {
-                                warn!("Write to {:?} failed: {:?}", addr, err)
-                            }
+                    match low_outbound_receiver.recv_async().await {
+                        Ok((packet, req)) => {
+                            match control.open_stream().await {
+                                Ok(stream) => {
+                                    tokio::spawn(handle_client_stream(&network, stream, packet, req));
+                                }
 
-                            tokio::task::yield_now().await;
+                                Err(err) => {
+                                    warn!("Opening stream to {:?} failed: {:?}", addr, err);
+                                }
+                            };
+
                             continue;
                         }
 
-                        Err(TryRecvError::Closed) => {
+                        Err(RecvError::Disconnected) => {
                             debug!("Write half of {} closed", addr);
                             break;
                         }
-
-                        Err(TryRecvError::Empty) => { } // Do nothing
                     }
-
-                    tokio::task::yield_now().await;
                 }
             } => {
                 let network = network_clone3;
@@ -326,11 +333,22 @@ fn process_connection(
 
             // Reader future
             _ = async move {
-                let reader = BufReader::new(reader);
-                let network = network_clone2;
+                loop {
+                    match sock.next_stream().await {
+                        Ok(Some(stream)) => {
+                            debug!("Starting server tcp stream with id {} for {}", stream.id(), addr);
 
-                if let Err(err) = socket_reader(network.clone(), addr.clone(), reader, refuse_connection).await {
-                    warn!("Socket reader error for {:?}: {:?}", addr, err);
+                            tokio::spawn(async move {
+                                let network = network_clone2.clone();
+
+                                handle_server_stream(&network, &stream)
+                                    .await
+                                    .map_err(|err| warn!("Socket reader error for {:?}: {:?}", addr, err));
+                            });
+                        }
+
+                        _ => { }
+                    }
                 };
 
                 info!("Connection to {} closed", addr);
@@ -350,6 +368,22 @@ fn process_connection(
     };
 
     tokio::spawn(socket);
+}
+
+async fn handle_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin>(
+    network: &N,
+    sock: S,
+    initial_packet: Vec<u8>,
+    client_request: ClientRequest,
+) -> Result<(), NetworkErr> {
+    unimplemented!();
+}
+
+async fn handle_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin>(
+    network: &N,
+    sock: &S,
+) -> Result<(), NetworkErr> {
+    unimplemented!();
 }
 
 /// Attempt to decode a `Header` from a socket
@@ -570,7 +604,7 @@ pub fn start_peer_list_refresh_interval(
 
                     if let Ok(packet) = result {
                         network
-                            .send_to_peer(&peer_addr, packet.to_bytes(), NetworkPriority::Medium)
+                            .send_to_peer(&peer_addr, &packet, NetworkPriority::Medium)
                             .map_err(|err| {
                                 warn!("Could not send packet to {}, reason: {:?}", peer_addr, err)
                             })
@@ -620,29 +654,29 @@ pub fn start_peer_list_refresh_interval(
     tokio::spawn(refresh_interval);
 }
 
-async fn socket_reader(
-    mut network: Network,
-    addr: SocketAddr,
-    mut reader: BufReader<TimeoutReader<ReadHalf<'_>>>,
-    refuse_connection: Arc<AtomicBool>,
-) -> Result<(), io::Error> {
-    let mut header_buf: [u8; crate::common::HEADER_SIZE] = [0; crate::common::HEADER_SIZE];
+// async fn socket_reader(
+//     mut network: Network,
+//     addr: SocketAddr,
+//     mut reader: BufReader<TimeoutReader<ReadHalf<'_>>>,
+//     refuse_connection: Arc<AtomicBool>,
+// ) -> Result<(), io::Error> {
+//     let mut header_buf: [u8; crate::common::HEADER_SIZE] = [0; crate::common::HEADER_SIZE];
 
-    loop {
-        if refuse_connection.load(Ordering::Relaxed) {
-            info!("Closing connection to {:?}", addr);
-            break;
-        }
+//     loop {
+//         if refuse_connection.load(Ordering::Relaxed) {
+//             info!("Closing connection to {:?}", addr);
+//             break;
+//         }
 
-        // Process packet
-        let result = async { network.process_packet(&addr, &packet) }.await;
+//         // Process packet
+//         let result = async { network.process_packet(&addr, &packet) }.await;
 
-        // Handle any error
-        handle_err(&network, &addr, refuse_connection.clone(), result).await;
-    }
+//         // Handle any error
+//         handle_err(&network, &addr, refuse_connection.clone(), result).await;
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 fn ban_peer<N: NetworkInterface>(network: &N, addr: &SocketAddr) {
     info!("Banning peer {}", addr);
