@@ -306,50 +306,6 @@ impl NetworkInterface for Network {
         self.downloader.clone()
     }
 
-    fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
-        let (is_none_id, conn_type) = {
-            let peers = self.peers.read();
-            let peer = peers.get(peer).ok_or(NetworkErr::PeerNotFound)?;
-            (peer.id.is_none(), peer.connection_type)
-        };
-
-        // We should receive a connect packet
-        // if the peer's id is non-existent and
-        // the connection is of type `Server`.
-        if is_none_id {
-            match Connect::from_bytes(packet) {
-                Ok(connect_packet) => {
-                    debug!(
-                        "Received connect packet from {}: {:?}",
-                        peer, connect_packet
-                    );
-
-                    // Handle connect packet
-                    Connect::handle(self, peer, connect_packet, conn_type)?;
-
-                    Ok(())
-                }
-
-                _ => {
-                    // Invalid packet, remove peer
-                    debug!("Invalid connect packet from {}", peer);
-                    Err(NetworkErr::InvalidConnectPacket)
-                }
-            }
-        } else {
-            crate::common::handle_packet(self, conn_type, peer, &packet)?;
-
-            // Refresh peer timeout timer
-            {
-                let peers = self.peers.read();
-                let peer = peers.get(peer).ok_or(NetworkErr::PeerNotFound)?;
-                peer.last_seen.store(0, Ordering::SeqCst);
-            }
-
-            Ok(())
-        }
-    }
-
     fn ban_peer(&self, peer: &NodeId) -> Result<(), NetworkErr> {
         unimplemented!();
     }

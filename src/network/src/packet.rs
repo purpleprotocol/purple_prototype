@@ -44,8 +44,9 @@ pub trait Packet {
     fn from_bytes(bytes: &[u8]) -> Result<Arc<Self>, NetworkErr>;
 
     /// Callback that handles a `Packet` after it has been parsed.
-    fn handle<N: NetworkInterface>(
+    async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
+        socket: &S,
         peer: &SocketAddr,
         packet: Arc<Self>,
         conn_type: ConnectionType,

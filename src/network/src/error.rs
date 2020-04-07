@@ -99,6 +99,9 @@ pub enum NetworkErr {
 
     /// Encryption keys were not found for the peer i.e. we are still connecting
     NoKeys,
+
+    /// Writing to the socket failed
+    WriteErr,
 }
 
 impl From<DownloaderErr> for NetworkErr {

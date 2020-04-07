@@ -222,7 +222,7 @@ fn process_connection(
         };
 
         // Handle `Connect` packet
-        match Connect::handle(&mut network, &addr, connect, client_or_server) {
+        match Connect::handle(&mut network, &sock, &addr, connect, client_or_server).await {
             Ok(()) => { },
             Err(err) => {
                 warn!("Connect error for {:?}: {:?}", addr, err);
@@ -252,7 +252,6 @@ fn process_connection(
         tokio::select! {
             // Writer future
             _ = async move {
-
                 // Poll outbound channels in the order of their priority
                 loop {
                     match high_outbound_receiver.recv_async().await {
@@ -347,7 +346,9 @@ fn process_connection(
                             });
                         }
 
-                        _ => { }
+                        _ => {
+                            break;
+                        }
                     }
                 };
 

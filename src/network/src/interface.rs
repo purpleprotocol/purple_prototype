@@ -71,10 +71,7 @@ pub trait NetworkInterface: Clone + Send + Sync {
         packet: &P,
         priority: NetworkPriority,
     ) -> Result<(), NetworkErr>;
-
-    /// Callback that processes each packet that is received from any peer.
-    fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
-
+    
     /// Returns true if the peer with the given `SocketAddr` exists
     /// in the peer table.
     fn has_peer(&self, addr: &SocketAddr) -> bool;

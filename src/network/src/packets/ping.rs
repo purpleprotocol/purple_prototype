@@ -28,6 +28,8 @@ use rand::prelude::*;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -47,11 +49,12 @@ impl Ping {
 impl Packet for Ping {
     const PACKET_TYPE: u8 = 2;
 
-    fn handle<N: NetworkInterface>(
+    async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
+        sock: &S,
         addr: &SocketAddr,
-        packet: Arc<Ping>,
-        _conn_type: ConnectionType,
+        packet: Arc<Self>,
+        conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
             "Received Ping packet from {} with nonce {}",

@@ -28,6 +28,8 @@ use crypto::{KxPublicKey as KxPk, PublicKey as Pk, SecretKey as Sk, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -148,10 +150,11 @@ impl Packet for Connect {
         Ok(Arc::new(packet.clone()))
     }
 
-    fn handle<N: NetworkInterface>(
+    async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
+        sock: &S,
         addr: &SocketAddr,
-        packet: Arc<Connect>,
+        packet: Arc<Self>,
         conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         if !packet.verify_sig() {
@@ -215,7 +218,18 @@ impl Packet for Connect {
                 debug!("Sending connect packet to {}", addr);
                 let mut packet = Connect::new(our_node_id, our_pk.unwrap());
                 packet.sign(network.secret_key());
-                network.send_raw(addr, &packet.to_bytes(), NetworkPriority::High)?;
+
+                // Serialize packet and wrap it with the network header
+                let packet_bytes = packet.to_bytes();
+                let packet = crate::common::wrap_packet(&packet_bytes, network.network_name());
+
+                // Write packet to stream
+                sock
+                    .write(&packet)
+                    .await
+                    .map_err(|_| NetworkErr::WriteErr)?;
+
+                debug!("Successfully sent connect packet to {}", addr);
             }
 
             // Execute after connect callback

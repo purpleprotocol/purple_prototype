@@ -26,6 +26,8 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -43,11 +45,12 @@ impl Pong {
 impl Packet for Pong {
     const PACKET_TYPE: u8 = 3;
 
-    fn handle<N: NetworkInterface>(
+    async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
+        sock: &S,
         addr: &SocketAddr,
-        packet: Arc<Pong>,
-        _conn_type: ConnectionType,
+        packet: Arc<Self>,
+        conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
             "Received Pong packet from {} with nonce {}",
