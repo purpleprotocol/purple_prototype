@@ -138,7 +138,7 @@ fn process_connection(
         let (high_outbound_sender, mut high_outbound_receiver) = flume::bounded(OUTBOUND_BUF_SIZE);
 
         // Wrap `TimeoutStream` with futures_io traits wrapper
-        let sock = FuturesIoSock::new(sock);
+        let mut sock = FuturesIoSock::new(sock);
 
         match client_or_server {
             ConnectionType::Client => info!("Connecting to {}", addr),
@@ -202,7 +202,7 @@ fn process_connection(
         }
 
         // Read `Connect` raw packet
-        let packet = match read_raw_packet(&sock, &network, &addr).await {
+        let packet = match read_raw_packet(&mut sock, &network, &addr, false).await {
             Ok(packet) => packet,
             Err(err) => {
                 warn!("Socket reader error for {:?}: {:?}", addr, err);
@@ -222,7 +222,7 @@ fn process_connection(
         };
 
         // Handle `Connect` packet
-        match Connect::handle(&mut network, &sock, &addr, connect, client_or_server).await {
+        match Connect::handle(&mut network, &mut sock, &addr, connect, client_or_server).await {
             Ok(()) => { },
             Err(err) => {
                 warn!("Connect error for {:?}: {:?}", addr, err);
@@ -237,8 +237,8 @@ fn process_connection(
         };
 
         // Wrap socket with multiplexer
-        let sock = Connection::new(sock, Config::default(), mode);
-        let control = sock.control();
+        let mut sock = Connection::new(sock, Config::default(), mode);
+        let mut control = sock.control();
 
         let network_clone = network.clone();
         let network_clone2 = network.clone();
@@ -258,7 +258,7 @@ fn process_connection(
                         Ok((packet, req)) => {
                             match control.open_stream().await {
                                 Ok(stream) => {
-                                    tokio::spawn(handle_client_stream(&network, stream, packet, req));
+                                    tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
                                 }
 
                                 Err(err) => {
@@ -279,7 +279,7 @@ fn process_connection(
                         Ok((packet, req)) => {
                             match control.open_stream().await {
                                 Ok(stream) => {
-                                    tokio::spawn(handle_client_stream(&network, stream, packet, req));
+                                    tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
                                 }
 
                                 Err(err) => {
@@ -300,7 +300,7 @@ fn process_connection(
                         Ok((packet, req)) => {
                             match control.open_stream().await {
                                 Ok(stream) => {
-                                    tokio::spawn(handle_client_stream(&network, stream, packet, req));
+                                    tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
                                 }
 
                                 Err(err) => {
@@ -333,12 +333,14 @@ fn process_connection(
             // Reader future
             _ = async move {
                 loop {
+                    let network = network_clone2.clone();
+
                     match sock.next_stream().await {
                         Ok(Some(stream)) => {
                             debug!("Starting server tcp stream with id {} for {}", stream.id(), addr);
 
                             tokio::spawn(async move {
-                                let network = network_clone2.clone();
+                                let network = network.clone();
 
                                 handle_server_stream(&network, &stream)
                                     .await
@@ -372,7 +374,7 @@ fn process_connection(
 }
 
 async fn handle_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin>(
-    network: &N,
+    network: N,
     sock: S,
     initial_packet: Vec<u8>,
     client_request: ClientRequest,
@@ -388,7 +390,7 @@ async fn handle_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
 }
 
 /// Attempt to decode a `Header` from a socket
-async fn read_header<S: AsyncRead + AsyncReadExt + Unpin>(socket: &S, addr: &SocketAddr) -> Result<Header, io::Error> {
+async fn read_header<S: AsyncRead + AsyncReadExt + Unpin>(socket: &mut S, addr: &SocketAddr) -> Result<Header, io::Error> {
     let mut header_buf: [u8; crate::common::HEADER_SIZE] = [0; crate::common::HEADER_SIZE];
 
     // Read header
@@ -421,9 +423,10 @@ async fn read_header<S: AsyncRead + AsyncReadExt + Unpin>(socket: &S, addr: &Soc
 
 /// Attempts to read and decode a raw packet from the given socket 
 async fn read_raw_packet<N: NetworkInterface, S: AsyncRead + AsyncReadExt + Unpin>(
-    sock: &S,
+    sock: &mut S,
     network: &N,
     addr: &SocketAddr,
+    decrypt: bool,
 ) -> Result<Bytes, io::Error> {
     // Read header
     let header = read_header(sock, addr).await?;
@@ -440,8 +443,12 @@ async fn read_raw_packet<N: NetworkInterface, S: AsyncRead + AsyncReadExt + Unpi
     // Verify packet CRC32
     verify_crc32(network, addr, &header, &packet_buf).await?;
 
-    // Decrypt packet
-    decrypt_packet(network, addr, &header, packet_buf).await
+    if decrypt {
+        // Decrypt packet
+        decrypt_packet(network, addr, &header, packet_buf).await
+    } else {
+        Ok(packet_buf.freeze())
+    }
 }
 
 async fn verify_crc32<N: NetworkInterface>(network: &N, addr: &SocketAddr, header: &Header, buf: &BytesMut) -> Result<(), io::Error> {

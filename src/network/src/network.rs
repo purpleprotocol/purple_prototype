@@ -212,20 +212,13 @@ impl NetworkInterface for Network {
     fn send_to_peer<P: Packet>(
         &self,
         peer: &SocketAddr,
-        packet: Vec<u8>,
+        packet: &P,
         priority: NetworkPriority,
     ) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
 
         if let Some(peer) = peers.get(peer) {
-            if let Some(ref rx) = peer.rx {
-                let req = packet.to_client_request();
-                let packet = crate::common::wrap_encrypt_packet(
-                    &packet,
-                    &self.secret_key,
-                    rx,
-                    self.network_name.as_str(),
-                );
+            if peer.rx.is_some() {
                 peer.send_packet(packet, priority)
             } else {
                 Err(NetworkErr::CouldNotSend)
@@ -235,7 +228,7 @@ impl NetworkInterface for Network {
         }
     }
 
-    fn send_to_all<P: Packet>(&self, packet: &[u8], priority: NetworkPriority) -> Result<(), NetworkErr> {
+    fn send_to_all<P: Packet>(&self, packet: &P, priority: NetworkPriority) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
 
         if peers.is_empty() {
@@ -243,16 +236,11 @@ impl NetworkInterface for Network {
         }
 
         for (addr, peer) in peers.iter() {
-            if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(
-                    &packet,
-                    &self.secret_key,
-                    rx,
-                    self.network_name.as_str(),
-                );
-                peer.send_packet(packet.to_vec(), priority)
+            if peer.rx.is_some() {
+                peer.send_packet(packet, priority)
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
                     .unwrap_or(());
+                
             }
         }
 
@@ -273,17 +261,12 @@ impl NetworkInterface for Network {
 
         let iter = peers.iter().filter(|(addr, _)| *addr != exception);
 
-        for (addr, peer) in iter {
-            if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(
-                    &packet,
-                    &self.secret_key,
-                    rx,
-                    self.network_name.as_str(),
-                );
+        for (addr, peer) in peers.iter() {
+            if peer.rx.is_some() {
                 peer.send_packet(packet, priority)
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
                     .unwrap_or(());
+                
             }
         }
 

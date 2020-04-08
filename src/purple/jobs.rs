@@ -20,7 +20,6 @@
 
 use account::NormalAddress;
 use chain::{Block, CheckpointBlock, PowBlock, PowChainRef};
-use network::packets::ForwardBlock;
 use network::{Network, NetworkInterface};
 use network::{NetworkPriority, Packet};
 use parking_lot::RwLock;

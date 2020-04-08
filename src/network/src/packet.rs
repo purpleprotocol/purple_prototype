@@ -46,7 +46,7 @@ pub trait Packet {
     /// Callback that handles a `Packet` after it has been parsed.
     async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
-        socket: &S,
+        socket: &mut S,
         peer: &SocketAddr,
         packet: Arc<Self>,
         conn_type: ConnectionType,

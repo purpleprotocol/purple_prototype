@@ -62,7 +62,7 @@ pub trait NetworkInterface: Clone + Send + Sync {
     ) -> Result<(), NetworkErr>;
 
     /// Sends a packet to all peers.
-    fn send_to_all<P: Packet>(&self, packet: &[u8], priority: NetworkPriority) -> Result<(), NetworkErr>;
+    fn send_to_all<P: Packet>(&self, packet: &P, priority: NetworkPriority) -> Result<(), NetworkErr>;
 
     /// Sends a packet to all peers except the given address.
     fn send_to_all_except<P: Packet>(
@@ -71,7 +71,7 @@ pub trait NetworkInterface: Clone + Send + Sync {
         packet: &P,
         priority: NetworkPriority,
     ) -> Result<(), NetworkErr>;
-    
+
     /// Returns true if the peer with the given `SocketAddr` exists
     /// in the peer table.
     fn has_peer(&self, addr: &SocketAddr) -> bool;

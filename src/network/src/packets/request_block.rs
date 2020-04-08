@@ -99,7 +99,7 @@ impl Packet for RequestBlock {
 
     async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
-        sock: &S,
+        sock: &mut S,
         addr: &SocketAddr,
         packet: Arc<Self>,
         conn_type: ConnectionType,
