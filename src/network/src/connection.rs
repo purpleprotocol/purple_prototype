@@ -231,6 +231,8 @@ fn process_connection(
             }
         };
 
+        info!("Connected to {}", addr);
+
         let mode = match client_or_server {
             ConnectionType::Client => Mode::Client,
             ConnectionType::Server => Mode::Server,
