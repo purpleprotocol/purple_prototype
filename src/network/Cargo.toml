@@ -13,8 +13,11 @@ byteorder = "1.2.7"
 bytes = "0.5.4"
 futures = "0.3.4"
 chrono = "0.4.6"
-tokio = { version = "0.2.11", features = ["full"] } 
+tokio = { version = "0.2.14", features = ["full"] } 
 tokio-io-timeout = "0.4.0"
+futures-io = "0.3.4"
+futures-util = "0.3.4"
+yamux = "0.4.5"
 dashmap = "3.2.1"
 rlp = "0.3.0"
 log = "0.4.0"
@@ -22,6 +25,7 @@ flume = "0.7.1"
 parking_lot = "0.7.1"
 triomphe = { git = "https://github.com/octavonce/triomphe" }
 hex = "0.3.2"
+async-trait = "0.1.29"
 hashdb = "0.3.0"
 chain = { path = "../chain" }
 crypto = { path = "../crypto" }

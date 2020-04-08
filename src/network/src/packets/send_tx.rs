@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -32,6 +33,9 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
 use transactions::Tx;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
+use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendTx {
@@ -45,6 +49,7 @@ impl SendTx {
     }
 }
 
+#[async_trait]
 impl Packet for SendTx {
     const PACKET_TYPE: u8 = 8;
 
@@ -105,11 +110,12 @@ impl Packet for SendTx {
         Ok(Arc::new(packet.clone()))
     }
 
-    fn handle<N: NetworkInterface>(
+    async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
+        sock: &mut S,
         addr: &SocketAddr,
-        packet: Arc<SendTx>,
-        _conn_type: ConnectionType,
+        packet: Arc<Self>,
+        conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
             "Received SendTx packet from {} with nonce {}",
@@ -149,6 +155,10 @@ impl Packet for SendTx {
             InboundPacket::RejectTx(_) | InboundPacket::RequestTx(_) => unreachable!(),
             InboundPacket::None => Ok(()),
         }
+    }
+
+    fn to_client_request(&self) -> Option<ClientRequest> {
+        None
     }
 }
 

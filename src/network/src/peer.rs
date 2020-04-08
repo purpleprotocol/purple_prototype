@@ -16,19 +16,23 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::bootstrap::cache::BootstrapCache;
 use crate::error::NetworkErr;
 use crate::priority::NetworkPriority;
 use crate::validation::validator::ProtocolValidator;
+use crate::util::FuturesIoSock;
+use crate::packet::Packet;
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use crypto::{Hash, NodeId};
+use yamux::Control;
 use std::default::Default;
 use std::fmt;
 use std::hash::{Hash as HashTrait, Hasher};
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU64;
 use triomphe::Arc;
-use tokio::sync::mpsc::Sender;
+use flume::Sender;
 
 #[cfg(test)]
 use parking_lot::Mutex;
@@ -82,18 +86,6 @@ pub struct Peer {
     /// Whether the peer has sent a `Connect` packet or not.
     pub sent_connect: bool,
 
-    /// Buffer storing packets that are to be
-    /// sent to the peer with low priority.
-    pub low_outbound_buffer: Option<Sender<Vec<u8>>>,
-
-    /// Buffer storing packets that are to be
-    /// sent to the peer with medium priority.
-    pub medium_outbound_buffer: Option<Sender<Vec<u8>>>,
-
-    /// Buffer storing packets that are to be
-    /// sent to the peer with high priority.
-    pub high_outbound_buffer: Option<Sender<Vec<u8>>>,
-
     /// Session generated public key
     pub pk: Pk,
 
@@ -108,6 +100,22 @@ pub struct Peer {
 
     /// Associated protocol validator
     pub(crate) validator: ProtocolValidator,
+
+    /// Buffer storing packets that are to be
+    /// sent to the peer with low priority.
+    pub low_outbound_buffer: Option<Sender<(Vec<u8>, ClientRequest)>>,
+
+    /// Buffer storing packets that are to be
+    /// sent to the peer with medium priority.
+    pub medium_outbound_buffer: Option<Sender<(Vec<u8>, ClientRequest)>>,
+
+    /// Buffer storing packets that are to be
+    /// sent to the peer with high priority.
+    pub high_outbound_buffer: Option<Sender<(Vec<u8>, ClientRequest)>>,
+
+    #[cfg(not(test))]
+    /// Control for the tcp connection
+    pub tcp_control: Option<Control>,
 
     #[cfg(test)]
     pub(crate) timeout_guard: Option<Guard>,
@@ -130,9 +138,9 @@ impl Peer {
         id: Option<NodeId>,
         ip: SocketAddr,
         connection_type: ConnectionType,
-        low_outbound_buffer: Option<Sender<Vec<u8>>>,
-        medium_outbound_buffer: Option<Sender<Vec<u8>>>,
-        high_outbound_buffer: Option<Sender<Vec<u8>>>,
+        low_outbound_buffer: Option<Sender<(Vec<u8>, ClientRequest)>>,
+        medium_outbound_buffer: Option<Sender<(Vec<u8>, ClientRequest)>>,
+        high_outbound_buffer: Option<Sender<(Vec<u8>, ClientRequest)>>,
         bootstrap_cache: BootstrapCache,
     ) -> Peer {
         let (pk, sk) = gen_kx_keypair();
@@ -154,6 +162,9 @@ impl Peer {
             bytes_read: Arc::new(AtomicU64::new(0)),
             past_bytes_read: Arc::new(AtomicU64::new(0)),
             validator: ProtocolValidator::new(bootstrap_cache),
+
+            #[cfg(not(test))]
+            tcp_control: None,
 
             #[cfg(test)]
             timeout_guard: None,
@@ -178,9 +189,9 @@ impl Peer {
     }
 
     /// Attempts to place a packet in the outbound buffer of a `Peer`.
-    pub fn send_packet(
+    pub fn send_packet<P: Packet>(
         &self,
-        packet: Vec<u8>,
+        packet: &P,
         priority: NetworkPriority,
     ) -> Result<(), NetworkErr> {
         let mut sender = match priority {
@@ -189,7 +200,10 @@ impl Peer {
             NetworkPriority::High => self.high_outbound_buffer.as_ref().unwrap().clone(),
         };
 
-        sender.try_send(packet).map_err(|err| {
+        let req = packet.to_client_request().unwrap();
+        let packet = packet.to_bytes();
+
+        sender.try_send((packet, req)).map_err(|err| {
             debug!("Packet sending error: {:?}", err);
             NetworkErr::CouldNotSend
         })

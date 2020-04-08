@@ -85,14 +85,17 @@ pub enum NetworkErr {
     /// The entry is already stored in the bootstrap cache
     AlreadyStored,
 
-    /// We have received a `ConnectPool` packet even though we are not a miner node.
-    NotMiner,
-
-    /// There is no active validator pool session on our node.
-    NoPoolSession,
-
     /// An error inside the downloader
     DownloadErr(DownloaderErr),
+
+    /// The packet cannot start a protocol flow
+    CannotStartProtocolFlow,
+
+    /// Encryption keys were not found for the peer i.e. we are still connecting
+    NoKeys,
+
+    /// Writing to the socket failed
+    WriteErr,
 }
 
 impl From<DownloaderErr> for NetworkErr {

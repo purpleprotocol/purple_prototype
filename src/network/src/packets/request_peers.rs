@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -28,6 +29,9 @@ use rand::prelude::*;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
+use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestPeers {
@@ -49,6 +53,7 @@ impl RequestPeers {
     }
 }
 
+#[async_trait]
 impl Packet for RequestPeers {
     const PACKET_TYPE: u8 = 4;
 
@@ -107,11 +112,12 @@ impl Packet for RequestPeers {
         Ok(Arc::new(packet.clone()))
     }
 
-    fn handle<N: NetworkInterface>(
+    async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
+        sock: &mut S,
         addr: &SocketAddr,
-        packet: Arc<RequestPeers>,
-        _conn_type: ConnectionType,
+        packet: Arc<Self>,
+        conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
             "Received RequestPeers packet from {} with nonce {}",
@@ -136,11 +142,15 @@ impl Packet for RequestPeers {
         debug!("Sending SendPeers packet to {}", addr);
 
         // Send `SendPeers` packet back to peer
-        network.send_to_peer(addr, packet.to_bytes(), NetworkPriority::Medium)?;
+        network.send_to_peer(addr, &packet, NetworkPriority::Medium)?;
 
         debug!("SendPeers packet sent to {}", addr);
 
         Ok(())
+    }
+
+    fn to_client_request(&self) -> Option<ClientRequest> {
+        Some(ClientRequest::RequestPeers)
     }
 }
 

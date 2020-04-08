@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -28,6 +29,9 @@ use crypto::{PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
+use async_trait::async_trait;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum RejectPieceInfoStatus {
@@ -50,6 +54,7 @@ impl RejectPieceInfo {
     }
 }
 
+#[async_trait]
 impl Packet for RejectPieceInfo {
     const PACKET_TYPE: u8 = 18;
 
@@ -108,13 +113,18 @@ impl Packet for RejectPieceInfo {
         Ok(Arc::new(packet.clone()))
     }
 
-    fn handle<N: NetworkInterface>(
+    async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
+        sock: &mut S,
         addr: &SocketAddr,
-        packet: Arc<RejectPieceInfo>,
-        _conn_type: ConnectionType,
+        packet: Arc<Self>,
+        conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         unimplemented!();
+    }
+
+    fn to_client_request(&self) -> Option<ClientRequest> {
+        None
     }
 }
 

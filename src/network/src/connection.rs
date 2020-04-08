@@ -24,6 +24,10 @@ use crate::packets::connect::Connect;
 use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
 use crate::priority::NetworkPriority;
 use crate::validation::sender::Sender;
+use crate::util::FuturesIoSock;
+use crate::header::PacketHeader as Header;
+use crate::client_request::ClientRequest;
+use yamux::{Connection, Mode, Config};
 use bytes::{Bytes, BytesMut};
 use crypto::{Nonce, Signature};
 use persistence::PersistentDb;
@@ -33,13 +37,16 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use triomphe::Arc;
 use std::time::{Duration, Instant};
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
+use std::marker::Unpin;
+use tokio::io;
 use tokio::net::tcp::ReadHalf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TryRecvError;
+use flume::RecvError;
 use tokio::time;
 use tokio_io_timeout::*;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Peer timeout interval
 pub(crate) const PEER_TIMEOUT: u64 = 15000;
@@ -120,26 +127,23 @@ fn process_connection(
         let refuse_connection = Arc::new(AtomicBool::new(false));
         let addr = sock.peer_addr().unwrap();
 
-        // Split up the reading and writing parts of the
-        // socket.
-        let (reader, writer) = sock.split();
-        let mut reader = TimeoutReader::new(reader);
-        let mut writer = TimeoutWriter::new(writer);
+        // Wrap raw socket with a `TimeoutStream`
+        let mut sock = TimeoutStream::new(sock);
+        sock.set_read_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
+        sock.set_write_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
 
-        // Set timeout
-        reader.set_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
-        writer.set_timeout(Some(Duration::from_millis(PEER_TIMEOUT)));
+        // Create outbound channels
+        let (low_outbound_sender, mut low_outbound_receiver) = flume::bounded(OUTBOUND_BUF_SIZE);
+        let (medium_outbound_sender, mut medium_outbound_receiver) = flume::bounded(OUTBOUND_BUF_SIZE);
+        let (high_outbound_sender, mut high_outbound_receiver) = flume::bounded(OUTBOUND_BUF_SIZE);
+
+        // Wrap `TimeoutStream` with futures_io traits wrapper
+        let mut sock = FuturesIoSock::new(sock);
 
         match client_or_server {
             ConnectionType::Client => info!("Connecting to {}", addr),
             ConnectionType::Server => info!("Received connection request from {}", addr),
         };
-
-        // Create outbound channels
-        let (low_outbound_sender, mut low_outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
-        let (medium_outbound_sender, mut medium_outbound_receiver) =
-            mpsc::channel(OUTBOUND_BUF_SIZE);
-        let (high_outbound_sender, mut high_outbound_receiver) = mpsc::channel(OUTBOUND_BUF_SIZE);
 
         // Create new peer and add it to the peer table
         let peer = Peer::new(
@@ -153,13 +157,90 @@ fn process_connection(
         );
 
         let (node_id, skey) = {
-            if let Err(NetworkErr::MaximumPeersReached) = network.add_peer(addr, peer.clone()) {
+            if let Err(NetworkErr::MaximumPeersReached) = network.add_peer(addr, peer) {
                 // Stop accepting peers
                 accept_connections.store(false, Ordering::Relaxed);
             }
 
             (network.node_id.clone(), network.secret_key.clone())
         };
+
+        // Write a connect packet if we are the client.
+        let connect = match client_or_server {
+            ConnectionType::Client => {
+                let mut peers = network.peers.read();
+
+                if let Some(peer) = peers.get(&addr) {
+                    // Send `Connect` packet.
+                    let mut connect = Connect::new(node_id.clone(), peer.pk);
+                    connect.sign(&skey);
+                    Some(connect)
+                } else {
+                    warn!("Could not find peer {:?}", addr);
+                    return;
+                }
+            }
+
+            _ => None
+        };
+
+        // Send connect packet if we are the client
+        if let Some(connect) = connect {
+            let packet = async {
+                let packet = connect.to_bytes();
+                let packet =
+                    crate::common::wrap_packet(&packet, network.network_name.as_str());
+                packet
+            }.await;
+
+            debug!("Sending connect packet to {}", addr);
+
+            if let Err(err) = sock.write(&packet).await {
+                warn!("Write to {:?} failed: {:?}", addr, err);
+                return;
+            }
+        }
+
+        // Read `Connect` raw packet
+        let packet = match read_raw_packet(&mut sock, &network, &addr, false).await {
+            Ok(packet) => packet,
+            Err(err) => {
+                warn!("Socket reader error for {:?}: {:?}", addr, err);
+                ban_peer(&network, &addr);
+                return;
+            }
+        };
+
+        // Parse `Connect` packet
+        let connect = match Connect::from_bytes(&packet) {
+            Ok(packet) => packet,
+            Err(err) => {
+                warn!("Connect error for {:?}: {:?}", addr, err);
+                ban_peer(&network, &addr);
+                return;
+            }
+        };
+
+        // Handle `Connect` packet
+        match Connect::handle(&mut network, &mut sock, &addr, connect, client_or_server).await {
+            Ok(()) => { },
+            Err(err) => {
+                warn!("Connect error for {:?}: {:?}", addr, err);
+                ban_peer(&network, &addr);
+                return;
+            }
+        };
+
+        info!("Connected to {}", addr);
+
+        let mode = match client_or_server {
+            ConnectionType::Client => Mode::Client,
+            ConnectionType::Server => Mode::Server,
+        };
+
+        // Wrap socket with multiplexer
+        let mut sock = Connection::new(sock, Config::default(), mode);
+        let mut control = sock.control();
 
         let network_clone = network.clone();
         let network_clone2 = network.clone();
@@ -173,102 +254,70 @@ fn process_connection(
         tokio::select! {
             // Writer future
             _ = async move {
-                let mut writer = BufWriter::new(writer);
-                let connect = {
-                    let mut peers = network.peers.read();
-
-                    if let Some(peer) = peers.get(&addr) {
-                        // Write a connect packet if we are the client.
-                        match client_or_server {
-                            ConnectionType::Client => {
-                                // Send `Connect` packet.
-                                let mut connect = Connect::new(node_id.clone(), peer.pk);
-                                connect.sign(&skey);
-                                Some(connect)
-                            }
-
-                            _ => None
-                        }
-                    } else {
-                        warn!("Could not find peer {:?}", addr);
-                        return;
-                    }
-                };
-
-                // Send connect packet if we are the client
-                if let Some(connect) = connect {
-                    let packet = async {
-                        let packet = connect.to_bytes();
-                        let packet =
-                            crate::common::wrap_packet(&packet, network.network_name.as_str());
-                        packet
-                    }.await;
-
-                    debug!("Sending connect packet to {}", addr);
-
-                    if let Err(err) = writer.write(&packet).await {
-                        warn!("Write to {:?} failed: {:?}", addr, err);
-                        return;
-                    }
-                }
-
                 // Poll outbound channels in the order of their priority
                 loop {
-                    match high_outbound_receiver.try_recv() {
-                        Ok(packet) => {
-                            if let Err(err) = writer.write(&packet).await {
-                                warn!("Write to {:?} failed: {:?}", addr, err)
-                            }
+                    match high_outbound_receiver.recv_async().await {
+                        Ok((packet, req)) => {
+                            match control.open_stream().await {
+                                Ok(stream) => {
+                                    tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
+                                }
 
-                            tokio::task::yield_now().await;
+                                Err(err) => {
+                                    warn!("Opening stream to {:?} failed: {:?}", addr, err);
+                                }
+                            };
+
                             continue;
                         }
 
-                        Err(TryRecvError::Closed) => {
+                        Err(RecvError::Disconnected) => {
                             debug!("Write half of {} closed", addr);
                             break;
                         }
-
-                        Err(TryRecvError::Empty) => { } // Do nothing
                     }
 
-                    match medium_outbound_receiver.try_recv() {
-                        Ok(packet) => {
-                            if let Err(err) = writer.write(&packet).await {
-                                warn!("Write to {:?} failed: {:?}", addr, err)
-                            }
+                    match medium_outbound_receiver.recv_async().await {
+                        Ok((packet, req)) => {
+                            match control.open_stream().await {
+                                Ok(stream) => {
+                                    tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
+                                }
 
-                            tokio::task::yield_now().await;
+                                Err(err) => {
+                                    warn!("Opening stream to {:?} failed: {:?}", addr, err);
+                                }
+                            };
+
                             continue;
                         }
 
-                        Err(TryRecvError::Closed) => {
+                        Err(RecvError::Disconnected) => {
                             debug!("Write half of {} closed", addr);
                             break;
                         }
-
-                        Err(TryRecvError::Empty) => { } // Do nothing
                     }
 
-                    match low_outbound_receiver.try_recv() {
-                        Ok(packet) => {
-                            if let Err(err) = writer.write(&packet).await {
-                                warn!("Write to {:?} failed: {:?}", addr, err)
-                            }
+                    match low_outbound_receiver.recv_async().await {
+                        Ok((packet, req)) => {
+                            match control.open_stream().await {
+                                Ok(stream) => {
+                                    tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
+                                }
 
-                            tokio::task::yield_now().await;
+                                Err(err) => {
+                                    warn!("Opening stream to {:?} failed: {:?}", addr, err);
+                                }
+                            };
+
                             continue;
                         }
 
-                        Err(TryRecvError::Closed) => {
+                        Err(RecvError::Disconnected) => {
                             debug!("Write half of {} closed", addr);
                             break;
                         }
-
-                        Err(TryRecvError::Empty) => { } // Do nothing
                     }
-
-                    tokio::task::yield_now().await;
                 }
             } => {
                 let network = network_clone3;
@@ -285,11 +334,26 @@ fn process_connection(
 
             // Reader future
             _ = async move {
-                let reader = BufReader::new(reader);
-                let network = network_clone2;
+                loop {
+                    let network = network_clone2.clone();
 
-                if let Err(err) = socket_reader(network.clone(), addr.clone(), reader, refuse_connection).await {
-                    warn!("Socket reader error for {:?}: {:?}", addr, err);
+                    match sock.next_stream().await {
+                        Ok(Some(stream)) => {
+                            debug!("Starting server tcp stream with id {} for {}", stream.id(), addr);
+
+                            tokio::spawn(async move {
+                                let network = network.clone();
+
+                                handle_server_stream(&network, &stream)
+                                    .await
+                                    .map_err(|err| warn!("Socket reader error for {:?}: {:?}", addr, err));
+                            });
+                        }
+
+                        _ => {
+                            break;
+                        }
+                    }
                 };
 
                 info!("Connection to {} closed", addr);
@@ -309,6 +373,191 @@ fn process_connection(
     };
 
     tokio::spawn(socket);
+}
+
+async fn handle_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin>(
+    network: N,
+    sock: S,
+    initial_packet: Vec<u8>,
+    client_request: ClientRequest,
+) -> Result<(), NetworkErr> {
+    unimplemented!();
+}
+
+async fn handle_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin>(
+    network: &N,
+    sock: &S,
+) -> Result<(), NetworkErr> {
+    unimplemented!();
+}
+
+/// Attempt to decode a `Header` from a socket
+async fn read_header<S: AsyncRead + AsyncReadExt + Unpin>(socket: &mut S, addr: &SocketAddr) -> Result<Header, io::Error> {
+    let mut header_buf: [u8; crate::common::HEADER_SIZE] = [0; crate::common::HEADER_SIZE];
+
+    // Read header
+    socket.read_exact(&mut header_buf).await?;
+
+    // Decode header
+    let header = crate::common::decode_header(&header_buf).map_err(|err| {
+        // TODO: Handle header read error
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Header read error for {}: {:?}", addr, err),
+        )
+    })?;
+
+    // Only accept our current network version
+    if header.network_version != crate::common::NETWORK_VERSION {
+        return Err(io::Error::new(
+            // TODO: Handle header read error
+            io::ErrorKind::Other,
+            format!(
+                "Header read error for {}: {:?}",
+                addr,
+                NetworkErr::BadVersion
+            ),
+        ));
+    }
+
+    Ok(header)
+}
+
+/// Attempts to read and decode a raw packet from the given socket 
+async fn read_raw_packet<N: NetworkInterface, S: AsyncRead + AsyncReadExt + Unpin>(
+    sock: &mut S,
+    network: &N,
+    addr: &SocketAddr,
+    decrypt: bool,
+) -> Result<Bytes, io::Error> {
+    // Read header
+    let header = read_header(sock, addr).await?;
+
+    // Read packet from socket
+    let mut packet_buf = BytesMut::with_capacity(header.packet_len as usize);
+    sock.read_exact(&mut packet_buf).await?;
+
+    let bytes_read = packet_buf.len();
+
+    // Account bytes read
+    account_bytes_read(network.clone(), &addr.clone(), bytes_read).await;
+
+    // Verify packet CRC32
+    verify_crc32(network, addr, &header, &packet_buf).await?;
+
+    if decrypt {
+        // Decrypt packet
+        decrypt_packet(network, addr, &header, packet_buf).await
+    } else {
+        Ok(packet_buf.freeze())
+    }
+}
+
+async fn verify_crc32<N: NetworkInterface>(network: &N, addr: &SocketAddr, header: &Header, buf: &BytesMut) -> Result<(), io::Error> {
+    crate::common::verify_crc32(&header, &buf, network.network_name())
+        .map_err(|err| {
+            io::Error::new(
+                // TODO: Handle header read error
+                io::ErrorKind::Other,
+                format!("Header read error for {}: {:?}", addr, err),
+            )
+        })
+}
+
+async fn decrypt_packet<N: NetworkInterface>(network: &N, addr: &SocketAddr, header: &Header, buf: BytesMut) -> Result<Bytes, io::Error> {
+    let (peer_id, peer_tx) = { 
+        let peers = network.peers();
+        let peers = peers.read();
+        let peer = peers.get(&addr).ok_or(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Lost connection to {}", addr),
+            ))?;
+
+        (peer.id.clone(), peer.tx.clone())
+    };
+
+    let mut buf = BytesMut::new();
+
+    // Decode nonce which is always the
+    // first 12 bytes in the packet.
+    let nonce_buf = &buf[..12];
+    let mut nonce: [u8; 12] = [0; 12];
+    nonce.copy_from_slice(nonce_buf);
+    let nonce = Nonce(nonce);
+
+    // The next 64 bytes in the packet are
+    // the signature of the packet.
+    let sig_buf = &buf[12..76];
+    let sig = Signature::new(sig_buf);
+
+    // Get a slice of the remaining length
+    // which is the packet payload.
+    let packet_slice = &buf[76..];
+
+    // Verify packet signature
+    if !crypto::verify(packet_slice, &sig, &peer_id.as_ref().unwrap().0) {
+        return Err(io::Error::new(
+            // TODO: Handle signature error
+            io::ErrorKind::Other,
+            format!("Packet signature error for {}", addr),
+        ));
+    }
+
+    // Decrypt payload
+    let decrypted =
+        crate::common::decrypt(packet_slice, &nonce, peer_tx.as_ref().unwrap())
+            .map_err(|_| {
+                io::Error::new(
+                    // TODO: Handle encryption error
+                    io::ErrorKind::Other,
+                    format!("Encryption error for {}", addr),
+                )
+            })?;
+
+    buf.extend_from_slice(&decrypted);
+    Ok(buf.freeze())
+}
+
+async fn account_bytes_read<N: NetworkInterface>(network: N, addr: &SocketAddr, bytes_read: usize) {
+    let bytes_read = bytes_read + crate::common::HEADER_SIZE;
+    let acc = {
+        let peers = network.peers();
+        let peers = peers.read();
+
+        if let Some(peer) = peers.get(addr) {
+            peer.bytes_read.clone()
+        } else {
+            warn!("Could not find peer {}", addr);
+            return;
+        }
+    };
+
+    debug!("Finished reading {} bytes from {}", bytes_read, addr);
+    acc.fetch_add(bytes_read as u64, Ordering::SeqCst);
+}
+
+async fn handle_err<N: NetworkInterface>(network: &N, addr: &SocketAddr, refuse_connection: Arc<AtomicBool>, result: Result<(), NetworkErr>) {
+    // TODO: Handle other errors as well
+    match result {
+        Ok(_) => {} // Do nothing
+        Err(NetworkErr::InvalidConnectPacket) => {
+            // Flag socket for connection refusal if we
+            // have received an invalid connect packet.
+            refuse_connection.store(true, Ordering::Relaxed);
+
+            // Also, ban the peer
+            ban_peer(network, addr);
+        }
+
+        Err(NetworkErr::SelfConnect) => {
+            refuse_connection.store(true, Ordering::Relaxed);
+        }
+
+        err => {
+            warn!("Packet process error for {}: {:?}", addr.clone(), err);
+            ban_peer(network, addr); // Blanket ban for now
+        }
+    }
 }
 
 /// Starts a background job responsible for requesting and
@@ -365,7 +614,7 @@ pub fn start_peer_list_refresh_interval(
 
                     if let Ok(packet) = result {
                         network
-                            .send_to_peer(&peer_addr, packet.to_bytes(), NetworkPriority::Medium)
+                            .send_to_peer(&peer_addr, &packet, NetworkPriority::Medium)
                             .map_err(|err| {
                                 warn!("Could not send packet to {}, reason: {:?}", peer_addr, err)
                             })
@@ -415,183 +664,33 @@ pub fn start_peer_list_refresh_interval(
     tokio::spawn(refresh_interval);
 }
 
-async fn socket_reader(
-    mut network: Network,
-    addr: SocketAddr,
-    mut reader: BufReader<TimeoutReader<ReadHalf<'_>>>,
-    refuse_connection: Arc<AtomicBool>,
-) -> Result<(), io::Error> {
-    let mut header_buf: [u8; crate::common::HEADER_SIZE] = [0; crate::common::HEADER_SIZE];
+// async fn socket_reader(
+//     mut network: Network,
+//     addr: SocketAddr,
+//     mut reader: BufReader<TimeoutReader<ReadHalf<'_>>>,
+//     refuse_connection: Arc<AtomicBool>,
+// ) -> Result<(), io::Error> {
+//     let mut header_buf: [u8; crate::common::HEADER_SIZE] = [0; crate::common::HEADER_SIZE];
 
-    loop {
-        if refuse_connection.load(Ordering::Relaxed) {
-            info!("Closing connection to {:?}", addr);
-            break;
-        }
+//     loop {
+//         if refuse_connection.load(Ordering::Relaxed) {
+//             info!("Closing connection to {:?}", addr);
+//             break;
+//         }
 
-        // Read header
-        reader.read_exact(&mut header_buf).await?;
+//         // Process packet
+//         let result = async { network.process_packet(&addr, &packet) }.await;
 
-        // Decode header
-        let header = async {
-            let header = crate::common::decode_header(&header_buf).map_err(|err| {
-                // TODO: Handle header read error
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Header read error for {}: {:?}", addr, err),
-                )
-            })?;
+//         // Handle any error
+//         handle_err(&network, &addr, refuse_connection.clone(), result).await;
+//     }
 
-            // Only accept our current network version
-            if header.network_version != crate::common::NETWORK_VERSION {
-                return Err(io::Error::new(
-                    // TODO: Handle header read error
-                    io::ErrorKind::Other,
-                    format!(
-                        "Header read error for {}: {:?}",
-                        addr,
-                        NetworkErr::BadVersion
-                    ),
-                ));
-            }
+//     Ok(())
+// }
 
-            Ok(header)
-        }
-        .await?;
-
-        // Read packet from socket
-        let mut packet_buf = BytesMut::with_capacity(header.packet_len as usize);
-        reader.read_exact(&mut packet_buf).await?;
-
-        let bytes_read = packet_buf.len();
-        let network_clone = network.clone();
-        let addr_clone = addr.clone();
-
-        // Account bytes read
-        tokio::spawn(async move {
-            let bytes_read = bytes_read + crate::common::HEADER_SIZE;
-            let acc = {
-                let peers = network_clone.peers();
-                let peers = peers.read();
-
-                if let Some(peer) = peers.get(&addr_clone) {
-                    peer.bytes_read.clone()
-                } else {
-                    warn!("Could not find peer {}", addr);
-                    return;
-                }
-            };
-
-            debug!("Finished reading {} bytes from {}", bytes_read, addr_clone);
-            acc.fetch_add(bytes_read as u64, Ordering::SeqCst);
-        });
-
-        // Verify packet CRC32
-        async {
-            crate::common::verify_crc32(&header, &packet_buf, network.network_name.as_str())
-                .map_err(|err| {
-                    io::Error::new(
-                        // TODO: Handle header read error
-                        io::ErrorKind::Other,
-                        format!("Header read error for {}: {:?}", addr, err),
-                    )
-                })
-        }
-        .await?;
-
-        // Decrypt packet
-        let packet: Bytes = async {
-            let mut peers = network.peers.write();
-
-            if let Some(peer) = peers.get_mut(&addr) {
-                let mut buf = BytesMut::new();
-
-                // Decrypt packet if we are connected
-                if peer.sent_connect {
-                    // Decode nonce which is always the
-                    // first 12 bytes in the packet.
-                    let nonce_buf = &packet_buf[..12];
-                    let mut nonce: [u8; 12] = [0; 12];
-                    nonce.copy_from_slice(nonce_buf);
-                    let nonce = Nonce(nonce);
-
-                    // The next 64 bytes in the packet are
-                    // the signature of the packet.
-                    let sig_buf = &packet_buf[12..76];
-                    let sig = Signature::new(sig_buf);
-
-                    // Get a slice of the remaining length
-                    // which is the packet payload.
-                    let packet_slice = &packet_buf[76..];
-
-                    // Verify packet signature
-                    if !crypto::verify(packet_slice, &sig, &peer.id.as_ref().unwrap().0) {
-                        return Err(io::Error::new(
-                            // TODO: Handle signature error
-                            io::ErrorKind::Other,
-                            format!("Packet signature error for {}", addr),
-                        ));
-                    }
-
-                    // Decrypt payload
-                    let decrypted =
-                        crate::common::decrypt(packet_slice, &nonce, peer.tx.as_ref().unwrap())
-                            .map_err(|_| {
-                                io::Error::new(
-                                    // TODO: Handle encryption error
-                                    io::ErrorKind::Other,
-                                    format!("Encryption error for {}", addr),
-                                )
-                            })?;
-
-                    buf.extend_from_slice(&decrypted);
-                } else {
-                    // We are expecting an un-encrypted `Connect` packet
-                    // so we make it just pass through.
-                    buf = packet_buf;
-                }
-
-                Ok(buf.freeze())
-            } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Lost connection to {}", addr),
-                ));
-            }
-        }
-        .await?;
-
-        // Process packet
-        let result = async { network.process_packet(&addr, &packet) }.await;
-
-        // Handle errors
-        async {
-            // TODO: Handle other errors as well
-            match result {
-                Ok(_) => {} // Do nothing
-                Err(NetworkErr::InvalidConnectPacket) => {
-                    // Flag socket for connection refusal if we
-                    // have received an invalid connect packet.
-                    refuse_connection.store(true, Ordering::Relaxed);
-
-                    // Also, ban the peer
-                    info!("Banning peer {}", addr);
-                    network.ban_ip(&addr).unwrap();
-                }
-
-                Err(NetworkErr::SelfConnect) => {
-                    refuse_connection.store(true, Ordering::Relaxed);
-                }
-
-                err => {
-                    warn!("Packet process error for {}: {:?}", addr.clone(), err);
-                }
-            }
-        }
-        .await;
-    }
-
-    Ok(())
+fn ban_peer<N: NetworkInterface>(network: &N, addr: &SocketAddr) {
+    info!("Banning peer {}", addr);
+    network.ban_ip(&addr).unwrap();
 }
 
 // #[cfg(test)]

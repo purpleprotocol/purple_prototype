@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -27,6 +28,9 @@ use crypto::ShortHash;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
+use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestBlock {
@@ -42,6 +46,7 @@ impl RequestBlock {
     }
 }
 
+#[async_trait]
 impl Packet for RequestBlock {
     const PACKET_TYPE: u8 = 11;
 
@@ -92,13 +97,18 @@ impl Packet for RequestBlock {
         Ok(Arc::new(packet.clone()))
     }
 
-    fn handle<N: NetworkInterface>(
+    async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
+        sock: &mut S,
         addr: &SocketAddr,
-        packet: Arc<RequestBlock>,
-        _conn_type: ConnectionType,
+        packet: Arc<Self>,
+        conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         unimplemented!();
+    }
+
+    fn to_client_request(&self) -> Option<ClientRequest> {
+        Some(ClientRequest::RequestBlock)
     }
 }
 

@@ -17,6 +17,7 @@
 */
 
 use crate::bootstrap::cache::BootstrapCache;
+use crate::packet::Packet;
 use crate::error::NetworkErr;
 use crate::peer::Peer;
 use crate::priority::NetworkPriority;
@@ -36,7 +37,7 @@ use flume::Sender;
 use crossbeam_channel::Sender;
 
 /// Generic network layer interface.
-pub trait NetworkInterface: Clone + Send {
+pub trait NetworkInterface: Clone + Send + Sync {
     /// Attempts to connect to the peer with the given ip.
     fn connect(&mut self, address: &SocketAddr) -> Result<(), NetworkErr>;
 
@@ -53,35 +54,23 @@ pub trait NetworkInterface: Clone + Send {
     fn disconnect_from_ip(&mut self, ip: &SocketAddr) -> Result<(), NetworkErr>;
 
     /// Sends a packet to a specific peer.
-    fn send_to_peer(
+    fn send_to_peer<P: Packet>(
         &self,
         peer: &SocketAddr,
-        packet: Vec<u8>,
+        packet: &P,
         priority: NetworkPriority,
     ) -> Result<(), NetworkErr>;
 
     /// Sends a packet to all peers.
-    fn send_to_all(&self, packet: &[u8], priority: NetworkPriority) -> Result<(), NetworkErr>;
+    fn send_to_all<P: Packet>(&self, packet: &P, priority: NetworkPriority) -> Result<(), NetworkErr>;
 
     /// Sends a packet to all peers except the given address.
-    fn send_to_all_except(
+    fn send_to_all_except<P: Packet>(
         &self,
         exception: &SocketAddr,
-        packet: &[u8],
+        packet: &P,
         priority: NetworkPriority,
     ) -> Result<(), NetworkErr>;
-
-    /// Sends a raw packet to a specific peer. This
-    /// means that the packet will be un-encrypted.
-    fn send_raw(
-        &self,
-        peer: &SocketAddr,
-        packet: &[u8],
-        priority: NetworkPriority,
-    ) -> Result<(), NetworkErr>;
-
-    /// Callback that processes each packet that is received from any peer.
-    fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr>;
 
     /// Returns true if the peer with the given `SocketAddr` exists
     /// in the peer table.
@@ -105,6 +94,9 @@ pub trait NetworkInterface: Clone + Send {
 
     /// Returns a reference to the peer table `RwLock`.
     fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>>;
+
+    /// Returns a reference to the current network name
+    fn network_name(&self) -> &str;
 
     /// Returns a reference to the `PowChain`.
     fn pow_chain_ref(&self) -> PowChainRef;

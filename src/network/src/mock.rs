@@ -171,26 +171,6 @@ impl NetworkInterface for MockNetwork {
         }
     }
 
-    fn send_raw(
-        &self,
-        peer: &SocketAddr,
-        packet: &[u8],
-        _priority: NetworkPriority,
-    ) -> Result<(), NetworkErr> {
-        let id = if let Some(id) = self.address_mappings.get(peer) {
-            id
-        } else {
-            return Err(NetworkErr::PeerNotFound);
-        };
-
-        if let Some(mailbox) = self.mailboxes.get(&id) {
-            mailbox.send((self.ip.clone(), packet.to_vec())).unwrap();
-            Ok(())
-        } else {
-            Err(NetworkErr::PeerNotFound)
-        }
-    }
-
     fn send_to_all(&self, packet: &[u8], _priority: NetworkPriority) -> Result<(), NetworkErr> {
         if self.mailboxes.is_empty() {
             return Err(NetworkErr::NoPeers);
@@ -253,105 +233,16 @@ impl NetworkInterface for MockNetwork {
         &self.pow_chain_sender
     }
 
-    fn process_packet(&mut self, addr: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
-        if addr == &self.ip {
-            panic!("We received a packet from ourselves! This is illegal");
-        }
-
-        let (tx, is_none_id, conn_type) = {
-            let mut peers = self.peers.write();
-
-            // Insert to peer table if this is the first received packet.
-            if peers.get(addr).is_none() {
-                peers.insert(
-                    addr.clone(),
-                    Peer::new(
-                        None,
-                        addr.clone(),
-                        ConnectionType::Server,
-                        None,
-                        None,
-                        None,
-                        self.bootstrap_cache.clone(),
-                    ),
-                );
-            }
-
-            let peer = peers.get(addr).unwrap();
-            (peer.tx.clone(), peer.id.is_none(), peer.connection_type)
-        };
-
-        // We should receive a connect packet
-        // if the peer's id is non-existent.
-        if is_none_id {
-            match Connect::from_bytes(packet) {
-                Ok(connect_packet) => {
-                    debug!(
-                        "Received connect packet from {}: {:?}",
-                        addr, connect_packet
-                    );
-
-                    // Handle connect packet
-                    Connect::handle(self, addr, connect_packet, conn_type)?;
-
-                    // Schedule timeout task
-                    {
-                        let peers_clone = self.peers.clone();
-                        let addr_clone = addr.clone();
-                        let mut peers = self.peers.write();
-                        let mut peer = peers.get_mut(addr).unwrap();
-
-                        let timer = timer::Timer::new();
-                        let guard =
-                            timer.schedule_repeating(Duration::milliseconds(10), move || {
-                                let peers = peers_clone.clone();
-                                let addr = addr_clone.clone();
-                                let mut peers = peers.write();
-
-                                let mut peer = peers.get_mut(&addr).unwrap();
-                                peer.last_seen.fetch_add(10, Ordering::SeqCst);
-                                peer.last_ping.fetch_add(10, Ordering::SeqCst);
-                            });
-
-                        peer.timeout_guard = Some(guard);
-                        peer.timer = Some(Arc::new(Mutex::new(timer)));
-                    }
-
-                    Ok(())
-                }
-                _ => {
-                    // Invalid packet, remove peer
-                    debug!("Invalid connect packet from {}", addr);
-                    Err(NetworkErr::InvalidConnectPacket)
-                }
-            }
-        } else {
-            debug!("Received packet from {}: {}", addr, hex::encode(packet));
-
-            let packet = crate::common::unwrap_decrypt_packet(
-                packet,
-                tx.as_ref().unwrap(),
-                self.network_name.as_str(),
-            )?;
-            crate::common::handle_packet(self, conn_type, addr, &packet)?;
-
-            // Refresh peer timeout timer
-            {
-                let peers = self.peers.read();
-                let peer = peers.get(addr).unwrap();
-                peer.last_seen.store(0, Ordering::SeqCst);
-            }
-
-            Ok(())
-        }
-    }
-
     fn ban_peer(&self, peer: &NodeId) -> Result<(), NetworkErr> {
         unimplemented!();
     }
 
     fn ban_ip(&self, peer: &SocketAddr) -> Result<(), NetworkErr> {
         unimplemented!();
+    }
+
+    fn network_name(&self) -> &str {
+        self.network_name.as_str()
     }
 
     fn our_node_id(&self) -> &NodeId {
@@ -465,29 +356,6 @@ impl MockNetwork {
                                 network.ban_ip(&addr).unwrap();
                             }
                         }
-                    }
-                }
-
-                let pow_receiver = pow_block_receiver.lock();
-                let mut iter = pow_receiver.try_iter();
-
-                while let Some((addr, block)) = iter.next() {
-                    let pow_chain = network.pow_chain_ref().chain;
-                    let mut chain = pow_chain.write();
-
-                    match chain.append_block(block.clone()) {
-                        Ok(()) => {
-                            // Forward block
-                            let mut packet = ForwardBlock::new(block);
-                            network
-                                .send_to_all_except(&addr, &packet.to_bytes(), NetworkPriority::Low)
-                                .unwrap();
-                        }
-                        Err(err) => info!(
-                            "Chain Error for block {:?}: {:?}",
-                            block.block_hash().unwrap(),
-                            err
-                        ),
                     }
                 }
 

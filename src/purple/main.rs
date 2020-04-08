@@ -241,9 +241,6 @@ fn main() {
 
     // Start the tokio runtime
     runtime.block_on(async move {
-        // Start listening for blocks
-        start_block_listeners(network.clone(), pow_chain.clone(), pow_rx);
-
         // Start listening to connections
         start_listener(network.clone(), accept_connections.clone());
 
@@ -267,7 +264,7 @@ fn main() {
                 let collector_address = argv.collector_address;
 
                 // Start mining
-                crate::jobs::start_miner(pow_chain, network.clone(), our_ip, proof_delay, collector_address)
+                crate::jobs::start_miner(pow_chain, network.clone(), our_ip, proof_delay, collector_address.as_ref().unwrap().clone())
                     .expect("Could not start miner");
             }
         }
@@ -382,7 +379,7 @@ struct Argv {
         feature = "miner-cpu-avx",
         feature = "miner-test-mode"
     ))]
-    collector_address: NormalAddress,
+    collector_address: Option<NormalAddress>,
 
     #[cfg(feature = "miner-test-mode")]
     proof_delay: u32,
@@ -478,6 +475,7 @@ fn parse_cli_args() -> Argv {
         argv.arg(
             Arg::with_name("start_mining")
                 .long("start-mining")
+                .requires("collector_address")
                 .help("Start the node as a miner node"),
         )
         .arg(
@@ -563,10 +561,10 @@ fn parse_cli_args() -> Argv {
             feature = "miner-test-mode"
         ))] {
             let start_mining: bool = matches.is_present("start_mining");
-            let collector_address: NormalAddress = if let Some(arg) = matches.value_of("collector_address") {
-                unwrap!(NormalAddress::from_base58(arg), "Bad value for <COLLECTOR_ADDRESS>")
+            let collector_address = if let Some(arg) = matches.value_of("collector_address") {
+                Some(unwrap!(NormalAddress::from_base58(arg), "Bad value for <COLLECTOR_ADDRESS>"))
             } else {
-                panic!("No value specified for <COLLECTOR_ADDRESS>")
+                None
             };
         }
     }
@@ -605,3 +603,13 @@ fn parse_cli_args() -> Argv {
 }
 
 mod jobs;
+
+// Check that we can safely cast a `usize` to a `u64`.
+static_assertions::const_assert! {
+    std::mem::size_of::<usize>() <= std::mem::size_of::<u64>()
+}
+
+// Check that we can safely cast a `u32` to a `usize`.
+static_assertions::const_assert! {
+    std::mem::size_of::<u32>() <= std::mem::size_of::<usize>()
+}

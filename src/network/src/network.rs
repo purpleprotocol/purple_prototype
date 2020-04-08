@@ -209,22 +209,16 @@ impl NetworkInterface for Network {
         self.port
     }
 
-    fn send_to_peer(
+    fn send_to_peer<P: Packet>(
         &self,
         peer: &SocketAddr,
-        packet: Vec<u8>,
+        packet: &P,
         priority: NetworkPriority,
     ) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
 
         if let Some(peer) = peers.get(peer) {
-            if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(
-                    &packet,
-                    &self.secret_key,
-                    rx,
-                    self.network_name.as_str(),
-                );
+            if peer.rx.is_some() {
                 peer.send_packet(packet, priority)
             } else {
                 Err(NetworkErr::CouldNotSend)
@@ -234,7 +228,7 @@ impl NetworkInterface for Network {
         }
     }
 
-    fn send_to_all(&self, packet: &[u8], priority: NetworkPriority) -> Result<(), NetworkErr> {
+    fn send_to_all<P: Packet>(&self, packet: &P, priority: NetworkPriority) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
 
         if peers.is_empty() {
@@ -242,26 +236,21 @@ impl NetworkInterface for Network {
         }
 
         for (addr, peer) in peers.iter() {
-            if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(
-                    &packet,
-                    &self.secret_key,
-                    rx,
-                    self.network_name.as_str(),
-                );
-                peer.send_packet(packet.to_vec(), priority)
+            if peer.rx.is_some() {
+                peer.send_packet(packet, priority)
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
                     .unwrap_or(());
+                
             }
         }
 
         Ok(())
     }
 
-    fn send_to_all_except(
+    fn send_to_all_except<P: Packet>(
         &self,
         exception: &SocketAddr,
-        packet: &[u8],
+        packet: &P,
         priority: NetworkPriority,
     ) -> Result<(), NetworkErr> {
         let peers = self.peers.read();
@@ -272,37 +261,20 @@ impl NetworkInterface for Network {
 
         let iter = peers.iter().filter(|(addr, _)| *addr != exception);
 
-        for (addr, peer) in iter {
-            if let Some(ref rx) = peer.rx {
-                let packet = crate::common::wrap_encrypt_packet(
-                    &packet,
-                    &self.secret_key,
-                    rx,
-                    self.network_name.as_str(),
-                );
-                peer.send_packet(packet.to_vec(), priority)
+        for (addr, peer) in peers.iter() {
+            if peer.rx.is_some() {
+                peer.send_packet(packet, priority)
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
                     .unwrap_or(());
+                
             }
         }
 
         Ok(())
     }
 
-    fn send_raw(
-        &self,
-        peer: &SocketAddr,
-        packet: &[u8],
-        priority: NetworkPriority,
-    ) -> Result<(), NetworkErr> {
-        let peers = self.peers.read();
-
-        if let Some(peer) = peers.get(peer) {
-            let packet = crate::common::wrap_packet(&packet, self.network_name.as_str());
-            peer.send_packet(packet, priority)
-        } else {
-            Err(NetworkErr::PeerNotFound)
-        }
+    fn network_name(&self) -> &str {
+        self.network_name.as_str()
     }
 
     fn pow_chain_ref(&self) -> PowChainRef {
@@ -315,50 +287,6 @@ impl NetworkInterface for Network {
 
     fn downloader(&self) -> Downloader {
         self.downloader.clone()
-    }
-
-    fn process_packet(&mut self, peer: &SocketAddr, packet: &[u8]) -> Result<(), NetworkErr> {
-        let (is_none_id, conn_type) = {
-            let peers = self.peers.read();
-            let peer = peers.get(peer).ok_or(NetworkErr::PeerNotFound)?;
-            (peer.id.is_none(), peer.connection_type)
-        };
-
-        // We should receive a connect packet
-        // if the peer's id is non-existent and
-        // the connection is of type `Server`.
-        if is_none_id {
-            match Connect::from_bytes(packet) {
-                Ok(connect_packet) => {
-                    debug!(
-                        "Received connect packet from {}: {:?}",
-                        peer, connect_packet
-                    );
-
-                    // Handle connect packet
-                    Connect::handle(self, peer, connect_packet, conn_type)?;
-
-                    Ok(())
-                }
-
-                _ => {
-                    // Invalid packet, remove peer
-                    debug!("Invalid connect packet from {}", peer);
-                    Err(NetworkErr::InvalidConnectPacket)
-                }
-            }
-        } else {
-            crate::common::handle_packet(self, conn_type, peer, &packet)?;
-
-            // Refresh peer timeout timer
-            {
-                let peers = self.peers.read();
-                let peer = peers.get(peer).ok_or(NetworkErr::PeerNotFound)?;
-                peer.last_seen.store(0, Ordering::SeqCst);
-            }
-
-            Ok(())
-        }
     }
 
     fn ban_peer(&self, peer: &NodeId) -> Result<(), NetworkErr> {
@@ -431,7 +359,7 @@ impl NetworkInterface for Network {
                         debug!("Sending Ping packet to {}", addr);
 
                         network_clone2
-                            .send_to_peer(&addr, ping.to_bytes(), NetworkPriority::Low)
+                            .send_to_peer(&addr, &ping, NetworkPriority::Low)
                             .map_err(|err| warn!("Could not send ping to {}: {:?}", addr, err))
                             .unwrap_or(());
 

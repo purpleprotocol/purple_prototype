@@ -45,9 +45,6 @@ pub fn init(
     state_db: PersistentDb,
     archival_mode: bool,
 ) -> PowChainRef {
-    assert_eq!(crate::MAX_TX_SET_SIZE % crate::MAX_PIECE_SIZE, 0);
-    assert_eq!(crate::MAX_PIECE_SIZE % crate::MAX_SUB_PIECE_SIZE, 0);
-
     let root_state = if state_db.retrieve(PersistentDb::RELOAD_FLAG).is_some() {
         PowChainState::reload(state_db.clone()).unwrap()
     } else {
@@ -81,9 +78,6 @@ pub fn init(
     state_db: PersistentDb,
     archival_mode: bool,
 ) -> PowChainRef {
-    assert_eq!(crate::MAX_TX_SET_SIZE % crate::MAX_PIECE_SIZE, 0);
-    assert_eq!(crate::MAX_PIECE_SIZE % crate::MAX_SUB_PIECE_SIZE, 0);
-    
     let root_state = if state_db.retrieve(PersistentDb::RELOAD_FLAG).is_some() {
         PowChainState::reload(state_db.clone()).unwrap()
     } else {

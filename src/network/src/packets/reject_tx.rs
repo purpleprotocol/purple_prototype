@@ -16,6 +16,7 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -30,6 +31,9 @@ use crypto::{PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
+use async_trait::async_trait;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum TxRejectStatus {
@@ -50,6 +54,7 @@ impl RejectTx {
     }
 }
 
+#[async_trait]
 impl Packet for RejectTx {
     const PACKET_TYPE: u8 = 9;
 
@@ -110,11 +115,12 @@ impl Packet for RejectTx {
         Ok(Arc::new(packet.clone()))
     }
 
-    fn handle<N: NetworkInterface>(
+    async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
+        sock: &mut S,
         addr: &SocketAddr,
-        packet: Arc<RejectTx>,
-        _conn_type: ConnectionType,
+        packet: Arc<Self>,
+        conn_type: ConnectionType,
     ) -> Result<(), NetworkErr> {
         debug!(
             "Received RejectTx packet from {} with nonce {}",
@@ -150,6 +156,10 @@ impl Packet for RejectTx {
         debug!("RejectTx {} acked!", packet.nonce);
 
         Ok(())
+    }
+
+    fn to_client_request(&self) -> Option<ClientRequest> {
+        None
     }
 }
 

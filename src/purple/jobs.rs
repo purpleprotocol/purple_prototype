@@ -20,7 +20,6 @@
 
 use account::NormalAddress;
 use chain::{Block, CheckpointBlock, PowBlock, PowChainRef};
-use network::packets::ForwardBlock;
 use network::{Network, NetworkInterface};
 use network::{NetworkPriority, Packet};
 use parking_lot::RwLock;
@@ -166,11 +165,6 @@ pub fn start_miner(
 
                             // Only propagate block if the chain append was successful
                             if let Ok(_) = result {
-                                debug!("Creating block...");
-
-                                let packet = ForwardBlock::new(block);
-                                let packet = packet.to_bytes();
-
                                 debug!("Pausing solvers...");
 
                                 // Pause solvers
@@ -179,11 +173,10 @@ pub fn start_miner(
 
                                 debug!("Sending block...");
 
-                                // Send block to all of our peers
-                                network.send_to_all(&packet, NetworkPriority::Medium).map_err(|err| warn!("Could not send pow block! Reason: {:?}", err));
-
-                                // Wait a bit for buffers to flush
-                                thread::sleep_ms(150);
+                                // TODO: Start propagating the block
+                                
+                                // // Wait a bit for buffers to flush
+                                // thread::sleep_ms(150);
                             } else {
                                 warn!("Could not send pow block! Reason: Unsuccessful chain append");
                             }

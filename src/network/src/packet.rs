@@ -19,14 +19,19 @@
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::peer::ConnectionType;
+use crate::client_request::ClientRequest;
 use chrono::prelude::*;
 use crypto::{SecretKey as Sk, Signature};
-use std::net::SocketAddr;
 use triomphe::Arc;
+use async_trait::async_trait;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
+use std::net::SocketAddr;
 
 /// The type id of a packet.
 pub type PacketType = u8;
 
+#[async_trait]
 /// Generic packet interface
 pub trait Packet {
     /// The type of the packet.
@@ -39,10 +44,39 @@ pub trait Packet {
     fn from_bytes(bytes: &[u8]) -> Result<Arc<Self>, NetworkErr>;
 
     /// Callback that handles a `Packet` after it has been parsed.
-    fn handle<N: NetworkInterface>(
+    async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
         network: &mut N,
+        socket: &mut S,
         peer: &SocketAddr,
         packet: Arc<Self>,
         conn_type: ConnectionType,
     ) -> Result<(), NetworkErr>;
+
+    /// Returns `Some(_)` if the packet is an initial packet
+    /// in a client request. Returns `None` otherwise.
+    fn to_client_request(&self) -> Option<ClientRequest>;
+
+    /// Attempts to start a client protocol flow using the packet.
+    /// 
+    /// This should return an `Err(_)` if the packet cannot start 
+    /// a client protocol flow. 
+    async fn start_client_protocol_flow<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
+      &self, 
+      network: &N, 
+      sock: &S
+    ) -> Result<(), NetworkErr> {
+        Err(NetworkErr::CannotStartProtocolFlow)
+    }
+
+    /// Attempts to start a server protocol flow using the packet.
+    /// 
+    /// This should return an `Err(_)` if the packet cannot start 
+    /// a server protocol flow. 
+    async fn start_server_protocol_flow<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
+      &self, 
+      network: &N, 
+      sock: &S
+    ) -> Result<(), NetworkErr> {
+        Err(NetworkErr::CannotStartProtocolFlow)
+    }
 }

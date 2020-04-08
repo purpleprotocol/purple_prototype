@@ -57,3 +57,6 @@ pub fn random_socket_addr() -> SocketAddr {
     let addr = IpAddr::V4(Ipv4Addr::new(i1, i2, i3, i4));
     SocketAddr::new(addr, 44034)
 }
+
+static_assertions::const_assert_eq!(crate::MAX_TX_SET_SIZE % crate::MAX_PIECE_SIZE, 0);
+static_assertions::const_assert_eq!(crate::MAX_PIECE_SIZE % crate::MAX_SUB_PIECE_SIZE, 0);
