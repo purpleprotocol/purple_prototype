@@ -27,7 +27,7 @@ use crate::validation::sender::Sender;
 use crate::util::FuturesIoSock;
 use crate::header::PacketHeader as Header;
 use crate::client_request::ClientRequest;
-use yamux::{Connection, Mode, Config};
+use yamux::{Connection, Mode, Config, ConnectionError as YamuxConnErr};
 use bytes::{Bytes, BytesMut};
 use crypto::{Nonce, Signature};
 use persistence::PersistentDb;
@@ -258,14 +258,24 @@ fn process_connection(
                 loop {
                     match high_outbound_receiver.recv_async().await {
                         Ok((packet, req)) => {
-                            match control.open_stream().await {
-                                Ok(stream) => {
-                                    tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
-                                }
+                            loop {
+                                match control.open_stream().await {
+                                    Ok(stream) => {
+                                        tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
+                                        break;
+                                    }
 
-                                Err(err) => {
-                                    warn!("Opening stream to {:?} failed: {:?}", addr, err);
-                                }
+                                    // Spin until there are streams available
+                                    Err(YamuxConnErr::TooManyStreams) => {
+                                        tokio::task::yield_now().await;
+                                        continue;
+                                    }
+
+                                    Err(err) => {
+                                        warn!("Opening stream to {:?} failed: {:?}", addr, err);
+                                        break;
+                                    }
+                                };
                             };
 
                             continue;
@@ -279,14 +289,24 @@ fn process_connection(
 
                     match medium_outbound_receiver.recv_async().await {
                         Ok((packet, req)) => {
-                            match control.open_stream().await {
-                                Ok(stream) => {
-                                    tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
-                                }
+                            loop {
+                                match control.open_stream().await {
+                                    Ok(stream) => {
+                                        tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
+                                        break;
+                                    }
 
-                                Err(err) => {
-                                    warn!("Opening stream to {:?} failed: {:?}", addr, err);
-                                }
+                                    // Spin until there are streams available
+                                    Err(YamuxConnErr::TooManyStreams) => {
+                                        tokio::task::yield_now().await;
+                                        continue;
+                                    }
+
+                                    Err(err) => {
+                                        warn!("Opening stream to {:?} failed: {:?}", addr, err);
+                                        break;
+                                    }
+                                };
                             };
 
                             continue;
@@ -300,14 +320,24 @@ fn process_connection(
 
                     match low_outbound_receiver.recv_async().await {
                         Ok((packet, req)) => {
-                            match control.open_stream().await {
-                                Ok(stream) => {
-                                    tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
-                                }
+                            loop {
+                                match control.open_stream().await {
+                                    Ok(stream) => {
+                                        tokio::spawn(handle_client_stream(network.clone(), stream, packet, req));
+                                        break;
+                                    }
 
-                                Err(err) => {
-                                    warn!("Opening stream to {:?} failed: {:?}", addr, err);
-                                }
+                                    // Spin until there are streams available
+                                    Err(YamuxConnErr::TooManyStreams) => {
+                                        tokio::task::yield_now().await;
+                                        continue;
+                                    }
+
+                                    Err(err) => {
+                                        warn!("Opening stream to {:?} failed: {:?}", addr, err);
+                                        break;
+                                    }
+                                };
                             };
 
                             continue;
@@ -381,6 +411,8 @@ async fn handle_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
     initial_packet: Vec<u8>,
     client_request: ClientRequest,
 ) -> Result<(), NetworkErr> {
+    // Write initial packet to stream
+
     unimplemented!();
 }
 
