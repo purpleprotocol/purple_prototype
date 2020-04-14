@@ -168,9 +168,7 @@ fn process_connection(
         // Write a connect packet if we are the client.
         let connect = match client_or_server {
             ConnectionType::Client => {
-                let mut peers = network.peers.read();
-
-                if let Some(peer) = peers.get(&addr) {
+                if let Some(peer) = network.peers.get(&addr) {
                     // Send `Connect` packet.
                     let mut connect = Connect::new(node_id.clone(), peer.pk);
                     connect.sign(&skey);
@@ -419,7 +417,7 @@ async fn start_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt 
     let result = handle_client_stream(network.clone(), sock, &addr, initial_packet, client_request).await;
     
     if let Err(err) = result {
-        warn!("Socket reader error for {:?}: {:?}", addr, err);
+        warn!("Stream error for {:?}: {:?}", addr, err);
         handle_err(&network, &addr, refuse_connection, err).await;
     }
 }
@@ -433,7 +431,7 @@ async fn start_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt 
     let result = handle_server_stream(network.clone(), sock, &addr).await;
     
     if let Err(err) = result {
-        warn!("Socket reader error for {:?}: {:?}", addr, err);
+        warn!("Stream error for {:?}: {:?}", addr, err);
         handle_err(&network, &addr, refuse_connection, err).await;
     }
 }
@@ -531,7 +529,6 @@ async fn verify_crc32<N: NetworkInterface>(network: &N, addr: &SocketAddr, heade
 async fn decrypt_packet<N: NetworkInterface>(network: &N, addr: &SocketAddr, header: &Header, buf: BytesMut) -> Result<Bytes, io::Error> {
     let (peer_id, peer_tx) = { 
         let peers = network.peers();
-        let peers = peers.read();
         let peer = peers.get(&addr).ok_or(io::Error::new(
                 io::ErrorKind::ConnectionAborted,
                 format!("Lost connection to {}", addr),
@@ -583,10 +580,7 @@ async fn decrypt_packet<N: NetworkInterface>(network: &N, addr: &SocketAddr, hea
 async fn account_bytes_read<N: NetworkInterface>(network: N, addr: &SocketAddr, bytes_read: usize) {
     let bytes_read = bytes_read + crate::common::HEADER_SIZE;
     let acc = {
-        let peers = network.peers();
-        let peers = peers.read();
-
-        if let Some(peer) = peers.get(addr) {
+        if let Some(peer) = network.peers().get(addr) {
             peer.bytes_read.clone()
         } else {
             warn!("Could not find peer {}", addr);
@@ -643,7 +637,6 @@ pub fn start_peer_list_refresh_interval(
             debug!("Triggering peer refresh...");
 
             let peers = network.peers();
-            let peers = peers.read();
 
             if peers.len() < network.max_peers {
                 debug!(
@@ -655,7 +648,7 @@ pub fn start_peer_list_refresh_interval(
                 // TODO: Ask multiple peers
                 let peer = peers
                     .iter()
-                    .map(|(addr, _)| addr.clone())
+                    .map(|val| val.key().clone())
                     .choose(&mut rand::thread_rng());
 
                 if let Some(peer_addr) = peer {
@@ -704,12 +697,12 @@ pub fn start_peer_list_refresh_interval(
                 // TODO: Disconnect from the peers with the highest latency
                 let iter = peers
                     .iter()
-                    .filter_map(|(_, p)| p.id.as_ref())
+                    .filter_map(|p| p.id.clone())
                     .take(peers.len() - network.max_peers);
 
                 for id in iter {
                     network
-                        .disconnect(id)
+                        .disconnect(&id)
                         .map_err(|err| {
                             warn!(
                                 "Could not disconnect from peer with id {:?}! Reason: {:?}",

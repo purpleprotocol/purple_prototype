@@ -55,14 +55,12 @@ impl Receiver<RequestPeers, SendPeers> for RequestPeersReceiver {
             // First attempt to send the peers we are connected to
             let connected_peers: Vec<SocketAddr> = {
                 let peers = network.peers();
-                let peers = peers.read();
 
                 peers
                     .iter()
                     // Filter out the requester
-                    .filter(|(k, _v)| *k != sender)
-                    .map(|(_, v)| &v.ip)
-                    .cloned()
+                    .filter(|v| v.key() != sender)
+                    .map(|v| v.ip.clone())
                     .choose_multiple(&mut rand::thread_rng(), packet.requested_peers as usize)
             };
 

@@ -64,7 +64,6 @@ impl Packet for Ping {
         // Retrieve receiver mutex
         let receiver = {
             let peers = network.peers();
-            let peers = peers.read();
             let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
 
             #[cfg(test)]

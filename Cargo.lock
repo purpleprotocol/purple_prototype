@@ -29,9 +29,6 @@ name = "ahash"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f33b5018f120946c1dcf279194f238a9f146725593ead1c08fa47ff22b0b5d3"
-dependencies = [
- "const-random",
-]
 
 [[package]]
 name = "ahash"
@@ -1145,9 +1142,9 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "graphlib"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ae6ca2e3573e167b49b5c97e4e228466d32057185a8a21652b35549d1dd8d50"
+checksum = "b7ce4424e12e166b7ebe47a5e7a0470bfa3db63001553781e8d89d1ebfff58dc"
 dependencies = [
  "dot",
  "hashbrown 0.6.3",
@@ -1202,7 +1199,6 @@ checksum = "8e6073d0ca812575946eb5f35ff68dbe519907b25c42530389ff946dc84c6ead"
 dependencies = [
  "ahash 0.2.18",
  "autocfg 0.1.7",
- "rayon",
 ]
 
 [[package]]

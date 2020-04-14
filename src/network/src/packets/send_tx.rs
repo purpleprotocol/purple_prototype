@@ -127,7 +127,6 @@ impl Packet for SendTx {
         // Retrieve pairs map
         let pairs = {
             let peers = network.peers();
-            let peers = peers.read();
             let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
 
             peer.validator.transaction_propagation.pairs.clone()
