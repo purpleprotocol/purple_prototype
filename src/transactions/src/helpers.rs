@@ -19,6 +19,9 @@
 use crate::{Tx, Send};
 use account::{Address, Balance, NormalAddress};
 use crypto::{PublicKey, SecretKey};
+use constants::*;
+use lazy_static::*;
+use triomphe::Arc;
 
 #[cfg(any(test, feature = "test"))]
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -30,6 +33,13 @@ pub enum TestAccount {
     A = 0,
     B = 1,
     C = 2,
+}
+
+#[cfg(any(test, feature = "test"))]
+lazy_static! {
+    static ref A_NONCE: Arc<AtomicU64> = Arc::new(AtomicU64::new(1));
+    static ref B_NONCE: Arc<AtomicU64> = Arc::new(AtomicU64::new(1));
+    static ref C_NONCE: Arc<AtomicU64> = Arc::new(AtomicU64::new(1));
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -106,4 +116,28 @@ pub fn send_coins(
     tx.compute_hash();
     let byte_size = tx.to_bytes().unwrap().len() - 1;
     Tx::Send(tx, byte_size)
+}
+
+#[cfg(any(test, feature = "test"))]
+pub fn get_tx_list_of_size(size: usize) -> Result<Vec<Arc<Tx>>, &'static str> {
+    if (size == 0 || size > MAX_TX_SET_SIZE) {
+        return Err("Invalid size");
+    }
+
+    let mut tx_list = Vec::<Arc<Tx>>::new();
+    let mut current_size = 0;
+
+    while current_size <= MAX_TX_SET_SIZE {
+        let nonce = A_NONCE.fetch_add(1, Ordering::SeqCst);
+        let mut send_tx = send_coins(TestAccount::A, TestAccount::B, 1, 10, nonce);
+        let new_size = send_tx.byte_size() + current_size;
+        if (new_size > MAX_TX_SET_SIZE) {
+            break;
+        }
+
+        tx_list.push(Arc::new(send_tx));
+        current_size = new_size;
+    }
+
+    Ok(tx_list)
 }

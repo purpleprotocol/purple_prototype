@@ -19,6 +19,7 @@ elastic-array = "0.10.0"
 rand = "0.6.0"
 rocksdb = "0.13.0"
 persistence = { path = "../persistence" }
+constants = { path = "../constants" }
 crypto = { path = "../crypto" }
 account = { path = "../account" }
 quickcheck = "0.7.2"
@@ -26,6 +27,7 @@ rust_decimal = "0.9.0"
 purple_vm = { path = "../purple_vm" }
 bin-tools = { path = "../util/bin-tools/" }
 bitvec = "0.9.0"
+triomphe = { git = "https://github.com/octavonce/triomphe" }
 
 [dev-dependencies]
 tempfile = "3.0.5"

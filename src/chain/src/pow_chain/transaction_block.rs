@@ -21,6 +21,7 @@ use crate::chain::*;
 use crate::pow_chain::chain_state::BlockType;
 use crate::pow_chain::PowChainState;
 use crate::types::*;
+use constants::*;
 use account::NormalAddress;
 use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -43,15 +44,6 @@ use std::str;
 use std::str::FromStr;
 use triomphe::Arc;
 use transactions::Tx;
-
-/// The maximum size, in bytes, of a transaction set in a transaction block.
-pub const MAX_TX_SET_SIZE: usize = 2097152; // 2mb
-
-/// The maximum allowed size of a piece of transactions. `MAX_TX_SET_SIZE % MAX_PIECE_SIZE` must equal to 0
-pub const MAX_PIECE_SIZE: usize = 262144; // 256kb
-
-/// The maximum allowed size of a sub-piece. `MAX_PIECE_SIZE % MAX_SUB_PIECE_SIZE` must equal to 0
-pub const MAX_SUB_PIECE_SIZE: usize = 16384; // 16kb
 
 #[derive(Clone, Debug)]
 /// A block belonging to the `PowChain`.
