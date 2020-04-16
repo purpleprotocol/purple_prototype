@@ -43,6 +43,7 @@ mod genesis;
 mod mint;
 mod open_contract;
 mod send;
+mod helpers;
 
 pub use crate::burn::*;
 pub use crate::call::*;
@@ -54,6 +55,7 @@ pub use crate::genesis::*;
 pub use crate::mint::*;
 pub use crate::open_contract::*;
 pub use crate::send::*;
+pub use crate::helpers::*;
 
 use account::{Address, Balance, NormalAddress};
 use crypto::{FromBase58, Hash, Identity, PublicKey, SecretKey, ShortHash};
@@ -392,94 +394,6 @@ impl Arbitrary for Tx {
             _ => panic!(),
         }
     }
-}
-
-#[cfg(any(test, feature = "test"))]
-use std::sync::atomic::{AtomicU64, Ordering};
-
-#[cfg(any(test, feature = "test"))]
-#[repr(u8)]
-#[derive(Clone, Debug, PartialEq, Copy)]
-pub enum TestAccount {
-    A = 0,
-    B = 1,
-    C = 2,
-}
-
-#[cfg(any(test, feature = "test"))]
-impl TestAccount {
-    pub fn to_perm_address(&self) -> NormalAddress {
-        let id: u8 = match *self {
-            TestAccount::A => 1,
-            TestAccount::B => 2,
-            TestAccount::C => 3,
-        };
-        let (pk, _) = crypto::gen_keypair_from_seed(&[&[id][..], &encode_be_u64!(1)].concat());
-        NormalAddress::from_pkey(&pk)
-    }
-
-    pub fn to_signing_addr(&self, nonce: u64) -> NormalAddress {
-        let id: u8 = match *self {
-            TestAccount::A => 1,
-            TestAccount::B => 2,
-            TestAccount::C => 3,
-        };
-        let (pk, _) = crypto::gen_keypair_from_seed(&[&[id][..], &encode_be_u64!(nonce)].concat());
-        NormalAddress::from_pkey(&pk)
-    }
-
-    pub fn to_pkey(&self, nonce: u64) -> PublicKey {
-        let id: u8 = match *self {
-            TestAccount::A => 1,
-            TestAccount::B => 2,
-            TestAccount::C => 3,
-        };
-        let (pk, _) = crypto::gen_keypair_from_seed(&[&[id][..], &encode_be_u64!(nonce)].concat());
-        pk
-    }
-
-    pub fn to_skey(&self, nonce: u64) -> SecretKey {
-        let id: u8 = match *self {
-            TestAccount::A => 1,
-            TestAccount::B => 2,
-            TestAccount::C => 3,
-        };
-        let (_, sk) = crypto::gen_keypair_from_seed(&[&[id][..], &encode_be_u64!(nonce)].concat());
-        sk
-    }
-}
-
-#[cfg(any(test, feature = "test"))]
-/// Helper to create test `Send` transactions between the
-/// genesis test accounts.
-pub fn send_coins(
-    sender: TestAccount,
-    receiver: TestAccount,
-    amount: u64,
-    fee: u64,
-    sender_nonce: u64,
-) -> Tx {
-    assert_ne!(sender, receiver);
-
-    let sender_pkey = sender.to_pkey(sender_nonce);
-
-    let mut tx = Send {
-        from: sender_pkey,
-        next_address: sender.to_signing_addr(sender_nonce + 1),
-        to: Address::Normal(receiver.to_perm_address()),
-        amount: Balance::from_u64(amount),
-        fee: Balance::from_u64(fee),
-        asset_hash: crypto::hash_slice(crate::genesis::MAIN_CUR_NAME).to_short(),
-        fee_hash: crypto::hash_slice(crate::genesis::MAIN_CUR_NAME).to_short(),
-        nonce: sender_nonce,
-        signature: None,
-        hash: None,
-    };
-
-    tx.sign(sender.to_skey(sender_nonce));
-    tx.compute_hash();
-    let byte_size = tx.to_bytes().unwrap().len() - 1;
-    Tx::Send(tx, byte_size)
 }
 
 #[cfg(test)]
