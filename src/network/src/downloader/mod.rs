@@ -19,12 +19,13 @@
 use crate::downloader::download::Download;
 use crate::downloader::error::DownloaderErr;
 use crate::downloader::download_info::DownloadInfo;
-use chain::{Block, MAX_PIECE_SIZE, MAX_TX_SET_SIZE};
+use chain::Block;
 use crypto::ShortHash;
 use chain::TransactionBlock;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use triomphe::Arc;
+use constants::*;
 
 mod download_state;
 mod download;

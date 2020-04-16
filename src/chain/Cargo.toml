@@ -28,14 +28,14 @@ rand = "^0.6.0"
 quickcheck = "0.7.2"
 static_assertions = "1"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
+graphlib = { version = "0.6.0", features = ["dot"] }
+test-helpers = { path = "../util/test-helpers" }
 
 [dev-dependencies]
-graphlib = { version = "0.6.0", features = ["dot"] }
 rayon = "1.2.0"
 criterion = "0.2.1"
 tempdir = "0.3.7"
 rocksdb = "0.13.0"
-test-helpers = { path = "../util/test-helpers" }
 
 [dev-dependencies.miner]
 features = ["test"]
