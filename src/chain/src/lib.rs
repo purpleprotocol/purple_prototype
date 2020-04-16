@@ -30,7 +30,7 @@ mod init;
 mod pow_chain;
 pub mod types;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test"))]
 mod test_helpers;
 
 pub use crate::block::*;
@@ -40,13 +40,13 @@ pub use crate::pow_chain::block::*;
 pub use crate::pow_chain::chain::*;
 pub use crate::pow_chain::*;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test"))]
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test"))]
 use rand::prelude::*;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test"))]
 pub fn random_socket_addr() -> SocketAddr {
     let mut thread_rng = rand::thread_rng();
     let i1 = thread_rng.gen();
@@ -57,6 +57,3 @@ pub fn random_socket_addr() -> SocketAddr {
     let addr = IpAddr::V4(Ipv4Addr::new(i1, i2, i3, i4));
     SocketAddr::new(addr, 44034)
 }
-
-static_assertions::const_assert_eq!(crate::MAX_TX_SET_SIZE % crate::MAX_PIECE_SIZE, 0);
-static_assertions::const_assert_eq!(crate::MAX_PIECE_SIZE % crate::MAX_SUB_PIECE_SIZE, 0);

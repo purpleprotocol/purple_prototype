@@ -310,6 +310,11 @@ impl<B: Block> ChainRef<B> {
             chain.canonical_tip_state.inner_ref().state_root().clone(),
         )
     }
+
+    pub fn get_state_root(&self) -> ShortHash {
+        let chain = self.chain.read();
+        chain.canonical_tip_state.inner_ref().state_root().clone()
+    }
 }
 
 #[derive(Debug)]

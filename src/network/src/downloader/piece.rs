@@ -22,7 +22,7 @@ use crate::downloader::piece_info::PieceInfo;
 use crate::downloader::sub_piece_info::{SubPieceInfo, SubPieceState};
 use crate::downloader::sub_pieces::SubPieces;
 use crypto::{ShortHash, BlakeHasher};
-use chain::{MAX_TX_SET_SIZE, MAX_PIECE_SIZE, MAX_SUB_PIECE_SIZE};
+use constants::*;
 use std::hash::Hasher;
 
 #[derive(Debug, PartialEq)]

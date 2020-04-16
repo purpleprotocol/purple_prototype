@@ -351,6 +351,8 @@ dependencies = [
  "bin-tools",
  "byteorder",
  "chrono",
+ "constants",
+ "criterion",
  "crypto",
  "elastic-array",
  "graphlib",
@@ -368,7 +370,9 @@ dependencies = [
  "rand 0.6.5",
  "rayon",
  "rlp",
+ "rocksdb",
  "static_assertions",
+ "tempdir",
  "test-helpers",
  "transactions",
  "triomphe",
@@ -454,6 +458,13 @@ name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
+
+[[package]]
+name = "constants"
+version = "0.1.0"
+dependencies = [
+ "static_assertions",
+]
 
 [[package]]
 name = "cookie"
@@ -1574,6 +1585,7 @@ dependencies = [
  "account",
  "chain",
  "chrono",
+ "constants",
  "crypto",
  "graphlib",
  "hashbrown 0.1.7",
@@ -1769,6 +1781,7 @@ dependencies = [
  "bytes",
  "chain",
  "chrono",
+ "constants",
  "criterion",
  "crossbeam-channel 0.4.2",
  "crypto",
@@ -3280,6 +3293,7 @@ dependencies = [
  "bin-tools",
  "bitvec",
  "byteorder",
+ "constants",
  "crypto",
  "elastic-array",
  "hashdb",
@@ -3297,6 +3311,7 @@ dependencies = [
  "serde_derive",
  "tempfile",
  "test-helpers",
+ "triomphe",
  "unwrap",
 ]
 

@@ -1,0 +1,268 @@
+#[macro_use]
+extern crate criterion;
+extern crate miner;
+extern crate rocksdb;
+extern crate tempdir;
+
+use triomphe::Arc;
+use chain::*;
+use account::normal::NormalAddress;
+use miner::Proof;
+use criterion::Criterion;
+use rand::prelude::*;
+use crypto::*;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use persistence::PersistentDb;
+use rocksdb::DB;
+use parking_lot::RwLock;
+use chrono::prelude::*;
+use transactions::*;
+use constants::*;
+
+pub fn random_socket_addr() -> SocketAddr {
+    let mut thread_rng = rand::thread_rng();
+    let i1 = thread_rng.gen();
+    let i2 = thread_rng.gen();
+    let i3 = thread_rng.gen();
+    let i4 = thread_rng.gen();
+
+    let addr = IpAddr::V4(Ipv4Addr::new(i1, i2, i3, i4));
+    SocketAddr::new(addr, 44034)
+}
+
+fn criterion_benchmark(c: &mut Criterion) {
+    c.bench_function("append_block with a CheckpointBlock", |b| {
+        let db1 = test_helpers::init_tempdb();
+        let db2 = test_helpers::init_tempdb();
+        chain::init(db1, db2, true);
+
+        let db3 = test_helpers::init_tempdb();
+        let chain = Chain::<PowBlock>::new(db3, PowBlock::genesis_state(), true);
+        let mut chain = ChainRef::<PowBlock>::new(Arc::new(RwLock::new(chain)));
+
+        let proof = Proof::test_proof(42);
+        let collector_address = NormalAddress::random();
+        let ip = random_socket_addr();
+        let height = 0;
+
+        let identity = Identity::new();
+        let node_id = NodeId(*identity.pkey());
+
+        let mut block = CheckpointBlock::new(
+            chain.canonical_tip().block_hash().unwrap(),
+            collector_address,
+            ip,
+            height + 1,
+            proof,
+            node_id,
+        );
+
+        block.sign_miner(identity.skey());
+        block.compute_hash();
+
+        let block = Arc::new(block);
+        let block = PowBlock::Checkpoint(block);
+        let block = Arc::new(block);
+
+        b.iter(|| chain.append_block(block.clone()));
+    });
+
+    c.bench_function("append_block with a CheckpointBlock - flush to disk", |b| {
+        let db1 = test_helpers::init_tempdb();
+        let db2 = test_helpers::init_tempdb();
+        chain::init(db1, db2, true);
+
+        let tmp_dir = tempdir::TempDir::new("db_dir").unwrap();
+        let path = tmp_dir.path();
+        let db3 = Arc::new(DB::open_default(path.to_str().unwrap()).unwrap());
+        let per_db = PersistentDb::new(db3, None);
+
+        let chain = Chain::<PowBlock>::new(per_db, PowBlock::genesis_state(), true);
+        let chain = ChainRef::<PowBlock>::new(Arc::new(RwLock::new(chain)));
+
+        let proof = Proof::test_proof(42);
+        let collector_address = NormalAddress::random();
+        let ip = random_socket_addr();
+        let height = 0;
+
+        let identity = Identity::new();
+        let node_id = NodeId(*identity.pkey());
+
+        let mut block = CheckpointBlock::new(
+            chain.canonical_tip().block_hash().unwrap(),
+            collector_address,
+            ip,
+            height + 1,
+            proof,
+            node_id,
+        );
+
+        block.sign_miner(identity.skey());
+        block.compute_hash();
+
+        let block = Arc::new(block);
+        let block = PowBlock::Checkpoint(block);
+        let block = Arc::new(block);
+
+        b.iter(|| chain.append_block(block.clone()));
+    });
+
+    c.bench_function("append_block with an empty TransactionBlock", |b| {
+        let db1 = test_helpers::init_tempdb();
+        let db2 = test_helpers::init_tempdb();
+        chain::init(db1, db2, true);
+
+        let db3 = test_helpers::init_tempdb();
+        let chain = Chain::<PowBlock>::new(db3, PowBlock::genesis_state(), true);
+        let chain = ChainRef::<PowBlock>::new(Arc::new(RwLock::new(chain)));
+        let proof = Proof::test_proof(42);
+        let identity = Identity::new();
+        let node_id = NodeId(*identity.pkey());
+        let collector_address = NormalAddress::random();
+        let ip = random_socket_addr();
+        let mut height = 1;
+
+        let mut checkpoint_block = CheckpointBlock::new(
+            chain.canonical_tip().block_hash().unwrap(),
+            collector_address,
+            ip,
+            height,
+            proof,
+            node_id.clone(),
+        );
+
+        checkpoint_block.sign_miner(identity.skey());
+        checkpoint_block.compute_hash();
+
+        let mut blocks = Vec::new();
+        let mut parent_hash = checkpoint_block.block_hash().unwrap();
+        for _ in 0..ALLOWED_TXS_BLOCKS {
+            height += 1;
+
+            let mut block = TransactionBlock {
+                tx_checksums: Some(Vec::<ShortHash>::new()),
+                pieces_sizes: Some(Vec::<usize>::new()),
+                height: height,
+                parent_hash: parent_hash,
+                state_root: Some(chain.get_state_root()),
+                tx_root: Some(ShortHash::NULL_RLP),
+                hash: None,
+                miner_id: node_id.clone(),
+                miner_signature: None,
+                timestamp: Utc::now(),
+                transactions: Some(Arc::new(RwLock::new(Vec::new()))),
+            };
+            
+            block.sign_miner(identity.skey());
+            block.compute_hash();
+
+            let block = Arc::<TransactionBlock>::new(block);
+            let block = PowBlock::Transaction(block);
+            let block = Arc::<PowBlock>::new(block);
+
+            parent_hash = block.block_hash().unwrap();
+
+            blocks.push(block);
+        }
+
+        b.iter(|| {
+            let db3 = test_helpers::init_tempdb();
+            let chain = Chain::<PowBlock>::new(db3, PowBlock::genesis_state(), true);
+            let chain = ChainRef::<PowBlock>::new(Arc::new(RwLock::new(chain)));
+
+            let checkpoint_block = checkpoint_block.clone();
+            let blocks = blocks.clone();
+            let block = Arc::<CheckpointBlock>::new(checkpoint_block);
+            let block = PowBlock::Checkpoint(block);
+            let block = Arc::<PowBlock>::new(block);
+
+            chain.append_block(block).unwrap();
+
+            for block in blocks {
+                chain.append_block(block).unwrap();
+            } 
+        });
+    });
+
+    c.bench_function("append_block with a full TransactionBlock", |b| {
+        let db1 = test_helpers::init_tempdb();
+        let db2 = test_helpers::init_tempdb();
+        chain::init(db1, db2, true);
+
+        let db3 = test_helpers::init_tempdb();
+        let chain = Chain::<PowBlock>::new(db3, PowBlock::genesis_state(), true);
+        let chain = ChainRef::<PowBlock>::new(Arc::new(RwLock::new(chain)));
+        let proof = Proof::test_proof(42);
+        let identity = Identity::new();
+        let node_id = NodeId(*identity.pkey());
+        let collector_address = NormalAddress::random();
+        let ip = random_socket_addr();
+        let mut height = 1;
+
+        let mut checkpoint_block = CheckpointBlock::new(
+            chain.canonical_tip().block_hash().unwrap(),
+            collector_address,
+            ip,
+            height,
+            proof,
+            node_id.clone(),
+        );
+
+        checkpoint_block.sign_miner(identity.skey());
+        checkpoint_block.compute_hash();
+
+        let mut blocks = Vec::new();
+        let mut parent_hash = checkpoint_block.block_hash().unwrap();
+        for _ in 0..ALLOWED_TXS_BLOCKS {
+            height += 1;
+
+            let transaction_list = get_tx_list_of_size(MAX_TX_SET_SIZE).unwrap();
+
+            let mut block = TransactionBlock {
+                tx_checksums: Some(Vec::<ShortHash>::new()),
+                pieces_sizes: Some(Vec::<usize>::new()),
+                height: height,
+                parent_hash: parent_hash,
+                state_root: Some(chain.get_state_root()),
+                tx_root: Some(ShortHash::NULL_RLP),
+                hash: None,
+                miner_id: node_id.clone(),
+                miner_signature: None,
+                timestamp: Utc::now(),
+                transactions: Some(Arc::new(RwLock::new(transaction_list))),
+            };
+            
+            block.sign_miner(identity.skey());
+            block.compute_hash();
+
+            let block = Arc::<TransactionBlock>::new(block);
+            let block = PowBlock::Transaction(block);
+            let block = Arc::<PowBlock>::new(block);
+
+            parent_hash = block.block_hash().unwrap();
+
+            blocks.push(block);
+        }
+
+        b.iter(|| {
+            let db3 = test_helpers::init_tempdb();
+            let chain = Chain::<PowBlock>::new(db3, PowBlock::genesis_state(), true);
+            let chain = ChainRef::<PowBlock>::new(Arc::new(RwLock::new(chain)));
+
+            let checkpoint_block = checkpoint_block.clone();
+            let blocks = blocks.clone();
+            let block = Arc::<CheckpointBlock>::new(checkpoint_block);
+            let block = PowBlock::Checkpoint(block);
+            let block = Arc::<PowBlock>::new(block);
+
+            chain.append_block(block).unwrap();
+
+            for block in blocks {
+                chain.append_block(block).unwrap();
+            } 
+        });
+    });
+}
+
+criterion_group!(benches, criterion_benchmark);
+criterion_main!(benches);

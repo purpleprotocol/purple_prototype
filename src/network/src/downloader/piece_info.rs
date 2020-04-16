@@ -18,7 +18,7 @@
 
 use crate::downloader::sub_piece_info::SubPieceInfo;
 use crypto::ShortHash;
-use chain::{MAX_TX_SET_SIZE, MAX_PIECE_SIZE, MAX_SUB_PIECE_SIZE};
+use constants::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PieceInfo {

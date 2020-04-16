@@ -21,7 +21,7 @@
 use crate::error::MempoolErr;
 use account::{Address, Balance, NormalAddress};
 use chain::types::StateInterface;
-use chain::{PowChainRef, PowChainState, MAX_TX_SET_SIZE};
+use chain::{PowChainRef, PowChainState};
 use chrono::{DateTime, Utc};
 use crypto::{Hash, ShortHash};
 use hashbrown::{HashMap, HashSet};
@@ -31,6 +31,7 @@ use rand::Rng;
 use std::collections::{BTreeMap, VecDeque};
 use triomphe::Arc;
 use transactions::Tx;
+use constants::*;
 
 /// How far into the future a transaction can be
 /// in order to be accepted.

@@ -22,7 +22,7 @@ use crate::downloader::download_state::DownloadState;
 use crate::downloader::piece_info::PieceInfo;
 use crate::downloader::sub_piece_info::SubPieceInfo;
 use crate::downloader::piece::Piece;
-use chain::{MAX_PIECE_SIZE, MAX_SUB_PIECE_SIZE, MAX_TX_SET_SIZE};
+use constants::*;
 use hashbrown::HashMap;
 use chrono::*;
 use crypto::ShortHash;

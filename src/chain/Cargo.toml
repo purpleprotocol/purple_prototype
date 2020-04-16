@@ -20,6 +20,7 @@ account = { path = "../account" }
 crypto = { path = "../crypto" }
 miner = { path = "../miner" }
 transactions = { path = "../transactions" }
+constants = { path = "../constants" }
 persistence = { path = "../persistence" }
 bin-tools = { path = "../util/bin-tools/" }
 hashdb = "0.3.0"
@@ -27,11 +28,14 @@ rand = "^0.6.0"
 quickcheck = "0.7.2"
 static_assertions = "1"
 hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde", "rayon"] }
+graphlib = { version = "0.6.0", features = ["dot"] }
+test-helpers = { path = "../util/test-helpers" }
 
 [dev-dependencies]
-graphlib = { version = "0.6.0", features = ["dot"] }
 rayon = "1.2.0"
-test-helpers = { path = "../util/test-helpers" }
+criterion = "0.2.1"
+tempdir = "0.3.7"
+rocksdb = "0.13.0"
 
 [dev-dependencies.miner]
 features = ["test"]
@@ -40,6 +44,11 @@ path = "../miner"
 [dev-dependencies.transactions]
 features = ["test"]
 path = "../transactions" 
+
+[[bench]]
+name = "chain_benchmarks"
+path = "bench/chain_bench.rs"
+harness = false
 
 [features]
 test = []
