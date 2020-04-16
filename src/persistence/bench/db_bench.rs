@@ -2,6 +2,7 @@
 
 #[macro_use]
 extern crate criterion;
+//extern crate mimalloc;
 extern crate mimalloc;
 extern crate persistence;
 extern crate rand;
@@ -9,12 +10,15 @@ extern crate rocksdb;
 extern crate tempdir;
 
 use criterion::Criterion;
+//use mimalloc::MiMalloc;
 use mimalloc::MiMalloc;
 use persistence::PersistentDb;
 use rand::Rng;
 use rocksdb::{Options, DB};
 use triomphe::Arc;
 
+//#[global_allocator]
+//static GLOBAL: MiMalloc = MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 

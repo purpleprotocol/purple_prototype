@@ -30,7 +30,7 @@ mod init;
 mod pow_chain;
 pub mod types;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test"))]
 mod test_helpers;
 
 pub use crate::block::*;
@@ -40,13 +40,13 @@ pub use crate::pow_chain::block::*;
 pub use crate::pow_chain::chain::*;
 pub use crate::pow_chain::*;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test"))]
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test"))]
 use rand::prelude::*;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test"))]
 pub fn random_socket_addr() -> SocketAddr {
     let mut thread_rng = rand::thread_rng();
     let i1 = thread_rng.gen();

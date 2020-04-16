@@ -400,13 +400,13 @@ impl TransactionBlock {
     }
 
     pub fn sign_miner(&mut self, sk: &Sk) {
-        let message = self.compute_message();
+        let message = self.compute_sign_message();
         let sig = crypto::sign(&message, sk);
         self.miner_signature = Some(sig);
     }
 
     pub fn verify_miner_sig(&self) -> bool {
-        let message = self.compute_message();
+        let message = self.compute_sign_message();
         crypto::verify(
             &message,
             self.miner_signature.as_ref().unwrap(),
@@ -415,20 +415,42 @@ impl TransactionBlock {
     }
 
     pub fn compute_hash(&mut self) {
-        let message = self.compute_message();
+        let message = self.compute_hash_message();
         let hash = crypto::hash_slice(&message);
 
         self.hash = Some(hash);
     }
 
     pub fn verify_hash(&self) -> bool {
-        let message = self.compute_message();
+        let message = self.compute_hash_message();
         let oracle = crypto::hash_slice(&message);
 
         self.hash.unwrap() == oracle
     }
 
-    fn compute_message(&self) -> Vec<u8> {
+    fn compute_sign_message(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+        let ts = self.timestamp.to_rfc3339();
+        let timestamp = ts.as_bytes();
+        let tx_checksums = self.tx_checksums.as_ref().unwrap();
+        let sizes = self.pieces_sizes.as_ref().unwrap();
+
+        buf.write_u64::<BigEndian>(self.height).unwrap();
+        buf.extend_from_slice(&self.parent_hash.0);
+        buf.extend_from_slice(&self.state_root.unwrap().0);
+        buf.extend_from_slice(&self.tx_root.unwrap().0);
+        buf.extend_from_slice(&(&self.miner_id.0).0);
+        buf.extend_from_slice(&timestamp);
+
+        for (i, checksum) in tx_checksums.iter().enumerate() {
+            buf.write_u32::<BigEndian>(sizes[i] as u32).unwrap();
+            buf.extend_from_slice(&checksum.0);
+        }
+
+        buf
+    }
+
+    fn compute_hash_message(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         let ts = self.timestamp.to_rfc3339();
         let timestamp = ts.as_bytes();

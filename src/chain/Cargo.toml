@@ -31,6 +31,9 @@ hashbrown = { git = "https://github.com/octavonce/hashbrown", features = ["serde
 [dev-dependencies]
 graphlib = { version = "0.6.0", features = ["dot"] }
 rayon = "1.2.0"
+criterion = "0.2.1"
+tempdir = "0.3.7"
+rocksdb = "0.13.0"
 test-helpers = { path = "../util/test-helpers" }
 
 [dev-dependencies.miner]
@@ -40,6 +43,11 @@ path = "../miner"
 [dev-dependencies.transactions]
 features = ["test"]
 path = "../transactions" 
+
+[[bench]]
+name = "chain_benchmarks"
+path = "bench/chain_bench.rs"
+harness = false
 
 [features]
 test = []
