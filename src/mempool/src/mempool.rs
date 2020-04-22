@@ -159,37 +159,24 @@ impl Mempool {
     /// mempool and returns it. Returns `None` if there is no
     /// such transaction in the mempool.
     ///
-    /// This operation will orphan any transactions that depend
-    /// on the given transaction. Use `Mempool::remove_branch()`
-    /// to remove any dependent transactions as well.
-    pub fn remove(&mut self, tx_hash: &ShortHash) -> Option<Arc<Tx>> {
+    /// This operation will not remove the subsequent transactions
+    /// Use `Mempool::remove_branch()` to remove any dependent
+    /// transactions as well.
+    fn remove_internal(&mut self, tx_hash: &ShortHash) -> Option<Arc<Tx>> {
         if cfg!(test) {
             println!("DEBUG REMOVED TX {}.", tx_hash);
         }
 
+        // Clean up from tx_lookup
         let tx = self.tx_lookup.remove(tx_hash)?;
         let signing_address = tx.creator_signing_address();
-        let fee = tx.fee();
-        let fee_hash = tx.fee_hash();
-        let mut cur_address = signing_address;
-
-        // TODO: orphan fees should be removed as well
-        // Orphan any subsequent transactions
-        while let Some(next_signing_address) = self.address_mappings.get(&cur_address) {
-            if let Some(tx_hash) = self.address_hash_mappings.get(&next_signing_address) {
-                self.address_reverse_mappings.remove(&next_signing_address);
-
-                self.orphan_set.insert(*tx_hash);
-                cur_address = next_signing_address.clone();
-            } else {
-                break;
-            }
-        }
 
         // Clean up from address mappings
-        self.address_mappings.remove(&signing_address)?;
+        self.address_mappings.remove(&signing_address);
+        self.address_hash_mappings.remove(&signing_address);
+        self.address_reverse_mappings.remove(&signing_address);
 
-        // Remove from orphans if still there
+        // Clean up from orphans if still there
         self.orphan_set.remove(tx_hash);
 
         // Clean entry from timestamp lookups
@@ -197,6 +184,8 @@ impl Mempool {
             self.timestamp_reverse_lookup.remove(&timestamp);
         }
 
+        let fee = tx.fee();
+        let fee_hash = tx.fee_hash();
         let mut remove_fee_entry = false;
         let mut remove_fee_map = false;
 
@@ -235,7 +224,38 @@ impl Mempool {
     /// mempool and any dependent transactions and returns them.
     /// Returns `None` if there is no such transaction in the mempool.
     pub fn remove_branch(&mut self, tx_hash: &ShortHash) -> Option<Vec<Arc<Tx>>> {
-        unimplemented!();
+        if cfg!(test) {
+            println!("DEBUG BRANCH REMOVED TX {}.", tx_hash);
+        }
+
+        if self.tx_lookup.len() == 0 {
+            return None;
+        }
+
+        // Get the current transaction, return None if doesn't exist
+        let tx = self.tx_lookup.get(tx_hash)?;
+        let mut signing_address = tx.creator_signing_address();
+
+        let mut to_remove: Vec<ShortHash> = vec![*tx_hash];
+        let mut res: Vec<Arc<Tx>> = Vec::new();
+        // Search the subsequent transactions and mark them to be removed
+        while let Some(next_signing_address) = self.address_mappings.get(&signing_address) {
+            if let Some(tx_hash) = self.address_hash_mappings.get(&next_signing_address) {
+                to_remove.push(*tx_hash);
+                signing_address = next_signing_address.clone();
+            } else {
+                break;
+            }
+        }
+
+        // Remove transactions and store them
+        for hash in to_remove {
+            if let Some(tx_removed) = self.remove_internal(&hash) {
+                res.push(tx_removed);
+            }
+        }
+
+        Some(res)
     }
 
     /// Attempts to append a transaction to the mempool.
@@ -548,7 +568,7 @@ impl Mempool {
 
         // Remove obsolete transactions
         for obsolete in tx_set.obsolete_set.iter() {
-            self.remove(obsolete);
+            self.remove_internal(obsolete);
         }
 
         Some(tx_set.tx_set)
@@ -585,9 +605,7 @@ impl Mempool {
         }
     }
 
-    fn add_fee(&self, tx: Arc<Tx>) {
-
-    }
+    fn add_fee(&self, tx: Arc<Tx>) {}
 }
 
 pub struct TxSet {
@@ -940,7 +958,7 @@ mod tests {
             true
         }
 
-        fn remove_stress_test() -> bool {
+        fn remove_branch_stress_test() -> bool {
             let chain_db = test_helpers::init_tempdb();
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
@@ -1064,15 +1082,15 @@ mod tests {
             assert!(!mempool.orphan_set.contains(&B_5.tx_hash().unwrap().to_short()));
 
             // Remove some transactions
-            mempool.remove(&A_3.tx_hash().unwrap().to_short());
-            mempool.remove(&B_5.tx_hash().unwrap().to_short());
+            mempool.remove_branch(&A_3.tx_hash().unwrap().to_short());
+            mempool.remove_branch(&B_5.tx_hash().unwrap().to_short());
 
             // Check tx lookup
             assert!(mempool.tx_lookup.contains_key(&A_1.tx_hash().unwrap().to_short()));
             assert!(mempool.tx_lookup.contains_key(&A_2.tx_hash().unwrap().to_short()));
             assert!(!mempool.tx_lookup.contains_key(&A_3.tx_hash().unwrap().to_short())); // not
-            assert!(mempool.tx_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
-            assert!(mempool.tx_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&A_4.tx_hash().unwrap().to_short())); // not
+            assert!(!mempool.tx_lookup.contains_key(&A_5.tx_hash().unwrap().to_short())); // not
             assert!(mempool.tx_lookup.contains_key(&B_1.tx_hash().unwrap().to_short()));
             assert!(mempool.tx_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
             assert!(mempool.tx_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
@@ -1082,9 +1100,9 @@ mod tests {
             // Check next address
             assert_eq!(mempool.address_mappings.get(&A_1.creator_signing_address()).unwrap(), &A_1.next_address());
             assert_eq!(mempool.address_mappings.get(&A_2.creator_signing_address()).unwrap(), &A_2.next_address());
-            assert_eq!(mempool.address_mappings.get(&A_3.creator_signing_address()), None); //not
-            assert_eq!(mempool.address_mappings.get(&A_4.creator_signing_address()).unwrap(), &A_4.next_address());
-            assert_eq!(mempool.address_mappings.get(&A_5.creator_signing_address()).unwrap(), &A_5.next_address());
+            assert_eq!(mempool.address_mappings.get(&A_3.creator_signing_address()), None); // not
+            assert_eq!(mempool.address_mappings.get(&A_4.creator_signing_address()), None); // not
+            assert_eq!(mempool.address_mappings.get(&A_5.creator_signing_address()), None); // not
             assert_eq!(mempool.address_mappings.get(&B_1.creator_signing_address()).unwrap(), &B_1.next_address());
             assert_eq!(mempool.address_mappings.get(&B_2.creator_signing_address()).unwrap(), &B_2.next_address());
             assert_eq!(mempool.address_mappings.get(&B_3.creator_signing_address()).unwrap(), &B_3.next_address());
@@ -1095,8 +1113,8 @@ mod tests {
             assert!(mempool.timestamp_lookup.contains_key(&A_1.tx_hash().unwrap().to_short()));
             assert!(mempool.timestamp_lookup.contains_key(&A_2.tx_hash().unwrap().to_short()));
             assert!(!mempool.timestamp_lookup.contains_key(&A_3.tx_hash().unwrap().to_short()));
-            assert!(mempool.timestamp_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
-            assert!(mempool.timestamp_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.timestamp_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.timestamp_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
             assert!(mempool.timestamp_lookup.contains_key(&B_1.tx_hash().unwrap().to_short()));
             assert!(mempool.timestamp_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
             assert!(mempool.timestamp_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
@@ -1108,14 +1126,14 @@ mod tests {
                 // Check timestamp reverse lookup
                 assert_eq!(mempool.timestamp_reverse_lookup.get(&A_1_ts).unwrap(), &A_1.tx_hash().unwrap().to_short());
                 assert_eq!(mempool.timestamp_reverse_lookup.get(&A_2_ts).unwrap(), &A_2.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_3_ts).unwrap(), &A_3.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_4_ts).unwrap(), &A_4.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_5_ts).unwrap(), &A_5.tx_hash().unwrap().to_short());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_3_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_4_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_5_ts).is_none());
                 assert_eq!(mempool.timestamp_reverse_lookup.get(&B_1_ts).unwrap(), &B_1.tx_hash().unwrap().to_short());
                 assert_eq!(mempool.timestamp_reverse_lookup.get(&B_2_ts).unwrap(), &B_2.tx_hash().unwrap().to_short());
                 assert_eq!(mempool.timestamp_reverse_lookup.get(&B_3_ts).unwrap(), &B_3.tx_hash().unwrap().to_short());
                 assert_eq!(mempool.timestamp_reverse_lookup.get(&B_4_ts).unwrap(), &B_4.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&B_5_ts).unwrap(), &B_5.tx_hash().unwrap().to_short());
+                assert!(mempool.timestamp_reverse_lookup.get(&B_5_ts).is_none());
             }
 
             // Check fee map
@@ -1125,8 +1143,8 @@ mod tests {
                 assert!(fee_map.get(&A_1.fee()).unwrap().contains(&A_1.tx_hash().unwrap().to_short()));
                 assert!(fee_map.get(&A_2.fee()).unwrap().contains(&A_2.tx_hash().unwrap().to_short()));
                 assert!(!fee_map.get(&A_3.fee()).unwrap().contains(&A_3.tx_hash().unwrap().to_short()));
-                assert!(fee_map.get(&A_4.fee()).unwrap().contains(&A_4.tx_hash().unwrap().to_short()));
-                assert!(fee_map.get(&A_5.fee()).unwrap().contains(&A_5.tx_hash().unwrap().to_short()));
+                assert!(!fee_map.get(&A_4.fee()).unwrap().contains(&A_4.tx_hash().unwrap().to_short()));
+                assert!(!fee_map.get(&A_5.fee()).unwrap().contains(&A_5.tx_hash().unwrap().to_short()));
                 assert!(fee_map.get(&B_1.fee()).unwrap().contains(&B_1.tx_hash().unwrap().to_short()));
                 assert!(fee_map.get(&B_2.fee()).unwrap().contains(&B_2.tx_hash().unwrap().to_short()));
                 assert!(fee_map.get(&B_3.fee()).unwrap().contains(&B_3.tx_hash().unwrap().to_short()));
@@ -1137,68 +1155,68 @@ mod tests {
             // Check orphan pool
             assert!(!mempool.orphan_set.contains(&A_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.orphan_set.contains(&A_2.tx_hash().unwrap().to_short()));
-            assert!(!mempool.orphan_set.contains(&A_3.tx_hash().unwrap().to_short())); // doesn't contains removed
-            assert!(mempool.orphan_set.contains(&A_4.tx_hash().unwrap().to_short())); // contains subsequent
-            assert!(mempool.orphan_set.contains(&A_5.tx_hash().unwrap().to_short())); // contains subsequent
+            assert!(!mempool.orphan_set.contains(&A_3.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_5.tx_hash().unwrap().to_short()));
             assert!(!mempool.orphan_set.contains(&B_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.orphan_set.contains(&B_2.tx_hash().unwrap().to_short()));
             assert!(!mempool.orphan_set.contains(&B_3.tx_hash().unwrap().to_short()));
             assert!(!mempool.orphan_set.contains(&B_4.tx_hash().unwrap().to_short()));
-            assert!(!mempool.orphan_set.contains(&B_5.tx_hash().unwrap().to_short())); // doesn't contains removed
+            assert!(!mempool.orphan_set.contains(&B_5.tx_hash().unwrap().to_short()));
 
             // Remove some transactions
-            mempool.remove(&A_2.tx_hash().unwrap().to_short());
-            mempool.remove(&B_2.tx_hash().unwrap().to_short());
+            mempool.remove_branch(&A_2.tx_hash().unwrap().to_short());
+            mempool.remove_branch(&B_2.tx_hash().unwrap().to_short());
 
             // Check tx lookup
             assert!(mempool.tx_lookup.contains_key(&A_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.tx_lookup.contains_key(&A_2.tx_hash().unwrap().to_short()));
             assert!(!mempool.tx_lookup.contains_key(&A_3.tx_hash().unwrap().to_short()));
-            assert!(mempool.tx_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
-            assert!(mempool.tx_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
             assert!(mempool.tx_lookup.contains_key(&B_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.tx_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
-            assert!(mempool.tx_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
-            assert!(mempool.tx_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
             assert!(!mempool.tx_lookup.contains_key(&B_5.tx_hash().unwrap().to_short()));
 
             // Check next address
             assert_eq!(mempool.address_mappings.get(&A_1.creator_signing_address()).unwrap(), &A_1.next_address());
             assert_eq!(mempool.address_mappings.get(&A_2.creator_signing_address()), None);
             assert_eq!(mempool.address_mappings.get(&A_3.creator_signing_address()), None);
-            assert_eq!(mempool.address_mappings.get(&A_4.creator_signing_address()).unwrap(), &A_4.next_address());
-            assert_eq!(mempool.address_mappings.get(&A_5.creator_signing_address()).unwrap(), &A_5.next_address());
+            assert_eq!(mempool.address_mappings.get(&A_4.creator_signing_address()), None);
+            assert_eq!(mempool.address_mappings.get(&A_5.creator_signing_address()), None);
             assert_eq!(mempool.address_mappings.get(&B_1.creator_signing_address()).unwrap(), &B_1.next_address());
             assert_eq!(mempool.address_mappings.get(&B_2.creator_signing_address()), None);
-            assert_eq!(mempool.address_mappings.get(&B_3.creator_signing_address()).unwrap(), &B_3.next_address());
-            assert_eq!(mempool.address_mappings.get(&B_4.creator_signing_address()).unwrap(), &B_4.next_address());
+            assert_eq!(mempool.address_mappings.get(&B_3.creator_signing_address()), None);
+            assert_eq!(mempool.address_mappings.get(&B_4.creator_signing_address()), None);
             assert_eq!(mempool.address_mappings.get(&B_5.creator_signing_address()), None);
 
             // Check timestamp lookup
             assert!(mempool.timestamp_lookup.contains_key(&A_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.timestamp_lookup.contains_key(&A_2.tx_hash().unwrap().to_short()));
             assert!(!mempool.timestamp_lookup.contains_key(&A_3.tx_hash().unwrap().to_short()));
-            assert!(mempool.timestamp_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
-            assert!(mempool.timestamp_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.timestamp_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.timestamp_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
             assert!(mempool.timestamp_lookup.contains_key(&B_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.timestamp_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
-            assert!(mempool.timestamp_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
-            assert!(mempool.timestamp_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.timestamp_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
+            assert!(!mempool.timestamp_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
             assert!(!mempool.timestamp_lookup.contains_key(&B_5.tx_hash().unwrap().to_short()));
 
             #[cfg(not(windows))]
             {
                 // Check timestamp reverse lookup
                 assert_eq!(mempool.timestamp_reverse_lookup.get(&A_1_ts).unwrap(), &A_1.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_2_ts).unwrap(), &A_2.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_3_ts).unwrap(), &A_3.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_4_ts).unwrap(), &A_4.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_5_ts).unwrap(), &A_5.tx_hash().unwrap().to_short());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_2_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_3_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_4_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_5_ts).is_none());
                 assert_eq!(mempool.timestamp_reverse_lookup.get(&B_1_ts).unwrap(), &B_1.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&B_2_ts).unwrap(), &B_2.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&B_3_ts).unwrap(), &B_3.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&B_4_ts).unwrap(), &B_4.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&B_5_ts).unwrap(), &B_5.tx_hash().unwrap().to_short());
+                assert!(mempool.timestamp_reverse_lookup.get(&B_2_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&B_3_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&B_4_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&B_5_ts).is_none());
             }
 
             // Check fee map
@@ -1208,109 +1226,99 @@ mod tests {
                 assert!(fee_map.get(&A_1.fee()).unwrap().contains(&A_1.tx_hash().unwrap().to_short()));
                 assert!(fee_map.get(&A_2.fee()).is_none()); // A_2 & B_2 removed, both fee = 5 the queue gets removed
                 assert!(!fee_map.get(&A_3.fee()).unwrap().contains(&A_3.tx_hash().unwrap().to_short()));
-                assert!(fee_map.get(&A_4.fee()).unwrap().contains(&A_4.tx_hash().unwrap().to_short()));
-                assert!(fee_map.get(&A_5.fee()).unwrap().contains(&A_5.tx_hash().unwrap().to_short()));
+                assert!(!fee_map.get(&A_4.fee()).unwrap().contains(&A_4.tx_hash().unwrap().to_short()));
+                assert!(!fee_map.get(&A_5.fee()).unwrap().contains(&A_5.tx_hash().unwrap().to_short()));
                 assert!(fee_map.get(&B_1.fee()).unwrap().contains(&B_1.tx_hash().unwrap().to_short()));
                 assert!(fee_map.get(&B_2.fee()).is_none()); // A_2 & B_2 removed, both fee = 5 the queue gets removed
-                assert!(fee_map.get(&B_3.fee()).unwrap().contains(&B_3.tx_hash().unwrap().to_short()));
-                assert!(fee_map.get(&B_4.fee()).unwrap().contains(&B_4.tx_hash().unwrap().to_short()));
+                assert!(!fee_map.get(&B_3.fee()).unwrap().contains(&B_3.tx_hash().unwrap().to_short()));
+                assert!(!fee_map.get(&B_4.fee()).unwrap().contains(&B_4.tx_hash().unwrap().to_short()));
                 assert!(!fee_map.get(&B_5.fee()).unwrap().contains(&B_5.tx_hash().unwrap().to_short()));
             }
 
             // Check orphan pool
             assert!(!mempool.orphan_set.contains(&A_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.orphan_set.contains(&A_2.tx_hash().unwrap().to_short()));
-            assert!(mempool.orphan_set.contains(&A_3.tx_hash().unwrap().to_short()));
-            assert!(mempool.orphan_set.contains(&A_4.tx_hash().unwrap().to_short()));
-            assert!(mempool.orphan_set.contains(&A_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_3.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_5.tx_hash().unwrap().to_short()));
             assert!(!mempool.orphan_set.contains(&B_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.orphan_set.contains(&B_2.tx_hash().unwrap().to_short()));
-            assert!(mempool.orphan_set.contains(&B_3.tx_hash().unwrap().to_short()));
-            assert!(mempool.orphan_set.contains(&B_4.tx_hash().unwrap().to_short()));
-            assert!(mempool.orphan_set.contains(&B_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_3.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_5.tx_hash().unwrap().to_short()));
 
             // Remove some transactions
-            mempool.remove(&A_1.tx_hash().unwrap().to_short());
-            mempool.remove(&B_1.tx_hash().unwrap().to_short());
+            mempool.remove_branch(&A_1.tx_hash().unwrap().to_short());
+            mempool.remove_branch(&B_1.tx_hash().unwrap().to_short());
 
             // Check tx lookup
             assert!(!mempool.tx_lookup.contains_key(&A_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.tx_lookup.contains_key(&A_2.tx_hash().unwrap().to_short()));
             assert!(!mempool.tx_lookup.contains_key(&A_3.tx_hash().unwrap().to_short()));
-            assert!(mempool.tx_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
-            assert!(mempool.tx_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
             assert!(!mempool.tx_lookup.contains_key(&B_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.tx_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
-            assert!(mempool.tx_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
-            assert!(mempool.tx_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
             assert!(!mempool.tx_lookup.contains_key(&B_5.tx_hash().unwrap().to_short()));
 
             // Check next address
             assert_eq!(mempool.address_mappings.get(&A_1.creator_signing_address()), None);
             assert_eq!(mempool.address_mappings.get(&A_2.creator_signing_address()), None);
             assert_eq!(mempool.address_mappings.get(&A_3.creator_signing_address()), None);
-            assert_eq!(mempool.address_mappings.get(&A_4.creator_signing_address()).unwrap(), &A_4.next_address());
-            assert_eq!(mempool.address_mappings.get(&A_5.creator_signing_address()).unwrap(), &A_5.next_address());
+            assert_eq!(mempool.address_mappings.get(&A_4.creator_signing_address()), None);
+            assert_eq!(mempool.address_mappings.get(&A_5.creator_signing_address()), None);
             assert_eq!(mempool.address_mappings.get(&B_1.creator_signing_address()), None);
             assert_eq!(mempool.address_mappings.get(&B_2.creator_signing_address()), None);
-            assert_eq!(mempool.address_mappings.get(&B_3.creator_signing_address()).unwrap(), &B_3.next_address());
-            assert_eq!(mempool.address_mappings.get(&B_4.creator_signing_address()).unwrap(), &B_4.next_address());
+            assert_eq!(mempool.address_mappings.get(&B_3.creator_signing_address()), None);
+            assert_eq!(mempool.address_mappings.get(&B_4.creator_signing_address()), None);
             assert_eq!(mempool.address_mappings.get(&B_5.creator_signing_address()), None);
 
             // Check timestamp lookup
             assert!(!mempool.timestamp_lookup.contains_key(&A_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.timestamp_lookup.contains_key(&A_2.tx_hash().unwrap().to_short()));
             assert!(!mempool.timestamp_lookup.contains_key(&A_3.tx_hash().unwrap().to_short()));
-            assert!(mempool.timestamp_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
-            assert!(mempool.timestamp_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.timestamp_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.timestamp_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
             assert!(!mempool.timestamp_lookup.contains_key(&B_1.tx_hash().unwrap().to_short()));
             assert!(!mempool.timestamp_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
-            assert!(mempool.timestamp_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
-            assert!(mempool.timestamp_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.timestamp_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
+            assert!(!mempool.timestamp_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
             assert!(!mempool.timestamp_lookup.contains_key(&B_5.tx_hash().unwrap().to_short()));
 
             #[cfg(not(windows))]
             {
                 // Check timestamp reverse lookup
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_1_ts).unwrap(), &A_1.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_2_ts).unwrap(), &A_2.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_3_ts).unwrap(), &A_3.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_4_ts).unwrap(), &A_4.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&A_5_ts).unwrap(), &A_5.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&B_1_ts).unwrap(), &B_1.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&B_2_ts).unwrap(), &B_2.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&B_3_ts).unwrap(), &B_3.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&B_4_ts).unwrap(), &B_4.tx_hash().unwrap().to_short());
-                assert_eq!(mempool.timestamp_reverse_lookup.get(&B_5_ts).unwrap(), &B_5.tx_hash().unwrap().to_short());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_1_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_2_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_3_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_4_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&A_5_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&B_1_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&B_2_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&B_3_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&B_4_ts).is_none());
+                assert!(mempool.timestamp_reverse_lookup.get(&B_5_ts).is_none());
             }
 
             // Check fee map
             {
-                let fee_map = mempool.fee_map.get(&cur_hash).unwrap();
-
-                assert!(!fee_map.get(&A_1.fee()).unwrap().contains(&A_1.tx_hash().unwrap().to_short()));
-                assert!(fee_map.get(&A_2.fee()).is_none()); // A_2 & B_2 removed, both fee = 5 the queue gets removed
-                assert!(!fee_map.get(&A_3.fee()).unwrap().contains(&A_3.tx_hash().unwrap().to_short()));
-                assert!(fee_map.get(&A_4.fee()).unwrap().contains(&A_4.tx_hash().unwrap().to_short()));
-                assert!(fee_map.get(&A_5.fee()).unwrap().contains(&A_5.tx_hash().unwrap().to_short()));
-                assert!(!fee_map.get(&B_1.fee()).unwrap().contains(&B_1.tx_hash().unwrap().to_short()));
-                assert!(fee_map.get(&B_2.fee()).is_none()); // A_2 & B_2 removed, both fee = 5 the queue gets removed
-                assert!(fee_map.get(&B_3.fee()).unwrap().contains(&B_3.tx_hash().unwrap().to_short()));
-                assert!(fee_map.get(&B_4.fee()).unwrap().contains(&B_4.tx_hash().unwrap().to_short()));
-                assert!(!fee_map.get(&B_5.fee()).unwrap().contains(&B_5.tx_hash().unwrap().to_short()));
+                // Every transaction has been removed, so the fee map should be empty
+                assert_eq!(mempool.fee_map.len(), 0);
             }
 
-            // // Check orphan pool
-            // assert!(!mempool.orphan_set.contains(&A_1.tx_hash().unwrap().to_short()));
-            // assert!(!mempool.orphan_set.contains(&A_2.tx_hash().unwrap().to_short()));
-            // assert!(mempool.orphan_set.contains(&A_3.tx_hash().unwrap().to_short()));
-            // assert!(mempool.orphan_set.contains(&A_4.tx_hash().unwrap().to_short()));
-            // assert!(mempool.orphan_set.contains(&A_5.tx_hash().unwrap().to_short()));
-            // assert!(!mempool.orphan_set.contains(&B_1.tx_hash().unwrap().to_short()));
-            // assert!(!mempool.orphan_set.contains(&B_2.tx_hash().unwrap().to_short()));
-            // assert!(mempool.orphan_set.contains(&B_3.tx_hash().unwrap().to_short()));
-            // assert!(mempool.orphan_set.contains(&B_4.tx_hash().unwrap().to_short()));
-            // assert!(mempool.orphan_set.contains(&B_5.tx_hash().unwrap().to_short()));
+            // Check orphan pool
+            assert!(!mempool.orphan_set.contains(&A_1.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_2.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_3.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&A_5.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_1.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_2.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_3.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_4.tx_hash().unwrap().to_short()));
+            assert!(!mempool.orphan_set.contains(&B_5.tx_hash().unwrap().to_short()));
 
             true
         }
