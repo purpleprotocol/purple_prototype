@@ -29,9 +29,6 @@ name = "ahash"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f33b5018f120946c1dcf279194f238a9f146725593ead1c08fa47ff22b0b5d3"
-dependencies = [
- "const-random",
-]
 
 [[package]]
 name = "ahash"
@@ -1145,9 +1142,9 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "graphlib"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ae6ca2e3573e167b49b5c97e4e228466d32057185a8a21652b35549d1dd8d50"
+checksum = "b7ce4424e12e166b7ebe47a5e7a0470bfa3db63001553781e8d89d1ebfff58dc"
 dependencies = [
  "dot",
  "hashbrown 0.6.3",
@@ -1202,7 +1199,6 @@ checksum = "8e6073d0ca812575946eb5f35ff68dbe519907b25c42530389ff946dc84c6ead"
 dependencies = [
  "ahash 0.2.18",
  "autocfg 0.1.7",
- "rayon",
 ]
 
 [[package]]
@@ -1486,9 +1482,9 @@ dependencies = [
 
 [[package]]
 name = "libmimalloc-sys"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b87ffa7aa24a1b71beebc6be14ad552d4314ec5be3b3bb3e1159c61a8b01a0bd"
+checksum = "a27252ec1d0c4e0dd6142cbc572da50b363ab56fc334f7aa8fadf295b2e24e74"
 dependencies = [
  "cmake",
 ]
@@ -1608,9 +1604,9 @@ checksum = "2522fe9e6a71447b7acc0841bced2517976f982e7ea8d494870eb71464ebc269"
 
 [[package]]
 name = "mimalloc"
-version = "0.1.18"
+version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94b16eee4eb86e92abf8ad6910fd3219549ba344d5d77194a6def2119173f2de"
+checksum = "6c52de2069999f01bd26436564dbe7de3a87898feeb7a0d0ff9eb20a05bb7ca0"
 dependencies = [
  "libmimalloc-sys",
 ]
@@ -1793,6 +1789,7 @@ dependencies = [
  "hashbrown 0.1.7",
  "hashdb",
  "hex 0.3.2",
+ "lazy_static 1.4.0",
  "log 0.4.8",
  "mempool",
  "parking_lot 0.7.1",

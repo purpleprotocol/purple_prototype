@@ -170,7 +170,6 @@ impl Packet for Connect {
 
             {
                 let peers = network.peers();
-                let mut peers = peers.write();
                 let node_id = node_id.clone();
                 let kx_key = &packet.kx_key;
                 let mut peer = peers.get_mut(addr).ok_or(NetworkErr::PeerNotFound)?;

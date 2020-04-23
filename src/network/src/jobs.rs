@@ -35,9 +35,8 @@ pub async fn start_periodic_jobs(network: Network) {
 /// Traverses each peer and sets the amount of bytes read for the last second
 async fn account_bytes_read_for_peers(network: Network) {
     let peers = network.peers();
-    let peers = peers.read();
 
-    for (_, peer) in peers.iter() {
+    for peer in peers.iter() {
         let bytes_read = peer.bytes_read.clone();
         let past_bytes_read = peer.past_bytes_read.clone();
 

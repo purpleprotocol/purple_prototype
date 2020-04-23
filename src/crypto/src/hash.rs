@@ -37,20 +37,16 @@ impl Hash {
         33, 138, 100, 10, 8, 238, 209, 45, 213, 117, 199,
     ]);
 
+    #[inline]
     /// Converts the `Hash` to an unique integer representation.
     pub fn to_u64(&self) -> u64 {
         let short = self.to_short();
         decode_le_u64!(&short.0).unwrap()
     }
 
+    #[inline]
     pub fn to_vec(&self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::with_capacity(HASH_BYTES);
-
-        for byte in &self.0 {
-            result.push(*byte);
-        }
-
-        result
+        self.0.to_vec()
     }
 
     pub fn random() -> Hash {

@@ -160,7 +160,6 @@ impl Packet for SendPeers {
         // Retrieve sender mutex
         let sender = {
             let peers = network.peers();
-            let peers = peers.read();
             let peer = peers.get(addr).ok_or(NetworkErr::SessionExpired)?;
 
             peer.validator.request_peers.sender.clone()

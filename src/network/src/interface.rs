@@ -24,7 +24,7 @@ use crate::priority::NetworkPriority;
 use crate::downloader::Downloader;
 use chain::*;
 use crypto::{NodeId, SecretKey as Sk};
-use hashbrown::HashMap;
+use dashmap::DashMap;
 use mempool::Mempool;
 use parking_lot::RwLock;
 use std::net::SocketAddr;
@@ -93,7 +93,7 @@ pub trait NetworkInterface: Clone + Send + Sync {
     fn port(&self) -> u16;
 
     /// Returns a reference to the peer table `RwLock`.
-    fn peers(&self) -> Arc<RwLock<HashMap<SocketAddr, Peer>>>;
+    fn peers(&self) -> Arc<DashMap<SocketAddr, Peer>>;
 
     /// Returns a reference to the current network name
     fn network_name(&self) -> &str;

@@ -42,19 +42,15 @@ impl ShortHash {
         ShortHash(short_hash)
     }
 
+    #[inline]
     /// Converts the `ShortHash` to an unique integer representation.
     pub fn to_u64(&self) -> u64 {
         decode_le_u64!(&self.0).unwrap()
     }
 
+    #[inline]
     pub fn to_vec(&self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::with_capacity(SHORT_HASH_BYTES);
-
-        for byte in &self.0 {
-            result.push(*byte);
-        }
-
-        result
+        self.0.to_vec()
     }
 
     pub fn random() -> ShortHash {
