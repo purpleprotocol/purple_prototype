@@ -49,15 +49,18 @@ mod signature;
 
 use rust_sodium::crypto::sign::{sign_detached, verify_detached};
 
+#[inline]
 pub fn sign(message: &[u8], skey: &SecretKey) -> Signature {
     let sig = sign_detached(message, skey);
     Signature::new(&sig.0)
 }
 
+#[inline]
 pub fn verify(message: &[u8], signature: &Signature, pkey: &PublicKey) -> bool {
     verify_detached(&signature.inner(), message, pkey)
 }
 
+#[inline]
 pub fn seal(message: &[u8], key: &SessionKey) -> (Vec<u8>, Nonce) {
     let n = aead::gen_nonce();
     let key = aead::Key::from_slice(&key.0).unwrap();
@@ -66,6 +69,7 @@ pub fn seal(message: &[u8], key: &SessionKey) -> (Vec<u8>, Nonce) {
     (ciphertext, n)
 }
 
+#[inline]
 pub fn open(ciphertext: &[u8], key: &SessionKey, nonce: &Nonce) -> Result<Vec<u8>, ()> {
     let key = aead::Key::from_slice(&key.0).unwrap();
 
@@ -75,6 +79,7 @@ pub fn open(ciphertext: &[u8], key: &SessionKey, nonce: &Nonce) -> Result<Vec<u8
     }
 }
 
+#[inline]
 pub fn gen_keypair_from_seed(seed: &[u8]) -> (PublicKey, SecretKey) {
     let hashed_seed = hash_slice(seed);
     let seed = Seed(hashed_seed.0);

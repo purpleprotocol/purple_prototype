@@ -32,6 +32,7 @@ use triomphe::Arc;
 pub const NETWORK_VERSION: u8 = 0;
 pub const HEADER_SIZE: usize = 7; // Total of 7 bytes. 1 + 2 + 4;
 
+#[inline]
 /// Encrypts and wraps a packet with the default network header. Also signs
 /// the encrypted packet and attaches the signature to the packet.
 pub fn wrap_encrypt_packet(
@@ -49,6 +50,7 @@ pub fn wrap_encrypt_packet(
     )
 }
 
+#[inline]
 /// Wraps a packet without encrypting it.
 ///
 /// ### Header fields
@@ -74,13 +76,14 @@ pub fn wrap_packet(packet: &[u8], network_name: &str) -> Vec<u8> {
     buf
 }
 
+#[inline]
 /// Attempts to decode a `PacketHeader` from a slice of bytes.
 pub fn decode_header(header: &[u8]) -> Result<PacketHeader, NetworkErr> {
     if header.len() != HEADER_SIZE {
         return Err(NetworkErr::BadHeader);
     }
 
-    let mut rdr = Cursor::new(header.to_vec());
+    let mut rdr = Cursor::new(header);
     let network_version = if let Ok(result) = rdr.read_u8() {
         result
     } else {
@@ -118,6 +121,7 @@ pub fn decode_header(header: &[u8]) -> Result<PacketHeader, NetworkErr> {
     })
 }
 
+#[inline]
 /// Verifies the CRC32 checksum of the packet returning `Err(NetworkErr::BadCRC32)` if invalid.
 pub fn verify_crc32(
     header: &PacketHeader,
@@ -138,6 +142,7 @@ pub fn verify_crc32(
     Ok(())
 }
 
+#[inline]
 /// Attempts to decrypt a packet
 pub fn decrypt(packet: &[u8], nonce: &Nonce, key: &SessionKey) -> Result<Vec<u8>, NetworkErr> {
     match crypto::open(packet, key, nonce) {
@@ -146,7 +151,7 @@ pub fn decrypt(packet: &[u8], nonce: &Nonce, key: &SessionKey) -> Result<Vec<u8>
     }
 }
 
-#[cfg(test)]
+#[inline]
 /// Attempts to decrypt a packet. Only used for testing
 pub fn unwrap_decrypt_packet(
     packet: &[u8],

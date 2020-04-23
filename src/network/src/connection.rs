@@ -19,8 +19,8 @@
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::network::Network;
-use crate::packet::Packet;
-use crate::packets::connect::Connect;
+use crate::packet::*;
+use crate::packets::*;
 use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
 use crate::priority::NetworkPriority;
 use crate::validation::sender::Sender;
@@ -406,7 +406,7 @@ fn process_connection(
     tokio::spawn(socket);
 }
 
-async fn start_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin>(
+async fn start_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
     network: N,
     sock: S,
     addr: SocketAddr,
@@ -436,16 +436,60 @@ async fn start_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt 
     }
 }
 
-async fn handle_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin>(
+async fn handle_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
     network: N,
-    sock: S,
+    mut sock: S,
     addr: &SocketAddr,
     initial_packet: Vec<u8>,
     client_request: ClientRequest,
 ) -> Result<(), NetworkErr> {
-    // Write initial packet to stream
+    let packet_type = &initial_packet[0];
 
-    unimplemented!();
+    // Write initial packet to stream
+    write_raw_packet(&mut sock, &network, addr, &initial_packet, true).await;
+
+    // Start corresponding stream
+    match *packet_type {
+        Ping::PACKET_TYPE => {
+            Ping::start_client_protocol_flow(&network, &sock).await?;
+        }
+
+        AnnounceBlock::PACKET_TYPE => {
+            AnnounceBlock::start_client_protocol_flow(&network, &sock).await?;
+        }
+
+        AnnounceTx::PACKET_TYPE => {
+            AnnounceTx::start_client_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestBlock::PACKET_TYPE => {
+            RequestBlock::start_client_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestPeers::PACKET_TYPE => {
+            RequestPeers::start_client_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestPieceInfo::PACKET_TYPE => {
+            RequestPieceInfo::start_client_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestSubPiece::PACKET_TYPE => {
+            RequestSubPiece::start_client_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestTx::PACKET_TYPE => {
+            RequestTx::start_client_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestBlock::PACKET_TYPE => {
+            RequestBlock::start_client_protocol_flow(&network, &sock).await?;
+        }
+
+        _ => panic!("Invalid packet type to start a stream with: {}", packet_type)
+    }
+
+    Ok(())
 }
 
 async fn handle_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin>(
@@ -484,6 +528,17 @@ async fn read_header<S: AsyncRead + AsyncReadExt + Unpin>(socket: &mut S, addr: 
     }
 
     Ok(header)
+}
+
+/// Attempts to write a raw packet to a socket
+pub async fn write_raw_packet<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin>(
+    sock: &mut S,
+    network: &N,
+    addr: &SocketAddr,
+    packet: &[u8],
+    encrypt: bool,
+) -> Result<(), io::Error> {
+    unimplemented!();
 }
 
 /// Attempts to read and decode a raw packet from the given socket 

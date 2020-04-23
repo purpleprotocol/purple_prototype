@@ -31,18 +31,22 @@ impl Signature {
         Signature(PrimitiveSig(sig))
     }
 
+    #[inline]
     pub fn inner(&self) -> PrimitiveSig {
         self.0
     }
 
+    #[inline]
     pub fn inner_bytes(&self) -> Vec<u8> {
         (self.0).0.to_vec()
     }
 
+    #[inline]
     pub fn to_bytes(&self) -> Vec<u8> {
         (self.0).0.to_vec()
     }
 
+    #[inline]
     pub fn from_bytes(bin: &[u8]) -> Result<Signature, &'static str> {
         if bin.len() == 64 {
             let mut sig = [0; 64];

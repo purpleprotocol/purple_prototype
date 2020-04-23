@@ -20,12 +20,15 @@ use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::peer::ConnectionType;
 use crate::client_request::ClientRequest;
+use crate::packets::*;
 use chrono::prelude::*;
 use crypto::{SecretKey as Sk, Signature};
 use triomphe::Arc;
 use async_trait::async_trait;
+use hashbrown::HashSet;
 use futures_io::{AsyncRead, AsyncWrite};
 use futures_util::io::{AsyncReadExt, AsyncWriteExt};
+use lazy_static::*;
 use std::net::SocketAddr;
 
 /// The type id of a packet.
@@ -61,7 +64,6 @@ pub trait Packet {
     /// This should return an `Err(_)` if the packet cannot start 
     /// a client protocol flow. 
     async fn start_client_protocol_flow<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
-      &self, 
       network: &N, 
       sock: &S
     ) -> Result<(), NetworkErr> {
@@ -73,7 +75,6 @@ pub trait Packet {
     /// This should return an `Err(_)` if the packet cannot start 
     /// a server protocol flow. 
     async fn start_server_protocol_flow<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
-      &self, 
       network: &N, 
       sock: &S
     ) -> Result<(), NetworkErr> {
