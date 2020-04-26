@@ -482,10 +482,6 @@ async fn handle_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
             RequestTx::start_client_protocol_flow(&network, &sock).await?;
         }
 
-        RequestBlock::PACKET_TYPE => {
-            RequestBlock::start_client_protocol_flow(&network, &sock).await?;
-        }
-
         _ => panic!("Invalid packet type to start a stream with: {}", packet_type)
     }
 
@@ -535,10 +531,6 @@ async fn handle_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
 
         RequestTx::PACKET_TYPE => {
             RequestTx::start_server_protocol_flow(&network, &sock).await?;
-        }
-
-        RequestBlock::PACKET_TYPE => {
-            RequestBlock::start_server_protocol_flow(&network, &sock).await?;
         }
 
         _ => panic!("Invalid packet type to start a stream with: {}", packet_type)
