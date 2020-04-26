@@ -34,14 +34,14 @@ extern crate serde_derive;
 #[macro_use]
 extern crate lazy_static;
 
+pub use crate::code::function::*;
+pub use crate::code::validator::*;
 pub use crate::code::*;
 pub use crate::error::*;
 pub use crate::gas::*;
-pub use crate::virtual_machine::*;
-pub use crate::code::function::*;
-pub use crate::code::validator::*;
-pub use crate::module::*;
 pub use crate::instruction_set::*;
+pub use crate::module::*;
+pub use crate::virtual_machine::*;
 
 mod address;
 mod code;

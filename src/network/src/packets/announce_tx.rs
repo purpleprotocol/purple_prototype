@@ -26,17 +26,17 @@ use crate::protocol_flow::transaction_propagation::inbound::InboundPacket;
 use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
 use crate::protocol_flow::transaction_propagation::Pair;
 use crate::validation::receiver::Receiver;
+use async_trait::async_trait;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::{Block, PowBlock};
 use crypto::NodeId;
 use crypto::{PublicKey as Pk, SecretKey as Sk, ShortHash, Signature};
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use rand::Rng;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
-use futures_io::{AsyncRead, AsyncWrite};
-use futures_util::io::{AsyncReadExt, AsyncWriteExt};
-use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnounceTx {

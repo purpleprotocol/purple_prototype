@@ -23,8 +23,8 @@ use crate::protocol_flow::transaction_propagation::outbound::OutboundPacket;
 use crate::protocol_flow::transaction_propagation::sender_state::TxSenderState;
 use crate::validation::sender::Sender;
 use crypto::ShortHash;
-use triomphe::Arc;
 use transactions::Tx;
+use triomphe::Arc;
 
 #[derive(Debug, Default)]
 pub struct TxSender {

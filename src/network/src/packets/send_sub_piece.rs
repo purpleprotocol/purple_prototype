@@ -24,14 +24,14 @@ use crate::packets::SendPeers;
 use crate::peer::ConnectionType;
 use crate::priority::NetworkPriority;
 use crate::validation::receiver::Receiver;
+use async_trait::async_trait;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::ShortHash;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
-use futures_io::{AsyncRead, AsyncWrite};
-use futures_util::io::{AsyncReadExt, AsyncWriteExt};
-use async_trait::async_trait;
 
 /// Maximum size of a sub-piece. 16kb
 pub const SUB_PIECE_MAX_SIZE: usize = 16_384;
@@ -53,10 +53,7 @@ impl SendSubPiece {
             panic!("Cannot have an empty sub-piece!");
         }
 
-        SendSubPiece {
-            sub_piece,
-            nonce,
-        }
+        SendSubPiece { sub_piece, nonce }
     }
 }
 
@@ -74,7 +71,9 @@ impl Packet for SendSubPiece {
         // 3) Nonce             - 64bits
         // 4) Sub-piece         - Sub-piece length bytes
         buffer.write_u8(packet_type).unwrap();
-        buffer.write_u16::<BigEndian>(self.sub_piece.len() as u16).unwrap();
+        buffer
+            .write_u16::<BigEndian>(self.sub_piece.len() as u16)
+            .unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
         buffer.extend_from_slice(&self.sub_piece);
         buffer
@@ -119,10 +118,7 @@ impl Packet for SendSubPiece {
         let mut sub_piece = Vec::with_capacity(sub_piece_len);
         sub_piece.extend_from_slice(&bytes[11..]);
 
-        let packet = SendSubPiece {
-            nonce,
-            sub_piece,
-        };
+        let packet = SendSubPiece { nonce, sub_piece };
 
         Ok(Arc::new(packet.clone()))
     }
@@ -153,7 +149,10 @@ impl Arbitrary for SendSubPiece {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> SendSubPiece {
         SendSubPiece {
             nonce: Arbitrary::arbitrary(g),
-            sub_piece: (0..500).into_iter().map(|_| Arbitrary::arbitrary(g)).collect(),
+            sub_piece: (0..500)
+                .into_iter()
+                .map(|_| Arbitrary::arbitrary(g))
+                .collect(),
         }
     }
 }

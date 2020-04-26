@@ -17,8 +17,8 @@
 */
 
 use crate::downloader::sub_piece_info::SubPieceInfo;
-use crypto::ShortHash;
 use constants::*;
+use crypto::ShortHash;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PieceInfo {
@@ -56,9 +56,17 @@ impl PieceInfo {
         };
 
         if size > MAX_PIECE_SIZE as u64 {
-            panic!("Cannot crate PieceInfo with a sum of all SubPieces sizes greater than {}! Got: {}", MAX_PIECE_SIZE, size);
+            panic!(
+                "Cannot crate PieceInfo with a sum of all SubPieces sizes greater than {}! Got: {}",
+                MAX_PIECE_SIZE, size
+            );
         }
-        
-        PieceInfo { checksum, sub_pieces, size, completed }
+
+        PieceInfo {
+            checksum,
+            sub_pieces,
+            size,
+            completed,
+        }
     }
 }

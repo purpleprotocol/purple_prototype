@@ -31,7 +31,9 @@ macro_rules! impl_hash {
 
         /// Computes the message that is passed to the
         /// hash function of this transaction.
-        pub fn compute_hash_message(&self) -> Vec<u8> { assemble_message(&self) }
+        pub fn compute_hash_message(&self) -> Vec<u8> {
+            assemble_message(&self)
+        }
 
         /// Verifies the correctness of the hash of the transaction.
         ///
@@ -48,5 +50,5 @@ macro_rules! impl_hash {
 
             hash == oracle_hash.0
         }
-    }
+    };
 }

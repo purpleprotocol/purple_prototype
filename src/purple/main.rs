@@ -58,9 +58,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
-use triomphe::Arc;
 use std::thread;
 use tokio::runtime::{Builder, Runtime};
+use triomphe::Arc;
 
 #[cfg(not(feature = "mimalloc-allocator"))]
 use std::alloc::System;
@@ -264,8 +264,14 @@ fn main() {
                 let collector_address = argv.collector_address;
 
                 // Start mining
-                crate::jobs::start_miner(pow_chain, network.clone(), our_ip, proof_delay, collector_address.as_ref().unwrap().clone())
-                    .expect("Could not start miner");
+                crate::jobs::start_miner(
+                    pow_chain,
+                    network.clone(),
+                    our_ip,
+                    proof_delay,
+                    collector_address.as_ref().unwrap().clone(),
+                )
+                .expect("Could not start miner");
             }
         }
 
@@ -280,7 +286,6 @@ fn main() {
                 argv.port,
                 true,
             ),
-
             // Start periodic jobs
             network::jobs::start_periodic_jobs(network.clone()),
         );

@@ -16,20 +16,20 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
-use crate::peer::ConnectionType;
-use crate::client_request::ClientRequest;
 use crate::packets::*;
+use crate::peer::ConnectionType;
+use async_trait::async_trait;
 use chrono::prelude::*;
 use crypto::{SecretKey as Sk, Signature};
-use triomphe::Arc;
-use async_trait::async_trait;
-use hashbrown::HashSet;
 use futures_io::{AsyncRead, AsyncWrite};
 use futures_util::io::{AsyncReadExt, AsyncWriteExt};
+use hashbrown::HashSet;
 use lazy_static::*;
 use std::net::SocketAddr;
+use triomphe::Arc;
 
 /// The type id of a packet.
 pub type PacketType = u8;
@@ -60,23 +60,29 @@ pub trait Packet {
     fn to_client_request(&self) -> Option<ClientRequest>;
 
     /// Attempts to start a client protocol flow using the packet.
-    /// 
-    /// This should return an `Err(_)` if the packet cannot start 
-    /// a client protocol flow. 
-    async fn start_client_protocol_flow<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
-      network: &N, 
-      sock: &S
+    ///
+    /// This should return an `Err(_)` if the packet cannot start
+    /// a client protocol flow.
+    async fn start_client_protocol_flow<
+        N: NetworkInterface,
+        S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync,
+    >(
+        network: &N,
+        sock: &S,
     ) -> Result<(), NetworkErr> {
         Err(NetworkErr::CannotStartProtocolFlow)
     }
 
     /// Attempts to start a server protocol flow using the packet.
-    /// 
-    /// This should return an `Err(_)` if the packet cannot start 
-    /// a server protocol flow. 
-    async fn start_server_protocol_flow<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
-      network: &N, 
-      sock: &S
+    ///
+    /// This should return an `Err(_)` if the packet cannot start
+    /// a server protocol flow.
+    async fn start_server_protocol_flow<
+        N: NetworkInterface,
+        S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync,
+    >(
+        network: &N,
+        sock: &S,
     ) -> Result<(), NetworkErr> {
         Err(NetworkErr::CannotStartProtocolFlow)
     }

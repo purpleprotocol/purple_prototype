@@ -16,23 +16,23 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::client_request::ClientRequest;
 use crate::bootstrap::cache::BootstrapCache;
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
-use crate::priority::NetworkPriority;
-use crate::validation::validator::ProtocolValidator;
-use crate::util::FuturesIoSock;
 use crate::packet::Packet;
+use crate::priority::NetworkPriority;
+use crate::util::FuturesIoSock;
+use crate::validation::validator::ProtocolValidator;
 use crypto::{gen_kx_keypair, KxPublicKey as Pk, KxSecretKey as Sk, SessionKey};
 use crypto::{Hash, NodeId};
-use yamux::Control;
+use flume::Sender;
 use std::default::Default;
 use std::fmt;
 use std::hash::{Hash as HashTrait, Hasher};
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU64;
 use triomphe::Arc;
-use flume::Sender;
+use yamux::Control;
 
 #[cfg(test)]
 use parking_lot::Mutex;

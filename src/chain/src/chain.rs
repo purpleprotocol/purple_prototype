@@ -30,8 +30,8 @@ use parking_lot::{Mutex, RwLock};
 use persistence::PersistentDb;
 use std::collections::VecDeque;
 use std::hash::Hash as HashTrait;
-use triomphe::Arc;
 use transactions::Tx;
+use triomphe::Arc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ChainErr {

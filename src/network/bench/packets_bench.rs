@@ -7,8 +7,8 @@ use criterion::Criterion;
 use network::packets::*;
 use network::Packet;
 use quickcheck::{Arbitrary, StdGen};
-use triomphe::Arc;
 use transactions::Tx;
+use triomphe::Arc;
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("deserialize SendSubPiece packet 16kb data", |b| {

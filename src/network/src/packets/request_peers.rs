@@ -24,14 +24,14 @@ use crate::packets::SendPeers;
 use crate::peer::ConnectionType;
 use crate::priority::NetworkPriority;
 use crate::validation::receiver::Receiver;
+use async_trait::async_trait;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use rand::prelude::*;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
-use futures_io::{AsyncRead, AsyncWrite};
-use futures_util::io::{AsyncReadExt, AsyncWriteExt};
-use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestPeers {

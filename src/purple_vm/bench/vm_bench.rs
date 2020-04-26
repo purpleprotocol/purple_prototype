@@ -6,11 +6,11 @@ extern crate criterion;
 #[macro_use]
 extern crate bin_tools;
 
-use criterion::Criterion;
-use persistence::*;
-use crypto::{ShortHash, Hash};
-use patricia_trie::{Trie, TrieDBMut};
 use bitvec::*;
+use criterion::Criterion;
+use crypto::{Hash, ShortHash};
+use patricia_trie::{Trie, TrieDBMut};
+use persistence::*;
 use purple_vm::*;
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -19,7 +19,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let mut db = test_helpers::init_tempdb();
         let mut root = ShortHash::NULL_RLP;
         let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
-        
+
         let mut block = get_fib_block1(10);
         block.extend_from_slice(&get_fib_block2());
 
@@ -28,18 +28,19 @@ fn criterion_benchmark(c: &mut Criterion) {
             name: "debug_test".to_owned(),
             block: block,
             return_type: None,
-            arguments: vec![]
+            arguments: vec![],
         };
 
         let module = Module {
             module_hash: Hash::NULL,
             functions: vec![function],
-            imports: vec![]
+            imports: vec![],
         };
 
         vm.load(module).unwrap();
         b.iter(|| {
-            vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap()
+            vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap())
+                .unwrap()
         });
     });
 
@@ -48,7 +49,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let mut db = test_helpers::init_tempdb();
         let mut root = ShortHash::NULL_RLP;
         let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
-        
+
         let mut block = get_fib_block1(50);
         block.extend_from_slice(&get_fib_block2());
 
@@ -57,18 +58,19 @@ fn criterion_benchmark(c: &mut Criterion) {
             name: "debug_test".to_owned(),
             block: block,
             return_type: None,
-            arguments: vec![]
+            arguments: vec![],
         };
 
         let module = Module {
             module_hash: Hash::NULL,
             functions: vec![function],
-            imports: vec![]
+            imports: vec![],
         };
 
         vm.load(module).unwrap();
         b.iter(|| {
-            vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap()
+            vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap())
+                .unwrap()
         });
     });
 
@@ -77,7 +79,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let mut db = test_helpers::init_tempdb();
         let mut root = ShortHash::NULL_RLP;
         let mut trie = TrieDBMut::<DbHasher, Codec>::new(&mut db, &mut root);
-        
+
         let mut block = get_fib_block1(100);
         block.extend_from_slice(&get_fib_block2());
 
@@ -86,18 +88,19 @@ fn criterion_benchmark(c: &mut Criterion) {
             name: "debug_test".to_owned(),
             block: block,
             return_type: None,
-            arguments: vec![]
+            arguments: vec![],
         };
 
         let module = Module {
             module_hash: Hash::NULL,
             functions: vec![function],
-            imports: vec![]
+            imports: vec![],
         };
 
         vm.load(module).unwrap();
         b.iter(|| {
-            vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap()).unwrap()
+            vm.execute(&mut trie, 0, 0, &[], Gas::from_bytes(b"0.0").unwrap())
+                .unwrap()
         });
     });
 }
@@ -105,11 +108,11 @@ fn criterion_benchmark(c: &mut Criterion) {
 fn get_fib_block1(n: u64) -> Vec<u8> {
     let mut block: Vec<u8> = vec![
         Instruction::Begin.repr(),
-        0x00,                             // 0 Arity
+        0x00, // 0 Arity
         Instruction::Nop.repr(),
         Instruction::PushOperand.repr(),
-        0x04,                             // 4 Arity
-        0x00,                             // Reference bits
+        0x04, // 4 Arity
+        0x00, // Reference bits
         Instruction::i64Const.repr(),
         Instruction::i64Const.repr(),
         Instruction::i64Const.repr(),
@@ -135,7 +138,7 @@ fn get_fib_block2() -> Vec<u8> {
     bitmask3.set(0, true);
 
     let block: Vec<u8> = vec![
-        0x00,                             // a = 0
+        0x00, // a = 0
         0x00,
         0x00,
         0x00,
@@ -143,7 +146,7 @@ fn get_fib_block2() -> Vec<u8> {
         0x00,
         0x00,
         0x00,
-        0x00,                             // b = 1
+        0x00, // b = 1
         0x00,
         0x00,
         0x00,
@@ -151,7 +154,7 @@ fn get_fib_block2() -> Vec<u8> {
         0x00,
         0x00,
         0x01,
-        0x00,                             // sum = 0
+        0x00, // sum = 0
         0x00,
         0x00,
         0x00,
@@ -159,20 +162,20 @@ fn get_fib_block2() -> Vec<u8> {
         0x00,
         0x00,
         0x00,
-        Instruction::i64Store.repr(),     // Store sum at 0x00, 0x03
+        Instruction::i64Store.repr(), // Store sum at 0x00, 0x03
         0x00,
         0x03,
-        Instruction::i64Store.repr(),     // Store b at 0x00, 0x02
+        Instruction::i64Store.repr(), // Store b at 0x00, 0x02
         0x00,
         0x02,
-        Instruction::i64Store.repr(),     // Store a at 0x00, 0x01
+        Instruction::i64Store.repr(), // Store a at 0x00, 0x01
         0x00,
         0x01,
-        Instruction::i64Store.repr(),     // Store n at 0x00, 0x00
+        Instruction::i64Store.repr(), // Store n at 0x00, 0x00
         0x00,
         0x00,
         Instruction::Loop.repr(),
-        0x00,            
+        0x00,
         Instruction::PushOperand.repr(), // Push n to operand stack and check if n > 1
         0x02,
         bitmask3,
@@ -189,10 +192,10 @@ fn get_fib_block2() -> Vec<u8> {
         0x00,
         0x00,
         0x02,
-        Instruction::BreakIf.repr(),     // Break loop if n is less than 2 
+        Instruction::BreakIf.repr(), // Break loop if n is less than 2
         Instruction::LtSigned.repr(),
         Instruction::PopOperand.repr(),
-        Instruction::PushLocal.repr(),   // Push n, b and a to locals stack
+        Instruction::PushLocal.repr(), // Push n, b and a to locals stack
         0x03,
         bitmask,
         Instruction::i64Const.repr(),
@@ -205,7 +208,7 @@ fn get_fib_block2() -> Vec<u8> {
         Instruction::i64Load.repr(),
         0x00,
         0x01,
-        Instruction::PickLocal.repr(),   // Copy b to the top of the stack
+        Instruction::PickLocal.repr(), // Copy b to the top of the stack
         0x00,
         0x02,
         Instruction::PushOperand.repr(), // Push a and copy of b on the operand stack
@@ -219,7 +222,7 @@ fn get_fib_block2() -> Vec<u8> {
         Instruction::PickOperand.repr(), // Dupe sum on the operand stack
         0x00,
         0x00,
-        Instruction::i64Store.repr(),    // Store new sum at 0x00, 0x03
+        Instruction::i64Store.repr(), // Store new sum at 0x00, 0x03
         0x00,
         0x03,
         Instruction::PushOperand.repr(), // Push b on the operand stack
@@ -227,10 +230,10 @@ fn get_fib_block2() -> Vec<u8> {
         bitmask3,
         Instruction::i64Const.repr(),
         Instruction::PopLocal.repr(),
-        Instruction::i64Store.repr(),    // Store b as new a at 0x00, 0x01
+        Instruction::i64Store.repr(), // Store b as new a at 0x00, 0x01
         0x00,
         0x01,
-        Instruction::i64Store.repr(),    // Store sum as new b at 0x00, 0x02
+        Instruction::i64Store.repr(), // Store sum as new b at 0x00, 0x02
         0x00,
         0x02,
         Instruction::PushOperand.repr(), // Push b on the operand stack and subtract by 1
@@ -248,12 +251,12 @@ fn get_fib_block2() -> Vec<u8> {
         0x00,
         0x01,
         Instruction::Sub.repr(),
-        Instruction::i64Store.repr(),     // Store new n at 0x00, 0x00
+        Instruction::i64Store.repr(), // Store new n at 0x00, 0x00
         0x00,
         0x00,
         Instruction::End.repr(),
         Instruction::Nop.repr(),
-        Instruction::End.repr()
+        Instruction::End.repr(),
     ];
 
     block

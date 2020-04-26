@@ -24,15 +24,15 @@ use crate::packets::SendPeers;
 use crate::peer::ConnectionType;
 use crate::priority::NetworkPriority;
 use crate::validation::receiver::Receiver;
+use async_trait::async_trait;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::ShortHash;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use rand::prelude::*;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
-use futures_io::{AsyncRead, AsyncWrite};
-use futures_util::io::{AsyncReadExt, AsyncWriteExt};
-use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RequestPieceInfo {
@@ -104,7 +104,7 @@ impl Packet for RequestPieceInfo {
 
         let mut block_hash_bytes = [0; 8];
         let mut piece_hash_bytes = [0; 8];
-        
+
         block_hash_bytes.copy_from_slice(&bytes[9..17]);
         piece_hash_bytes.copy_from_slice(&bytes[17..]);
 

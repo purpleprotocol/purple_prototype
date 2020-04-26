@@ -16,37 +16,37 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
+use crate::client_request::ClientRequest;
 use crate::error::NetworkErr;
+use crate::header::PacketHeader as Header;
 use crate::interface::NetworkInterface;
 use crate::network::Network;
 use crate::packet::*;
 use crate::packets::*;
 use crate::peer::{ConnectionType, Peer, OUTBOUND_BUF_SIZE};
 use crate::priority::NetworkPriority;
-use crate::validation::sender::Sender;
 use crate::util::FuturesIoSock;
-use crate::header::PacketHeader as Header;
-use crate::client_request::ClientRequest;
-use yamux::{Connection, Mode, Config, ConnectionError as YamuxConnErr};
+use crate::validation::sender::Sender;
 use bytes::{Bytes, BytesMut};
 use crypto::{Nonce, Signature};
+use flume::RecvError;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use persistence::PersistentDb;
 use rand::prelude::IteratorRandom;
 use std::iter;
+use std::marker::Unpin;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use triomphe::Arc;
 use std::time::{Duration, Instant};
-use std::marker::Unpin;
 use tokio::io;
 use tokio::net::tcp::ReadHalf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
-use flume::RecvError;
 use tokio::time;
 use tokio_io_timeout::*;
-use futures_io::{AsyncRead, AsyncWrite};
-use futures_util::io::{AsyncReadExt, AsyncWriteExt};
+use triomphe::Arc;
+use yamux::{Config, Connection, ConnectionError as YamuxConnErr, Mode};
 
 /// Peer timeout interval
 pub(crate) const PEER_TIMEOUT: u64 = 15000;
@@ -134,7 +134,8 @@ fn process_connection(
 
         // Create outbound channels
         let (low_outbound_sender, mut low_outbound_receiver) = flume::bounded(OUTBOUND_BUF_SIZE);
-        let (medium_outbound_sender, mut medium_outbound_receiver) = flume::bounded(OUTBOUND_BUF_SIZE);
+        let (medium_outbound_sender, mut medium_outbound_receiver) =
+            flume::bounded(OUTBOUND_BUF_SIZE);
         let (high_outbound_sender, mut high_outbound_receiver) = flume::bounded(OUTBOUND_BUF_SIZE);
 
         // Wrap `TimeoutStream` with futures_io traits wrapper
@@ -179,17 +180,17 @@ fn process_connection(
                 }
             }
 
-            _ => None
+            _ => None,
         };
 
         // Send connect packet if we are the client
         if let Some(connect) = connect {
             let packet = async {
                 let packet = connect.to_bytes();
-                let packet =
-                    crate::common::wrap_packet(&packet, network.network_name.as_str());
+                let packet = crate::common::wrap_packet(&packet, network.network_name.as_str());
                 packet
-            }.await;
+            }
+            .await;
 
             debug!("Sending connect packet to {}", addr);
 
@@ -221,7 +222,7 @@ fn process_connection(
 
         // Handle `Connect` packet
         match Connect::handle(&mut network, &mut sock, &addr, connect, client_or_server).await {
-            Ok(()) => { },
+            Ok(()) => {}
             Err(err) => {
                 warn!("Connect error for {:?}: {:?}", addr, err);
                 ban_peer(&network, &addr);
@@ -372,7 +373,7 @@ fn process_connection(
                     match sock.next_stream().await {
                         Ok(Some(stream)) => {
                             debug!("Starting server tcp stream with id {} for {}", stream.id(), addr);
-                      
+
                             let network = network_clone2.clone();
                             let refuse_connection = refuse_clone.clone();
 
@@ -406,7 +407,10 @@ fn process_connection(
     tokio::spawn(socket);
 }
 
-async fn start_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
+async fn start_client_stream<
+    N: NetworkInterface,
+    S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync,
+>(
     network: N,
     sock: S,
     addr: SocketAddr,
@@ -414,29 +418,36 @@ async fn start_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt 
     initial_packet: Vec<u8>,
     client_request: ClientRequest,
 ) {
-    let result = handle_client_stream(network.clone(), sock, &addr, initial_packet, client_request).await;
-    
+    let result =
+        handle_client_stream(network.clone(), sock, &addr, initial_packet, client_request).await;
+
     if let Err(err) = result {
         warn!("Stream error for {:?}: {:?}", addr, err);
         handle_err(&network, &addr, refuse_connection, err).await;
     }
 }
 
-async fn start_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
+async fn start_server_stream<
+    N: NetworkInterface,
+    S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync,
+>(
     network: N,
     sock: S,
     addr: SocketAddr,
     refuse_connection: Arc<AtomicBool>,
 ) {
     let result = handle_server_stream(network.clone(), sock, &addr).await;
-    
+
     if let Err(err) = result {
         warn!("Stream error for {:?}: {:?}", addr, err);
         handle_err(&network, &addr, refuse_connection, err).await;
     }
 }
 
-async fn handle_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
+async fn handle_client_stream<
+    N: NetworkInterface,
+    S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync,
+>(
     network: N,
     mut sock: S,
     addr: &SocketAddr,
@@ -482,13 +493,19 @@ async fn handle_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
             RequestTx::start_client_protocol_flow(&network, &sock).await?;
         }
 
-        _ => panic!("Invalid packet type to start a stream with: {}", packet_type)
+        _ => panic!(
+            "Invalid packet type to start a stream with: {}",
+            packet_type
+        ),
     }
 
     Ok(())
 }
 
-async fn handle_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
+async fn handle_server_stream<
+    N: NetworkInterface,
+    S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync,
+>(
     network: N,
     mut sock: S,
     addr: &SocketAddr,
@@ -533,14 +550,20 @@ async fn handle_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
             RequestTx::start_server_protocol_flow(&network, &sock).await?;
         }
 
-        _ => panic!("Invalid packet type to start a stream with: {}", packet_type)
+        _ => panic!(
+            "Invalid packet type to start a stream with: {}",
+            packet_type
+        ),
     }
 
     Ok(())
 }
 
 /// Attempt to decode a `Header` from a socket
-async fn read_header<S: AsyncRead + AsyncReadExt + Unpin>(socket: &mut S, addr: &SocketAddr) -> Result<Header, io::Error> {
+async fn read_header<S: AsyncRead + AsyncReadExt + Unpin>(
+    socket: &mut S,
+    addr: &SocketAddr,
+) -> Result<Header, io::Error> {
     let mut header_buf: [u8; crate::common::HEADER_SIZE] = [0; crate::common::HEADER_SIZE];
 
     // Read header
@@ -580,7 +603,7 @@ pub async fn write_raw_packet<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
     unimplemented!();
 }
 
-/// Attempts to read and decode a raw packet from the given socket 
+/// Attempts to read and decode a raw packet from the given socket
 async fn read_raw_packet<N: NetworkInterface, S: AsyncRead + AsyncReadExt + Unpin>(
     sock: &mut S,
     network: &N,
@@ -610,23 +633,32 @@ async fn read_raw_packet<N: NetworkInterface, S: AsyncRead + AsyncReadExt + Unpi
     }
 }
 
-async fn verify_crc32<N: NetworkInterface>(network: &N, addr: &SocketAddr, header: &Header, buf: &BytesMut) -> Result<(), io::Error> {
-    crate::common::verify_crc32(&header, &buf, network.network_name())
-        .map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("Header read error for {}: {:?}", addr, err),
-            )
-        })
+async fn verify_crc32<N: NetworkInterface>(
+    network: &N,
+    addr: &SocketAddr,
+    header: &Header,
+    buf: &BytesMut,
+) -> Result<(), io::Error> {
+    crate::common::verify_crc32(&header, &buf, network.network_name()).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Header read error for {}: {:?}", addr, err),
+        )
+    })
 }
 
-async fn decrypt_packet<N: NetworkInterface>(network: &N, addr: &SocketAddr, header: &Header, buf: BytesMut) -> Result<Bytes, io::Error> {
-    let (peer_id, peer_tx) = { 
+async fn decrypt_packet<N: NetworkInterface>(
+    network: &N,
+    addr: &SocketAddr,
+    header: &Header,
+    buf: BytesMut,
+) -> Result<Bytes, io::Error> {
+    let (peer_id, peer_tx) = {
         let peers = network.peers();
         let peer = peers.get(&addr).ok_or(io::Error::new(
-                io::ErrorKind::ConnectionAborted,
-                format!("Lost connection to {}", addr),
-            ))?;
+            io::ErrorKind::ConnectionAborted,
+            format!("Lost connection to {}", addr),
+        ))?;
 
         (peer.id.clone(), peer.tx.clone())
     };
@@ -658,14 +690,13 @@ async fn decrypt_packet<N: NetworkInterface>(network: &N, addr: &SocketAddr, hea
     }
 
     // Decrypt payload
-    let decrypted =
-        crate::common::decrypt(packet_slice, &nonce, peer_tx.as_ref().unwrap())
-            .map_err(|_| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("Encryption error for {}", addr),
-                )
-            })?;
+    let decrypted = crate::common::decrypt(packet_slice, &nonce, peer_tx.as_ref().unwrap())
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Encryption error for {}", addr),
+            )
+        })?;
 
     buf.extend_from_slice(&decrypted);
     Ok(buf.freeze())
@@ -686,7 +717,12 @@ async fn account_bytes_read<N: NetworkInterface>(network: N, addr: &SocketAddr, 
     acc.fetch_add(bytes_read as u64, Ordering::SeqCst);
 }
 
-async fn handle_err<N: NetworkInterface>(network: &N, addr: &SocketAddr, refuse_connection: Arc<AtomicBool>, err: NetworkErr) {
+async fn handle_err<N: NetworkInterface>(
+    network: &N,
+    addr: &SocketAddr,
+    refuse_connection: Arc<AtomicBool>,
+    err: NetworkErr,
+) {
     // TODO: Handle other errors as well
     match err {
         NetworkErr::InvalidConnectPacket => {

@@ -4,20 +4,20 @@ extern crate miner;
 extern crate rocksdb;
 extern crate tempdir;
 
-use triomphe::Arc;
-use chain::*;
 use account::normal::NormalAddress;
-use miner::Proof;
-use criterion::Criterion;
-use rand::prelude::*;
-use crypto::*;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use persistence::PersistentDb;
-use rocksdb::DB;
-use parking_lot::RwLock;
+use chain::*;
 use chrono::prelude::*;
-use transactions::*;
 use constants::*;
+use criterion::Criterion;
+use crypto::*;
+use miner::Proof;
+use parking_lot::RwLock;
+use persistence::PersistentDb;
+use rand::prelude::*;
+use rocksdb::DB;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use transactions::*;
+use triomphe::Arc;
 
 pub fn random_socket_addr() -> SocketAddr {
     let mut thread_rng = rand::thread_rng();
@@ -152,7 +152,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 timestamp: Utc::now(),
                 transactions: Some(Arc::new(RwLock::new(Vec::new()))),
             };
-            
+
             block.sign_miner(identity.skey());
             block.compute_hash();
 
@@ -180,7 +180,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
             for block in blocks {
                 chain.append_block(block).unwrap();
-            } 
+            }
         });
     });
 
@@ -231,7 +231,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     //             timestamp: Utc::now(),
     //             transactions: Some(Arc::new(RwLock::new(transaction_list))),
     //         };
-            
+
     //         block.sign_miner(identity.skey());
     //         block.compute_hash();
 
@@ -259,7 +259,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     //         for block in blocks {
     //             chain.append_block(block).unwrap();
-    //         } 
+    //         }
     //     });
     // });
 }

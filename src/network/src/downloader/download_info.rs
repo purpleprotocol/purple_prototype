@@ -16,8 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::downloader::piece_info::PieceInfo;
 use crate::downloader::download_state::DownloadState;
+use crate::downloader::piece_info::PieceInfo;
 use chrono::*;
 
 #[derive(Clone, Debug, PartialEq)]

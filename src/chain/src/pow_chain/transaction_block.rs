@@ -21,11 +21,11 @@ use crate::chain::*;
 use crate::pow_chain::chain_state::BlockType;
 use crate::pow_chain::PowChainState;
 use crate::types::*;
-use constants::*;
 use account::NormalAddress;
 use bin_tools::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chrono::prelude::*;
+use constants::*;
 use crypto::PublicKey;
 use crypto::{Hash, ShortHash};
 use crypto::{NodeId, SecretKey as Sk, Signature};
@@ -42,8 +42,8 @@ use std::io::Cursor;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str;
 use std::str::FromStr;
-use triomphe::Arc;
 use transactions::Tx;
+use triomphe::Arc;
 
 #[derive(Clone, Debug)]
 /// A block belonging to the `PowChain`.
@@ -63,7 +63,7 @@ pub struct TransactionBlock {
     /// The hash of the block.
     pub hash: Option<Hash>,
 
-    /// Checksums of all the block's pieces 
+    /// Checksums of all the block's pieces
     pub tx_checksums: Option<Vec<ShortHash>>,
 
     /// Sizes of all the pieces
@@ -291,8 +291,15 @@ impl Block for TransactionBlock {
             return Err("Bad height");
         };
 
-        if bytes.len() != 11 + timestamp_len as usize + 32 * 2 + crypto::SHORT_HASH_BYTES * 2 + 64 + pieces_count as usize * 12 {
-            return Err("Invalid packet length")
+        if bytes.len()
+            != 11
+                + timestamp_len as usize
+                + 32 * 2
+                + crypto::SHORT_HASH_BYTES * 2
+                + 64
+                + pieces_count as usize * 12
+        {
+            return Err("Invalid packet length");
         }
 
         let parent_hash = {
@@ -316,9 +323,12 @@ impl Block for TransactionBlock {
             ShortHash(hash)
         };
 
-        let miner_id = NodeId::from_bytes(&bytes[59..91]).map_err(|_| "Incorrect miner id field")?;
-        let miner_signature = Signature::from_bytes(&bytes[91..155]).map_err(|_| "Incorrect signature field")?;
-        let utf8 = std::str::from_utf8(&bytes[155..(155+timestamp_len as usize)]).map_err(|_| "Invalid block timestamp")?;
+        let miner_id =
+            NodeId::from_bytes(&bytes[59..91]).map_err(|_| "Incorrect miner id field")?;
+        let miner_signature =
+            Signature::from_bytes(&bytes[91..155]).map_err(|_| "Incorrect signature field")?;
+        let utf8 = std::str::from_utf8(&bytes[155..(155 + timestamp_len as usize)])
+            .map_err(|_| "Invalid block timestamp")?;
         let timestamp = DateTime::<Utc>::from_str(utf8).map_err(|_| "Invalid block timestamp")?;
 
         let mut tx_checksums = Vec::with_capacity(pieces_count as usize);
@@ -331,7 +341,7 @@ impl Block for TransactionBlock {
             let i = i * 12;
             let start_i = i + start_i;
             let end_i = i + end_i;
-            let mut reader = Cursor::new(&bytes[start_i..(start_i+4)]);
+            let mut reader = Cursor::new(&bytes[start_i..(start_i + 4)]);
 
             let piece_size = reader
                 .read_u32::<BigEndian>()
@@ -341,8 +351,8 @@ impl Block for TransactionBlock {
             if piece_size > MAX_PIECE_SIZE || piece_size == 0 {
                 return Err("Invalid piece size!");
             }
-            
-            hash_bytes.copy_from_slice(&bytes[(start_i+4)..end_i]);
+
+            hash_bytes.copy_from_slice(&bytes[(start_i + 4)..end_i]);
             tx_checksums.push(ShortHash(hash_bytes));
             pieces_sizes.push(piece_size);
         }
@@ -475,8 +485,18 @@ impl Arbitrary for TransactionBlock {
         let num = rng.gen_range(0, 9);
 
         let mut block = TransactionBlock {
-            tx_checksums: Some((0..num).into_iter().map(|_| Arbitrary::arbitrary(g)).collect()),
-            pieces_sizes: Some((0..num).into_iter().map(|_| rng.gen_range(1, MAX_PIECE_SIZE)).collect()),
+            tx_checksums: Some(
+                (0..num)
+                    .into_iter()
+                    .map(|_| Arbitrary::arbitrary(g))
+                    .collect(),
+            ),
+            pieces_sizes: Some(
+                (0..num)
+                    .into_iter()
+                    .map(|_| rng.gen_range(1, MAX_PIECE_SIZE))
+                    .collect(),
+            ),
             height: Arbitrary::arbitrary(g),
             parent_hash: Arbitrary::arbitrary(g),
             state_root: Some(Arbitrary::arbitrary(g)),
@@ -509,7 +529,7 @@ mod tests {
             let mut pieces_sizes = block.pieces_sizes.as_mut().unwrap();
             let max_pieces = MAX_TX_SET_SIZE / MAX_PIECE_SIZE;
 
-            for i in 0..(max_pieces + 10) { 
+            for i in 0..(max_pieces + 10) {
                 tx_checksums.push(crypto::hash_slice(format!("random_hash-{}", i).as_bytes()).to_short());
                 pieces_sizes.push(rng.gen_range(1, MAX_PIECE_SIZE));
             }
@@ -529,7 +549,7 @@ mod tests {
             }
 
             let random = rng.gen_range(MAX_PIECE_SIZE + 1, MAX_PIECE_SIZE + 100);
-            
+
             pieces_sizes.pop();
             pieces_sizes.push(random);
             block.compute_hash();

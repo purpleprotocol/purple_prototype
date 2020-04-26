@@ -26,9 +26,9 @@ use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
 use persistence::{Codec, DbHasher, PersistentDb};
 use std::collections::VecDeque;
 use std::net::SocketAddr;
-use triomphe::Arc;
 use transactions::Genesis;
 use transactions::Tx;
+use triomphe::Arc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum BlockType {

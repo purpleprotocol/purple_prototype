@@ -353,7 +353,7 @@ impl HashDB<DbHasher, ElasticArray128<u8>> for PersistentDb {
 }
 
 impl AsHashDB<DbHasher, ElasticArray128<u8>> for PersistentDb {
-    fn as_hashdb(&self) -> & dyn HashDB<DbHasher, ElasticArray128<u8>> {
+    fn as_hashdb(&self) -> &dyn HashDB<DbHasher, ElasticArray128<u8>> {
         self
     }
     fn as_hashdb_mut(&mut self) -> &mut dyn HashDB<DbHasher, ElasticArray128<u8>> {

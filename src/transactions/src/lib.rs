@@ -40,10 +40,10 @@ mod create_currency;
 mod create_mintable;
 mod create_unique;
 mod genesis;
+mod helpers;
 mod mint;
 mod open_contract;
 mod send;
-mod helpers;
 
 pub use crate::burn::*;
 pub use crate::call::*;
@@ -52,10 +52,10 @@ pub use crate::create_currency::*;
 pub use crate::create_mintable::*;
 pub use crate::create_unique::*;
 pub use crate::genesis::*;
+pub use crate::helpers::*;
 pub use crate::mint::*;
 pub use crate::open_contract::*;
 pub use crate::send::*;
-pub use crate::helpers::*;
 
 use account::{Address, Balance, NormalAddress};
 use crypto::{FromBase58, Hash, Identity, PublicKey, SecretKey, ShortHash};

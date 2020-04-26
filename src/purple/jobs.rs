@@ -28,8 +28,8 @@ use std::cell::RefCell;
 use std::net::SocketAddr;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use triomphe::Arc;
 use std::thread;
+use triomphe::Arc;
 
 #[cfg(any(
     feature = "miner-cpu",
@@ -84,7 +84,7 @@ pub fn start_miner(
     network: Network,
     ip: SocketAddr,
     proof_delay: Option<u32>,
-    collector_address: NormalAddress
+    collector_address: NormalAddress,
 ) -> Result<(), &'static str> {
     if MINER_IS_STARTED.load(Ordering::Relaxed) {
         return Err("The miner is already started!");
@@ -119,7 +119,7 @@ pub fn start_miner(
             if are_solvers_started {
                 let current_height = { miner.borrow().current_height(plugin_type) };
 
-                if let Some(miner_height) = current_height { 
+                if let Some(miner_height) = current_height {
                     let tip = pow_chain.canonical_tip();
                     let tip_state = pow_chain.canonical_tip_state();
                     let current_height = tip.height();
@@ -147,7 +147,7 @@ pub fn start_miner(
 
                             // Create block
                             let mut block = CheckpointBlock::new(
-                                tip_state.last_checkpoint.clone(), 
+                                tip_state.last_checkpoint.clone(),
                                 collector_address,
                                 ip,
                                 miner_height + 1,
@@ -174,7 +174,6 @@ pub fn start_miner(
                                 debug!("Sending block...");
 
                                 // TODO: Start propagating the block
-                                
                                 // // Wait a bit for buffers to flush
                                 // thread::sleep_ms(150);
                             } else {

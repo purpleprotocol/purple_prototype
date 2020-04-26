@@ -472,7 +472,7 @@ impl CreateMintable {
         if bytes.len() < 2 {
             return Err("Invalid transaction length");
         }
-        
+
         let mut rdr = Cursor::new(bytes);
         let tx_type = if let Ok(result) = rdr.read_u8() {
             result
@@ -504,11 +504,7 @@ impl CreateMintable {
             return Err("Bad fee len");
         };
 
-        let optional_bytes = if currency_flag == 0 {
-            8
-        } else {
-            0
-        };
+        let optional_bytes = if currency_flag == 0 { 8 } else { 0 };
 
         if bytes.len() != 28 + 8 + optional_bytes + 32 + 33 * 3 + 64 + (fee_len as usize) {
             return Err("Invalid transaction length");
@@ -587,21 +583,21 @@ impl CreateMintable {
             &bytes[109..142]
         };
         let next_address = NormalAddress::from_bytes(slice)?;
-        
+
         let slice = if currency_flag == 1 {
             &bytes[134..167]
         } else {
             &bytes[142..175]
         };
         let minter_address = Address::from_bytes(slice)?;
-        
+
         let slice = if currency_flag == 1 {
             &bytes[167..231]
         } else {
             &bytes[175..239]
         };
         let signature = Signature::from_bytes(slice)?;
-        
+
         let slice = if currency_flag == 1 {
             &bytes[231..]
         } else {

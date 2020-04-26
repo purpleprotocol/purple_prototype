@@ -22,15 +22,15 @@ use crate::interface::NetworkInterface;
 use crate::packet::Packet;
 use crate::peer::ConnectionType;
 use crate::priority::NetworkPriority;
+use async_trait::async_trait;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use crypto::NodeId;
 use crypto::{KxPublicKey as KxPk, PublicKey as Pk, SecretKey as Sk, Signature};
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
-use futures_io::{AsyncRead, AsyncWrite};
-use futures_util::io::{AsyncReadExt, AsyncWriteExt};
-use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Connect {
@@ -223,8 +223,7 @@ impl Packet for Connect {
                 let packet = crate::common::wrap_packet(&packet_bytes, network.network_name());
 
                 // Write packet to stream
-                sock
-                    .write(&packet)
+                sock.write(&packet)
                     .await
                     .map_err(|_| NetworkErr::WriteErr)?;
 
@@ -286,9 +285,9 @@ mod tests {
     use crypto::NodeId;
     use hashbrown::HashMap;
     use parking_lot::Mutex;
-    use triomphe::Arc;
     use std::thread;
     use std::time::Duration;
+    use triomphe::Arc;
 
     // #[test]
     // fn it_successfuly_performs_connect_handshake() {

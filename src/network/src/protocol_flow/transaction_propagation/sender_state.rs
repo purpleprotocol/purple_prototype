@@ -17,8 +17,8 @@
 */
 
 use std::default::Default;
-use triomphe::Arc;
 use transactions::Tx;
+use triomphe::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TxSenderState {
