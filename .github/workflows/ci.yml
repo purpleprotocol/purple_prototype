@@ -128,11 +128,12 @@ jobs:
       - name: Test
         uses: actions-rs/cargo@v1
         with:
-          command: test
+          command: test --all
 
-      - name: Miner
+      - name: Miner (Linux)
         uses: actions-rs/cargo@v1
         with:
+          if: runner.os == 'Linux'
           command: build
           args: --features miner-cpu
 
