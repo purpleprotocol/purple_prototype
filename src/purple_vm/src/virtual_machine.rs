@@ -16,8 +16,6 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#![rustfmt::skip]
-
 use crate::address::Address;
 use crate::code::function::Function;
 use crate::error::VmError;

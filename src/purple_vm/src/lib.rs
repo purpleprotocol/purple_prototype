@@ -52,4 +52,6 @@ mod instruction_set;
 mod module;
 mod primitives;
 mod stack;
+
+#[rustfmt::skip]
 mod virtual_machine;
