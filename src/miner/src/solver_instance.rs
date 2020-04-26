@@ -43,7 +43,7 @@ impl SolverInstance {
         let l = PluginLibrary::new(&config.file)?;
         Ok(SolverInstance {
             lib: l,
-            config: config,
+            config,
             stats: SolverStats::default(),
             solutions: SolverSolutions::default(),
         })

@@ -24,14 +24,14 @@ use crate::packets::SendPeers;
 use crate::peer::ConnectionType;
 use crate::priority::NetworkPriority;
 use crate::validation::receiver::Receiver;
+use async_trait::async_trait;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::ShortHash;
+use futures_io::{AsyncRead, AsyncWrite};
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
-use futures_io::{AsyncRead, AsyncWrite};
-use futures_util::io::{AsyncReadExt, AsyncWriteExt};
-use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendPieceInfo {
@@ -50,10 +50,7 @@ impl SendPieceInfo {
             panic!("Cannot receive an empty hashes vector!");
         }
 
-        SendPieceInfo {
-            hashes,
-            nonce,
-        }
+        SendPieceInfo { hashes, nonce }
     }
 }
 
@@ -73,7 +70,7 @@ impl Packet for SendPieceInfo {
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u8(self.hashes.len() as u8).unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
-        
+
         // Write sub-pieces hashes
         for hash in self.hashes.iter() {
             buffer.extend_from_slice(&hash.0);
@@ -131,10 +128,7 @@ impl Packet for SendPieceInfo {
             hashes.push(ShortHash(hash_bytes));
         }
 
-        let packet = SendPieceInfo {
-            nonce,
-            hashes
-        };
+        let packet = SendPieceInfo { nonce, hashes };
 
         Ok(Arc::new(packet.clone()))
     }
@@ -165,7 +159,10 @@ impl Arbitrary for SendPieceInfo {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> SendPieceInfo {
         SendPieceInfo {
             nonce: Arbitrary::arbitrary(g),
-            hashes: (0..16).into_iter().map(|_| Arbitrary::arbitrary(g)).collect(),
+            hashes: (0..16)
+                .into_iter()
+                .map(|_| Arbitrary::arbitrary(g))
+                .collect(),
         }
     }
 }

@@ -16,10 +16,10 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use tokio::io; //, Result as TokioResult, Error};
-use futures_io::{AsyncRead, AsyncWrite, Result as TokioResult, Error};
+use futures_io::{AsyncRead, AsyncWrite, Error, Result as TokioResult};
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use tokio::io; //, Result as TokioResult, Error};
 
 /// `futures-io` based socket wrapper over tokio 2.0 socket.
 pub struct FuturesIoSock<S: io::AsyncRead + io::AsyncWrite + Unpin> {
@@ -35,9 +35,9 @@ impl<S: io::AsyncRead + io::AsyncWrite + Unpin> FuturesIoSock<S> {
 
 impl<S: io::AsyncRead + io::AsyncWrite + Unpin> AsyncRead for FuturesIoSock<S> {
     fn poll_read(
-        mut self: Pin<&mut Self>, 
-        ctx: &mut Context, 
-        buf: &mut [u8]
+        mut self: Pin<&mut Self>,
+        ctx: &mut Context,
+        buf: &mut [u8],
     ) -> Poll<TokioResult<usize>> {
         Pin::new(&mut self.sock).poll_read(ctx, buf)
     }
@@ -45,9 +45,9 @@ impl<S: io::AsyncRead + io::AsyncWrite + Unpin> AsyncRead for FuturesIoSock<S> {
 
 impl<S: io::AsyncRead + io::AsyncWrite + Unpin> AsyncWrite for FuturesIoSock<S> {
     fn poll_write(
-        mut self: Pin<&mut Self>, 
-        ctx: &mut Context, 
-        buf: &[u8]
+        mut self: Pin<&mut Self>,
+        ctx: &mut Context,
+        buf: &[u8],
     ) -> Poll<Result<usize, Error>> {
         Pin::new(&mut self.sock).poll_write(ctx, buf)
     }
@@ -56,10 +56,7 @@ impl<S: io::AsyncRead + io::AsyncWrite + Unpin> AsyncWrite for FuturesIoSock<S> 
         Pin::new(&mut self.sock).poll_flush(ctx)
     }
 
-    fn poll_close(
-        mut self: Pin<&mut Self>, 
-        ctx: &mut Context
-    ) -> Poll<Result<(), Error>> {
+    fn poll_close(mut self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Result<(), Error>> {
         Pin::new(&mut self.sock).poll_shutdown(ctx)
     }
-} 
+}

@@ -17,7 +17,7 @@
 */
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-/// Enum representing each request a client can initiate 
+/// Enum representing each request a client can initiate
 pub enum ClientRequest {
     Ping,
     RequestPeers,

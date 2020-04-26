@@ -102,7 +102,10 @@ mod tests {
         let data = b"data".to_vec();
         let checksum = crypto::hash_slice(b"other_data").to_short();
         let mut sub_piece = SubPiece::new(data.len() as u64, checksum);
-        assert_eq!(sub_piece.add_data(Arc::new(data.clone())), Err(DownloaderErr::InvalidChecksum));
+        assert_eq!(
+            sub_piece.add_data(Arc::new(data.clone())),
+            Err(DownloaderErr::InvalidChecksum)
+        );
     }
 
     #[test]

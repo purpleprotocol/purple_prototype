@@ -16,10 +16,10 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use crate::{Tx, Send};
+use crate::{Send, Tx};
 use account::{Address, Balance, NormalAddress};
-use crypto::{PublicKey, SecretKey};
 use constants::*;
+use crypto::{PublicKey, SecretKey};
 use lazy_static::*;
 use triomphe::Arc;
 

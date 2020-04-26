@@ -33,8 +33,8 @@ use crypto::ShortHash;
 use patricia_trie::{TrieDBMut, TrieMut};
 use persistence::{Codec, DbHasher, PersistentDb};
 use quicksort::*;
-use triomphe::Arc;
 use tempdir::TempDir;
+use triomphe::Arc;
 
 pub use quicksort::*;
 

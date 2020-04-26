@@ -18,6 +18,7 @@
 
 use crate::bootstrap::cache::BootstrapCache;
 use crate::connection::*;
+use crate::downloader::Downloader;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -25,21 +26,20 @@ use crate::packets::connect::Connect;
 use crate::peer::ConnectionType;
 use crate::priority::NetworkPriority;
 use crate::validation::sender::Sender as SenderTrait;
-use crate::downloader::Downloader;
 use crate::Peer;
 use chain::*;
 use crypto::NodeId;
 use crypto::SecretKey as Sk;
-use hashbrown::HashSet;
 use dashmap::DashMap;
+use hashbrown::HashSet;
 use mempool::Mempool;
 use parking_lot::RwLock;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use triomphe::Arc;
 use std::time::Duration;
 use tokio::time;
+use triomphe::Arc;
 
 #[cfg(test)]
 use crossbeam_channel::Sender;
@@ -222,7 +222,11 @@ impl NetworkInterface for Network {
         }
     }
 
-    fn send_to_all<P: Packet>(&self, packet: &P, priority: NetworkPriority) -> Result<(), NetworkErr> {
+    fn send_to_all<P: Packet>(
+        &self,
+        packet: &P,
+        priority: NetworkPriority,
+    ) -> Result<(), NetworkErr> {
         if self.peers.is_empty() {
             return Err(NetworkErr::NoPeers);
         }
@@ -234,7 +238,6 @@ impl NetworkInterface for Network {
                 peer.send_packet(packet, priority)
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
                     .unwrap_or(());
-                
             }
         }
 
@@ -255,12 +258,11 @@ impl NetworkInterface for Network {
 
         for peer in self.peers.iter() {
             let addr = peer.key();
-            
+
             if peer.rx.is_some() {
                 peer.send_packet(packet, priority)
                     .map_err(|err| warn!("Failed to send packet to {}! Reason: {:?}", addr, err))
                     .unwrap_or(());
-                
             }
         }
 

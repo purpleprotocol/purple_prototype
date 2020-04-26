@@ -138,8 +138,10 @@ impl Function {
                                             acc += byte_size;
                                         }
                                         true => {
-                                            let idx = i + initial_offset + 2 + arity as usize + acc + 1;
-                                            let op = Instruction::from_repr(self.block[idx]).unwrap();
+                                            let idx =
+                                                i + initial_offset + 2 + arity as usize + acc + 1;
+                                            let op =
+                                                Instruction::from_repr(self.block[idx]).unwrap();
 
                                             match op {
                                                 Instruction::PopOperand => {
@@ -164,8 +166,10 @@ impl Function {
                                                     result_len += 3;
                                                     acc += 3;
                                                 }
-                                                _ => panic!("Invalid instruction received: {:?}", op)
-                                            }   
+                                                _ => {
+                                                    panic!("Invalid instruction received: {:?}", op)
+                                                }
+                                            }
                                         }
                                     },
                                     None => panic!("Invalid type!"),
@@ -205,8 +209,10 @@ impl Function {
                                             acc += byte_size;
                                         }
                                         true => {
-                                            let idx = i + initial_offset + 2 + arity as usize + acc + 1;
-                                            let op = Instruction::from_repr(self.block[idx]).unwrap();
+                                            let idx =
+                                                i + initial_offset + 2 + arity as usize + acc + 1;
+                                            let op =
+                                                Instruction::from_repr(self.block[idx]).unwrap();
 
                                             match op {
                                                 Instruction::PopLocal => {
@@ -231,8 +237,11 @@ impl Function {
                                                     result_len += 3;
                                                     acc += 3;
                                                 }
-                                                _ => panic!("Invalid instruction received: {:#?}", op)
-                                            }                                            
+                                                _ => panic!(
+                                                    "Invalid instruction received: {:#?}",
+                                                    op
+                                                ),
+                                            }
                                         }
                                     },
                                     None => panic!("Invalid type!"),

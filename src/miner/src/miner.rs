@@ -29,16 +29,16 @@ use crate::shared_data::JobData;
 use crate::solver_instance::SolverInstance;
 use crate::verify::*;
 use cfg_if::*;
+use crypto::Hash;
 use flume::unbounded;
 use flume::{Receiver, Sender};
-use crypto::Hash;
 use parking_lot::RwLock;
 use rand::Rng;
 use std::path::PathBuf;
 use std::ptr::NonNull;
-use triomphe::Arc;
 use std::thread;
 use std::time;
+use triomphe::Arc;
 
 const SO_SUFFIX: &str = ".cuckooplugin";
 

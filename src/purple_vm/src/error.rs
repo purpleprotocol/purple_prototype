@@ -62,5 +62,5 @@ pub enum VmError {
     UnsafeCast,
 
     /// Passed index exceeds array length
-    IndexOutOfBound
+    IndexOutOfBound,
 }

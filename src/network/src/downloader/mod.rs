@@ -17,28 +17,28 @@
 */
 
 use crate::downloader::download::Download;
-use crate::downloader::error::DownloaderErr;
 use crate::downloader::download_info::DownloadInfo;
+use crate::downloader::error::DownloaderErr;
 use chain::Block;
-use crypto::ShortHash;
 use chain::TransactionBlock;
+use constants::*;
+use crypto::ShortHash;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use triomphe::Arc;
-use constants::*;
 
-mod download_state;
 mod download;
+mod download_info;
+mod download_state;
+pub mod error;
 mod piece;
+pub mod piece_info;
 mod sub_piece;
 mod sub_piece_info;
 mod sub_pieces;
-mod download_info;
-pub mod piece_info;
-pub mod error;
 
-pub use self::piece_info::*;
 pub use self::error::*;
+pub use self::piece_info::*;
 
 /// Maximum allowed concurrent downloads
 pub const MAX_CONCURRENT_DOWNLOADS: usize = 50;
@@ -52,35 +52,54 @@ pub struct Downloader {
     info: DownloaderInfo,
 
     /// HashMap with all current block downloads
-    block_downloads: Arc<DashMap<ShortHash, Arc<Mutex<Download>>>>, 
+    block_downloads: Arc<DashMap<ShortHash, Arc<Mutex<Download>>>>,
 }
 
 impl Downloader {
     pub fn new() -> Self {
-        Downloader { 
+        Downloader {
             info: DownloaderInfo::new(),
-            block_downloads: Arc::new(DashMap::with_capacity(MAX_CONCURRENT_DOWNLOADS))
+            block_downloads: Arc::new(DashMap::with_capacity(MAX_CONCURRENT_DOWNLOADS)),
         }
     }
 
     /// Schedules a new block download. Returns `Err(_)` if the download cannot
     /// be scheduled.
-    pub async fn from_block(&self, block: Arc<TransactionBlock>, priority: u64) -> Result<(), DownloaderErr> {        
-        debug!("Scheduling block download for hash: {}, height: {}", block.block_hash().unwrap(), block.height());
-        
+    pub async fn from_block(
+        &self,
+        block: Arc<TransactionBlock>,
+        priority: u64,
+    ) -> Result<(), DownloaderErr> {
+        debug!(
+            "Scheduling block download for hash: {}, height: {}",
+            block.block_hash().unwrap(),
+            block.height()
+        );
+
         if self.block_downloads.len() >= MAX_CONCURRENT_DOWNLOADS {
             let err = DownloaderErr::Full;
-            debug!("Scheduling failed for hash: {}, height: {}, reason: {:?}", block.block_hash().unwrap(), block.height(), err);
+            debug!(
+                "Scheduling failed for hash: {}, height: {}, reason: {:?}",
+                block.block_hash().unwrap(),
+                block.height(),
+                err
+            );
             return Err(err);
         }
 
         // First try to schedule the block download
-        let info = self.try_schedule_block_download(block.clone(), priority).await?;
-        
+        let info = self
+            .try_schedule_block_download(block.clone(), priority)
+            .await?;
+
         // If scheduling succeeds, write info entry
         self.write_download_info(block.clone(), info).await;
 
-        debug!("Scheduling succeeded for hash: {}, height: {}", block.block_hash().unwrap(), block.height());
+        debug!(
+            "Scheduling succeeded for hash: {}, height: {}",
+            block.block_hash().unwrap(),
+            block.height()
+        );
 
         Ok(())
     }
@@ -98,20 +117,32 @@ impl Downloader {
         self.block_downloads.remove(hash).map(|(_, r)| r)
     }
 
-    async fn try_schedule_block_download(&self, block: Arc<TransactionBlock>, priority: u64) -> Result<DownloadInfo, DownloaderErr> {
+    async fn try_schedule_block_download(
+        &self,
+        block: Arc<TransactionBlock>,
+        priority: u64,
+    ) -> Result<DownloadInfo, DownloaderErr> {
         let block_hash = block.block_hash().unwrap().to_short();
         let has_block = self.block_downloads.get(&block_hash).is_some();
 
         if has_block {
             let err = DownloaderErr::AlreadyHaveDownload;
-            debug!("Scheduling failed for hash: {}, height: {}, reason: {:?}", block.block_hash().unwrap(), block.height(), err);
+            debug!(
+                "Scheduling failed for hash: {}, height: {}, reason: {:?}",
+                block.block_hash().unwrap(),
+                block.height(),
+                err
+            );
             return Err(err);
         }
 
         let tx_checksums = block.tx_checksums.as_ref().unwrap();
         let pieces_sizes = block.pieces_sizes.as_ref().unwrap();
 
-        if tx_checksums.len() == 0 || tx_checksums.len() != pieces_sizes.len() || tx_checksums.len() > MAX_TX_SET_SIZE / MAX_PIECE_SIZE {
+        if tx_checksums.len() == 0
+            || tx_checksums.len() != pieces_sizes.len()
+            || tx_checksums.len() > MAX_TX_SET_SIZE / MAX_PIECE_SIZE
+        {
             return Err(DownloaderErr::InvalidBlockHeader);
         }
 
@@ -132,7 +163,7 @@ impl Downloader {
         self.block_downloads.insert(block_hash.to_short(), download);
 
         Ok(info)
-    } 
+    }
 
     async fn write_download_info(&self, block: Arc<TransactionBlock>, info: DownloadInfo) {
         let block_hash = block.block_hash().unwrap().to_short();

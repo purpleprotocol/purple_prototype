@@ -23,6 +23,7 @@ use account::{Address, Balance, NormalAddress};
 use chain::types::StateInterface;
 use chain::{PowChainRef, PowChainState};
 use chrono::{DateTime, Utc};
+use constants::*;
 use crypto::{Hash, ShortHash};
 use hashbrown::{HashMap, HashSet};
 use patricia_trie::{Trie, TrieDB};
@@ -31,7 +32,6 @@ use rand::Rng;
 use std::collections::{BTreeMap, VecDeque};
 use transactions::Tx;
 use triomphe::Arc;
-use constants::*;
 
 /// How far into the future a transaction can be
 /// in order to be accepted.

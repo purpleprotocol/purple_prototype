@@ -31,8 +31,10 @@ extern crate bin_tools;
 // pub mod mock;
 
 pub mod bootstrap;
+mod client_request;
 mod common;
 mod connection;
+pub mod downloader;
 mod error;
 mod header;
 mod interface;
@@ -43,10 +45,8 @@ pub mod packets;
 mod peer;
 mod priority;
 mod protocol_flow;
-mod validation;
-pub mod downloader;
 mod util;
-mod client_request;
+mod validation;
 
 pub use crate::bootstrap::*;
 pub use crate::connection::*;

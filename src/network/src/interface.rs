@@ -17,11 +17,11 @@
 */
 
 use crate::bootstrap::cache::BootstrapCache;
-use crate::packet::Packet;
+use crate::downloader::Downloader;
 use crate::error::NetworkErr;
+use crate::packet::Packet;
 use crate::peer::Peer;
 use crate::priority::NetworkPriority;
-use crate::downloader::Downloader;
 use chain::*;
 use crypto::{NodeId, SecretKey as Sk};
 use dashmap::DashMap;
@@ -62,7 +62,11 @@ pub trait NetworkInterface: Clone + Send + Sync {
     ) -> Result<(), NetworkErr>;
 
     /// Sends a packet to all peers.
-    fn send_to_all<P: Packet>(&self, packet: &P, priority: NetworkPriority) -> Result<(), NetworkErr>;
+    fn send_to_all<P: Packet>(
+        &self,
+        packet: &P,
+        priority: NetworkPriority,
+    ) -> Result<(), NetworkErr>;
 
     /// Sends a packet to all peers except the given address.
     fn send_to_all_except<P: Packet>(
