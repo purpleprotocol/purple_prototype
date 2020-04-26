@@ -638,6 +638,7 @@ impl<B: Block> Chain<B> {
         self.db.retrieve(&block_hash.0).is_some()
     }
 
+    #[inline]
     fn update_max_orphan_height(&mut self, new_height: u64) {
         if self.max_orphan_height.is_none() {
             self.max_orphan_height = Some(new_height);
@@ -650,6 +651,7 @@ impl<B: Block> Chain<B> {
         }
     }
 
+    #[inline]
     fn write_block(&mut self, block: Arc<B>) {
         let block_hash = block.block_hash().unwrap();
         //println!("DEBUG WRITING BLOCK: {:?}", block_hash);
@@ -774,11 +776,13 @@ impl<B: Block> Chain<B> {
         }
     }
 
+    #[inline]
     fn write_canonical_height(&mut self, height: u64) {
         let encoded_height = encode_be_u64!(height);
         self.db.put(&CANONICAL_HEIGHT_KEY, &encoded_height);
     }
 
+    #[inline]
     fn write_orphan(&mut self, orphan: Arc<B>, orphan_type: OrphanType, inverse_height: u64) {
         let orphan_hash = orphan.block_hash().unwrap();
         let height = orphan.height();
@@ -813,11 +817,13 @@ impl<B: Block> Chain<B> {
         self.validations_mapping.insert(orphan_hash, orphan_type);
     }
 
+    #[inline]
     fn compute_height_key(hash: &Hash) -> Hash {
-        let block_height_key = format!("{}.height", hex::encode(hash.to_vec()));
+        let block_height_key = format!("{}.height", hex::encode(&hash.0));
         crypto::hash_slice(block_height_key.as_bytes())
     }
 
+    #[inline]
     /// Attempts to attach orphans to the canonical chain
     /// starting with the given height.
     fn process_orphans(&mut self, start_height: u64) {
@@ -1048,6 +1054,7 @@ impl<B: Block> Chain<B> {
         }
     }
 
+    #[inline]
     /// Attempts to switch the canonical chain to the valid chain
     /// which has the given canidate tip. Do nothing if this is not
     /// possible.
@@ -1117,6 +1124,7 @@ impl<B: Block> Chain<B> {
         }
     }
 
+    #[inline]
     /// Attempts to attach a disconnected chain tip to other
     /// disconnected chains. Returns the final status of the tip.
     fn attempt_attach(
@@ -1211,6 +1219,7 @@ impl<B: Block> Chain<B> {
         Ok(status)
     }
 
+    #[inline]
     /// Attempts to attach a canonical chain tip to other
     /// disconnected chains. Returns the final status of the
     /// old tip, its inverse height and the new tip.
@@ -1296,6 +1305,7 @@ impl<B: Block> Chain<B> {
         self.traverse_inverse(tip.clone(), 0, true);
     }
 
+    #[inline]
     /// Recursively changes the validation status of the tips
     /// of the given head to `OrphanType::ValidChainTip`
     /// and of their parents to `OrphanType::BelongsToValid`.
@@ -1417,6 +1427,7 @@ impl<B: Block> Chain<B> {
         }
     }
 
+    #[inline]
     /// Traverses the parents of the orphan and updates their
     /// inverse heights according to the provided start height
     /// of the orphan. The third argument specifies if we should
@@ -1993,6 +2004,7 @@ impl<B: Block> Chain<B> {
         self.canonical_tip.clone()
     }
 
+    #[inline]
     fn search_fetch_next_state(&self, target_height: u64) -> UnflushedChainState<B::ChainState> {
         // Find a height with an earlier checkpoint
         // than the target height.
@@ -2076,6 +2088,7 @@ impl<B: Block> Chain<B> {
         }
     }
 
+    #[inline]
     /// Cleans up any blocks that descend from the start block.
     ///
     /// TODO: Soft delete and then finally delete asynchronously.
@@ -2124,6 +2137,7 @@ impl<B: Block> Chain<B> {
         }
     }
 
+    #[inline]
     /// Cleans up any associated block data to the given hash
     fn cleanup_block_data(&mut self, block_height: u64, block_hash: &Hash) {
         let blocks = self.heights_mapping.get_mut(&block_height).unwrap();

@@ -422,7 +422,7 @@ async fn start_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt 
     }
 }
 
-async fn start_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin>(
+async fn start_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
     network: N,
     sock: S,
     addr: SocketAddr,
@@ -492,12 +492,59 @@ async fn handle_client_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
     Ok(())
 }
 
-async fn handle_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin>(
+async fn handle_server_stream<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync>(
     network: N,
-    sock: S,
+    mut sock: S,
     addr: &SocketAddr,
 ) -> Result<(), NetworkErr> {
-    unimplemented!();
+    // Write initial packet to stream
+    let bytes = read_raw_packet(&mut sock, &network, addr, true)
+        .await
+        .map_err(|_| NetworkErr::IoErr)?;
+    let packet_type = &bytes[0];
+
+    // Start corresponding stream
+    match *packet_type {
+        Ping::PACKET_TYPE => {
+            Ping::start_server_protocol_flow(&network, &sock).await?;
+        }
+
+        AnnounceBlock::PACKET_TYPE => {
+            AnnounceBlock::start_server_protocol_flow(&network, &sock).await?;
+        }
+
+        AnnounceTx::PACKET_TYPE => {
+            AnnounceTx::start_server_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestBlock::PACKET_TYPE => {
+            RequestBlock::start_server_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestPeers::PACKET_TYPE => {
+            RequestPeers::start_server_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestPieceInfo::PACKET_TYPE => {
+            RequestPieceInfo::start_server_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestSubPiece::PACKET_TYPE => {
+            RequestSubPiece::start_server_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestTx::PACKET_TYPE => {
+            RequestTx::start_server_protocol_flow(&network, &sock).await?;
+        }
+
+        RequestBlock::PACKET_TYPE => {
+            RequestBlock::start_server_protocol_flow(&network, &sock).await?;
+        }
+
+        _ => panic!("Invalid packet type to start a stream with: {}", packet_type)
+    }
+
+    Ok(())
 }
 
 /// Attempt to decode a `Header` from a socket

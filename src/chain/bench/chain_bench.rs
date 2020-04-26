@@ -184,84 +184,84 @@ fn criterion_benchmark(c: &mut Criterion) {
         });
     });
 
-    c.bench_function("append_block with a full TransactionBlock", |b| {
-        let db1 = test_helpers::init_tempdb();
-        let db2 = test_helpers::init_tempdb();
-        chain::init(db1, db2, true);
+    // c.bench_function("append_block with a full TransactionBlock", |b| {
+    //     let db1 = test_helpers::init_tempdb();
+    //     let db2 = test_helpers::init_tempdb();
+    //     chain::init(db1, db2, true);
 
-        let db3 = test_helpers::init_tempdb();
-        let chain = Chain::<PowBlock>::new(db3, PowBlock::genesis_state(), true);
-        let chain = ChainRef::<PowBlock>::new(Arc::new(RwLock::new(chain)));
-        let proof = Proof::test_proof(42);
-        let identity = Identity::new();
-        let node_id = NodeId(*identity.pkey());
-        let collector_address = NormalAddress::random();
-        let ip = random_socket_addr();
-        let mut height = 1;
+    //     let db3 = test_helpers::init_tempdb();
+    //     let chain = Chain::<PowBlock>::new(db3, PowBlock::genesis_state(), true);
+    //     let chain = ChainRef::<PowBlock>::new(Arc::new(RwLock::new(chain)));
+    //     let proof = Proof::test_proof(42);
+    //     let identity = Identity::new();
+    //     let node_id = NodeId(*identity.pkey());
+    //     let collector_address = NormalAddress::random();
+    //     let ip = random_socket_addr();
+    //     let mut height = 1;
 
-        let mut checkpoint_block = CheckpointBlock::new(
-            chain.canonical_tip().block_hash().unwrap(),
-            collector_address,
-            ip,
-            height,
-            proof,
-            node_id.clone(),
-        );
+    //     let mut checkpoint_block = CheckpointBlock::new(
+    //         chain.canonical_tip().block_hash().unwrap(),
+    //         collector_address,
+    //         ip,
+    //         height,
+    //         proof,
+    //         node_id.clone(),
+    //     );
 
-        checkpoint_block.sign_miner(identity.skey());
-        checkpoint_block.compute_hash();
+    //     checkpoint_block.sign_miner(identity.skey());
+    //     checkpoint_block.compute_hash();
 
-        let mut blocks = Vec::new();
-        let mut parent_hash = checkpoint_block.block_hash().unwrap();
-        for _ in 0..ALLOWED_TXS_BLOCKS {
-            height += 1;
+    //     let mut blocks = Vec::new();
+    //     let mut parent_hash = checkpoint_block.block_hash().unwrap();
+    //     for _ in 0..ALLOWED_TXS_BLOCKS {
+    //         height += 1;
 
-            let transaction_list = get_tx_list_of_size(MAX_TX_SET_SIZE).unwrap();
+    //         let transaction_list = get_tx_list_of_size(MAX_TX_SET_SIZE).unwrap();
 
-            let mut block = TransactionBlock {
-                tx_checksums: Some(Vec::<ShortHash>::new()),
-                pieces_sizes: Some(Vec::<usize>::new()),
-                height: height,
-                parent_hash: parent_hash,
-                state_root: Some(chain.get_state_root()),
-                tx_root: Some(ShortHash::NULL_RLP),
-                hash: None,
-                miner_id: node_id.clone(),
-                miner_signature: None,
-                timestamp: Utc::now(),
-                transactions: Some(Arc::new(RwLock::new(transaction_list))),
-            };
+    //         let mut block = TransactionBlock {
+    //             tx_checksums: Some(Vec::<ShortHash>::new()),
+    //             pieces_sizes: Some(Vec::<usize>::new()),
+    //             height: height,
+    //             parent_hash: parent_hash,
+    //             state_root: Some(chain.get_state_root()),
+    //             tx_root: Some(ShortHash::NULL_RLP),
+    //             hash: None,
+    //             miner_id: node_id.clone(),
+    //             miner_signature: None,
+    //             timestamp: Utc::now(),
+    //             transactions: Some(Arc::new(RwLock::new(transaction_list))),
+    //         };
             
-            block.sign_miner(identity.skey());
-            block.compute_hash();
+    //         block.sign_miner(identity.skey());
+    //         block.compute_hash();
 
-            let block = Arc::<TransactionBlock>::new(block);
-            let block = PowBlock::Transaction(block);
-            let block = Arc::<PowBlock>::new(block);
+    //         let block = Arc::<TransactionBlock>::new(block);
+    //         let block = PowBlock::Transaction(block);
+    //         let block = Arc::<PowBlock>::new(block);
 
-            parent_hash = block.block_hash().unwrap();
+    //         parent_hash = block.block_hash().unwrap();
 
-            blocks.push(block);
-        }
+    //         blocks.push(block);
+    //     }
 
-        b.iter(|| {
-            let db3 = test_helpers::init_tempdb();
-            let chain = Chain::<PowBlock>::new(db3, PowBlock::genesis_state(), true);
-            let chain = ChainRef::<PowBlock>::new(Arc::new(RwLock::new(chain)));
+    //     b.iter(|| {
+    //         let db3 = test_helpers::init_tempdb();
+    //         let chain = Chain::<PowBlock>::new(db3, PowBlock::genesis_state(), true);
+    //         let chain = ChainRef::<PowBlock>::new(Arc::new(RwLock::new(chain)));
 
-            let checkpoint_block = checkpoint_block.clone();
-            let blocks = blocks.clone();
-            let block = Arc::<CheckpointBlock>::new(checkpoint_block);
-            let block = PowBlock::Checkpoint(block);
-            let block = Arc::<PowBlock>::new(block);
+    //         let checkpoint_block = checkpoint_block.clone();
+    //         let blocks = blocks.clone();
+    //         let block = Arc::<CheckpointBlock>::new(checkpoint_block);
+    //         let block = PowBlock::Checkpoint(block);
+    //         let block = Arc::<PowBlock>::new(block);
 
-            chain.append_block(block).unwrap();
+    //         chain.append_block(block).unwrap();
 
-            for block in blocks {
-                chain.append_block(block).unwrap();
-            } 
-        });
-    });
+    //         for block in blocks {
+    //             chain.append_block(block).unwrap();
+    //         } 
+    //     });
+    // });
 }
 
 criterion_group!(benches, criterion_benchmark);

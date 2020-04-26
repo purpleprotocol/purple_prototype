@@ -17,6 +17,7 @@
 */
 
 use crate::downloader::error::DownloaderErr;
+use std::io::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NetworkErr {
@@ -96,6 +97,9 @@ pub enum NetworkErr {
 
     /// Writing to the socket failed
     WriteErr,
+
+    /// Generic IO error
+    IoErr,
 }
 
 impl From<DownloaderErr> for NetworkErr {
