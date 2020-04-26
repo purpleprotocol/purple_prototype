@@ -134,7 +134,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --features miner_cpu
+          args: --features miner-cpu
 
   lint:
     name: Rustfmt / Clippy
