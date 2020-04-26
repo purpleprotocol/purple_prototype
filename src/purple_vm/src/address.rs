@@ -26,9 +26,9 @@ pub struct Address {
 impl Address {
     pub fn new(ip: usize, fun_idx: usize, module_idx: usize) -> Address {
         Address {
-            ip: ip,
-            fun_idx: fun_idx,
-            module_idx: module_idx,
+            ip,
+            fun_idx,
+            module_idx,
         }
     }
 

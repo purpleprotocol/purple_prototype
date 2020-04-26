@@ -244,7 +244,7 @@ impl Code {
 
             let import = Import {
                 addr_idx: address_idx,
-                function_name: function_name,
+                function_name,
             };
 
             imports.push(import);
@@ -331,10 +331,10 @@ impl Code {
             }
 
             let function = Function {
-                arity: arity,
+                arity,
                 name: function_name,
-                arguments: arguments,
-                block: block,
+                arguments,
+                block,
                 return_type: Some(return_type),
             };
 

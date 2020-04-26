@@ -142,8 +142,8 @@ fn criterion_benchmark(c: &mut Criterion) {
             let mut block = TransactionBlock {
                 tx_checksums: Some(Vec::<ShortHash>::new()),
                 pieces_sizes: Some(Vec::<usize>::new()),
-                height: height,
-                parent_hash: parent_hash,
+                height,
+                parent_hash,
                 state_root: Some(chain.get_state_root()),
                 tx_root: Some(ShortHash::NULL_RLP),
                 hash: None,

@@ -146,10 +146,10 @@ impl Peer {
         let (pk, sk) = gen_kx_keypair();
 
         Peer {
-            id: id,
-            ip: ip,
-            pk: pk,
-            sk: sk,
+            id,
+            ip,
+            pk,
+            sk,
             rx: None,
             tx: None,
             sent_connect: false,

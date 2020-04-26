@@ -44,9 +44,9 @@ impl<T: fmt::Debug + Clone> Frame<T> {
         }
 
         Frame {
-            locals: locals,
-            scope_type: scope_type,
-            return_address: return_address,
+            locals,
+            scope_type,
+            return_address,
         }
     }
 }

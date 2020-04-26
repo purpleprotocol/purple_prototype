@@ -26,7 +26,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let function = Function {
             arity: 0,
             name: "debug_test".to_owned(),
-            block: block,
+            block,
             return_type: None,
             arguments: vec![],
         };
@@ -56,7 +56,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let function = Function {
             arity: 0,
             name: "debug_test".to_owned(),
-            block: block,
+            block,
             return_type: None,
             arguments: vec![],
         };
@@ -86,7 +86,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let function = Function {
             arity: 0,
             name: "debug_test".to_owned(),
-            block: block,
+            block,
             return_type: None,
             arguments: vec![],
         };

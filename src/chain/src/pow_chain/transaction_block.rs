@@ -365,7 +365,7 @@ impl Block for TransactionBlock {
             tx_checksums: Some(tx_checksums),
             pieces_sizes: Some(pieces_sizes),
             hash: None,
-            parent_hash: parent_hash,
+            parent_hash,
             miner_signature: Some(miner_signature),
             transactions: None,
             height,

@@ -42,8 +42,8 @@ pub struct Connect {
 impl Connect {
     pub fn new(node_id: NodeId, kx_key: KxPk) -> Connect {
         Connect {
-            node_id: node_id,
-            kx_key: kx_key,
+            node_id,
+            kx_key,
             signature: None,
         }
     }
