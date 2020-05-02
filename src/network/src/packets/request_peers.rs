@@ -17,6 +17,7 @@
 */
 
 use crate::client_request::ClientRequest;
+use crate::connection::*;
 use crate::error::NetworkErr;
 use crate::interface::NetworkInterface;
 use crate::packet::Packet;
@@ -150,6 +151,28 @@ impl Packet for RequestPeers {
 
     fn to_client_request(&self) -> Option<ClientRequest> {
         Some(ClientRequest::RequestPeers)
+    }
+
+    async fn start_client_protocol_flow<
+        N: NetworkInterface,
+        S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync,
+    >(
+        network: &mut N,
+        sock: &mut S,
+        peer: &SocketAddr,
+    ) -> Result<(), NetworkErr> {
+        // Read initial packet from stream
+        let bytes = read_raw_packet(sock, network as &_, peer, true)
+            .await
+            .map_err(|_| NetworkErr::IoErr)?;
+
+        // Deserialize packet
+        let packet = SendPeers::from_bytes(&bytes)?;
+
+        // Handle packet
+        SendPeers::handle(network, sock, peer, packet, ConnectionType::Client).await?;
+
+        Ok(())
     }
 }
 
