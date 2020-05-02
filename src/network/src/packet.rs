@@ -36,7 +36,7 @@ pub type PacketType = u8;
 
 #[async_trait]
 /// Generic packet interface
-pub trait Packet {
+pub trait Packet: Send + Sync {
     /// The type of the packet.
     const PACKET_TYPE: PacketType;
 
@@ -61,14 +61,18 @@ pub trait Packet {
 
     /// Attempts to start a client protocol flow using the packet.
     ///
+    /// The implementation assumes that the first packet in the protocol
+    /// flow has already been sent and awaits receiving the response packet.
+    ///
     /// This should return an `Err(_)` if the packet cannot start
     /// a client protocol flow.
     async fn start_client_protocol_flow<
         N: NetworkInterface,
         S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync,
     >(
-        network: &N,
-        sock: &S,
+        network: &mut N,
+        sock: &mut S,
+        peer: &SocketAddr,
     ) -> Result<(), NetworkErr> {
         Err(NetworkErr::CannotStartProtocolFlow)
     }
@@ -81,8 +85,10 @@ pub trait Packet {
         N: NetworkInterface,
         S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync,
     >(
-        network: &N,
-        sock: &S,
+        network: &mut N,
+        sock: &mut S,
+        peer: &SocketAddr,
+        initial_packet: Arc<Self>,
     ) -> Result<(), NetworkErr> {
         Err(NetworkErr::CannotStartProtocolFlow)
     }

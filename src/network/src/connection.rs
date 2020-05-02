@@ -448,7 +448,7 @@ async fn handle_client_stream<
     N: NetworkInterface,
     S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync,
 >(
-    network: N,
+    mut network: N,
     mut sock: S,
     addr: &SocketAddr,
     initial_packet: Vec<u8>,
@@ -462,35 +462,35 @@ async fn handle_client_stream<
     // Start corresponding stream
     match *packet_type {
         Ping::PACKET_TYPE => {
-            Ping::start_client_protocol_flow(&network, &sock).await?;
+            Ping::start_client_protocol_flow(&mut network, &mut sock, addr).await?;
         }
 
         AnnounceBlock::PACKET_TYPE => {
-            AnnounceBlock::start_client_protocol_flow(&network, &sock).await?;
+            AnnounceBlock::start_client_protocol_flow(&mut network, &mut sock, addr).await?;
         }
 
         AnnounceTx::PACKET_TYPE => {
-            AnnounceTx::start_client_protocol_flow(&network, &sock).await?;
+            AnnounceTx::start_client_protocol_flow(&mut network, &mut sock, addr).await?;
         }
 
         RequestBlock::PACKET_TYPE => {
-            RequestBlock::start_client_protocol_flow(&network, &sock).await?;
+            RequestBlock::start_client_protocol_flow(&mut network, &mut sock, addr).await?;
         }
 
         RequestPeers::PACKET_TYPE => {
-            RequestPeers::start_client_protocol_flow(&network, &sock).await?;
+            RequestPeers::start_client_protocol_flow(&mut network, &mut sock, addr).await?;
         }
 
         RequestPieceInfo::PACKET_TYPE => {
-            RequestPieceInfo::start_client_protocol_flow(&network, &sock).await?;
+            RequestPieceInfo::start_client_protocol_flow(&mut network, &mut sock, addr).await?;
         }
 
         RequestSubPiece::PACKET_TYPE => {
-            RequestSubPiece::start_client_protocol_flow(&network, &sock).await?;
+            RequestSubPiece::start_client_protocol_flow(&mut network, &mut sock, addr).await?;
         }
 
         RequestTx::PACKET_TYPE => {
-            RequestTx::start_client_protocol_flow(&network, &sock).await?;
+            RequestTx::start_client_protocol_flow(&mut network, &mut sock, addr).await?;
         }
 
         _ => panic!(
@@ -506,11 +506,11 @@ async fn handle_server_stream<
     N: NetworkInterface,
     S: AsyncWrite + AsyncWriteExt + AsyncRead + AsyncReadExt + Unpin + Send + Sync,
 >(
-    network: N,
+    mut network: N,
     mut sock: S,
     addr: &SocketAddr,
 ) -> Result<(), NetworkErr> {
-    // Write initial packet to stream
+    // Read initial packet from stream
     let bytes = read_raw_packet(&mut sock, &network, addr, true)
         .await
         .map_err(|_| NetworkErr::IoErr)?;
@@ -519,35 +519,46 @@ async fn handle_server_stream<
     // Start corresponding stream
     match *packet_type {
         Ping::PACKET_TYPE => {
-            Ping::start_server_protocol_flow(&network, &sock).await?;
+            let packet = Ping::from_bytes(&bytes)?;
+            Ping::start_server_protocol_flow(&mut network, &mut sock, addr, packet).await?;
         }
 
         AnnounceBlock::PACKET_TYPE => {
-            AnnounceBlock::start_server_protocol_flow(&network, &sock).await?;
+            let packet = AnnounceBlock::from_bytes(&bytes)?;
+            AnnounceBlock::start_server_protocol_flow(&mut network, &mut sock, addr, packet)
+                .await?;
         }
 
         AnnounceTx::PACKET_TYPE => {
-            AnnounceTx::start_server_protocol_flow(&network, &sock).await?;
+            let packet = AnnounceTx::from_bytes(&bytes)?;
+            AnnounceTx::start_server_protocol_flow(&mut network, &mut sock, addr, packet).await?;
         }
 
         RequestBlock::PACKET_TYPE => {
-            RequestBlock::start_server_protocol_flow(&network, &sock).await?;
+            let packet = RequestBlock::from_bytes(&bytes)?;
+            RequestBlock::start_server_protocol_flow(&mut network, &mut sock, addr, packet).await?;
         }
 
         RequestPeers::PACKET_TYPE => {
-            RequestPeers::start_server_protocol_flow(&network, &sock).await?;
+            let packet = RequestPeers::from_bytes(&bytes)?;
+            RequestPeers::start_server_protocol_flow(&mut network, &mut sock, addr, packet).await?;
         }
 
         RequestPieceInfo::PACKET_TYPE => {
-            RequestPieceInfo::start_server_protocol_flow(&network, &sock).await?;
+            let packet = RequestPieceInfo::from_bytes(&bytes)?;
+            RequestPieceInfo::start_server_protocol_flow(&mut network, &mut sock, addr, packet)
+                .await?;
         }
 
         RequestSubPiece::PACKET_TYPE => {
-            RequestSubPiece::start_server_protocol_flow(&network, &sock).await?;
+            let packet = RequestSubPiece::from_bytes(&bytes)?;
+            RequestSubPiece::start_server_protocol_flow(&mut network, &mut sock, addr, packet)
+                .await?;
         }
 
         RequestTx::PACKET_TYPE => {
-            RequestTx::start_server_protocol_flow(&network, &sock).await?;
+            let packet = RequestTx::from_bytes(&bytes)?;
+            RequestTx::start_server_protocol_flow(&mut network, &mut sock, addr, packet).await?;
         }
 
         _ => panic!(
@@ -604,7 +615,7 @@ pub async fn write_raw_packet<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
 }
 
 /// Attempts to read and decode a raw packet from the given socket
-async fn read_raw_packet<N: NetworkInterface, S: AsyncRead + AsyncReadExt + Unpin>(
+pub async fn read_raw_packet<N: NetworkInterface, S: AsyncRead + AsyncReadExt + Unpin>(
     sock: &mut S,
     network: &N,
     addr: &SocketAddr,
