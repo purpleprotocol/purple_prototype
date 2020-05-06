@@ -29,6 +29,7 @@ use hashbrown::{HashMap, HashSet};
 use patricia_trie::{Trie, TrieDB};
 use persistence::{Codec, DbHasher};
 use rand::Rng;
+use rust_decimal::Decimal;
 use std::collections::{BTreeMap, VecDeque};
 use transactions::Tx;
 use triomphe::Arc;
@@ -36,6 +37,9 @@ use triomphe::Arc;
 /// How far into the future a transaction can be
 /// in order to be accepted.
 const FUTURE_LIMIT: u64 = 10;
+
+/// TODO: comment, must be between 50-100, move to constants
+const PRUNE_THRESHOLD: u32 = 80;
 
 /// Memory pool used to store valid yet not processed
 /// transactions.
@@ -64,6 +68,12 @@ pub struct Mempool {
     /// Each entry in the map is an ordered binary tree
     /// map between transaction fees and transaction hashes.
     fee_map: HashMap<ShortHash, BTreeMap<Balance, VecDeque<ShortHash>>>,
+
+    // TODO: Add comments
+    fee_weight_map: BTreeMap<Balance, VecDeque<ShortHash>>,
+
+    // TODO: Add comments
+    fee_weight_reverse_map: HashMap<ShortHash, Balance>,
 
     /// Mapping between signing addresses that have issued
     /// transactions which are currently stored in the mempool
@@ -113,6 +123,12 @@ pub struct Mempool {
     next_tx_set_cache: Option<TxSet>,
 }
 
+pub struct TxSet {
+    pub(crate) tx_set: Vec<Arc<Tx>>,
+    pub(crate) taken_set: HashSet<ShortHash>,
+    pub(crate) obsolete_set: HashSet<ShortHash>,
+}
+
 impl Mempool {
     pub fn new(
         chain_ref: PowChainRef,
@@ -131,6 +147,8 @@ impl Mempool {
             tx_lookup: HashMap::new(),
             timestamp_lookup: HashMap::new(),
             fee_map: HashMap::new(),
+            fee_weight_map: BTreeMap::new(),
+            fee_weight_reverse_map: HashMap::new(),
             address_mappings: HashMap::new(),
             address_reverse_mappings: HashMap::new(),
             address_hash_mappings: HashMap::new(),
@@ -216,6 +234,8 @@ impl Mempool {
         if remove_fee_map {
             self.fee_map.remove(&fee_hash);
         }
+
+        // TODO: remove fee weights as well
 
         Some(tx)
     }
@@ -361,6 +381,9 @@ impl Mempool {
             self.fee_map.insert(tx_fee_cur, cur_entry);
         }
 
+        // Update weight information
+        self.update_fee_weight(tx);
+
         // Place transaction in address mappings
         self.address_mappings
             .insert(tx_signing_addr.clone(), tx_next_addr.clone());
@@ -391,8 +414,57 @@ impl Mempool {
     /// only if the mempool is more than 80% full.
     ///
     /// This operation is idempotent.
-    pub fn prune(&mut self) {
-        unimplemented!();
+    pub fn prune(&mut self) -> Option<Vec<Arc<Tx>>> {
+        // If the threshold is not exceeded, prune operation will not be performed
+        let mut items_to_prune = self.count() as u32 - (self.max_size * PRUNE_THRESHOLD / 100);
+        if items_to_prune < 1 {
+            return None;
+        }
+        let mut pruned: Vec<Arc<Tx>> = Vec::new();
+        let mut reached_max: bool = false;
+
+        let mut tx_to_remove: Vec<ShortHash> = Vec::new();
+        let mut balance_to_clean: Vec<Balance> = Vec::new();
+
+        // Iterate the fee_weight_map starting from the lowest balance
+        // to the highest one
+        for (balance, next_set) in self.fee_weight_map.iter() {
+            for tx_hash in next_set.iter() {
+                tx_to_remove.push(tx_hash.clone());
+
+                // Decrease the items remaining to remove
+                items_to_prune -= 1;
+                if items_to_prune == 0 {
+                    reached_max = true;
+                    break;
+                }
+            }
+
+            // Break if collected enough transactions
+            if reached_max {
+                break;
+            }
+
+            // Mark the balance to be removed
+            balance_to_clean.push(*balance);
+        }
+
+        // Proceed with transactions removal
+        for tx_hash in tx_to_remove {
+            if let Some(removed) = self.remove_branch(&tx_hash) {
+                for tx in removed {
+                    pruned.push(tx);
+                }
+            }
+        }
+
+        for balance in balance_to_clean {
+            self.fee_weight_map.remove(&balance);
+        }
+
+        Some(pruned)
+
+        // TODO: mark tx set for recalculation
     }
 
     /// Attempts to calculate a next transaction set that is to be
@@ -605,13 +677,53 @@ impl Mempool {
         }
     }
 
-    fn add_fee(&self, tx: Arc<Tx>) {}
-}
+    // TODO: add comment: this should be called only from append_tx
+    fn update_fee_weight(&mut self, tx: Arc<Tx>) {
+        let fee_hash = tx.fee_hash();
+        let tx_hash = tx.tx_hash().unwrap().to_short();
 
-pub struct TxSet {
-    pub(crate) tx_set: Vec<Arc<Tx>>,
-    pub(crate) taken_set: HashSet<ShortHash>,
-    pub(crate) obsolete_set: HashSet<ShortHash>,
+        let mut cur_weight: Balance = tx.fee().clone();
+        let mut signing_address = tx.creator_signing_address();
+
+        // Get the first subsequent transaction and sum up its weight
+        // (it already contains the weights of the subsequent transactions)
+        if let Some(next_signing_address) = self.address_mappings.get(&signing_address) {
+            if let Some(tx_hash) = self.address_hash_mappings.get(next_signing_address) {
+                if let Some(balance) = self.fee_weight_reverse_map.get(tx_hash) {
+                    cur_weight += balance.clone();
+                }
+            }
+        }
+
+        // Store the weight of the actual transaction
+        if let Some(balance) = self.fee_weight_map.get_mut(&cur_weight) {
+            balance.push_back(tx_hash.clone());
+        } else {
+            let mut transactions = VecDeque::new();
+            transactions.push_back(tx_hash.clone());
+            self.fee_weight_map.insert(cur_weight, transactions);
+        }
+
+        // Store it in the reverse map as well
+        self.fee_weight_reverse_map
+            .insert(tx_hash.clone(), cur_weight);
+
+        // TODO: Orphans not here, can this cause problem?
+        // Update the weights for the parent transactions
+        while let Some(previous_signing_address) =
+            self.address_reverse_mappings.get(&signing_address)
+        {
+            if let Some(tx_hash) = self.address_hash_mappings.get(&previous_signing_address) {
+                let tx_weight = self.fee_weight_reverse_map.get_mut(tx_hash).unwrap();
+                *tx_weight += cur_weight;
+
+                cur_weight = tx_weight.clone();
+                signing_address = previous_signing_address.clone();
+            } else {
+                break;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -978,6 +1090,17 @@ mod tests {
             let B_3 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 150, 10, 3));
             let B_4 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 10, 10, 4));
             let B_5 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 5));
+
+            // println!("A_1 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", A_1.clone().tx_hash(), A_1.clone().creator_signing_address(), A_1.clone().next_address());
+            // println!("A_2 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", A_2.clone().tx_hash(), A_2.clone().creator_signing_address(), A_2.clone().next_address());
+            // println!("A_3 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", A_3.clone().tx_hash(), A_3.clone().creator_signing_address(), A_3.clone().next_address());
+            // println!("A_4 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", A_4.clone().tx_hash(), A_4.clone().creator_signing_address(), A_4.clone().next_address());
+            // println!("A_5 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", A_5.clone().tx_hash(), A_5.clone().creator_signing_address(), A_5.clone().next_address());
+            // println!("B_1 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", B_1.clone().tx_hash(), B_1.clone().creator_signing_address(), B_1.clone().next_address());
+            // println!("B_2 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", B_2.clone().tx_hash(), B_2.clone().creator_signing_address(), B_2.clone().next_address());
+            // println!("B_3 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", B_3.clone().tx_hash(), B_3.clone().creator_signing_address(), B_3.clone().next_address());
+            // println!("B_4 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", B_4.clone().tx_hash(), B_4.clone().creator_signing_address(), B_4.clone().next_address());
+            // println!("B_5 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", B_5.clone().tx_hash(), B_5.clone().creator_signing_address(), B_5.clone().next_address());
 
             mempool.append_tx(A_1.clone());
             mempool.append_tx(A_2.clone());

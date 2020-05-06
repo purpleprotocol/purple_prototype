@@ -1591,6 +1591,7 @@ dependencies = [
  "persistence",
  "quickcheck",
  "rand 0.6.5",
+ "rust_decimal",
  "test-helpers",
  "transactions",
  "triomphe",
