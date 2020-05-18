@@ -34,13 +34,6 @@ use std::collections::{BTreeMap, VecDeque};
 use transactions::Tx;
 use triomphe::Arc;
 
-/// How far into the future a transaction can be
-/// in order to be accepted.
-const FUTURE_LIMIT: u64 = 10;
-
-/// TODO: comment, must be between 50-100, move to constants
-const PRUNE_THRESHOLD: u32 = 80;
-
 /// Memory pool used to store valid yet not processed
 /// transactions.
 pub struct Mempool {
@@ -67,12 +60,13 @@ pub struct Mempool {
     ///
     /// Each entry in the map is an ordered binary tree
     /// map between transaction fees and transaction hashes.
-    fee_map: HashMap<ShortHash, BTreeMap<Balance, VecDeque<ShortHash>>>,
+    fee_map: HashMap<ShortHash, BTreeMap<Balance, Vec<ShortHash>>>, // TODO: Change Vec to HashSet
 
-    // TODO: Add comments
-    fee_weight_map: BTreeMap<Balance, VecDeque<ShortHash>>,
+    // Mapping between a weight and all the transactions having
+    // that specific weight.
+    fee_weight_map: BTreeMap<Balance, HashSet<ShortHash>>,
 
-    // TODO: Add comments
+    // Mapping between transaction hash and the weight of it.
     fee_weight_reverse_map: HashMap<ShortHash, Balance>,
 
     /// Mapping between signing addresses that have issued
@@ -235,7 +229,12 @@ impl Mempool {
             self.fee_map.remove(&fee_hash);
         }
 
-        // TODO: remove fee weights as well
+        // Remove the fee weight information as well
+        if let Some(balance) = self.fee_weight_reverse_map.remove(tx_hash) {
+            if let Some(set) = self.fee_weight_map.get_mut(&balance) {
+                set.remove(tx_hash);
+            }
+        }
 
         Some(tx)
     }
@@ -364,25 +363,22 @@ impl Mempool {
         // Place transaction in fee mappings
         if let Some(cur_entry) = self.fee_map.get_mut(&tx_fee_cur) {
             if let Some(fee_entry) = cur_entry.get_mut(&tx_fee) {
-                fee_entry.push_back(tx_hash.clone());
+                fee_entry.push(tx_hash.clone());
             } else {
-                let mut fee_entry = VecDeque::new();
+                let mut fee_entry = Vec::new();
 
-                fee_entry.push_back(tx_hash.clone());
+                fee_entry.push(tx_hash.clone());
                 cur_entry.insert(tx_fee, fee_entry);
             }
         } else {
             let mut cur_entry = BTreeMap::new();
-            let mut fee_entry = VecDeque::new();
+            let mut fee_entry = Vec::new();
 
-            fee_entry.push_back(tx_hash.clone());
+            fee_entry.push(tx_hash.clone());
             cur_entry.insert(tx_fee, fee_entry);
 
             self.fee_map.insert(tx_fee_cur, cur_entry);
         }
-
-        // Update weight information
-        self.update_fee_weight(tx);
 
         // Place transaction in address mappings
         self.address_mappings
@@ -392,15 +388,34 @@ impl Mempool {
 
         // Update orphans
         if !is_orphan {
-            self.update_orphans(&tx_next_addr, tx_signing_addr.clone());
+            // First update the fee weight of the current tx
+            self.update_fee_weight(tx);
+            if let Some(moved) = self.update_orphans(&tx_next_addr, tx_signing_addr.clone()) {
+                // Finally, update fee weights for the entities which are not orphans anymore
+                for tx_hash_mov in moved {
+                    // TODO: change clone
+                    let tx_mov = self.tx_lookup.get(&tx_hash_mov).unwrap().clone();
+                    self.update_fee_weight(tx_mov);
+                }
+            }
         } else {
             if self
                 .address_reverse_mappings
                 .get(&tx_signing_addr)
                 .is_some()
             {
-                self.update_orphans(&tx_next_addr, tx_signing_addr.clone());
+                // First update the fee weight of the current tx
+                self.update_fee_weight(tx);
+                if let Some(moved) = self.update_orphans(&tx_next_addr, tx_signing_addr.clone()) {
+                    // Finally, update fee weights for the entities which are not orphans anymore
+                    for tx_hash_mov in moved {
+                        // TODO: change clone
+                        let tx_mov = self.tx_lookup.get(&tx_hash_mov).unwrap().clone();
+                        self.update_fee_weight(tx_mov);
+                    }
+                }
             } else {
+                // No fee weight update needed
                 self.orphan_set.insert(tx_hash);
             };
         }
@@ -414,13 +429,13 @@ impl Mempool {
     /// only if the mempool is more than 80% full.
     ///
     /// This operation is idempotent.
-    pub fn prune(&mut self) -> Option<Vec<Arc<Tx>>> {
+    pub fn prune(&mut self) -> Option<usize> {
         // If the threshold is not exceeded, prune operation will not be performed
         let mut items_to_prune = self.count() as u32 - (self.max_size * PRUNE_THRESHOLD / 100);
         if items_to_prune < 1 {
             return None;
         }
-        let mut pruned: Vec<Arc<Tx>> = Vec::new();
+        let mut pruned: usize = items_to_prune.clone() as usize;
         let mut reached_max: bool = false;
 
         let mut tx_to_remove: Vec<ShortHash> = Vec::new();
@@ -451,11 +466,7 @@ impl Mempool {
 
         // Proceed with transactions removal
         for tx_hash in tx_to_remove {
-            if let Some(removed) = self.remove_branch(&tx_hash) {
-                for tx in removed {
-                    pruned.push(tx);
-                }
-            }
+            self.remove_branch(&tx_hash);
         }
 
         for balance in balance_to_clean {
@@ -658,31 +669,47 @@ impl Mempool {
         &'a mut self,
         mut cur_addr: &'a NormalAddress,
         tx_signing_addr: NormalAddress,
-    ) {
+    ) -> Option<Vec<ShortHash>> {
+        let mut moved: Vec<ShortHash> = Vec::new();
         self.address_reverse_mappings
             .insert(cur_addr.clone(), tx_signing_addr);
 
         while let Some(next_addr) = self.address_mappings.get(cur_addr) {
             let cur_hash = self.address_hash_mappings.get(cur_addr).unwrap();
-            self.orphan_set.remove(cur_hash);
+            if self.orphan_set.remove(cur_hash) {
+                // If removed means that transaction is not orphan anymore, add to moved
+                moved.push(cur_hash.clone());
+            }
             self.address_reverse_mappings
                 .insert(next_addr.clone(), cur_addr.clone());
 
             if let Some(tx_hash) = self.address_hash_mappings.get(&next_addr) {
-                self.orphan_set.remove(tx_hash);
+                if self.orphan_set.remove(tx_hash) {
+                    // If removed means that transaction is not orphan anymore, add to moved
+                    moved.push(tx_hash.clone());
+                }
                 cur_addr = next_addr;
             } else {
                 break;
             }
         }
+
+        if moved.len() == 0 {
+            None
+        } else {
+            Some(moved)
+        }
     }
 
-    // TODO: add comment: this should be called only from append_tx
+    // Computes the fee weight for a transaction and updates
+    // the fee weight for parent transactions based on proper fee
+    // and subsequent fees
     fn update_fee_weight(&mut self, tx: Arc<Tx>) {
         let fee_hash = tx.fee_hash();
         let tx_hash = tx.tx_hash().unwrap().to_short();
+        let tx_fee = tx.fee().clone();
 
-        let mut cur_weight: Balance = tx.fee().clone();
+        let mut cur_weight: Balance = tx_fee.clone();
         let mut signing_address = tx.creator_signing_address();
 
         // Get the first subsequent transaction and sum up its weight
@@ -696,32 +723,55 @@ impl Mempool {
         }
 
         // Store the weight of the actual transaction
-        if let Some(balance) = self.fee_weight_map.get_mut(&cur_weight) {
-            balance.push_back(tx_hash.clone());
-        } else {
-            let mut transactions = VecDeque::new();
-            transactions.push_back(tx_hash.clone());
-            self.fee_weight_map.insert(cur_weight, transactions);
-        }
+        self.store_fee_weight_info(cur_weight.clone(), tx_hash.clone());
 
         // Store it in the reverse map as well
         self.fee_weight_reverse_map
             .insert(tx_hash.clone(), cur_weight);
 
-        // TODO: Orphans not here, can this cause problem?
         // Update the weights for the parent transactions
         while let Some(previous_signing_address) =
             self.address_reverse_mappings.get(&signing_address)
         {
             if let Some(tx_hash) = self.address_hash_mappings.get(&previous_signing_address) {
-                let tx_weight = self.fee_weight_reverse_map.get_mut(tx_hash).unwrap();
-                *tx_weight += cur_weight;
+                // Get previous transaction fee weight
+                let mut tx_weight = self.fee_weight_reverse_map.get_mut(tx_hash).unwrap();
 
-                cur_weight = tx_weight.clone();
+                // Remove transaction from set
+                let tx_set = self.fee_weight_map.get_mut(&tx_weight).unwrap();
+                if tx_set.remove(tx_hash) {
+                    if tx_set.is_empty() {
+                        self.fee_weight_map.remove(&tx_weight);
+                    }
+                } else {
+                    // This part should be unreachable
+                    panic!("Transaction set not found. [unreachable code]");
+                }
+                // Update previous transaction fee_weight
+                *tx_weight += tx_fee;
+                // Prepare for next previous transaction
                 signing_address = previous_signing_address.clone();
+
+                // Store the weight of the previous transaction
+                let tx_h = tx_hash.clone();
+                let tx_w = tx_weight.clone();
+                self.store_fee_weight_info(tx_w, tx_h);
             } else {
                 break;
             }
+        }
+    }
+
+    fn store_fee_weight_info(&mut self, weight: Balance, tx_hash: ShortHash) {
+        // Store the weight of the actual transaction
+        if let Some(balance) = self.fee_weight_map.get_mut(&weight) {
+            balance.insert(tx_hash.clone());
+        } else {
+            // Prepare the collection for this weight if doesn't exists
+            // and add the tx_hash to it
+            let mut transactions = HashSet::new();
+            transactions.insert(tx_hash.clone());
+            self.fee_weight_map.insert(weight, transactions);
         }
     }
 }
@@ -748,6 +798,76 @@ mod tests {
         ));
 
         assert_eq!(mempool.append_tx(tx), Err(MempoolErr::NonceLeq));
+    }
+
+    #[test]
+    fn iter_over_b_tree_map_orders_by_key_for_balance() {
+        let mut tree: BTreeMap<Balance, &'static str> = BTreeMap::new();
+
+        let b1: Balance = Balance::zero();
+        let b2: Balance = Balance::from_u64(1000);
+        let b3: Balance = Balance::from_u64(10);
+        let b4: Balance = Balance::from_u64(100);
+        let b5: Balance = Balance::from_u64(1);
+        let b6: Balance = Balance::from_u64(10);
+        let b7: Balance = Balance::from_u64(100000);
+        let b8: Balance = Balance::from_u64(1000);
+        let b9: Balance = Balance::from_u64(10);
+        let b10: Balance = Balance::from_u64(1);
+
+        // Append
+        tree.insert(b1, "b1");
+        tree.insert(b2, "b2");
+        tree.insert(b3, "b3");
+        tree.insert(b4, "b4");
+        tree.insert(b5, "b5");
+        tree.insert(b6, "b6");
+        tree.insert(b7, "b7");
+        tree.insert(b8, "b8");
+        tree.insert(b9, "b9");
+        tree.insert(b10, "b10");
+
+        // Check
+        let mut prev_key: Balance = Balance::zero();
+        for (key, val) in tree.iter() {
+            assert!(prev_key <= *key);
+            prev_key = *key;
+        }
+    }
+
+    #[test]
+    fn iter_over_b_tree_map_orders_by_key_for_date_time() {
+        let mut tree: BTreeMap<DateTime<Utc>, &'static str> = BTreeMap::new();
+        let mut t_ref: DateTime<Utc> = Utc::now();
+
+        let t1: DateTime<Utc> = Utc::now();
+        let t2: DateTime<Utc> = Utc::now();
+        let t3: DateTime<Utc> = Utc::now();
+        let t4: DateTime<Utc> = Utc::now();
+        let t5: DateTime<Utc> = Utc::now();
+        let t6: DateTime<Utc> = Utc::now();
+        let t7: DateTime<Utc> = Utc::now();
+        let t8: DateTime<Utc> = Utc::now();
+        let t9: DateTime<Utc> = Utc::now();
+        let t10: DateTime<Utc> = Utc::now();
+
+        // Append
+        tree.insert(t9, "t9");
+        tree.insert(t2, "t2");
+        tree.insert(t3, "t3");
+        tree.insert(t6, "t6");
+        tree.insert(t10, "t10");
+        tree.insert(t1, "t1");
+        tree.insert(t5, "t5");
+        tree.insert(t4, "t4");
+        tree.insert(t8, "t8");
+        tree.insert(t7, "t7");
+
+        // Check
+        for (key, val) in tree.iter() {
+            assert!(t_ref <= *key);
+            t_ref = *key;
+        }
     }
 
     quickcheck! {
@@ -1090,17 +1210,6 @@ mod tests {
             let B_3 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 150, 10, 3));
             let B_4 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 10, 10, 4));
             let B_5 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 5));
-
-            // println!("A_1 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", A_1.clone().tx_hash(), A_1.clone().creator_signing_address(), A_1.clone().next_address());
-            // println!("A_2 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", A_2.clone().tx_hash(), A_2.clone().creator_signing_address(), A_2.clone().next_address());
-            // println!("A_3 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", A_3.clone().tx_hash(), A_3.clone().creator_signing_address(), A_3.clone().next_address());
-            // println!("A_4 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", A_4.clone().tx_hash(), A_4.clone().creator_signing_address(), A_4.clone().next_address());
-            // println!("A_5 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", A_5.clone().tx_hash(), A_5.clone().creator_signing_address(), A_5.clone().next_address());
-            // println!("B_1 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", B_1.clone().tx_hash(), B_1.clone().creator_signing_address(), B_1.clone().next_address());
-            // println!("B_2 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", B_2.clone().tx_hash(), B_2.clone().creator_signing_address(), B_2.clone().next_address());
-            // println!("B_3 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", B_3.clone().tx_hash(), B_3.clone().creator_signing_address(), B_3.clone().next_address());
-            // println!("B_4 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", B_4.clone().tx_hash(), B_4.clone().creator_signing_address(), B_4.clone().next_address());
-            // println!("B_5 TxHash: {:?}, Sign: {:?}, NextSign: {:?}", B_5.clone().tx_hash(), B_5.clone().creator_signing_address(), B_5.clone().next_address());
 
             mempool.append_tx(A_1.clone());
             mempool.append_tx(A_2.clone());
@@ -1446,8 +1555,302 @@ mod tests {
             true
         }
 
-        // fn prune_stress_test() -> bool {
-        //     unimplemented!();
-        // }
+        fn prune_stress_test() -> bool {true}
+
+        // println!("A_1 TxHash: {:?}, Fee: {:?}", A_1.clone().tx_hash().unwrap().to_short(), A_1.clone().fee());
+        // println!("A_2 TxHash: {:?}, Fee: {:?}", A_2.clone().tx_hash().unwrap().to_short(), A_2.clone().fee());
+        // println!("A_3 TxHash: {:?}, Fee: {:?}", A_3.clone().tx_hash().unwrap().to_short(), A_3.clone().fee());
+        // println!("A_4 TxHash: {:?}, Fee: {:?}", A_4.clone().tx_hash().unwrap().to_short(), A_4.clone().fee());
+        // println!("A_5 TxHash: {:?}, Fee: {:?}", A_5.clone().tx_hash().unwrap().to_short(), A_5.clone().fee());
+        // println!("B_1 TxHash: {:?}, Fee: {:?}", B_1.clone().tx_hash().unwrap().to_short(), B_1.clone().fee());
+        // println!("B_2 TxHash: {:?}, Fee: {:?}", B_2.clone().tx_hash().unwrap().to_short(), B_2.clone().fee());
+        // println!("B_3 TxHash: {:?}, Fee: {:?}", B_3.clone().tx_hash().unwrap().to_short(), B_3.clone().fee());
+        // println!("B_4 TxHash: {:?}, Fee: {:?}", B_4.clone().tx_hash().unwrap().to_short(), B_4.clone().fee());
+        // println!("B_5 TxHash: {:?}, Fee: {:?}", B_5.clone().tx_hash().unwrap().to_short(), B_5.clone().fee());
+
+        fn it_computes_weight_maps_correctly_on_ordered_insertion() -> bool {
+            let chain_db = test_helpers::init_tempdb();
+            let state_db = test_helpers::init_tempdb();
+            let chain = chain::init(chain_db, state_db, true);
+            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+            let cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME).to_short();
+
+            // Transactions from account A
+            let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
+            let A_2 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 5, 2));
+            let A_3 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 150, 10, 3));
+            let A_4 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 10, 20, 4));
+            let A_5 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 5));
+
+            // Transactions from account B
+            let B_1 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 1));
+            let B_2 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 5, 2));
+            let B_3 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 150, 10, 3));
+            let B_4 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 10, 25, 4));
+            let B_5 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 5));
+
+            // Append transactions
+            mempool.append_tx(A_1.clone());
+            mempool.append_tx(A_2.clone());
+            mempool.append_tx(A_3.clone());
+            mempool.append_tx(A_4.clone());
+            mempool.append_tx(A_5.clone());
+            mempool.append_tx(B_1.clone());
+            mempool.append_tx(B_2.clone());
+            mempool.append_tx(B_3.clone());
+            mempool.append_tx(B_4.clone());
+            mempool.append_tx(B_5.clone());
+
+            // Proceed with checking
+            let tx_count = mempool.count();
+
+            let A1_weight = Balance::from_u64(55);
+            let A2_weight = Balance::from_u64(45);
+            let A3_weight = Balance::from_u64(40);
+            let A4_weight = Balance::from_u64(30);
+            let A5_weight = Balance::from_u64(10);
+            let B1_weight = Balance::from_u64(60);
+            let B2_weight = Balance::from_u64(50);
+            let B3_weight = Balance::from_u64(45);
+            let B4_weight = Balance::from_u64(35);
+            let B5_weight = Balance::from_u64(10);
+
+            // Check reverse map
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_1.tx_hash().unwrap().to_short()).unwrap(), A1_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_2.tx_hash().unwrap().to_short()).unwrap(), A2_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_3.tx_hash().unwrap().to_short()).unwrap(), A3_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_4.tx_hash().unwrap().to_short()).unwrap(), A4_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_5.tx_hash().unwrap().to_short()).unwrap(), A5_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_1.tx_hash().unwrap().to_short()).unwrap(), B1_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_2.tx_hash().unwrap().to_short()).unwrap(), B2_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_3.tx_hash().unwrap().to_short()).unwrap(), B3_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_4.tx_hash().unwrap().to_short()).unwrap(), B4_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_5.tx_hash().unwrap().to_short()).unwrap(), B5_weight);
+
+            // Check weights length
+            let mut cnt = 0;
+            for (balance, set) in mempool.fee_weight_map {
+                cnt += set.len();
+            }
+
+            assert_eq!(cnt, tx_count);
+            assert_eq!(mempool.fee_weight_reverse_map.len(), tx_count);
+
+            true
+        }
+
+        fn it_computes_weight_maps_correctly_on_random_insertion() -> bool {
+            let chain_db = test_helpers::init_tempdb();
+            let state_db = test_helpers::init_tempdb();
+            let chain = chain::init(chain_db, state_db, true);
+            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+            let cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME).to_short();
+
+            // Transactions from account A
+            let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
+            let A_2 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 5, 2));
+            let A_3 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 150, 10, 3));
+            let A_4 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 10, 20, 4));
+            let A_5 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 5));
+
+            // Transactions from account B
+            let B_1 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 1));
+            let B_2 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 5, 2));
+            let B_3 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 150, 10, 3));
+            let B_4 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 10, 25, 4));
+            let B_5 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 5));
+
+            mempool.append_tx(B_2.clone());
+            mempool.append_tx(A_2.clone());
+            mempool.append_tx(B_4.clone());
+            mempool.append_tx(B_1.clone());
+            mempool.append_tx(A_3.clone());
+            mempool.append_tx(A_4.clone());
+            mempool.append_tx(A_5.clone());
+            mempool.append_tx(B_3.clone());
+            mempool.append_tx(B_5.clone());
+            mempool.append_tx(A_1.clone());
+
+            // Proceed with checking
+            let tx_count = mempool.count();
+
+            let A1_weight = Balance::from_u64(55);
+            let A2_weight = Balance::from_u64(45);
+            let A3_weight = Balance::from_u64(40);
+            let A4_weight = Balance::from_u64(30);
+            let A5_weight = Balance::from_u64(10);
+            let B1_weight = Balance::from_u64(60);
+            let B2_weight = Balance::from_u64(50);
+            let B3_weight = Balance::from_u64(45);
+            let B4_weight = Balance::from_u64(35);
+            let B5_weight = Balance::from_u64(10);
+
+            // Check reverse map
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_1.tx_hash().unwrap().to_short()).unwrap(), A1_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_2.tx_hash().unwrap().to_short()).unwrap(), A2_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_3.tx_hash().unwrap().to_short()).unwrap(), A3_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_4.tx_hash().unwrap().to_short()).unwrap(), A4_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_5.tx_hash().unwrap().to_short()).unwrap(), A5_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_1.tx_hash().unwrap().to_short()).unwrap(), B1_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_2.tx_hash().unwrap().to_short()).unwrap(), B2_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_3.tx_hash().unwrap().to_short()).unwrap(), B3_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_4.tx_hash().unwrap().to_short()).unwrap(), B4_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_5.tx_hash().unwrap().to_short()).unwrap(), B5_weight);
+
+            // Check weights length
+            let mut cnt = 0;
+            for (balance, set) in mempool.fee_weight_map {
+                cnt += set.len();
+            }
+
+            assert_eq!(cnt, tx_count);
+            assert_eq!(mempool.fee_weight_reverse_map.len(), tx_count);
+
+            true
+        }
+
+        fn it_computes_weight_maps_correctly_on_random_insertion_intermediate_checks() -> bool {
+            let chain_db = test_helpers::init_tempdb();
+            let state_db = test_helpers::init_tempdb();
+            let chain = chain::init(chain_db, state_db, true);
+            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+            let cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME).to_short();
+
+            // Transactions from account A
+            let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
+            let A_2 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 5, 2));
+            let A_3 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 150, 10, 3));
+            let A_4 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 10, 20, 4));
+            let A_5 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 5));
+
+            // Transactions from account B
+            let B_1 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 1));
+            let B_2 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 5, 2));
+            let B_3 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 150, 10, 3));
+            let B_4 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 10, 25, 4));
+            let B_5 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 5));
+
+            let mut check_balance_key = | mempool: &Mempool, pairs: Vec<(Balance, ShortHash)> | -> usize {
+                let mut len = 0;
+
+                for (b, hash) in pairs {
+                    if let Some(set) = mempool.fee_weight_map.get(&b) {
+                        if set.contains(&hash) {
+                            len += 1;
+                        }
+                    }
+                }
+
+                len
+            };
+
+            mempool.append_tx(B_2.clone());
+            // B_2 orphan, no weight
+            assert!(mempool.fee_weight_map.is_empty());
+            assert!(mempool.fee_weight_reverse_map.is_empty());
+
+            mempool.append_tx(A_2.clone());
+            // A_2 orphan, still no weight
+            assert!(mempool.fee_weight_map.is_empty());
+            assert!(mempool.fee_weight_reverse_map.is_empty());
+            mempool.append_tx(B_4.clone());
+            // B_4 orphan, still no weight
+            assert!(mempool.fee_weight_map.is_empty());
+            assert!(mempool.fee_weight_reverse_map.is_empty());
+
+            mempool.append_tx(B_1.clone());
+            // B_1 not orphan, also updates B_2 => stored: B_1, B_2
+            let check = vec![(Balance::from_u64(15), B_1.tx_hash().unwrap().to_short()), (Balance::from_u64(5), B_2.tx_hash().unwrap().to_short())];
+            let cnt = check_balance_key(&mempool, check);
+            assert_eq!(cnt, 2);
+            assert_eq!(mempool.fee_weight_reverse_map.len(), 2);
+            mempool.append_tx(A_3.clone());
+            // A_3 orphan => stored: B_1, B_2
+            let check = vec![(Balance::from_u64(15), B_1.tx_hash().unwrap().to_short()), (Balance::from_u64(5), B_2.tx_hash().unwrap().to_short())];
+            let cnt = check_balance_key(&mempool, check);
+            assert_eq!(cnt, 2);
+            assert_eq!(mempool.fee_weight_reverse_map.len(), 2);
+
+            mempool.append_tx(A_4.clone());
+            // A_4 orphan => stored: B_1, B_2
+            let check = vec![(Balance::from_u64(15), B_1.tx_hash().unwrap().to_short()), (Balance::from_u64(5), B_2.tx_hash().unwrap().to_short())];
+            let cnt = check_balance_key(&mempool, check);
+            assert_eq!(cnt, 2);
+            assert_eq!(mempool.fee_weight_reverse_map.len(), 2);
+
+            mempool.append_tx(A_5.clone());
+            // A_5 orphan => stored: B_1, B_2
+            let check = vec![(Balance::from_u64(15), B_1.tx_hash().unwrap().to_short()), (Balance::from_u64(5), B_2.tx_hash().unwrap().to_short())];
+            let cnt = check_balance_key(&mempool, check);
+            assert_eq!(cnt, 2);
+            assert_eq!(mempool.fee_weight_reverse_map.len(), 2);
+
+            mempool.append_tx(B_3.clone());
+            // B_3 not orphan, also updates B_4 => stored B_1, B_2, B_3, B_4
+            let check = vec![(Balance::from_u64(50), B_1.tx_hash().unwrap().to_short()), (Balance::from_u64(40), B_2.tx_hash().unwrap().to_short()),
+                             (Balance::from_u64(35), B_3.tx_hash().unwrap().to_short()), (Balance::from_u64(25), B_4.tx_hash().unwrap().to_short())];
+            let cnt = check_balance_key(&mempool, check);
+            assert_eq!(cnt, 4);
+            assert_eq!(mempool.fee_weight_reverse_map.len(), 4);
+
+            mempool.append_tx(B_5.clone());
+            // B_5 not orphan => stored B_1, B_2, B_3, B_4, B_5
+            let check = vec![(Balance::from_u64(60), B_1.tx_hash().unwrap().to_short()), (Balance::from_u64(50), B_2.tx_hash().unwrap().to_short()),
+                             (Balance::from_u64(45), B_3.tx_hash().unwrap().to_short()), (Balance::from_u64(35), B_4.tx_hash().unwrap().to_short()),
+                             (Balance::from_u64(10), B_5.tx_hash().unwrap().to_short())];
+            let cnt = check_balance_key(&mempool, check);
+            assert_eq!(cnt, 5);
+            assert_eq!(mempool.fee_weight_reverse_map.len(), 5);
+
+            mempool.append_tx(A_1.clone());
+            // A_1 not orphan, also updates A_2, A_3, A_4, A_5 => stored A_1, A_2, A_3, A_4, A_5, B_1, B_2, B_3, B_4, B_5
+            let check = vec![(Balance::from_u64(55), A_1.tx_hash().unwrap().to_short()), (Balance::from_u64(45), A_2.tx_hash().unwrap().to_short()),
+                             (Balance::from_u64(40), A_3.tx_hash().unwrap().to_short()), (Balance::from_u64(30), A_4.tx_hash().unwrap().to_short()),
+                             (Balance::from_u64(10), A_5.tx_hash().unwrap().to_short()),
+                             (Balance::from_u64(60), B_1.tx_hash().unwrap().to_short()), (Balance::from_u64(50), B_2.tx_hash().unwrap().to_short()),
+                             (Balance::from_u64(45), B_3.tx_hash().unwrap().to_short()), (Balance::from_u64(35), B_4.tx_hash().unwrap().to_short()),
+                             (Balance::from_u64(10), B_5.tx_hash().unwrap().to_short())];
+            let cnt = check_balance_key(&mempool, check);
+            assert_eq!(cnt, 10);
+            assert_eq!(mempool.fee_weight_reverse_map.len(), 10);
+
+            // Final checks
+            let tx_count = mempool.count();
+
+            // Final weights
+            let A1_weight = Balance::from_u64(55);
+            let A2_weight = Balance::from_u64(45);
+            let A3_weight = Balance::from_u64(40);
+            let A4_weight = Balance::from_u64(30);
+            let A5_weight = Balance::from_u64(10);
+            let B1_weight = Balance::from_u64(60);
+            let B2_weight = Balance::from_u64(50);
+            let B3_weight = Balance::from_u64(45);
+            let B4_weight = Balance::from_u64(35);
+            let B5_weight = Balance::from_u64(10);
+
+            // Check reverse map
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_1.tx_hash().unwrap().to_short()).unwrap(), A1_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_2.tx_hash().unwrap().to_short()).unwrap(), A2_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_3.tx_hash().unwrap().to_short()).unwrap(), A3_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_4.tx_hash().unwrap().to_short()).unwrap(), A4_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_5.tx_hash().unwrap().to_short()).unwrap(), A5_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_1.tx_hash().unwrap().to_short()).unwrap(), B1_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_2.tx_hash().unwrap().to_short()).unwrap(), B2_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_3.tx_hash().unwrap().to_short()).unwrap(), B3_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_4.tx_hash().unwrap().to_short()).unwrap(), B4_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&B_5.tx_hash().unwrap().to_short()).unwrap(), B5_weight);
+
+            // Check weights length
+            let mut cnt = 0;
+            for (balance, set) in mempool.fee_weight_map {
+                cnt += set.len();
+            }
+
+            assert_eq!(cnt, tx_count);
+            assert_eq!(mempool.fee_weight_reverse_map.len(), tx_count);
+
+            true
+        }
     }
 }

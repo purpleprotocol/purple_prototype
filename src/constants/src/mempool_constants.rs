@@ -16,8 +16,14 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod chain_constants;
-pub mod mempool_constants;
+/// The threshold value after which the prune happens (percentage)
+/// 
+/// Remark: Must be between 50 and 100
+pub const PRUNE_THRESHOLD: u32 = 80;
 
-pub use self::chain_constants::*;
-pub use self::mempool_constants::*;
+/// How far into the future a transaction can be
+/// in order to be accepted.
+pub const FUTURE_LIMIT: u64 = 10;
+
+static_assertions::const_assert!(crate::PRUNE_THRESHOLD > 50);
+static_assertions::const_assert!(crate::PRUNE_THRESHOLD < 100);
