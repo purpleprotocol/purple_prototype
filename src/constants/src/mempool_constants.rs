@@ -19,7 +19,7 @@
 /// The threshold value after which the prune happens (percentage)
 /// 
 /// Remark: Must be between 50 and 100
-pub const PRUNE_THRESHOLD: u32 = 80;
+pub const PRUNE_THRESHOLD: usize = 80;
 
 /// How far into the future a transaction can be
 /// in order to be accepted.

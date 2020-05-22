@@ -230,11 +230,7 @@ impl Mempool {
         }
 
         // Remove the fee weight information as well
-        if let Some(balance) = self.fee_weight_reverse_map.remove(tx_hash) {
-            if let Some(set) = self.fee_weight_map.get_mut(&balance) {
-                set.remove(tx_hash);
-            }
-        }
+        self.remove_fee_weight_full_info(*tx_hash);
 
         Some(tx)
     }
@@ -255,6 +251,9 @@ impl Mempool {
         let tx = self.tx_lookup.get(tx_hash)?;
         let mut signing_address = tx.creator_signing_address();
 
+        // While address mappings still there, update
+        // fee weight for parent transactions
+        self.update_fee_weight(signing_address);
         let mut to_remove: Vec<ShortHash> = vec![*tx_hash];
         let mut res: Vec<Arc<Tx>> = Vec::new();
         // Search the subsequent transactions and mark them to be removed
@@ -389,13 +388,13 @@ impl Mempool {
         // Update orphans
         if !is_orphan {
             // First update the fee weight of the current tx
-            self.update_fee_weight(tx);
+            self.add_fee_weight(tx);
             if let Some(moved) = self.update_orphans(&tx_next_addr, tx_signing_addr.clone()) {
                 // Finally, update fee weights for the entities which are not orphans anymore
                 for tx_hash_mov in moved {
                     // TODO: change clone
                     let tx_mov = self.tx_lookup.get(&tx_hash_mov).unwrap().clone();
-                    self.update_fee_weight(tx_mov);
+                    self.add_fee_weight(tx_mov);
                 }
             }
         } else {
@@ -405,13 +404,13 @@ impl Mempool {
                 .is_some()
             {
                 // First update the fee weight of the current tx
-                self.update_fee_weight(tx);
+                self.add_fee_weight(tx);
                 if let Some(moved) = self.update_orphans(&tx_next_addr, tx_signing_addr.clone()) {
                     // Finally, update fee weights for the entities which are not orphans anymore
                     for tx_hash_mov in moved {
                         // TODO: change clone
                         let tx_mov = self.tx_lookup.get(&tx_hash_mov).unwrap().clone();
-                        self.update_fee_weight(tx_mov);
+                        self.add_fee_weight(tx_mov);
                     }
                 }
             } else {
@@ -431,51 +430,69 @@ impl Mempool {
     /// This operation is idempotent.
     pub fn prune(&mut self) -> Option<usize> {
         // If the threshold is not exceeded, prune operation will not be performed
-        let mut items_to_prune = self.count() as u32 - (self.max_size * PRUNE_THRESHOLD / 100);
-        if items_to_prune < 1 {
+        let limit: usize = self.max_size as usize * PRUNE_THRESHOLD / 100;
+        let items_to_prune: usize = if self.count() > limit {
+            self.count() - limit
+        } else {
             return None;
+        };
+
+        // Represents the limit of the transactions to be removed
+        // by fee and by timestamp. This way a 50/50 balance is kept
+        let threshold: usize = items_to_prune / 2;
+
+        let mut cnt = 0;
+        let mut to_remove_timestamp: Vec<ShortHash> = Vec::new();
+        let mut to_remove_weight: Vec<ShortHash> = Vec::new();
+
+        // First, iterate by timestamp
+        let mut iter = self.timestamp_reverse_lookup.iter();
+        while cnt < threshold {
+            to_remove_timestamp.push(*iter.next().unwrap().1);
+            cnt += 1;
         }
-        let mut pruned: usize = items_to_prune.clone() as usize;
-        let mut reached_max: bool = false;
 
-        let mut tx_to_remove: Vec<ShortHash> = Vec::new();
-        let mut balance_to_clean: Vec<Balance> = Vec::new();
+        // Then iterate by weight
+        let mut iter = self.fee_weight_map.iter();
+        cnt = 0;
+        while cnt < threshold {
+            let next = iter.next().unwrap();
+            for set in next.1 {
+                to_remove_weight.push(*set);
+                cnt += 1;
 
-        // Iterate the fee_weight_map starting from the lowest balance
-        // to the highest one
-        for (balance, next_set) in self.fee_weight_map.iter() {
-            for tx_hash in next_set.iter() {
-                tx_to_remove.push(tx_hash.clone());
-
-                // Decrease the items remaining to remove
-                items_to_prune -= 1;
-                if items_to_prune == 0 {
-                    reached_max = true;
+                if cnt >= threshold {
                     break;
                 }
             }
+        }
 
-            // Break if collected enough transactions
-            if reached_max {
+        let mut pruned = 0;
+        for (t, w) in to_remove_timestamp.iter().zip(to_remove_weight) {
+            if let Some(removed) = self.remove_branch(&t) {
+                pruned += removed.len();
+            }
+
+            // Remove by timestamp can delete more than one transaction
+            // on a run, so a check is needed to make sure the pruned
+            // items will not pass a limit
+            if pruned >= items_to_prune {
                 break;
             }
 
-            // Mark the balance to be removed
-            balance_to_clean.push(*balance);
-        }
+            if let Some(removed) = self.remove_branch(&w) {
+                pruned += removed.len();
+            }
 
-        // Proceed with transactions removal
-        for tx_hash in tx_to_remove {
-            self.remove_branch(&tx_hash);
-        }
-
-        for balance in balance_to_clean {
-            self.fee_weight_map.remove(&balance);
+            if pruned >= items_to_prune {
+                break;
+            }
         }
 
         Some(pruned)
 
-        // TODO: mark tx set for recalculation
+        // TODO: mark tx set for recalculation (do same checks for remove_branch
+        // but not twice when prune is called)
     }
 
     /// Attempts to calculate a next transaction set that is to be
@@ -704,7 +721,7 @@ impl Mempool {
     // Computes the fee weight for a transaction and updates
     // the fee weight for parent transactions based on proper fee
     // and subsequent fees
-    fn update_fee_weight(&mut self, tx: Arc<Tx>) {
+    fn add_fee_weight(&mut self, tx: Arc<Tx>) {
         let fee_hash = tx.fee_hash();
         let tx_hash = tx.tx_hash().unwrap().to_short();
         let tx_fee = tx.fee().clone();
@@ -747,9 +764,11 @@ impl Mempool {
                     // This part should be unreachable
                     panic!("Transaction set not found. [unreachable code]");
                 }
+
                 // Update previous transaction fee_weight
                 *tx_weight += tx_fee;
-                // Prepare for next previous transaction
+
+                // Prepare for next step
                 signing_address = previous_signing_address.clone();
 
                 // Store the weight of the previous transaction
@@ -762,10 +781,67 @@ impl Mempool {
         }
     }
 
+    // Updates the fee weight info after a transaction branch is removed
+    fn update_fee_weight(&mut self, mut rem_signing_address: NormalAddress) {
+        let mut acc: Balance = Balance::zero();
+
+        // Update the weights for the parent transactions
+        while let Some(previous_signing_address) =
+            self.address_reverse_mappings.get(&rem_signing_address)
+        {
+            if let Some(tx_hash) = self.address_hash_mappings.get(&previous_signing_address) {
+                // Get previous transaction fee weight
+                let mut tx_weight = self.fee_weight_reverse_map.get_mut(tx_hash).unwrap();
+
+                // Remove transaction from set
+                let tx_set = self.fee_weight_map.get_mut(&tx_weight).unwrap();
+                if tx_set.remove(tx_hash) {
+                    if tx_set.is_empty() {
+                        self.fee_weight_map.remove(&tx_weight);
+                    }
+                } else {
+                    // This part should be unreachable
+                    panic!("Transaction set not found. [unreachable code]");
+                }
+                let tx_fee = self.tx_lookup.get(tx_hash).unwrap().fee();
+
+                // Update previous transaction fee_weight
+                *tx_weight = tx_fee + acc;
+                acc += tx_fee;
+
+                // Prepare for next transaction
+                rem_signing_address = previous_signing_address.clone();
+
+                // Store the weight of the previous transaction
+                let tx_h = tx_hash.clone();
+                let tx_w = tx_weight.clone();
+                self.store_fee_weight_info(tx_w, tx_h);
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn remove_fee_weight_full_info(&mut self, tx_hash: ShortHash) {
+        if let Some(balance) = self.fee_weight_reverse_map.remove(&tx_hash) {
+            self.remove_fee_weight_info(&balance, &tx_hash);
+        }
+    }
+
+    fn remove_fee_weight_info(&mut self, balance: &Balance, tx_hash: &ShortHash) {
+        if let Some(set) = self.fee_weight_map.get_mut(balance) {
+            set.remove(tx_hash);
+
+            if set.is_empty() {
+                self.fee_weight_map.remove(&balance);
+            }
+        }
+    }
+
     fn store_fee_weight_info(&mut self, weight: Balance, tx_hash: ShortHash) {
         // Store the weight of the actual transaction
-        if let Some(balance) = self.fee_weight_map.get_mut(&weight) {
-            balance.insert(tx_hash.clone());
+        if let Some(set) = self.fee_weight_map.get_mut(&weight) {
+            set.insert(tx_hash.clone());
         } else {
             // Prepare the collection for this weight if doesn't exists
             // and add the tx_hash to it
@@ -1555,7 +1631,173 @@ mod tests {
             true
         }
 
-        fn prune_stress_test() -> bool {true}
+        #[cfg(not(windows))]
+        fn prune_stress_test() -> bool {
+            // 20 transactions, PRUNE_THRESHOLD = 80% => 4 transactions to be removed,
+            // ideally 2 by timestamp, 2 by weight
+            let chain_db = test_helpers::init_tempdb();
+            let state_db = test_helpers::init_tempdb();
+            let chain = chain::init(chain_db, state_db, true);
+            let mut mempool = Mempool::new(chain.clone(), 20, vec![], 80);
+
+            // Transactions from account A
+            let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
+            let A_2 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 5, 2));
+            let A_3 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 150, 10, 3));
+            let A_4 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 10, 20, 4));
+            let A_5 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 5));
+            let A_6 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 5, 6));
+            let A_7 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 15, 7));
+            let A_8 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 10, 8));
+            let A_9 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 2, 9));
+            let A_10 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 1, 10));
+
+            // Transactions from account B
+            let B_1 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 1));
+            let B_2 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 5, 2));
+            let B_3 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 150, 10, 3));
+            let B_4 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 10, 25, 4));
+            let B_5 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 5));
+            let B_6 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 25, 6));
+            let B_7 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 2, 7));
+            let B_8 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 1, 8));
+
+            // Transactions from account C - oldest
+            let C_1 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::A, 100, 100, 1));
+            let C_2 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::A, 100, 1200, 2));
+
+            // Append transactions
+            mempool.append_tx(C_1.clone()); // oldest
+            mempool.append_tx(C_2.clone()); // second oldest
+            mempool.append_tx(A_1.clone());
+            mempool.append_tx(A_2.clone());
+            mempool.append_tx(A_3.clone());
+            mempool.append_tx(A_4.clone());
+            mempool.append_tx(A_5.clone());
+            mempool.append_tx(A_6.clone());
+            mempool.append_tx(A_7.clone());
+            mempool.append_tx(A_8.clone());
+            mempool.append_tx(A_9.clone());
+            mempool.append_tx(A_10.clone()); // lowest
+            mempool.append_tx(B_1.clone());
+            mempool.append_tx(B_2.clone());
+            mempool.append_tx(B_3.clone());
+            mempool.append_tx(B_4.clone());
+            mempool.append_tx(B_5.clone());
+            mempool.append_tx(B_6.clone());
+            mempool.append_tx(B_7.clone());
+            mempool.append_tx(B_8.clone()); // second lowest
+            
+            // Prune will remove with a 50% ratio oldest transactions
+            // and transactions with lowest fee
+            mempool.prune();
+
+            // 4 transactions removed, 16 left => 80%
+            assert!(mempool.count() == 16);
+
+            assert!(!mempool.tx_lookup.contains_key(&C_2.tx_hash().unwrap().to_short())); // not
+            assert!(!mempool.tx_lookup.contains_key(&C_1.tx_hash().unwrap().to_short())); // not
+            assert!(mempool.tx_lookup.contains_key(&A_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_3.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_6.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_7.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_8.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_9.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&A_10.tx_hash().unwrap().to_short())); // not
+            assert!(mempool.tx_lookup.contains_key(&B_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_5.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_6.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_7.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&B_8.tx_hash().unwrap().to_short())); // not
+
+            true
+        }
+
+        fn future_limit_works() -> bool {
+            let chain_db = test_helpers::init_tempdb();
+            let state_db = test_helpers::init_tempdb();
+            let chain = chain::init(chain_db, state_db, true);
+            let mut mempool = Mempool::new(chain.clone(), 20, vec![], 80);
+
+            // Transactions from account A
+            let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
+            let A_2 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 5, 2));
+            let A_3 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 150, 10, 3));
+            let A_4 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 10, 20, 4));
+            let A_5 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 5));
+            let A_6 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 5, 6));
+            let A_7 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 15, 7));
+            let A_8 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 10, 8));
+            let A_9 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 15, 9));
+            let A_10 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 30, 10));
+            let A_11 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 2, 11));
+            let A_12 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::C, 100, 1, 12));
+
+            // Transactions from account B
+            let B_1 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 1));
+            let B_2 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 5, 2));
+            let B_3 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 150, 10, 3));
+            let B_4 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 10, 25, 4));
+            let B_5 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 10, 5));
+            let B_6 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 1, 6));
+
+            // Transactions from account C
+            let C_1 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::A, 100, 100, 1));
+            let C_2 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::A, 100, 1200, 2));
+
+            // Append 20 transactions
+            mempool.append_tx(C_2.clone());
+            mempool.append_tx(C_1.clone());
+            mempool.append_tx(A_1.clone());
+            mempool.append_tx(A_2.clone());
+            mempool.append_tx(A_3.clone());
+            mempool.append_tx(A_4.clone());
+            mempool.append_tx(A_5.clone());
+            mempool.append_tx(A_6.clone());
+            mempool.append_tx(A_7.clone());
+            mempool.append_tx(A_8.clone());
+            mempool.append_tx(A_9.clone());
+            mempool.append_tx(A_10.clone());
+            mempool.append_tx(A_11.clone()); // future exceeded
+            mempool.append_tx(A_12.clone()); // future exceeded
+            mempool.append_tx(B_1.clone());
+            mempool.append_tx(B_2.clone());
+            mempool.append_tx(B_3.clone());
+            mempool.append_tx(B_4.clone());
+            mempool.append_tx(B_5.clone());
+            mempool.append_tx(B_6.clone());
+
+            assert!(mempool.count() == 18);
+
+            assert!(mempool.tx_lookup.contains_key(&C_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&C_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_3.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_4.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_5.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_6.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_7.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_8.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_9.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&A_10.tx_hash().unwrap().to_short()));
+            assert!(!mempool.tx_lookup.contains_key(&A_11.tx_hash().unwrap().to_short())); // not
+            assert!(!mempool.tx_lookup.contains_key(&A_12.tx_hash().unwrap().to_short())); // not
+            assert!(mempool.tx_lookup.contains_key(&B_1.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_2.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_3.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_4.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_5.tx_hash().unwrap().to_short()));
+            assert!(mempool.tx_lookup.contains_key(&B_6.tx_hash().unwrap().to_short()));
+
+            true
+        }
 
         // println!("A_1 TxHash: {:?}, Fee: {:?}", A_1.clone().tx_hash().unwrap().to_short(), A_1.clone().fee());
         // println!("A_2 TxHash: {:?}, Fee: {:?}", A_2.clone().tx_hash().unwrap().to_short(), A_2.clone().fee());
@@ -1573,7 +1815,6 @@ mod tests {
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
             let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
-            let cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME).to_short();
 
             // Transactions from account A
             let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
@@ -1644,7 +1885,6 @@ mod tests {
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
             let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
-            let cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME).to_short();
 
             // Transactions from account A
             let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
@@ -1714,7 +1954,6 @@ mod tests {
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
             let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
-            let cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME).to_short();
 
             // Transactions from account A
             let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
@@ -1849,6 +2088,36 @@ mod tests {
 
             assert_eq!(cnt, tx_count);
             assert_eq!(mempool.fee_weight_reverse_map.len(), tx_count);
+
+            true
+        }
+
+        fn it_updates_weight_maps_correctly_after_remove_branch() -> bool {
+            let chain_db = test_helpers::init_tempdb();
+            let state_db = test_helpers::init_tempdb();
+            let chain = chain::init(chain_db, state_db, true);
+            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+
+            // Transactions from account A
+            let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
+            let A_2 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 5, 2));
+            let A_3 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 150, 10, 3));
+            let A_4 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 10, 20, 4));
+            let A_5 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 5));
+
+            mempool.append_tx(A_1.clone());
+            mempool.append_tx(A_2.clone());
+            mempool.append_tx(A_3.clone());
+            mempool.append_tx(A_4.clone());
+            mempool.append_tx(A_5.clone());
+
+            // Remove branch
+            mempool.remove_branch(&A_3.tx_hash().unwrap().to_short());
+
+            let A1_weight = Balance::from_u64(15);
+            let A2_weight = Balance::from_u64(5);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_1.tx_hash().unwrap().to_short()).unwrap(), A1_weight);
+            assert_eq!(*mempool.fee_weight_reverse_map.get(&A_2.tx_hash().unwrap().to_short()).unwrap(), A2_weight);
 
             true
         }
