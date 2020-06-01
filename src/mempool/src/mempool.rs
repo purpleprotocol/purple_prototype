@@ -22,7 +22,7 @@ use crate::error::MempoolErr;
 use account::{Address, Balance, NormalAddress};
 use chain::types::StateInterface;
 use chain::{PowChainRef, PowChainState};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use constants::*;
 use crypto::{Hash, ShortHash};
 use hashbrown::{HashMap, HashSet};
@@ -115,6 +115,23 @@ pub struct Mempool {
     /// TODO: Make this a queue of sets and cache subsequent
     /// tx sets as well.
     next_tx_set_cache: Option<TxSet>,
+
+    /// The threshold value after which the prune happens (percentage)
+    ///
+    /// Must be a number between 50 and 100.
+    prune_threshold: usize,
+
+    /// Time limit after which a transaction
+    /// can be marked as expired
+    ///
+    /// Must be greather or equal to 10 seconds
+    expire_duration: Duration,
+
+    /// Contains all the expired transactions
+    expired: HashSet<ShortHash>,
+
+    /// Contains all the propagated transactions
+    propagated: HashSet<ShortHash>,
 }
 
 pub struct TxSet {
@@ -129,11 +146,28 @@ impl Mempool {
         max_size: u32,
         preferred_currencies: Vec<ShortHash>,
         preference_ratio: u8,
+        expire_threshold: i64,
+        prune_threshold: usize,
     ) -> Mempool {
         if preference_ratio < 50 || preference_ratio > 100 {
             panic!(format!(
                 "Invalid preference ratio! Expected a number between 50 and 100! Got: {}",
                 preference_ratio
+            ));
+        }
+
+        #[cfg(not(test))]
+        if expire_threshold < 10000 {
+            panic!(format!(
+                "Invalid expire threshold! Expected a number greather or equal to 10000! Got: {}",
+                expire_threshold
+            ));
+        }
+
+        if prune_threshold < 50 || prune_threshold > 100 {
+            panic!(format!(
+                "Invalid prune threshold! Expected a number between 50 and 100! Got: {}",
+                prune_threshold
             ));
         }
 
@@ -153,18 +187,44 @@ impl Mempool {
             preference_ratio,
             chain_ref,
             next_tx_set_cache: None,
+            prune_threshold,
+            expire_duration: Duration::milliseconds(expire_threshold),
+            expired: HashSet::new(),
+            propagated: HashSet::new(),
         }
     }
 
     /// Returns `true` if there is an existing transaction with
     /// the given `Hash` in the mempool.
-    pub fn exists(&self, tx_hash: &ShortHash) -> bool {
-        self.tx_lookup.get(tx_hash).is_some()
+    pub fn exists(&self, tx_hash: ShortHash) -> bool {
+        self.tx_lookup.get(&tx_hash).is_some()
     }
 
     /// Returns the number of transactions in the mempool.
     pub fn count(&self) -> usize {
         self.tx_lookup.len()
+    }
+
+    /// Marks a transaction as propagated so the prune operation
+    /// will remove it prior
+    pub fn mark_propagated(&mut self, tx_hash: ShortHash) {
+        self.propagated.insert(tx_hash);
+    }
+
+    /// Marks the transactions which are behind the expire limit
+    /// as expired so the prune operation will remove them prior
+    pub fn update_expired(&mut self) {
+        let current_time = Utc::now();
+
+        for (time, tx_hash) in self.timestamp_reverse_lookup.iter() {
+            if let Some(tx_time) = time.checked_add_signed(self.expire_duration) {
+                if tx_time < current_time {
+                    self.expired.insert(*tx_hash);
+                } else {
+                    break;
+                }
+            }
+        }
     }
 
     /// Removes the transaction with the given `Hash` from the
@@ -228,6 +288,9 @@ impl Mempool {
         if remove_fee_map {
             self.fee_map.remove(&fee_hash);
         }
+
+        self.propagated.remove(tx_hash);
+        self.expired.remove(tx_hash);
 
         // Remove the fee weight information as well
         self.remove_fee_weight_full_info(*tx_hash);
@@ -397,45 +460,55 @@ impl Mempool {
                     self.add_fee_weight(tx_mov);
                 }
             }
-        } else {
-            if self
-                .address_reverse_mappings
-                .get(&tx_signing_addr)
-                .is_some()
-            {
-                // First update the fee weight of the current tx
-                self.add_fee_weight(tx);
-                if let Some(moved) = self.update_orphans(&tx_next_addr, tx_signing_addr.clone()) {
-                    // Finally, update fee weights for the entities which are not orphans anymore
-                    for tx_hash_mov in moved {
-                        // TODO: change clone
-                        let tx_mov = self.tx_lookup.get(&tx_hash_mov).unwrap().clone();
-                        self.add_fee_weight(tx_mov);
-                    }
+        } else if self.address_reverse_mappings.get(&tx_signing_addr).is_some() {
+            // First update the fee weight of the current tx
+            self.add_fee_weight(tx);
+            if let Some(moved) = self.update_orphans(&tx_next_addr, tx_signing_addr.clone()) {
+                // Finally, update fee weights for the entities which are not orphans anymore
+                for tx_hash_mov in moved {
+                    // TODO: change clone
+                    let tx_mov = self.tx_lookup.get(&tx_hash_mov).unwrap().clone();
+                    self.add_fee_weight(tx_mov);
                 }
-            } else {
-                // No fee weight update needed
-                self.orphan_set.insert(tx_hash);
-            };
+            }
+        } else {
+            // No fee weight update needed
+            self.orphan_set.insert(tx_hash);
         }
-
+    
         Ok(())
     }
 
     /// Attempts to perform a prune on the transactions stored
-    /// in the memory pool, removing the oldest transactions
-    /// that have the lowest fees. The prune will be performed
-    /// only if the mempool is more than 80% full.
+    /// in the memory pool, removing them in the following order:
+    /// propagated, expired and oldest transactions that have the
+    /// lowest fees. The prune will be performed
+    /// only if the mempool is more than <prune_threshold> full.
     ///
     /// This operation is idempotent.
     pub fn prune(&mut self) -> Option<usize> {
-        // If the threshold is not exceeded, prune operation will not be performed
-        let limit: usize = self.max_size as usize * PRUNE_THRESHOLD / 100;
-        let items_to_prune: usize = if self.count() > limit {
+        // First remove the transactions which are propagated & expired
+        // without checking if threshold is reached or not
+        let mut initial_prune = 0;
+        if let Some(init_prune) = self.prune_propagated_expired(){
+            initial_prune = init_prune;
+        }
+
+        // Now check if the limit is still met and proceed in case this is true
+        let limit: usize = self.max_size as usize * self.prune_threshold / 100;
+        let mut items_to_prune: usize = if self.count() > limit {
             self.count() - limit
         } else {
-            return None;
+            0
         };
+
+        if items_to_prune == 0 {
+            if initial_prune == 0 {
+                return None;
+            } else {
+                return Some(initial_prune);
+            }
+        }
 
         // Represents the limit of the transactions to be removed
         // by fee and by timestamp. This way a 50/50 balance is kept
@@ -467,29 +540,29 @@ impl Mempool {
             }
         }
 
-        let mut pruned = 0;
+        let mut final_prune = 0;
         for (t, w) in to_remove_timestamp.iter().zip(to_remove_weight) {
             if let Some(removed) = self.remove_branch(&t) {
-                pruned += removed.len();
+                final_prune += removed.len();
             }
 
             // Remove by timestamp can delete more than one transaction
             // on a run, so a check is needed to make sure the pruned
             // items will not pass a limit
-            if pruned >= items_to_prune {
+            if final_prune >= items_to_prune {
                 break;
             }
 
             if let Some(removed) = self.remove_branch(&w) {
-                pruned += removed.len();
+                final_prune += removed.len();
             }
 
-            if pruned >= items_to_prune {
+            if final_prune >= items_to_prune {
                 break;
             }
         }
 
-        Some(pruned)
+        Some(initial_prune + final_prune)
 
         // TODO: mark tx set for recalculation (do same checks for remove_branch
         // but not twice when prune is called)
@@ -850,6 +923,31 @@ impl Mempool {
             self.fee_weight_map.insert(weight, transactions);
         }
     }
+
+    fn prune_propagated_expired(&mut self) -> Option<usize> {
+        let mut total_pruned: usize = 0;
+        let mut to_remove_prop_exp: Vec<ShortHash> = Vec::new();
+        for tx_hash in self.propagated.iter() {
+            to_remove_prop_exp.push(*tx_hash);
+        }
+
+        for tx_hash in self.expired.iter() {
+            to_remove_prop_exp.push(*tx_hash);
+        }
+
+        if to_remove_prop_exp.is_empty() {
+            return None;
+        }
+
+        // First remove the propagated and the expired transactions
+        for tx_hash in to_remove_prop_exp {
+            if let Some(removed) = self.remove_branch(&tx_hash) {
+                total_pruned += removed.len();
+            }
+        }
+
+        Some(total_pruned)
+    }
 }
 
 #[cfg(test)]
@@ -864,7 +962,7 @@ mod tests {
         let chain_db = test_helpers::init_tempdb();
         let state_db = test_helpers::init_tempdb();
         let chain = chain::init(chain_db, state_db, true);
-        let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+        let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80, 10000, 80);
         let tx = Arc::new(transactions::send_coins(
             TestAccount::A,
             TestAccount::B,
@@ -959,7 +1057,7 @@ mod tests {
             let chain_db = test_helpers::init_tempdb();
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
-            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80, 10000, 80);
             let cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME).to_short();
 
             // Transactions from account A
@@ -1270,7 +1368,7 @@ mod tests {
             let chain_db = test_helpers::init_tempdb();
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
-            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80, 10000, 80);
             let cur_hash = crypto::hash_slice(transactions::MAIN_CUR_NAME).to_short();
 
             // Transactions from account A
@@ -1638,7 +1736,7 @@ mod tests {
             let chain_db = test_helpers::init_tempdb();
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
-            let mut mempool = Mempool::new(chain.clone(), 20, vec![], 80);
+            let mut mempool = Mempool::new(chain.clone(), 20, vec![], 80, 10000, 80);
 
             // Transactions from account A
             let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
@@ -1687,7 +1785,6 @@ mod tests {
             mempool.append_tx(B_6.clone());
             mempool.append_tx(B_7.clone());
             mempool.append_tx(B_8.clone()); // second lowest
-            
             // Prune will remove with a 50% ratio oldest transactions
             // and transactions with lowest fee
             mempool.prune();
@@ -1723,7 +1820,7 @@ mod tests {
             let chain_db = test_helpers::init_tempdb();
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
-            let mut mempool = Mempool::new(chain.clone(), 20, vec![], 80);
+            let mut mempool = Mempool::new(chain.clone(), 20, vec![], 80, 10000, 80);
 
             // Transactions from account A
             let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
@@ -1814,7 +1911,7 @@ mod tests {
             let chain_db = test_helpers::init_tempdb();
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
-            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80, 10000, 80);
 
             // Transactions from account A
             let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
@@ -1884,7 +1981,7 @@ mod tests {
             let chain_db = test_helpers::init_tempdb();
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
-            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80, 10000, 80);
 
             // Transactions from account A
             let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
@@ -1953,7 +2050,7 @@ mod tests {
             let chain_db = test_helpers::init_tempdb();
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
-            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80, 10000, 80);
 
             // Transactions from account A
             let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
@@ -2096,7 +2193,7 @@ mod tests {
             let chain_db = test_helpers::init_tempdb();
             let state_db = test_helpers::init_tempdb();
             let chain = chain::init(chain_db, state_db, true);
-            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80);
+            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80, 10000, 80);
 
             // Transactions from account A
             let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
@@ -2121,5 +2218,43 @@ mod tests {
 
             true
         }
+
+        fn it_removes_expired_first() -> bool {
+            let chain_db = test_helpers::init_tempdb();
+            let state_db = test_helpers::init_tempdb();
+            let chain = chain::init(chain_db, state_db, true);
+            let mut mempool = Mempool::new(chain.clone(), 10000, vec![], 80, 10, 80);
+
+            let A_1 = Arc::new(transactions::send_coins(TestAccount::A, TestAccount::B, 100, 10, 1));
+            let A_2 = Arc::new(transactions::send_coins(TestAccount::B, TestAccount::A, 100, 5, 1));
+            let A_3 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::B, 150, 10, 1));
+            let A_4 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::A, 10, 20, 2));
+            let A_5 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::A, 100, 10, 3));
+            
+            mempool.append_tx(A_1.clone());
+            std::thread::sleep(std::time::Duration::from_micros(10));
+            mempool.append_tx(A_2.clone());
+            
+            std::thread::sleep(std::time::Duration::from_millis(15));
+
+            mempool.append_tx(A_3.clone());
+            mempool.append_tx(A_4.clone());
+            mempool.append_tx(A_5.clone());
+
+            // First attempt, nothing removed because API was not called
+            let pruned = mempool.prune();
+            assert!(pruned.is_none());
+            assert_eq!(mempool.count(), 5);
+            
+            // Second attempt, after update_expired is called
+            mempool.update_expired();
+            let pruned = mempool.prune().unwrap();
+            assert_eq!(pruned, 2);
+            assert_eq!(mempool.count(), 3);
+
+            true
+        }
+
+        // fn it_removes_propagated_first() -> bool {}
     }
 }
