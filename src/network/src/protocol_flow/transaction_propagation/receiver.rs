@@ -44,7 +44,7 @@ impl Receiver<OutboundPacket, InboundPacket> for TxReceiver {
                     // Check the existence of the transaction in the mempool
                     let mempool = mempool.read();
 
-                    if mempool.exists(&packet.tx_hash) {
+                    if mempool.exists(packet.tx_hash) {
                         // Reject the transaction as it already exists in the mempool
                         let packet = RejectTx::new(packet.nonce, TxRejectStatus::Witnessed);
                         let packet = InboundPacket::RejectTx(Arc::new(packet));

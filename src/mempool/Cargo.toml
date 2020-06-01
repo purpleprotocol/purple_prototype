@@ -20,6 +20,7 @@ chain = { path = "../chain" }
 persistence = { path = "../persistence" }
 constants = { path = "../constants" }
 rust_decimal = "0.9.0"
+cfg-if = "0.1.10"
 
 [dev-dependencies]
 quickcheck = "0.7.2"

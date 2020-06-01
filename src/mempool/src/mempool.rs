@@ -33,6 +33,7 @@ use rust_decimal::Decimal;
 use std::collections::{BTreeMap, VecDeque};
 use transactions::Tx;
 use triomphe::Arc;
+use cfg_if::*;
 
 /// Memory pool used to store valid yet not processed
 /// transactions.
@@ -156,12 +157,15 @@ impl Mempool {
             ));
         }
 
-        #[cfg(not(test))]
-        if expire_threshold < 10000 {
-            panic!(format!(
-                "Invalid expire threshold! Expected a number greather or equal to 10000! Got: {}",
-                expire_threshold
-            ));
+        cfg_if! {
+            if #[cfg(not(test))] {
+                if expire_threshold < 10000 {
+                    panic!(format!(
+                        "Invalid expire threshold! Expected a number greather or equal to 10000! Got: {}",
+                        expire_threshold
+                    ));
+                }
+            }
         }
 
         if prune_threshold < 50 || prune_threshold > 100 {
@@ -356,7 +360,7 @@ impl Mempool {
         let mut is_orphan = true;
 
         // Check for existence
-        if self.exists(&tx_hash) {
+        if self.exists(tx_hash) {
             return Err(MempoolErr::AlreadyInMempool);
         }
 
