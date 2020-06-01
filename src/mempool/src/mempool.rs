@@ -20,6 +20,7 @@
 
 use crate::error::MempoolErr;
 use account::{Address, Balance, NormalAddress};
+use cfg_if::*;
 use chain::types::StateInterface;
 use chain::{PowChainRef, PowChainState};
 use chrono::{DateTime, Duration, Utc};
@@ -33,7 +34,6 @@ use rust_decimal::Decimal;
 use std::collections::{BTreeMap, VecDeque};
 use transactions::Tx;
 use triomphe::Arc;
-use cfg_if::*;
 
 /// Memory pool used to store valid yet not processed
 /// transactions.
@@ -464,7 +464,11 @@ impl Mempool {
                     self.add_fee_weight(tx_mov);
                 }
             }
-        } else if self.address_reverse_mappings.get(&tx_signing_addr).is_some() {
+        } else if self
+            .address_reverse_mappings
+            .get(&tx_signing_addr)
+            .is_some()
+        {
             // First update the fee weight of the current tx
             self.add_fee_weight(tx);
             if let Some(moved) = self.update_orphans(&tx_next_addr, tx_signing_addr.clone()) {
@@ -479,7 +483,6 @@ impl Mempool {
             // No fee weight update needed
             self.orphan_set.insert(tx_hash);
         }
-    
         Ok(())
     }
 
@@ -494,7 +497,7 @@ impl Mempool {
         // First remove the transactions which are propagated & expired
         // without checking if threshold is reached or not
         let mut initial_prune = 0;
-        if let Some(init_prune) = self.prune_propagated_expired(){
+        if let Some(init_prune) = self.prune_propagated_expired() {
             initial_prune = init_prune;
         }
 
@@ -2234,11 +2237,9 @@ mod tests {
             let A_3 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::B, 150, 10, 1));
             let A_4 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::A, 10, 20, 2));
             let A_5 = Arc::new(transactions::send_coins(TestAccount::C, TestAccount::A, 100, 10, 3));
-            
             mempool.append_tx(A_1.clone());
             std::thread::sleep(std::time::Duration::from_micros(10));
             mempool.append_tx(A_2.clone());
-            
             std::thread::sleep(std::time::Duration::from_millis(15));
 
             mempool.append_tx(A_3.clone());
@@ -2249,7 +2250,6 @@ mod tests {
             let pruned = mempool.prune();
             assert!(pruned.is_none());
             assert_eq!(mempool.count(), 5);
-            
             // Second attempt, after update_expired is called
             mempool.update_expired();
             let pruned = mempool.prune().unwrap();

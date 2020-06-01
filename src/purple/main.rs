@@ -153,7 +153,7 @@ fn main() {
             vec![main_cur_hash],
             80,
             argv.mempool_expire,
-            argv.prune_threshold
+            argv.prune_threshold,
         )));
         info!("Mempool initialization was successful!");
 
