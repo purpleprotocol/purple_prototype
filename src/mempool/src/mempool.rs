@@ -453,21 +453,11 @@ impl Mempool {
             .insert(tx_signing_addr, tx_hash.clone());
 
         // Update orphans
-        if !is_orphan {
-            // First update the fee weight of the current tx
-            self.add_fee_weight(tx);
-            if let Some(moved) = self.update_orphans(&tx_next_addr, tx_signing_addr.clone()) {
-                // Finally, update fee weights for the entities which are not orphans anymore
-                for tx_hash_mov in moved {
-                    // TODO: change clone
-                    let tx_mov = self.tx_lookup.get(&tx_hash_mov).unwrap().clone();
-                    self.add_fee_weight(tx_mov);
-                }
-            }
-        } else if self
-            .address_reverse_mappings
-            .get(&tx_signing_addr)
-            .is_some()
+        if !is_orphan
+            || self
+                .address_reverse_mappings
+                .get(&tx_signing_addr)
+                .is_some()
         {
             // First update the fee weight of the current tx
             self.add_fee_weight(tx);
