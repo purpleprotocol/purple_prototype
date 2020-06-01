@@ -1579,6 +1579,7 @@ name = "mempool"
 version = "0.1.0"
 dependencies = [
  "account",
+ "cfg-if",
  "chain",
  "chrono",
  "constants",
@@ -1591,6 +1592,7 @@ dependencies = [
  "persistence",
  "quickcheck",
  "rand 0.6.5",
+ "rust_decimal",
  "test-helpers",
  "transactions",
  "triomphe",

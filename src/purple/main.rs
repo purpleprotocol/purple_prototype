@@ -152,6 +152,8 @@ fn main() {
             argv.mempool_size,
             vec![main_cur_hash],
             80,
+            argv.mempool_expire,
+            argv.prune_threshold,
         )));
         info!("Mempool initialization was successful!");
 
@@ -362,6 +364,8 @@ struct Argv {
     network_name: String,
     bootnodes: Vec<SocketAddr>,
     mempool_size: u32,
+    mempool_expire: i64,
+    prune_threshold: usize,
     port: u16,
     bootstrap_cache_size: u64,
     max_peers: usize,
@@ -391,6 +395,40 @@ struct Argv {
 }
 
 fn parse_cli_args() -> Argv {
+    fn prune_threshold_validator(size: String) -> Result<(), String> {
+        let size = size.parse::<usize>();
+        match size {
+            Ok(num) => {
+                if num >= 50 && num <= 100 {
+                    return Ok(());
+                }
+                Err(String::from(
+                    "Prune threshold must be a number between 50 and 100.",
+                ))
+            }
+            Err(_) => Err(String::from(
+                "Prune threshold must be a number between 50 and 100.",
+            )),
+        }
+    }
+
+    fn mempool_expire_validator(size: String) -> Result<(), String> {
+        let size = size.parse::<i64>();
+        match size {
+            Ok(num) => {
+                if num >= 10000 {
+                    return Ok(());
+                }
+                Err(String::from(
+                    "Mempool expire value should be a number greather than 10000 (milliseconds).",
+                ))
+            }
+            Err(_) => Err(String::from(
+                "Mempool expire value should be a number greather than 10000 (milliseconds).",
+            )),
+        }
+    }
+
     let argv = App::new(format!("Purple Protocol v{}", env!("CARGO_PKG_VERSION")))
         .arg(
             Arg::with_name("network_name")
@@ -407,6 +445,22 @@ fn parse_cli_args() -> Argv {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("mempool_expire")
+                .long("mempool-expire")
+                .value_name("MEMPOOL_EXPIRE")
+                .help("The time limit (in milliseconds) after which a transaction can be marked as expired")
+                .validator(mempool_expire_validator)
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("prune_threshold")
+                .long("prune-threshold")
+                .value_name("PRUNE_THRESHOLD")
+                .help("The threshold value after which the prune happens (percentage)")
+                .validator(prune_threshold_validator)
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("bootstrap_cache_size")
                 .long("bootstrap-cache-size")
                 .value_name("SIZE")
@@ -417,6 +471,8 @@ fn parse_cli_args() -> Argv {
             Arg::with_name("no_mempool")
                 .long("no-mempool")
                 .conflicts_with("mempool_size")
+                .conflicts_with("mempool_expire")
+                .conflicts_with("prune_threshold")
                 .help("Start the node without a mempool")
         )
         .arg(
@@ -518,6 +574,18 @@ fn parse_cli_args() -> Argv {
         700000
     };
 
+    let mempool_expire: i64 = if let Some(arg) = matches.value_of("mempool_expire") {
+        unwrap!(arg.parse(), "Bad value for <MEMPOOL_EXPIRE>")
+    } else {
+        10000
+    };
+
+    let prune_threshold: usize = if let Some(arg) = matches.value_of("prune_threshold") {
+        unwrap!(arg.parse(), "Bad value for <PRUNE_THRESHOLD>")
+    } else {
+        80
+    };
+
     let port: u16 = if let Some(arg) = matches.value_of("port") {
         unwrap!(arg.parse(), "Bad value for <PORT>")
     } else {
@@ -582,6 +650,8 @@ fn parse_cli_args() -> Argv {
         no_mempool,
         interactive,
         mempool_size,
+        mempool_expire,
+        prune_threshold,
         archival_mode,
         wipe,
         port,

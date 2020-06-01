@@ -16,8 +16,6 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod chain_constants;
-pub mod mempool_constants;
-
-pub use self::chain_constants::*;
-pub use self::mempool_constants::*;
+/// How far into the future a transaction can be
+/// in order to be accepted.
+pub const FUTURE_LIMIT: u64 = 10;
