@@ -83,6 +83,12 @@ pub struct Peer {
     /// Bytes read in the preceding second
     pub past_bytes_read: Arc<AtomicU64>,
 
+    /// Bytes write in the current second
+    pub bytes_write: Arc<AtomicU64>,
+
+    /// Bytes wrote in the preceding second
+    pub past_bytes_write: Arc<AtomicU64>,
+
     /// Whether the peer has sent a `Connect` packet or not.
     pub sent_connect: bool,
 
@@ -161,6 +167,8 @@ impl Peer {
             last_ping: Arc::new(AtomicU64::new(0)),
             bytes_read: Arc::new(AtomicU64::new(0)),
             past_bytes_read: Arc::new(AtomicU64::new(0)),
+            bytes_write: Arc::new(AtomicU64::new(0)),
+            past_bytes_write: Arc::new(AtomicU64::new(0)),
             validator: ProtocolValidator::new(bootstrap_cache),
 
             #[cfg(not(test))]
