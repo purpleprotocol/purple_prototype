@@ -611,7 +611,35 @@ pub async fn write_raw_packet<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
     packet: &[u8],
     encrypt: bool,
 ) -> Result<(), io::Error> {
-    unimplemented!();
+    // Prepare packet buf
+    let packet_buf = {
+        if encrypt {
+            let peers = network.peers();
+            let peer = peers.get(addr).ok_or(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Could not find peer {}", addr),
+            ));
+            let peer = peer.unwrap();
+
+            crate::common::wrap_encrypt_packet(
+                packet,
+                network.secret_key(),
+                peer.rx.as_ref().unwrap(),
+                network.network_name(),
+            )
+        } else {
+            crate::common::wrap_packet(packet, network.network_name())
+        }
+    };
+
+    // Account bytes write
+    account_bytes_write(network.clone(), &addr.clone(), packet_buf.len()).await;
+
+    // Write packet to socket
+    let packet_buf_arr: &[u8] = &packet_buf;
+    sock.write_all(packet_buf_arr).await?;
+
+    Ok(())
 }
 
 /// Attempts to read and decode a raw packet from the given socket
@@ -726,6 +754,25 @@ async fn account_bytes_read<N: NetworkInterface>(network: N, addr: &SocketAddr, 
 
     debug!("Finished reading {} bytes from {}", bytes_read, addr);
     acc.fetch_add(bytes_read as u64, Ordering::SeqCst);
+}
+
+async fn account_bytes_write<N: NetworkInterface>(
+    network: N,
+    addr: &SocketAddr,
+    bytes_write: usize,
+) {
+    let bytes_write = bytes_write + crate::common::HEADER_SIZE;
+    let acc = {
+        if let Some(peer) = network.peers().get(addr) {
+            peer.bytes_write.clone()
+        } else {
+            warn!("Could not find peer {}", addr);
+            return;
+        }
+    };
+
+    debug!("Finished writing {} bytes to {}", bytes_write, addr);
+    acc.fetch_add(bytes_write as u64, Ordering::SeqCst);
 }
 
 async fn handle_err<N: NetworkInterface>(
