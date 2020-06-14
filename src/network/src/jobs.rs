@@ -32,7 +32,7 @@ pub async fn start_periodic_jobs(network: Network) {
     }
 }
 
-/// Traverses each peer and sets the amount of bytes read and wrote 
+/// Traverses each peer and sets the amount of bytes read and wrote
 /// for the last second
 async fn account_bytes_read_write_for_peers(network: Network) {
     let peers = network.peers();

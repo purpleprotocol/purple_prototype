@@ -615,7 +615,10 @@ pub async fn write_raw_packet<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
     let packet_buf = {
         if encrypt {
             let peers = network.peers();
-            let peer = peers.get(addr).ok_or(io::Error::new(io::ErrorKind::Other, format!("Could not find peer {}", addr)));
+            let peer = peers.get(addr).ok_or(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Could not find peer {}", addr),
+            ));
             let peer = peer.unwrap();
 
             crate::common::wrap_encrypt_packet(
