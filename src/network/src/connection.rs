@@ -637,7 +637,7 @@ pub async fn write_raw_packet<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt
 
     // Write packet to socket
     let packet_buf_arr: &[u8] = &packet_buf;
-    sock.write_all(&packet_buf_arr).await?;
+    sock.write_all(packet_buf_arr).await?;
 
     Ok(())
 }
