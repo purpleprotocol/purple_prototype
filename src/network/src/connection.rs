@@ -477,6 +477,10 @@ async fn handle_client_stream<
             RequestBlock::start_client_protocol_flow(&mut network, &mut sock, addr).await?;
         }
 
+        RequestBlocks::PACKET_TYPE => {
+            RequestBlocks::start_client_protocol_flow(&mut network, &mut sock, addr).await?;
+        }
+
         RequestPeers::PACKET_TYPE => {
             RequestPeers::start_client_protocol_flow(&mut network, &mut sock, addr).await?;
         }
