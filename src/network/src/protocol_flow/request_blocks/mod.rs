@@ -16,7 +16,12 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod ping_pong;
-pub mod request_peers;
-pub mod transaction_propagation;
-pub mod request_blocks;
+pub mod receiver;
+pub mod receiver_state;
+pub mod sender;
+pub mod sender_state;
+pub mod wrapper;
+
+pub use self::receiver::*;
+pub use self::sender::*;
+pub use self::wrapper::*;

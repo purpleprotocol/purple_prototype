@@ -1,0 +1,69 @@
+/*
+  Copyright (C) 2018-2020 The Purple Core Developers.
+  This file is part of the Purple Core Library.
+
+  The Purple Core Library is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  The Purple Core Library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+use crate::error::NetworkErr;
+use crate::packets::{RequestBlocks, SendBlocks};
+use crate::protocol_flow::request_blocks::sender_state::RequestBlocksSenderState;
+use crate::validation::sender::Sender;
+
+#[derive(Debug, Default)]
+pub struct RequestBlocksSender {
+    state: RequestBlocksSenderState,
+}
+
+impl Sender<RequestBlocks, SendBlocks, u8> for RequestBlocksSender {
+    fn send(&mut self, requested_blocks: u8) -> Result<RequestBlocks, NetworkErr> {
+        if let RequestBlocksSenderState::Ready = self.state {
+            let request_blocks = RequestBlocks::new(requested_blocks);
+
+            // Await a `SendBlocks` with the generated nonce
+            self.state = RequestBlocksSenderState::Waiting(request_blocks.nonce, requested_blocks);
+
+            Ok(request_blocks)
+        } else {
+            Err(NetworkErr::CouldNotSend)
+        }
+    }
+
+    fn acknowledge(&mut self, packet: &SendBlocks) -> Result<(), NetworkErr> {
+        if let RequestBlocksSenderState::Waiting(nonce, requested_blocks) = self.state {
+            if nonce == packet.nonce && packet.blocks.len() <= requested_blocks as usize {
+                // Reset state
+                self.state = RequestBlocksSenderState::Ready;
+
+                Ok(())
+            } else {
+                Err(NetworkErr::AckErr)
+            }
+        } else {
+            Err(NetworkErr::SenderStateErr)
+        }
+    }
+
+    fn done(&self) -> bool {
+        unimplemented!();
+    }
+
+    fn can_send(&self) -> bool {
+        self.state == RequestBlocksSenderState::Ready
+    }
+
+    fn reset(&mut self) {
+        self.state = RequestBlocksSenderState::Ready;
+    }
+}

@@ -27,4 +27,5 @@ pub enum ClientRequest {
     RequestTx,
     RequestPieceInfo,
     RequestSubPiece,
+    RequestBlocks,
 }

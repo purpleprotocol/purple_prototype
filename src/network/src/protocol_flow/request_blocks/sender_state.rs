@@ -16,7 +16,20 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod ping_pong;
-pub mod request_peers;
-pub mod transaction_propagation;
-pub mod request_blocks;
+use std::default::Default;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RequestBlocksSenderState {
+    /// The `Sender` is in stand-by, ready to send a `RequestBlocks` packet.
+    Ready,
+
+    /// The `Sender` has sent a `RequestBlocks` and is awaiting a `SendBlocks` with
+    /// the specified nonce and number of requested blocks.
+    Waiting(u64, u8),
+}
+
+impl Default for RequestBlocksSenderState {
+    fn default() -> Self {
+        RequestBlocksSenderState::Ready
+    }
+}
