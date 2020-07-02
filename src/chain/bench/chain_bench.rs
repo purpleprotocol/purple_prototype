@@ -299,7 +299,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 chain.append_block(block).unwrap();
                 println!("app2");
             }
-            println!("dn");
+            println!("dn3");
         });
     });
 
