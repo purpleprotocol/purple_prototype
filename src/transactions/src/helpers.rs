@@ -129,9 +129,10 @@ pub fn get_tx_list_of_size(size: usize) -> Result<Vec<Arc<Tx>>, &'static str> {
 
     while current_size <= MAX_TX_SET_SIZE {
         let nonce = A_NONCE.fetch_add(1, Ordering::SeqCst);
-        let mut send_tx = send_coins(TestAccount::A, TestAccount::B, 1, 10, nonce);
+        let mut send_tx = send_coins(TestAccount::A, TestAccount::B, 1, 1, nonce);
         let new_size = send_tx.byte_size() + current_size;
         if (new_size > MAX_TX_SET_SIZE) {
+            A_NONCE.fetch_sub(1, Ordering::SeqCst);
             break;
         }
 
@@ -140,4 +141,16 @@ pub fn get_tx_list_of_size(size: usize) -> Result<Vec<Arc<Tx>>, &'static str> {
     }
 
     Ok(tx_list)
+}
+
+#[cfg(any(test, feature = "test"))]
+use persistence::{Codec, DbHasher};
+#[cfg(any(test, feature = "test"))]
+use patricia_trie::{TrieDBMut, TrieMut};
+
+#[cfg(any(test, feature = "test"))]
+pub fn set_account_balance(address: &[u8], value: u64, db: &mut TrieDBMut<DbHasher, Codec>) {
+    let key = crypto::hash_slice(crate::genesis::MAIN_CUR_NAME).to_short();
+    let cur_key = [address, &b"."[..], &key.0].concat();
+    db.insert(&cur_key, &Balance::from_u64(value).to_bytes()).unwrap();
 }

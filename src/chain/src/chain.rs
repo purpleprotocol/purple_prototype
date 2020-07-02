@@ -306,8 +306,8 @@ impl<B: Block> ChainRef<B> {
     pub fn get_db_and_state_root(&self) -> (PersistentDb, ShortHash) {
         let chain = self.chain.read();
         (
-            chain.db.clone(),
-            chain.canonical_tip_state.inner_ref().state_root().clone(),
+            chain.canonical_tip_state.inner_ref().state_db(),
+            chain.canonical_tip_state.inner_ref().state_root(),
         )
     }
 
@@ -1604,7 +1604,7 @@ impl<B: Block> Chain<B> {
 
             // Process orphans
             self.process_orphans(height + 1);
-
+            
             Ok(())
         } else {
             if self.orphan_pool.len() >= B::MAX_ORPHANS {
@@ -2213,6 +2213,10 @@ pub mod tests {
 
     impl StateInterface for DummyState {
         fn state_root(&self) -> ShortHash {
+            unimplemented!();
+        }
+
+        fn state_db(&self) -> PersistentDb {
             unimplemented!();
         }
 
@@ -9345,6 +9349,122 @@ pub mod tests {
             assert_eq!(tips, pow_chain.valid_tips);
 
             true
+        }
+    }
+
+    use patricia_trie::{Trie, TrieDB, TrieDBMut, TrieMut};
+    use persistence::{Codec, DbHasher, PersistentDb};
+    use crate::block::Block;
+    use crate::pow_chain::block::*;
+    use crate::pow_chain::chain::*;
+    use crate::pow_chain::PowChainState;
+    use crate::pow_chain::checkpoint_block::*;
+    use crate::pow_chain::transaction_block::*;
+
+    use triomphe::Arc;
+    use account::normal::NormalAddress;
+    use miner::Proof;
+    use criterion::Criterion;
+    use rand::prelude::*;
+    use crypto::*;
+    use rocksdb::DB;
+    use parking_lot::RwLock;
+    use chrono::prelude::*;
+    use transactions::*;
+    use constants::*;
+
+    #[test]
+    fn triedb_insert() {
+        let tmp_dir = tempdir::TempDir::new("db_dir").unwrap();
+        let path1 = tmp_dir.path().join("1");
+        let path2 = tmp_dir.path().join("2");
+
+        let db1 = Arc::new(DB::open_default(path1.to_str().unwrap()).unwrap());
+        let per_db = PersistentDb::new(db1, None);
+
+        let db2 = Arc::new(DB::open_default(path2.to_str().unwrap()).unwrap());
+        let db_state = PersistentDb::new(db2, None);
+
+        crate::init(per_db.clone(), db_state, true);
+
+        let chain = Chain::<PowBlock>::new(per_db, PowBlock::genesis_state(), true);
+        let chain = ChainRef::<PowBlock>::new(Arc::new(RwLock::new(chain)));
+
+        let proof = Proof::test_proof(42);
+        let identity = Identity::new();
+        let node_id = NodeId(*identity.pkey());
+        let collector_address = NormalAddress::random();
+        let mut thread_rng = rand::thread_rng();
+        let addr = IpAddr::V4(Ipv4Addr::new(thread_rng.gen(), thread_rng.gen(), thread_rng.gen(), thread_rng.gen()));
+        let ip = SocketAddr::new(addr, 44034);
+        let mut height = 1;
+
+        let mut checkpoint_block = CheckpointBlock::new(
+            chain.canonical_tip().block_hash().unwrap(),
+            collector_address,
+            ip,
+            height,
+            proof,
+            node_id.clone(),
+        );
+
+        checkpoint_block.sign_miner(identity.skey());
+        checkpoint_block.compute_hash();
+
+        let mut blocks = Vec::new();
+        let mut parent_hash = checkpoint_block.block_hash().unwrap();
+        let (mut db, mut state) = chain.get_db_and_state_root();
+        for _ in 0..ALLOWED_TXS_BLOCKS {
+            height += 1;
+
+            let transaction_list = get_tx_list_of_size(MAX_TX_SET_SIZE).unwrap();
+            let state_root = {
+                // apply all transactions in the list to the state in order to get the state root
+                {
+                    let mut trie = TrieDBMut::<DbHasher, Codec>::from_existing(
+                        &mut db, &mut state).unwrap();
+
+                    for tx in transaction_list.iter() {
+                        tx.apply(&mut trie);
+                    }
+                }
+                state
+            };
+
+            let mut block = TransactionBlock {
+                tx_checksums: Some(Vec::<ShortHash>::new()),
+                pieces_sizes: Some(Vec::<usize>::new()),
+                height: height,
+                parent_hash: parent_hash,
+                state_root: Some(state_root),
+                tx_root: Some(ShortHash::NULL_RLP),
+                hash: None,
+                miner_id: node_id.clone(),
+                miner_signature: None,
+                timestamp: Utc::now(),
+                transactions: Some(Arc::new(RwLock::new(transaction_list))),
+            };
+            
+            block.sign_miner(identity.skey());
+            block.compute_hash();
+
+            let block = Arc::<TransactionBlock>::new(block);
+            let block = PowBlock::Transaction(block);
+            let block = Arc::<PowBlock>::new(block);
+
+            parent_hash = block.block_hash().unwrap();
+
+            blocks.push(block);
+        }
+
+        let block = Arc::<CheckpointBlock>::new(checkpoint_block);
+        let block = PowBlock::Checkpoint(block);
+        let block = Arc::<PowBlock>::new(block);
+
+        chain.append_block(block).unwrap();
+
+        for block in blocks {
+            chain.append_block(block).unwrap();
         }
     }
 }

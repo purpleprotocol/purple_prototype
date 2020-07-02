@@ -24,6 +24,9 @@ use persistence::{Codec, DbHasher};
 use rand::Rng;
 use std::io::Cursor;
 use std::str;
+use elastic_array::ElasticArray128;
+
+use hashdb::Hasher;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Send {
@@ -67,9 +70,11 @@ impl Send {
             return false;
         }
 
+        // TODO: validate also other types of Addresses
+
         // Validate against sending to a non-existing contract address
         if let Address::Contract(ref addr) = self.to {
-            let to_nonce_key = [addr.as_bytes(), &b".n"[..]].concat();
+            let to_nonce_key = [addr.as_bytes(), &b".N"[..]].concat();
 
             if trie.get(&to_nonce_key).unwrap().is_none() {
                 return false;
@@ -101,15 +106,8 @@ impl Send {
         // Calculate nonce key
         //
         // The key of a nonce has the following format:
-        // `<permanent-addr>.n`
-        let nonce_key = [permanent_addr.as_bytes(), &b".n"[..]].concat();
-
-        // Calculate currency keys
-        //
-        // The key of a currency entry has the following format:
-        // `<permanent-addr>.<currency-hash>`
-        let cur_key = [permanent_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
-        let fee_key = [permanent_addr.as_bytes(), &b"."[..], &bin_fee_hash[..]].concat();
+        // `<permanent-addr>.N`
+        let nonce_key = [permanent_addr.as_bytes(), &b".N"[..]].concat();
 
         // Retrieve serialized nonce
         let bin_nonce = match trie.get(&nonce_key) {
@@ -122,6 +120,12 @@ impl Send {
         if stored_nonce + 1 != self.nonce {
             return false;
         }
+
+        // Calculate currency keys
+        //
+        // The key of a currency entry has the following format:
+        // `<permanent-addr>.<currency-hash>`
+        let cur_key = [permanent_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
 
         if bin_fee_hash == bin_asset_hash {
             // The transaction's fee is paid in the same currency
@@ -154,6 +158,11 @@ impl Send {
                 Err(err) => panic!(err),
             };
 
+            // Calculate currency keys
+            //
+            // The key of a currency entry has the following format:
+            // `<permanent-addr>.<currency-hash>`
+            let fee_key = [permanent_addr.as_bytes(), &b"."[..], &bin_fee_hash[..]].concat();
             let mut fee_balance = match trie.get(&fee_key) {
                 Ok(Some(balance)) => match Balance::from_bytes(&balance) {
                     Ok(balance) => balance,
@@ -201,12 +210,13 @@ impl Send {
         // Calculate nonce keys
         //
         // The key of a nonce has the following format:
-        // `<permanent-addr>.n`
-        let from_nonce_key = [from_perm_addr.as_bytes(), &b".n"[..]].concat();
-        let to_nonce_key = [self.to.as_bytes(), &b".n"[..]].concat();
+        // `<permanent-addr>.N`
+        let from_nonce_key = [from_perm_addr.as_bytes(), &b".N"[..]].concat();
+        let to_nonce_key = [self.to.as_bytes(), &b".N"[..]].concat();
+        let next_nonce_key = [self.next_address.as_bytes(), &b".N"[..]].concat();
 
         // Retrieve serialized nonces
-        let bin_from_nonce = &trie.get(&from_nonce_key).unwrap().unwrap();
+        let bin_from_nonce = trie.get(&from_nonce_key).unwrap().unwrap();
         let bin_to_nonce = trie.get(&to_nonce_key);
 
         // Read the nonce of the sender
@@ -224,6 +234,7 @@ impl Send {
         let from_cur_key = &[from_perm_addr.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
         let from_fee_key = &[from_perm_addr.as_bytes(), &b"."[..], &bin_fee_hash[..]].concat();
         let to_cur_key = &[self.to.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
+        let next_cur_key = &[self.next_address.as_bytes(), &b"."[..], &bin_asset_hash[..]].concat();
 
         match bin_to_nonce {
             // The receiver account exists.
@@ -256,16 +267,13 @@ impl Send {
                     };
 
                     // Update trie
-                    trie.insert(from_cur_key, &sender_balance.to_bytes())
-                        .unwrap();
-                    trie.insert(to_cur_key, &receiver_balance.to_bytes())
-                        .unwrap();
-                    trie.insert(&from_nonce_key, &from_nonce).unwrap();
-
+                    trie.insert(next_cur_key, &sender_balance.to_bytes()).unwrap();
+                    trie.insert(to_cur_key, &receiver_balance.to_bytes()).unwrap();
+                    trie.insert(&next_nonce_key, &from_nonce).unwrap();
+                    
                     // Update sender address mapping
                     trie.remove(&from_addr_mapping_key).unwrap();
-                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes())
-                        .unwrap();
+                    trie.insert(&next_addr_mapping_key, self.next_address.as_bytes()).unwrap();
                 } else {
                     // The transaction's fee is paid in a different currency
                     // than the one being transferred so we retrieve both balances.
@@ -301,18 +309,14 @@ impl Send {
                     };
 
                     // Update trie
-                    trie.insert(from_cur_key, &sender_cur_balance.to_bytes())
-                        .unwrap();
-                    trie.insert(from_fee_key, &sender_fee_balance.to_bytes())
-                        .unwrap();
-                    trie.insert(to_cur_key, &receiver_balance.to_bytes())
-                        .unwrap();
-                    trie.insert(&from_nonce_key, &from_nonce).unwrap();
+                    trie.insert(next_cur_key, &sender_cur_balance.to_bytes()).unwrap();
+                    trie.insert(from_fee_key, &sender_fee_balance.to_bytes()).unwrap();
+                    trie.insert(to_cur_key, &receiver_balance.to_bytes()).unwrap();
+                    trie.insert(&next_nonce_key, &from_nonce).unwrap();
 
                     // Update sender address mapping
                     trie.remove(&from_addr_mapping_key).unwrap();
-                    trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes())
-                        .unwrap();
+                    trie.insert(&next_addr_mapping_key, self.next_address.as_bytes()).unwrap();
                 }
             }
             Ok(None) => {
@@ -347,18 +351,14 @@ impl Send {
                             .unwrap();
 
                         // Update balances
-                        trie.insert(from_cur_key, &sender_balance.to_bytes())
-                            .unwrap();
-                        trie.insert(to_cur_key, &receiver_balance.to_bytes())
-                            .unwrap();
-                        trie.insert(&from_nonce_key, &from_nonce).unwrap();
-                        trie.insert(&to_addr_mapping_key, self.to.as_bytes())
-                            .unwrap();
+                        trie.insert(next_cur_key, &sender_balance.to_bytes()).unwrap();
+                        trie.insert(to_cur_key, &receiver_balance.to_bytes()).unwrap();
+                        trie.insert(&next_nonce_key, &from_nonce).unwrap();
+                        trie.insert(&to_addr_mapping_key, self.to.as_bytes()).unwrap();
 
                         // Update sender address mapping
                         trie.remove(&from_addr_mapping_key).unwrap();
-                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes())
-                            .unwrap();
+                        trie.insert(&next_addr_mapping_key, self.next_address.as_bytes()).unwrap();
                     } else {
                         // The transaction's fee is paid in a different currency
                         // than the one being transferred so we retrieve both balances.
@@ -391,20 +391,15 @@ impl Send {
                             .unwrap();
 
                         // Update balances
-                        trie.insert(from_cur_key, &sender_cur_balance.to_bytes())
-                            .unwrap();
-                        trie.insert(from_fee_key, &sender_fee_balance.to_bytes())
-                            .unwrap();
-                        trie.insert(to_cur_key, &receiver_balance.to_bytes())
-                            .unwrap();
-                        trie.insert(&from_nonce_key, &from_nonce).unwrap();
-                        trie.insert(&to_addr_mapping_key, self.to.as_bytes())
-                            .unwrap();
+                        trie.insert(next_cur_key, &sender_cur_balance.to_bytes()).unwrap();
+                        trie.insert(from_fee_key, &sender_fee_balance.to_bytes()).unwrap();
+                        trie.insert(to_cur_key, &receiver_balance.to_bytes()).unwrap();
+                        trie.insert(&next_nonce_key, &from_nonce).unwrap();
+                        trie.insert(&to_addr_mapping_key, self.to.as_bytes()).unwrap();
 
                         // Update sender address mapping
                         trie.remove(&from_addr_mapping_key).unwrap();
-                        trie.insert(&next_addr_mapping_key, from_perm_addr.as_bytes())
-                            .unwrap();
+                        trie.insert(&next_addr_mapping_key, self.next_address.as_bytes()).unwrap();
                     }
                 } else {
                     panic!("The receiving account does not exist and it's address is not a normal one!")
@@ -1074,8 +1069,8 @@ mod tests {
 
         let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
 
-        let from_nonce_key = [from_addr.as_bytes(), &b".n"[..]].concat();
-        let to_nonce_key = [to_addr.as_bytes(), &b".n"[..]].concat();
+        let from_nonce_key = [from_addr.as_bytes(), &b".N"[..]].concat();
+        let to_nonce_key = [to_addr.as_bytes(), &b".N"[..]].concat();
         let from_addr_mapping_key = [from_addr.as_bytes(), &b".am"[..]].concat();
         let from_next_addr_mapping_key = [from_next_addr.as_bytes(), &b".am"[..]].concat();
         let to_addr_mapping_key = [to_addr.as_bytes(), &b".am"[..]].concat();
@@ -1158,8 +1153,8 @@ mod tests {
 
         let trie = TrieDB::<DbHasher, Codec>::new(&db, &root).unwrap();
 
-        let from_nonce_key = [from_addr.as_bytes(), &b".n"[..]].concat();
-        let to_nonce_key = [to_addr.as_bytes(), &b".n"[..]].concat();
+        let from_nonce_key = [from_addr.as_bytes(), &b".N"[..]].concat();
+        let to_nonce_key = [to_addr.as_bytes(), &b".N"[..]].concat();
         let from_addr_mapping_key = [from_addr.as_bytes(), &b".am"[..]].concat();
         let from_next_addr_mapping_key = [from_next_addr.as_bytes(), &b".am"[..]].concat();
 
