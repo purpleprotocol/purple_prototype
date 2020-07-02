@@ -233,14 +233,18 @@ impl StateInterface for PowChainState {
         self.state_root.clone()
     }
 
+    fn state_db(&self) -> PersistentDb {
+        self.db.clone()
+    }
+
     fn get_account_nonce(&self, address: &Address) -> Option<u64> {
         let trie = TrieDB::<DbHasher, Codec>::new(&self.db, &self.state_root).unwrap();
 
         // Calculate nonce key
         //
         // The key of a nonce has the following format:
-        // `<account-address>.n`
-        let nonce_key = [address.as_bytes(), &b".n"[..]].concat();
+        // `<account-address>.N`
+        let nonce_key = [address.as_bytes(), &b".N"[..]].concat();
         let encoded_nonce = trie.get(&nonce_key).ok()??;
 
         Some(decode_be_u64!(encoded_nonce).unwrap())

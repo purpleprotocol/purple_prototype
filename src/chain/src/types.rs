@@ -22,6 +22,7 @@ use crypto::ShortHash;
 use std::fmt::Debug;
 use transactions::Tx;
 use triomphe::Arc;
+use persistence::PersistentDb;
 
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub enum OrphanType {
@@ -124,6 +125,9 @@ where
 pub trait StateInterface {
     /// Returns the current state root that is stored in the state
     fn state_root(&self) -> ShortHash;
+
+    /// Return the current state db that is stored in the state
+    fn state_db(&self) -> PersistentDb;
 
     /// Returns the nonce of the account with the given address
     /// if it exists.

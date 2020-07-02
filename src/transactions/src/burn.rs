@@ -92,8 +92,8 @@ impl Burn {
         // Calculate nonce key
         //
         // The key of a nonce has the following format:
-        // `<permanent-addr>.n`
-        let nonce_key = [permanent_addr.as_bytes(), &b".n"[..]].concat();
+        // `<permanent-addr>.N`
+        let nonce_key = [permanent_addr.as_bytes(), &b".N"[..]].concat();
 
         // Calculate currency keys
         //
@@ -191,8 +191,8 @@ impl Burn {
         // Calculate nonce key
         //
         // The key of a nonce has the following format:
-        // `<account-address>.n`
-        let nonce_key = [burner_perm_addr.as_bytes(), &b".n"[..]].concat();
+        // `<account-address>.N`
+        let nonce_key = [burner_perm_addr.as_bytes(), &b".N"[..]].concat();
 
         // Retrieve serialized nonce
         let bin_nonce = &trie.get(&nonce_key).unwrap().unwrap();
