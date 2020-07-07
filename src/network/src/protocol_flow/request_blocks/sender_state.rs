@@ -17,6 +17,7 @@
 */
 
 use std::default::Default;
+use crate::protocol_flow::request_blocks::sender::RequestBlocksSenderArgs;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RequestBlocksSenderState {
@@ -24,8 +25,9 @@ pub enum RequestBlocksSenderState {
     Ready,
 
     /// The `Sender` has sent a `RequestBlocks` and is awaiting a `SendBlocks` with
-    /// the specified nonce and number of requested blocks.
-    Waiting(u64, u8),
+    /// the specified nonce and the number of requested blocks followed by the
+    /// Hash of the block from which the query starts
+    Waiting(u64, RequestBlocksSenderArgs),
 }
 
 impl Default for RequestBlocksSenderState {

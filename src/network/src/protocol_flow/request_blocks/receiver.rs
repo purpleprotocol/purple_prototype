@@ -27,14 +27,12 @@ use std::net::SocketAddr;
 #[derive(Debug)]
 pub struct RequestBlocksReceiver {
     state: RequestBlocksReceiverState,
-    bootstrap_cache: BootstrapCache,
 }
 
 impl RequestBlocksReceiver {
-    pub fn new(bootstrap_cache: BootstrapCache) -> RequestBlocksReceiver {
+    pub fn new() -> RequestBlocksReceiver {
         RequestBlocksReceiver {
             state: RequestBlocksReceiverState::default(),
-            bootstrap_cache,
         }
     }
 }
@@ -46,7 +44,17 @@ impl Receiver<RequestBlocks, SendBlocks> for RequestBlocksReceiver {
         sender: &SocketAddr,
         packet: &RequestBlocks,
     ) -> Result<SendBlocks, NetworkErr> {
-        unimplemented!();
+        if let RequestBlocksReceiverState::Ready = self.state {
+            let chain = network.pow_chain_ref();
+
+            if let Some(blocks) = chain.query_ascending(&packet.from, packet.requested_blocks) {
+                Ok(SendBlocks::new(blocks, packet.nonce))
+            } else {
+                unreachable!(); // TODO
+            }
+        } else {
+            unreachable!();
+        }
     }
 
     fn done(&self) -> bool {

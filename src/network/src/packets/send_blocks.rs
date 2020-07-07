@@ -23,7 +23,7 @@ use crate::packet::Packet;
 use crate::peer::ConnectionType;
 use async_trait::async_trait;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use chain::Block;
+use chain::*;
 use futures_io::{AsyncRead, AsyncWrite};
 use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use std::net::SocketAddr;
@@ -35,11 +35,11 @@ pub struct SendBlocks {
     pub(crate) nonce: u64,
 
     /// The list of blocks to be sent
-    pub(crate) blocks: Vec<usize>,
+    pub(crate) blocks: Vec<Arc<PowBlock>>,
 }
 
 impl SendBlocks {
-    pub fn new(blocks: Vec<usize>, nonce: u64) -> SendBlocks {
+    pub fn new(blocks: Vec<Arc<PowBlock>>, nonce: u64) -> SendBlocks {
         SendBlocks { blocks, nonce }
     }
 }

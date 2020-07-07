@@ -28,10 +28,10 @@ pub struct RequestBlocks {
 }
 
 impl RequestBlocks {
-    pub fn new(bootstrap_cache: BootstrapCache) -> RequestBlocks {
+    pub fn new() -> RequestBlocks {
         RequestBlocks {
             sender: Default::default(),
-            receiver: Arc::new(Mutex::new(RequestBlocksReceiver::new(bootstrap_cache))),
+            receiver: Arc::new(Mutex::new(RequestBlocksReceiver::new())),
         }
     }
 }

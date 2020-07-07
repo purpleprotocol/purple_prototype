@@ -27,6 +27,7 @@ use crate::priority::NetworkPriority;
 use crate::validation::receiver::Receiver;
 use async_trait::async_trait;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use crypto::{Hash, ShortHash};
 use futures_io::{AsyncRead, AsyncWrite};
 use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use rand::prelude::*;
@@ -41,15 +42,19 @@ pub struct RequestBlocks {
 
     /// The number of requested blocks
     pub(crate) requested_blocks: u8,
+
+    /// Start block hash
+    pub(crate) from: Hash,
 }
 
 impl RequestBlocks {
-    pub fn new(requested_blocks: u8) -> RequestBlocks {
+    pub fn new(requested_blocks: u8, from: Hash) -> RequestBlocks {
         let mut rng = rand::thread_rng();
 
         RequestBlocks {
-            requested_blocks,
             nonce: rng.gen(),
+            requested_blocks,
+            from,
         }
     }
 }
@@ -66,22 +71,25 @@ impl Packet for RequestBlocks {
         // 1) Packet type(20)   - 8bits
         // 2) Requested peers  - 8bits
         // 3) Nonce            - 64bits
+        // 4) From              - 32bits
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u8(self.requested_blocks).unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
+        buffer.extend_from_slice(&self.from.0);
 
         buffer
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Arc<RequestBlocks>, NetworkErr> {
         let mut rdr = Cursor::new(bytes);
+
         let packet_type = if let Ok(result) = rdr.read_u8() {
             result
         } else {
             return Err(NetworkErr::BadFormat);
         };
 
-        if bytes.len() != 10 {
+        if bytes.len() != 42 {
             return Err(NetworkErr::BadFormat);
         }
 
@@ -105,9 +113,17 @@ impl Packet for RequestBlocks {
             return Err(NetworkErr::BadFormat);
         };
 
+        let from_hash = {
+            let mut hash = [0; 32];
+            hash.copy_from_slice(&bytes[10..42]);
+
+            Hash(hash)
+        };
+
         let packet = RequestBlocks {
             nonce,
             requested_blocks,
+            from: from_hash,
         };
 
         Ok(Arc::new(packet.clone()))
@@ -190,6 +206,7 @@ impl Arbitrary for RequestBlocks {
         RequestBlocks {
             nonce: Arbitrary::arbitrary(g),
             requested_blocks: Arbitrary::arbitrary(g),
+            from: Arbitrary::arbitrary(g),
         }
     }
 }

@@ -44,7 +44,7 @@ impl ProtocolValidator {
     pub fn new(bootstrap_cache: BootstrapCache) -> ProtocolValidator {
         ProtocolValidator {
             ping_pong: Default::default(),
-            request_blocks: RequestBlocks::new(bootstrap_cache.clone()), // TODO: remove clone
+            request_blocks: RequestBlocks::new(),
             request_peers: RequestPeers::new(bootstrap_cache),
             transaction_propagation: Default::default(),
         }

@@ -20,19 +20,32 @@ use crate::error::NetworkErr;
 use crate::packets::{RequestBlocks, SendBlocks};
 use crate::protocol_flow::request_blocks::sender_state::RequestBlocksSenderState;
 use crate::validation::sender::Sender;
+use crypto::Hash;
 
 #[derive(Debug, Default)]
 pub struct RequestBlocksSender {
     state: RequestBlocksSenderState,
 }
 
-impl Sender<RequestBlocks, SendBlocks, u8> for RequestBlocksSender {
-    fn send(&mut self, requested_blocks: u8) -> Result<RequestBlocks, NetworkErr> {
+#[derive(Debug, Clone, Copy)]
+pub enum Order {
+    Ascending,
+    Descending,
+}
+
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub struct RequestBlocksSenderArgs {
+    requested_blocks: u8,
+    from: Hash,
+}
+
+impl Sender<RequestBlocks, SendBlocks, RequestBlocksSenderArgs> for RequestBlocksSender {
+    fn send(&mut self, args: RequestBlocksSenderArgs) -> Result<RequestBlocks, NetworkErr> {
         if let RequestBlocksSenderState::Ready = self.state {
-            let request_blocks = RequestBlocks::new(requested_blocks);
+            let request_blocks = RequestBlocks::new(args.requested_blocks, args.from);
 
             // Await a `SendBlocks` with the generated nonce
-            self.state = RequestBlocksSenderState::Waiting(request_blocks.nonce, requested_blocks);
+            self.state = RequestBlocksSenderState::Waiting(request_blocks.nonce, args);
 
             Ok(request_blocks)
         } else {
@@ -41,8 +54,8 @@ impl Sender<RequestBlocks, SendBlocks, u8> for RequestBlocksSender {
     }
 
     fn acknowledge(&mut self, packet: &SendBlocks) -> Result<(), NetworkErr> {
-        if let RequestBlocksSenderState::Waiting(nonce, requested_blocks) = self.state {
-            if nonce == packet.nonce && packet.blocks.len() <= requested_blocks as usize {
+        if let RequestBlocksSenderState::Waiting(nonce, args) = self.state {
+            if nonce == packet.nonce && packet.blocks.len() <= args.requested_blocks as usize {
                 // Reset state
                 self.state = RequestBlocksSenderState::Ready;
 
