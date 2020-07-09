@@ -16,8 +16,8 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-use std::default::Default;
 use crate::protocol_flow::request_blocks::sender::RequestBlocksSenderArgs;
+use std::default::Default;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RequestBlocksSenderState {
@@ -26,7 +26,7 @@ pub enum RequestBlocksSenderState {
 
     /// The `Sender` has sent a `RequestBlocks` and is awaiting a `SendBlocks` with
     /// the specified nonce and the number of requested blocks followed by the
-    /// Hash of the block from which the query starts
+    /// Hash of the block from which the query starts and the ordering
     Waiting(u64, RequestBlocksSenderArgs),
 }
 

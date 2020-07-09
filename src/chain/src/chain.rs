@@ -285,7 +285,6 @@ impl<B: Block> ChainRef<B> {
                     let mut cache = self.block_cache.lock();
                     cache.get(&hash).cloned()
                 };
-        
                 if let Some(block) = cache_result {
                     // If found in cache, store the next parent_hash
                     // and store the result
@@ -296,17 +295,14 @@ impl<B: Block> ChainRef<B> {
                         let chain = self.chain.read();
                         chain.query(&parent_hash)
                     };
-        
                     if let Some(block) = chain_result {
                         // If found in chain, store the next parent_hash,
                         // cache the result and store it as result
                         let hash = parent_hash.to_short();
                         let mut cache = self.block_cache.lock();
-        
                         if cache.get(&hash).is_none() {
                             cache.put(hash, block.clone());
                         }
-        
                         parent_hash = block.parent_hash();
                         result.push(block);
                     } else {

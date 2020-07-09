@@ -37,7 +37,8 @@ pub struct RequestBlocksSenderArgs {
 impl Sender<RequestBlocks, SendBlocks, RequestBlocksSenderArgs> for RequestBlocksSender {
     fn send(&mut self, args: RequestBlocksSenderArgs) -> Result<RequestBlocks, NetworkErr> {
         if let RequestBlocksSenderState::Ready = self.state {
-            let request_blocks = RequestBlocks::new(args.requested_blocks, args.from, args.is_descending);
+            let request_blocks =
+                RequestBlocks::new(args.requested_blocks, args.from, args.is_descending);
 
             // Await a `SendBlocks` with the generated nonce
             self.state = RequestBlocksSenderState::Waiting(request_blocks.nonce, args);

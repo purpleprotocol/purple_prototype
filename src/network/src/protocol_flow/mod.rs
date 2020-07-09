@@ -17,6 +17,6 @@
 */
 
 pub mod ping_pong;
+pub mod request_blocks;
 pub mod request_peers;
 pub mod transaction_propagation;
-pub mod request_blocks;
