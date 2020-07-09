@@ -197,6 +197,130 @@ impl<B: Block> ChainRef<B> {
         }
     }
 
+    /// Attempts to fetch a given number of blocks in ascending
+    /// mode by its hashes from the cache and if it doesn't succeed it
+    /// then attempts to retrieve them from the database.
+    pub fn query_ascending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
+        // Get the first block
+        let current_block = self.query(from);
+
+        if let Some(block) = current_block {
+            let mut height = block.height();
+            let mut result = vec![block];
+
+            for i in 1..size {
+                // Try to get next hash bytes by using the height
+                // of the block
+                height += 1;
+                let height_key = crypto::hash_slice(&encode_be_u64!(height)).0;
+                let next_hash_bytes = {
+                    let chain = self.chain.read();
+                    chain.db.retrieve(&height_key)
+                };
+
+                if let Some(bytes) = next_hash_bytes {
+                    // Convert the found bytes to Hash
+                    let mut next_hash = [0; 32];
+                    next_hash.copy_from_slice(&bytes);
+                    let block_hash = Hash(next_hash);
+
+                    // First, try to find the block in cache
+                    let cache_result = {
+                        let hash = block_hash.to_short();
+                        let mut cache = self.block_cache.lock();
+                        cache.get(&hash).cloned()
+                    };
+
+                    if let Some(block) = cache_result {
+                        result.push(block);
+                    } else {
+                        // If not found in cache, query the chain
+                        let chain_result = {
+                            let chain = self.chain.read();
+                            chain.query(&block_hash)
+                        };
+
+                        if let Some(block) = chain_result {
+                            // If block was found cache it and add to results
+                            let hash = block_hash.to_short();
+                            let mut cache = self.block_cache.lock();
+                            if cache.get(&hash).is_none() {
+                                cache.put(hash, block.clone());
+                            }
+                            result.push(block);
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            if result.is_empty() {
+                return None;
+            } else {
+                return Some(result);
+            }
+        }
+
+        None
+    }
+
+    /// Attempts to fetch a given number of blocks in descending
+    /// mode by its hashes from the cache and if it doesn't succeed it
+    /// then attempts to retrieve them from the database.
+    pub fn query_descending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
+        // Get the first block
+        let current_block = self.query(from);
+
+        if let Some(block) = current_block {
+            let mut parent_hash = block.parent_hash();
+            let mut result = vec![block];
+
+            for i in 1..size {
+                // Using the parent_hash try to get the previous block
+                let cache_result = {
+                    let hash = parent_hash.to_short();
+                    let mut cache = self.block_cache.lock();
+                    cache.get(&hash).cloned()
+                };
+                if let Some(block) = cache_result {
+                    // If found in cache, store the next parent_hash
+                    // and store the result
+                    parent_hash = block.parent_hash();
+                    result.push(block);
+                } else {
+                    let chain_result = {
+                        let chain = self.chain.read();
+                        chain.query(&parent_hash)
+                    };
+                    if let Some(block) = chain_result {
+                        // If found in chain, store the next parent_hash,
+                        // cache the result and store it as result
+                        let hash = parent_hash.to_short();
+                        let mut cache = self.block_cache.lock();
+                        if cache.get(&hash).is_none() {
+                            cache.put(hash, block.clone());
+                        }
+                        parent_hash = block.parent_hash();
+                        result.push(block);
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            if result.is_empty() {
+                return None;
+            } else {
+                return Some(result);
+            }
+        }
+
+        None
+    }
+
     /// Appends a block to the chain
     pub fn append_block(&self, block: Arc<B>) -> Result<(), ChainErr> {
         let mut chain = self.chain.write();

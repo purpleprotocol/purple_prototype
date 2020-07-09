@@ -16,7 +16,22 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod ping_pong;
-pub mod request_blocks;
-pub mod request_peers;
-pub mod transaction_propagation;
+use crate::protocol_flow::request_blocks::sender::RequestBlocksSenderArgs;
+use std::default::Default;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RequestBlocksSenderState {
+    /// The `Sender` is in stand-by, ready to send a `RequestBlocks` packet.
+    Ready,
+
+    /// The `Sender` has sent a `RequestBlocks` and is awaiting a `SendBlocks` with
+    /// the specified nonce and the number of requested blocks followed by the
+    /// Hash of the block from which the query starts and the ordering
+    Waiting(u64, RequestBlocksSenderArgs),
+}
+
+impl Default for RequestBlocksSenderState {
+    fn default() -> Self {
+        RequestBlocksSenderState::Ready
+    }
+}

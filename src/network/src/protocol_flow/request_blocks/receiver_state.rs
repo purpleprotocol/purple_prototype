@@ -16,7 +16,16 @@
   along with the Purple Core Library. If not, see <http://www.gnu.org/licenses/>.
 */
 
-pub mod ping_pong;
-pub mod request_blocks;
-pub mod request_peers;
-pub mod transaction_propagation;
+use std::default::Default;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RequestBlocksReceiverState {
+    /// The `Receiver` is ready to receive a `RequestBlocks` packet.
+    Ready,
+}
+
+impl Default for RequestBlocksReceiverState {
+    fn default() -> Self {
+        RequestBlocksReceiverState::Ready
+    }
+}
