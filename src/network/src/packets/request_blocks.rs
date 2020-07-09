@@ -45,16 +45,20 @@ pub struct RequestBlocks {
 
     /// Start block hash
     pub(crate) from: Hash,
+
+    /// Specifies if the order should be descending
+    pub(crate) is_descending: bool,
 }
 
 impl RequestBlocks {
-    pub fn new(requested_blocks: u8, from: Hash) -> RequestBlocks {
+    pub fn new(requested_blocks: u8, from: Hash, is_descending: bool) -> RequestBlocks {
         let mut rng = rand::thread_rng();
 
         RequestBlocks {
             nonce: rng.gen(),
             requested_blocks,
             from,
+            is_descending,
         }
     }
 }
@@ -66,16 +70,19 @@ impl Packet for RequestBlocks {
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::with_capacity(10);
         let packet_type: u8 = Self::PACKET_TYPE;
+        let is_descending: u8 = if self.is_descending { 1 } else { 0 };
 
         // Packet structure:
         // 1) Packet type(20)   - 8bits
-        // 2) Requested peers  - 8bits
-        // 3) Nonce            - 64bits
+        // 2) Requested peers   - 8bits
+        // 3) Nonce             - 64bits
         // 4) From              - 32bits
+        // 5) Is descending     - 8bits
         buffer.write_u8(packet_type).unwrap();
         buffer.write_u8(self.requested_blocks).unwrap();
         buffer.write_u64::<BigEndian>(self.nonce).unwrap();
         buffer.extend_from_slice(&self.from.0);
+        buffer.write_u8(is_descending).unwrap();
 
         buffer
     }
@@ -89,7 +96,7 @@ impl Packet for RequestBlocks {
             return Err(NetworkErr::BadFormat);
         };
 
-        if bytes.len() != 42 {
+        if bytes.len() != 43 {
             return Err(NetworkErr::BadFormat);
         }
 
@@ -120,10 +127,23 @@ impl Packet for RequestBlocks {
             Hash(hash)
         };
 
+        rdr.set_position(42);
+
+        let is_descending = if let Ok(result) = rdr.read_u8() {
+            match result {
+                0 => false,
+                1 => true,
+                _ => return Err(NetworkErr::BadFormat),
+            }
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
         let packet = RequestBlocks {
             nonce,
             requested_blocks,
             from: from_hash,
+            is_descending,
         };
 
         Ok(Arc::new(packet.clone()))
@@ -207,6 +227,7 @@ impl Arbitrary for RequestBlocks {
             nonce: Arbitrary::arbitrary(g),
             requested_blocks: Arbitrary::arbitrary(g),
             from: Arbitrary::arbitrary(g),
+            is_descending: Arbitrary::arbitrary(g),
         }
     }
 }

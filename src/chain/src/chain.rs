@@ -201,42 +201,56 @@ impl<B: Block> ChainRef<B> {
     /// mode by its hashes from the cache and if it doesn't succeed it
     /// then attempts to retrieve them from the database.
     pub fn query_ascending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
-        let mut cache = self.block_cache.lock();
-        let chain = self.chain.read();
+        // Get the first block
+        let current_block = self.query(from);
 
-        let mut get_block = |hash: &Hash| -> Option<Arc<B>> {
-            let short_hash = hash.to_short();
-            if let Some(block) = cache.get(&short_hash).cloned() {
-                Some(block)
-            } else if let Some(block) = chain.query_short_hash(&short_hash) {
-                cache.put(short_hash.clone(), block.clone());
-                Some(block)
-            } else {
-                None
-            }
-        };
+        if let Some(block) = current_block {
+            let mut height = block.height();
+            let mut result = vec![block];
 
-        if let Some(current_block) = get_block(from) {
-            let mut height = current_block.height();
-            let mut result = vec![current_block];
-            let mut cnt = 1;
-
-            while (cnt < size) {
+            for i in 1..size {
+                // Try to get next hash bytes by using the height
+                // of the block
                 height += 1;
+                let height_key = crypto::hash_slice(&encode_be_u64!(height)).0;
+                let next_hash_bytes = {
+                    let chain = self.chain.read();
+                    chain.db.retrieve(&height_key)
+                };
 
-                if let Some(next_hash_bytes) = chain
-                    .db
-                    .retrieve(&crypto::hash_slice(&encode_be_u64!(height)).0)
-                {
-                    let mut next_block_hash = [0; 32];
-                    next_block_hash.copy_from_slice(&next_hash_bytes);
-                    let block_hash = Hash(next_block_hash);
+                if let Some(bytes) = next_hash_bytes {
+                    // Convert the found bytes to Hash
+                    let mut next_hash = [0; 32];
+                    next_hash.copy_from_slice(&bytes);
+                    let block_hash = Hash(next_hash);
 
-                    if let Some(block) = get_block(&block_hash) {
+                    // First, try to find the block in cache
+                    let cache_result = {
+                        let hash = block_hash.to_short();
+                        let mut cache = self.block_cache.lock();
+                        cache.get(&hash).cloned()
+                    };
+
+                    if let Some(block) = cache_result {
                         result.push(block);
-                        cnt += 1;
                     } else {
-                        break;
+                        // If not found in cache, query the chain
+                        let chain_result = {
+                            let chain = self.chain.read();
+                            chain.query(&block_hash)
+                        };
+
+                        if let Some(block) = chain_result {
+                            // If block was found cache it and add to results
+                            let hash = block_hash.to_short();
+                            let mut cache = self.block_cache.lock();
+                            if cache.get(&hash).is_none() {
+                                cache.put(hash, block.clone());
+                            }
+                            result.push(block);
+                        } else {
+                            break;
+                        }
                     }
                 } else {
                     break;
@@ -244,84 +258,71 @@ impl<B: Block> ChainRef<B> {
             }
 
             if result.is_empty() {
-                None
+                return None;
             } else {
-                Some(result)
+                return Some(result);
             }
-        } else {
-            None
         }
+
+        None
     }
-
-    // /// Attempts to fetch a given number of blocks in descending
-    // /// mode by its hashes from the cache and if it doesn't succeed it
-    // /// then attempts to retrieve them from the database.
-    // pub fn query_descending_unoptimized(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
-    //     if let Some(from_block) = self.query(&from) {
-    //         let mut parent_hash = from_block.parent_hash();
-    //         let mut result = vec![from_block];
-    //         let mut cnt = 1;
-
-    //         while (cnt < size) {
-    //             if let Some(parent_block) = self.query(&parent_hash) {
-    //                 parent_hash = parent_block.parent_hash();
-    //                 result.push(parent_block);
-    //                 cnt += 1;
-    //             } else {
-    //                 return Some(result);
-    //             }
-    //         }
-
-    //         return Some(result);
-    //     } else {
-    //         None
-    //     }
-    // }
 
     /// Attempts to fetch a given number of blocks in descending
     /// mode by its hashes from the cache and if it doesn't succeed it
     /// then attempts to retrieve them from the database.
     pub fn query_descending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
-        let mut result = Vec::new();
-        let mut cache = self.block_cache.lock();
-        let mut cnt = 0;
-        let mut current_hash = from.clone();
+        // Get the first block
+        let current_block = self.query(from);
 
-        while (cnt < size) {
-            let hash = current_hash.to_short();
-            if let Some(block) = cache.get(&hash).cloned() {
-                current_hash = block.parent_hash();
-                result.push(block);
-                cnt += 1;
-            } else {
-                break;
-            }
-        }
+        if let Some(block) = current_block {
+            let mut parent_hash = block.parent_hash();
+            let mut result = vec![block];
 
-        if (cnt < size) {
-            let chain = self.chain.read();
-            while (cnt < size) {
-                let hash = current_hash.to_short();
-                if let Some(block) = cache.get(&hash).cloned() {
-                    current_hash = block.parent_hash();
+            for i in 1..size {
+                // Using the parent_hash try to get the previous block
+                let cache_result = {
+                    let hash = parent_hash.to_short();
+                    let mut cache = self.block_cache.lock();
+                    cache.get(&hash).cloned()
+                };
+        
+                if let Some(block) = cache_result {
+                    // If found in cache, store the next parent_hash
+                    // and store the result
+                    parent_hash = block.parent_hash();
                     result.push(block);
-                    cnt += 1;
-                } else if let Some(block) = chain.query_short_hash(&hash) {
-                    cache.put(hash.clone(), block.clone());
-                    current_hash = block.parent_hash();
-                    result.push(block);
-                    cnt += 1;
                 } else {
-                    break;
+                    let chain_result = {
+                        let chain = self.chain.read();
+                        chain.query(&parent_hash)
+                    };
+        
+                    if let Some(block) = chain_result {
+                        // If found in chain, store the next parent_hash,
+                        // cache the result and store it as result
+                        let hash = parent_hash.to_short();
+                        let mut cache = self.block_cache.lock();
+        
+                        if cache.get(&hash).is_none() {
+                            cache.put(hash, block.clone());
+                        }
+        
+                        parent_hash = block.parent_hash();
+                        result.push(block);
+                    } else {
+                        break;
+                    }
                 }
             }
+
+            if result.is_empty() {
+                return None;
+            } else {
+                return Some(result);
+            }
         }
 
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
+        None
     }
 
     /// Appends a block to the chain

@@ -47,10 +47,19 @@ impl Receiver<RequestBlocks, SendBlocks> for RequestBlocksReceiver {
         if let RequestBlocksReceiverState::Ready = self.state {
             let chain = network.pow_chain_ref();
 
-            if let Some(blocks) = chain.query_ascending(&packet.from, packet.requested_blocks) {
-                Ok(SendBlocks::new(blocks, packet.nonce))
+            if packet.is_descending {
+                if let Some(blocks) = chain.query_descending(&packet.from, packet.requested_blocks)
+                {
+                    Ok(SendBlocks::new(blocks, packet.nonce))
+                } else {
+                    unreachable!(); // TODO
+                }
             } else {
-                unreachable!(); // TODO
+                if let Some(blocks) = chain.query_ascending(&packet.from, packet.requested_blocks) {
+                    Ok(SendBlocks::new(blocks, packet.nonce))
+                } else {
+                    unreachable!(); // TODO
+                }
             }
         } else {
             unreachable!();

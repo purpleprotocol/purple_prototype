@@ -27,22 +27,17 @@ pub struct RequestBlocksSender {
     state: RequestBlocksSenderState,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Order {
-    Ascending,
-    Descending,
-}
-
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub struct RequestBlocksSenderArgs {
     requested_blocks: u8,
     from: Hash,
+    is_descending: bool,
 }
 
 impl Sender<RequestBlocks, SendBlocks, RequestBlocksSenderArgs> for RequestBlocksSender {
     fn send(&mut self, args: RequestBlocksSenderArgs) -> Result<RequestBlocks, NetworkErr> {
         if let RequestBlocksSenderState::Ready = self.state {
-            let request_blocks = RequestBlocks::new(args.requested_blocks, args.from);
+            let request_blocks = RequestBlocks::new(args.requested_blocks, args.from, args.is_descending);
 
             // Await a `SendBlocks` with the generated nonce
             self.state = RequestBlocksSenderState::Waiting(request_blocks.nonce, args);

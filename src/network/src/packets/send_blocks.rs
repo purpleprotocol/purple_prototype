@@ -26,6 +26,8 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use chain::*;
 use futures_io::{AsyncRead, AsyncWrite};
 use futures_util::io::{AsyncReadExt, AsyncWriteExt};
+use rlp::{Rlp, RlpStream};
+use std::io::Cursor;
 use std::net::SocketAddr;
 use triomphe::Arc;
 
@@ -42,6 +44,17 @@ impl SendBlocks {
     pub fn new(blocks: Vec<Arc<PowBlock>>, nonce: u64) -> SendBlocks {
         SendBlocks { blocks, nonce }
     }
+
+    fn encode_blocks(&self) -> Vec<u8> {
+        let mut encoder = RlpStream::new_list(self.blocks.len());
+
+        // Encode blocks with RLP
+        for block in self.blocks.iter() {
+            encoder.append(&block.to_bytes());
+        }
+
+        encoder.out()
+    }
 }
 
 #[async_trait]
@@ -50,24 +63,85 @@ impl Packet for SendBlocks {
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer: Vec<u8> = Vec::new();
-        // let packet_type: u8 = Self::PACKET_TYPE;
-        // let peers = self.encode_peers();
-        // let peers_len = peers.len();
+        let packet_type: u8 = Self::PACKET_TYPE;
+        let blocks = self.encode_blocks();
+        let blocks_len = blocks.len();
 
-        // // Packet structure:
-        // // 1) Packet type(5)   - 8bits
-        // // 2) Peers length     - 16bits
-        // // 3) Nonce            - 64bits
-        // // 4) Peers            - Binary of peers length
-        // buffer.write_u8(packet_type).unwrap();
-        // buffer.write_u16::<BigEndian>(peers_len as u16).unwrap();
-        // buffer.write_u64::<BigEndian>(self.nonce).unwrap();
-        // buffer.extend_from_slice(&peers);
+        // Packet structure:
+        // 1) Packet type(21)  - 8bits
+        // 2) Blocks length    - 16bits
+        // 3) Nonce            - 64bits
+        // 4) Blocks           - Binary of blocks length
+        buffer.write_u8(packet_type).unwrap();
+        buffer.write_u16::<BigEndian>(blocks_len as u16).unwrap();
+        buffer.write_u64::<BigEndian>(self.nonce).unwrap();
+        buffer.extend_from_slice(&blocks);
+
         buffer
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Arc<SendBlocks>, NetworkErr> {
-        unimplemented!();
+        let mut rdr = Cursor::new(bytes.to_vec());
+        let packet_type = if let Ok(result) = rdr.read_u8() {
+            result
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        if packet_type != Self::PACKET_TYPE {
+            return Err(NetworkErr::BadFormat);
+        }
+
+        rdr.set_position(1);
+
+        let blocks_len = if let Ok(result) = rdr.read_u16::<BigEndian>() {
+            result
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        rdr.set_position(3);
+
+        let nonce = if let Ok(result) = rdr.read_u64::<BigEndian>() {
+            result
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        // Consume cursor
+        let mut buf: Vec<u8> = rdr.into_inner();
+        let _: Vec<u8> = buf.drain(..11).collect();
+
+        let blocks = if buf.len() == blocks_len as usize {
+            let rlp = Rlp::new(&buf);
+            let mut blocks: Vec<Arc<PowBlock>> = Vec::new();
+
+            if rlp.is_list() {
+                for bytes in rlp.iter() {
+                    if bytes.is_data() {
+                        let data = bytes.data().map_err(|_| NetworkErr::BadFormat)?;
+                        let block = match PowBlock::from_bytes(data) {
+                            Ok(res) => res,
+                            Err(_) => return Err(NetworkErr::BadFormat),
+                        };
+
+                        blocks.push(block);
+                    } else {
+                        return Err(NetworkErr::BadFormat);
+                    }
+                }
+
+                blocks
+            } else {
+                return Err(NetworkErr::BadFormat);
+            }
+        } else {
+            return Err(NetworkErr::BadFormat);
+        };
+
+        let packet = SendBlocks { nonce, blocks };
+
+        Ok(Arc::new(packet.clone()))
     }
 
     async fn handle<N: NetworkInterface, S: AsyncWrite + AsyncWriteExt + Unpin + Send + Sync>(
@@ -94,6 +168,17 @@ impl Arbitrary for SendBlocks {
         SendBlocks {
             nonce: Arbitrary::arbitrary(g),
             blocks: Arbitrary::arbitrary(g),
+        }
+    }
+}
+
+#[cfg(all(test))]
+mod tests {
+    use super::*;
+
+    quickcheck! {
+        fn serialize_deserialize(tx: Arc<SendBlocks>) -> bool {
+            tx == SendBlocks::from_bytes(&SendBlocks::to_bytes(&tx)).unwrap()
         }
     }
 }

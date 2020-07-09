@@ -765,7 +765,7 @@ async fn account_bytes_write<N: NetworkInterface>(
     addr: &SocketAddr,
     bytes_write: usize,
 ) {
-    let bytes_write = bytes_write + crate::common::HEADER_SIZE;
+    let bytes_write = bytes_write;
     let acc = {
         if let Some(peer) = network.peers().get(addr) {
             peer.bytes_write.clone()
