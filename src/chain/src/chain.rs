@@ -197,10 +197,10 @@ impl<B: Block> ChainRef<B> {
         }
     }
 
-    /// Attempts to fetch a given number of blocks in ascending
+    /// Attempts to fetch a given number of blocks in descending
     /// mode by its hashes from the cache and if it doesn't succeed it
     /// then attempts to retrieve them from the database.
-    pub fn query_ascending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
+    pub fn query_descending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
         // Get the first block
         let current_block = self.query(from);
 
@@ -267,10 +267,10 @@ impl<B: Block> ChainRef<B> {
         None
     }
 
-    /// Attempts to fetch a given number of blocks in descending
+    /// Attempts to fetch a given number of blocks in ascending
     /// mode by its hashes from the cache and if it doesn't succeed it
     /// then attempts to retrieve them from the database.
-    pub fn query_descending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
+    pub fn query_ascending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
         // Get the first block
         let current_block = self.query(from);
 
@@ -438,6 +438,13 @@ impl<B: Block> ChainRef<B> {
     pub fn get_state_root(&self) -> ShortHash {
         let chain = self.chain.read();
         chain.canonical_tip_state.inner_ref().state_root().clone()
+    }
+
+    /// Removes blocks in ascending order starting from the current height
+    /// and the specified offset
+    pub fn remove_blocks(&self, height_offset: u64) {
+        // TODO: get current height, check if there are blocks behind the offset and remove them
+        unimplemented!();
     }
 }
 
@@ -760,6 +767,11 @@ impl<B: Block> Chain<B> {
     /// with the given `Hash`.
     pub fn is_canonical(&self, block_hash: &Hash) -> bool {
         self.db.retrieve(&block_hash.0).is_some()
+    }
+
+    /// Removes all the data related to a block from the db
+    pub fn remove_block(&self, block_hash: &Hash) {
+        unimplemented!();
     }
 
     #[inline]
