@@ -771,18 +771,21 @@ impl<B: Block> Chain<B> {
 
     /// Removes blocks in ascending order starting from the current height
     /// and the specified offset
-    pub fn remove_blocks(&self, height_offset: u64) {
+    pub fn remove_blocks(&mut self, height_offset: u64) {
         let current_height = self.height;
-
         let mut height = current_height - height_offset - 1;
 
+        // If height is less than 1, no need to remove anything
         if (height < 1) {
             return;
         }
 
         let mut encoded_height = encode_be_u64!(height);
 
+        // Get block hashes in ascending order by using the height and remove the
+        // data for each of them
         while let Some(bytes) = self.db.retrieve(&crypto::hash_slice(&encoded_height).0) {
+            // If block hash was found, proceed with removal
             let mut hash_bytes: [u8; 32] = [0; 32];
             hash_bytes.copy_from_slice(&bytes);
             self.remove_block(&Hash(hash_bytes));
@@ -9527,5 +9530,10 @@ pub mod tests {
 
             true
         }
+
+        // TODO add test when blocks & transactions generator is done
+        // fn it_removes_correctly_in_archival_mode() -> bool {
+
+        // }
     }
 }

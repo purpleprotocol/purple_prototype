@@ -28,7 +28,7 @@ pub const MAX_SUB_PIECE_SIZE: usize = 16384; // 16kb
 /// Specifies the height offset below which the blocks are removed when not in archival mode
 pub const PRUNE_BLOCKS_HEIGHT_OFFSET: u64 = 20;
 
-/// Specifies the time interval in milliseconds for the prune operation when not in archival mode 
+/// Specifies the time interval in milliseconds for the prune operation when not in archival mode
 pub const PRUNE_BLOCKS_INTERVAL: u64 = 5000;
 
 static_assertions::const_assert_eq!(crate::MAX_TX_SET_SIZE % crate::MAX_PIECE_SIZE, 0);
