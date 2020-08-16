@@ -443,8 +443,8 @@ impl<B: Block> ChainRef<B> {
     /// Removes blocks in ascending order starting from the current height
     /// and the specified offset
     pub fn remove_blocks(&self, height_offset: u64) {
-        // TODO: get current height, check if there are blocks behind the offset and remove them
-        unimplemented!();
+        let mut chain = self.chain.write();
+        chain.remove_blocks(height_offset);
     }
 }
 
@@ -769,9 +769,33 @@ impl<B: Block> Chain<B> {
         self.db.retrieve(&block_hash.0).is_some()
     }
 
-    /// Removes all the data related to a block from the db
-    pub fn remove_block(&self, block_hash: &Hash) {
-        unimplemented!();
+    /// Removes blocks in ascending order starting from the current height
+    /// and the specified offset
+    pub fn remove_blocks(&self, height_offset: u64) {
+        let current_height = self.height;
+
+        let mut height = current_height - height_offset - 1;
+
+        if (height < 1) {
+            return;
+        }
+
+        let mut encoded_height = encode_be_u64!(height);
+
+        while let Some(bytes) = self.db.retrieve(&crypto::hash_slice(&encoded_height).0) {
+            let mut hash_bytes: [u8; 32] = [0; 32];
+            hash_bytes.copy_from_slice(&bytes);
+            self.remove_block(&Hash(hash_bytes));
+
+            if (height > 0) {
+                height -= 1;
+                encoded_height = encode_be_u64!(height);
+            } else {
+                break;
+            }
+        }
+
+        self.db.flush();
     }
 
     #[inline]
@@ -789,7 +813,7 @@ impl<B: Block> Chain<B> {
 
     #[inline]
     fn write_block(&mut self, block: Arc<B>) {
-        let block_hash = block.block_hash().unwrap();
+        let block_hash: Hash = block.block_hash().unwrap();
         //println!("DEBUG WRITING BLOCK: {:?}", block_hash);
         assert!(self.disconnected_heads_mapping.get(&block_hash).is_none());
         assert!(self.disconnected_tips_mapping.get(&block_hash).is_none());
@@ -910,6 +934,27 @@ impl<B: Block> Chain<B> {
         if let Some(mut cb) = B::after_write() {
             cb(block);
         }
+    }
+
+    #[inline]
+    fn remove_block(&mut self, block_hash: &Hash) {
+        // Remove block from ledger
+        self.db.delete(&block_hash.0);
+
+        // Remove short mapping
+        let short = block_hash.to_short();
+        self.db.delete(&short.0);
+
+        // Remove block height
+        let block_height_key = Self::compute_height_key(&block_hash);
+        let block_height_encoded = self.db.retrieve(&block_height_key.0).unwrap();
+
+        self.db.delete(&block_height_key.0);
+
+        // Remove height mapping
+        self.db.delete(&crypto::hash_slice(&block_height_encoded).0);
+
+        // TODO: remove root block?
     }
 
     #[inline]
