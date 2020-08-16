@@ -277,20 +277,38 @@ fn main() {
             }
         }
 
-        tokio::join!(
-            // Start bootstrap process
-            bootstrap(
-                network.clone(),
-                accept_connections,
-                node_storage.clone(),
-                argv.max_peers,
-                argv.bootnodes.clone(),
-                argv.port,
-                true,
-            ),
-            // Start periodic jobs
-            network::jobs::start_periodic_jobs(network.clone()),
-        );
+        if (argv.archival_mode) {
+            tokio::join!(
+                // Start bootstrap process
+                bootstrap(
+                    network.clone(),
+                    accept_connections,
+                    node_storage.clone(),
+                    argv.max_peers,
+                    argv.bootnodes.clone(),
+                    argv.port,
+                    true,
+                ),
+                // Start periodic jobs
+                network::jobs::start_periodic_jobs(network.clone()),
+            );
+        } else {
+            tokio::join!(
+                // Start bootstrap process
+                bootstrap(
+                    network.clone(),
+                    accept_connections,
+                    node_storage.clone(),
+                    argv.max_peers,
+                    argv.bootnodes.clone(),
+                    argv.port,
+                    true,
+                ),
+                // Start periodic jobs
+                network::jobs::start_periodic_jobs(network.clone()),
+                network::jobs::start_chain_prune_job(network.clone()),
+            );
+        }
     });
 }
 

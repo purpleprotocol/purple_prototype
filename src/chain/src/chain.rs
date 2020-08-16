@@ -197,10 +197,10 @@ impl<B: Block> ChainRef<B> {
         }
     }
 
-    /// Attempts to fetch a given number of blocks in ascending
+    /// Attempts to fetch a given number of blocks in descending
     /// mode by its hashes from the cache and if it doesn't succeed it
     /// then attempts to retrieve them from the database.
-    pub fn query_ascending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
+    pub fn query_descending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
         // Get the first block
         let current_block = self.query(from);
 
@@ -267,10 +267,10 @@ impl<B: Block> ChainRef<B> {
         None
     }
 
-    /// Attempts to fetch a given number of blocks in descending
+    /// Attempts to fetch a given number of blocks in ascending
     /// mode by its hashes from the cache and if it doesn't succeed it
     /// then attempts to retrieve them from the database.
-    pub fn query_descending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
+    pub fn query_ascending(&self, from: &Hash, size: u8) -> Option<Vec<Arc<B>>> {
         // Get the first block
         let current_block = self.query(from);
 
@@ -438,6 +438,13 @@ impl<B: Block> ChainRef<B> {
     pub fn get_state_root(&self) -> ShortHash {
         let chain = self.chain.read();
         chain.canonical_tip_state.inner_ref().state_root().clone()
+    }
+
+    /// Removes blocks in ascending order starting from the current height
+    /// and the specified offset
+    pub fn remove_blocks(&self, height_offset: u64) {
+        let mut chain = self.chain.write();
+        chain.remove_blocks(height_offset);
     }
 }
 
@@ -762,6 +769,38 @@ impl<B: Block> Chain<B> {
         self.db.retrieve(&block_hash.0).is_some()
     }
 
+    /// Removes blocks in ascending order starting from the current height
+    /// and the specified offset
+    pub fn remove_blocks(&mut self, height_offset: u64) {
+        let current_height = self.height;
+        let mut height = current_height - height_offset - 1;
+
+        // If height is less than 1, no need to remove anything
+        if (height < 1) {
+            return;
+        }
+
+        let mut encoded_height = encode_be_u64!(height);
+
+        // Get block hashes in ascending order by using the height and remove the
+        // data for each of them
+        while let Some(bytes) = self.db.retrieve(&crypto::hash_slice(&encoded_height).0) {
+            // If block hash was found, proceed with removal
+            let mut hash_bytes: [u8; 32] = [0; 32];
+            hash_bytes.copy_from_slice(&bytes);
+            self.remove_block(&Hash(hash_bytes));
+
+            if (height > 0) {
+                height -= 1;
+                encoded_height = encode_be_u64!(height);
+            } else {
+                break;
+            }
+        }
+
+        self.db.flush();
+    }
+
     #[inline]
     fn update_max_orphan_height(&mut self, new_height: u64) {
         if self.max_orphan_height.is_none() {
@@ -777,7 +816,7 @@ impl<B: Block> Chain<B> {
 
     #[inline]
     fn write_block(&mut self, block: Arc<B>) {
-        let block_hash = block.block_hash().unwrap();
+        let block_hash: Hash = block.block_hash().unwrap();
         //println!("DEBUG WRITING BLOCK: {:?}", block_hash);
         assert!(self.disconnected_heads_mapping.get(&block_hash).is_none());
         assert!(self.disconnected_tips_mapping.get(&block_hash).is_none());
@@ -898,6 +937,27 @@ impl<B: Block> Chain<B> {
         if let Some(mut cb) = B::after_write() {
             cb(block);
         }
+    }
+
+    #[inline]
+    fn remove_block(&mut self, block_hash: &Hash) {
+        // Remove block from ledger
+        self.db.delete(&block_hash.0);
+
+        // Remove short mapping
+        let short = block_hash.to_short();
+        self.db.delete(&short.0);
+
+        // Remove block height
+        let block_height_key = Self::compute_height_key(&block_hash);
+        let block_height_encoded = self.db.retrieve(&block_height_key.0).unwrap();
+
+        self.db.delete(&block_height_key.0);
+
+        // Remove height mapping
+        self.db.delete(&crypto::hash_slice(&block_height_encoded).0);
+
+        // TODO: remove root block?
     }
 
     #[inline]
@@ -9470,5 +9530,10 @@ pub mod tests {
 
             true
         }
+
+        // TODO add test when blocks & transactions generator is done
+        // fn it_removes_correctly_in_archival_mode() -> bool {
+
+        // }
     }
 }

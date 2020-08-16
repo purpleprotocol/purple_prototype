@@ -27,7 +27,7 @@ pub enum DownloadState {
     /// The download is queued
     Queued,
 
-    /// We have are currently downloading this object
+    /// We are currently downloading this object
     Downloading,
 
     /// The download has been downloaded

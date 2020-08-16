@@ -20,6 +20,7 @@
 
 use crate::interface::NetworkInterface;
 use crate::network::Network;
+use constants::*;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
@@ -29,6 +30,14 @@ pub async fn start_periodic_jobs(network: Network) {
         debug!("Executing periodic jobs...");
         tokio::spawn(account_bytes_read_write_for_peers(network.clone()));
         tokio::time::delay_for(Duration::from_secs(1)).await;
+    }
+}
+
+pub async fn start_chain_prune_job(network: Network) {
+    loop {
+        debug!("Executing chain prune blocks job...");
+        tokio::spawn(prune_chain_blocks(network.clone()));
+        tokio::time::delay_for(Duration::from_millis(PRUNE_BLOCKS_INTERVAL)).await;
     }
 }
 
@@ -53,4 +62,12 @@ async fn account_bytes_read_write_for_peers(network: Network) {
             past_bytes_write.store(bytes_write, Ordering::SeqCst);
         });
     }
+}
+
+async fn prune_chain_blocks(network: Network) {
+    let chain = network.pow_chain_ref();
+
+    tokio::spawn(async move {
+        chain.remove_blocks(PRUNE_BLOCKS_HEIGHT_OFFSET);
+    });
 }
