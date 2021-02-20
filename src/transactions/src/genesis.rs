@@ -83,7 +83,7 @@ impl Genesis {
 
             coinbase_supply -= balance;
 
-            let nonce_key = [addr.as_bytes(), &b".n"[..]].concat();
+            let nonce_key = [addr.as_bytes(), &b".N"[..]].concat();
             let addr_mapping_key = [addr.as_bytes(), &b".am"[..]].concat();
             let cur_key = [addr.as_bytes(), &b"."[..], bin_asset_hash].concat();
             let balance = Balance::from_u64(*balance).to_bytes();

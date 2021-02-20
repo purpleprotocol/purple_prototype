@@ -32,6 +32,20 @@ triomphe = { git = "https://github.com/octavonce/triomphe" }
 [dev-dependencies]
 tempfile = "3.0.5"
 test-helpers = { path = "../util/test-helpers" }
+criterion = "0.2.1"
+rocksdb = "0.13.0"
+
+[dev-dependencies.miner]
+features = ["test"]
+path = "../miner" 
+
+[dev-dependencies.transactions]
+features = ["test"]
+path = "../transactions" 
+
+[dev-dependencies.chain]
+features = ["test"]
+path = "../chain"
 
 [features]
 test = []
