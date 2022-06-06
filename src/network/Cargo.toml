@@ -51,7 +51,7 @@ tempdir = "0.3.7"
 rayon = "1.2.0"
 timer = "0.2.0"
 criterion = "0.2.1"
-crossbeam-channel = "0.4.0"
+crossbeam-channel = "0.4.4"
 test-helpers = { path = "../util/test-helpers" }
 
 [[bench]]
