@@ -36,7 +36,7 @@ slog-term = "2.4.1"
 slog-async = "2.3.0"
 parking_lot = "0.7.1"
 flume = "0.7.1"
-tokio = { version = "0.2.14", features = ["full"] } 
+tokio = { version = "1.8.4", features = ["full"] } 
 dirs = "1.0.4"
 elastic-array = "0.10.0"
 jsonrpc-core = "9.0.0"
