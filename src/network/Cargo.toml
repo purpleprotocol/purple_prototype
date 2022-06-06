@@ -14,7 +14,7 @@ lazy_static = "1.4.0"
 bytes = "0.5.4"
 futures = "0.3.4"
 chrono = "0.4.6"
-tokio = { version = "0.2.14", features = ["full"] } 
+tokio = { version = "1.8.4", features = ["full"] } 
 tokio-io-timeout = "0.4.0"
 futures-io = "0.3.4"
 futures-util = "0.3.4"
