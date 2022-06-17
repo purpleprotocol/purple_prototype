@@ -17,7 +17,7 @@ chrono = "0.4.6"
 tokio = { version = "0.2.14", features = ["full"] } 
 tokio-io-timeout = "0.4.0"
 futures-io = "0.3.4"
-futures-util = "0.3.4"
+futures-util = "0.3.11"
 yamux = "0.4.5"
 dashmap = "3.2.1"
 rlp = "0.3.0"
